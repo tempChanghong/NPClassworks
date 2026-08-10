@@ -15,6 +15,9 @@ import GlobalMessage from '@/components/GlobalMessage.vue'
 import { createApp } from 'vue'
 
 import messageService from './utils/message'
+import { captureOAuthCallback } from './utils/classworksV2Client'
+
+captureOAuthCallback()
 
 const app = createApp(App)
 

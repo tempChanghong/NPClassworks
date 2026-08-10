@@ -11,6 +11,13 @@ let connectedDomain = null;
 const listeners = new Set();
 
 export function getServerUrl() {
+  const envUrl = import.meta.env.VITE_SERVER_URL;
+  // 本地联调必须服从显式开发地址，避免浏览器历史 localStorage 把请求
+  // 继续发送到官方服务器。生产构建仍允许学校设置覆盖默认值。
+  if (import.meta.env.DEV && envUrl) {
+    return envUrl;
+  }
+
   // For classworkscloud provider, use the effective server URL from rotation
   if (isRotationEnabled()) {
     return getEffectiveServerUrl();
@@ -18,7 +25,6 @@ export function getServerUrl() {
 
   // Prefer configured server domain; fallback to env; then current origin
   const cfg = getSetting('server.domain');
-  const envUrl = import.meta?.env?.VITE_SERVER_URL;
   return cfg || envUrl || window.location.origin;
 }
 
@@ -81,6 +87,17 @@ export function leaveToken(token) {
 export function leaveAll() {
   if (!socket) return;
   socket.emit('leave-all');
+}
+
+export function joinWorkspaces(workspaceIds) {
+  const s = getSocket();
+  if (!Array.isArray(workspaceIds) || workspaceIds.length === 0) return;
+  s.emit('join-workspaces', {workspaceIds});
+}
+
+export function leaveWorkspaces(workspaceIds = null) {
+  if (!socket) return;
+  socket.emit('leave-workspaces', workspaceIds ? {workspaceIds} : {});
 }
 
 export function onConnect(handler) {

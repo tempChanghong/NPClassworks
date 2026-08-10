@@ -117,6 +117,19 @@ if (!fs.existsSync(serviceWorkerPath)) {
   if (!sw.includes('index.html')) {
     fail('sw.js 未包含导航回退，离线打开应用可能失败。');
   }
+
+  const precacheStart = sw.indexOf('precacheAndRoute(');
+  const precacheEnd = precacheStart >= 0 ? sw.indexOf('],', precacheStart) : -1;
+  const precacheManifest = precacheStart >= 0 && precacheEnd > precacheStart
+    ? sw.slice(precacheStart, precacheEnd + 1)
+    : '';
+  if (!precacheManifest) {
+    fail('sw.js 中未找到 Workbox precache 清单。');
+  } else if (/url:\s*["'](?:\.\/)?sounds\//.test(precacheManifest)) {
+    fail('声音资源不应进入 precache，应由 sound-cache 按需缓存。');
+  } else if (/url:\s*["'](?:\.\/)?uaf\//.test(precacheManifest)) {
+    fail('UAF 字体和 WASM 不应进入 precache，应由 uaf-cache 按需缓存。');
+  }
 }
 
 if (!fs.existsSync(path.join(distDir, 'sw-cache-manager.js'))) {

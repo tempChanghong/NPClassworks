@@ -1,0 +1,383 @@
+import axios from "axios";
+import {getServerUrl} from "@/utils/socketClient";
+
+const ACCESS_TOKEN_KEY = "classworks-v2-access-token";
+const REFRESH_TOKEN_KEY = "classworks-v2-refresh-token";
+const OAUTH_RETURN_KEY = "classworks-v2-oauth-return";
+const OAUTH_ERROR_KEY = "classworks-v2-oauth-error";
+const SCREEN_TOKEN_KEY = "classworks-v2-screen-token";
+
+const client = axios.create({
+  timeout: 15000,
+  headers: {Accept: "application/json"},
+});
+
+let refreshPromise = null;
+
+function baseUrl() {
+  return getServerUrl().replace(/\/$/, "");
+}
+
+function unwrap(response) {
+  return response.data?.data ?? response.data;
+}
+
+export function getAccountTokens() {
+  return {
+    accessToken: localStorage.getItem(ACCESS_TOKEN_KEY) || "",
+    refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) || "",
+  };
+}
+
+export function saveAccountTokens({accessToken, refreshToken}) {
+  if (accessToken) localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+}
+
+export function clearAccountTokens() {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export function getClassroomScreenToken() {
+  return localStorage.getItem(SCREEN_TOKEN_KEY) || "";
+}
+
+export function saveClassroomScreenToken(token) {
+  if (token) localStorage.setItem(SCREEN_TOKEN_KEY, token);
+}
+
+export function clearClassroomScreenToken() {
+  localStorage.removeItem(SCREEN_TOKEN_KEY);
+}
+
+function screenHeaders(extra = {}) {
+  return {
+    ...extra,
+    "X-Classworks-Screen-Token": getClassroomScreenToken(),
+  };
+}
+
+export function captureOAuthCallback() {
+  const url = new URL(window.location.href);
+  const success = url.searchParams.get("success");
+  const accessToken = url.searchParams.get("access_token");
+  const refreshToken = url.searchParams.get("refresh_token");
+  if (success !== "true" && success !== "false" && !accessToken) return false;
+
+  if (success === "true" && accessToken) {
+    saveAccountTokens({accessToken, refreshToken});
+    sessionStorage.removeItem(OAUTH_ERROR_KEY);
+  } else {
+    sessionStorage.setItem(
+      OAUTH_ERROR_KEY,
+      url.searchParams.get("error") || "教师账户登录失败",
+    );
+  }
+
+  const returnPath = sessionStorage.getItem(OAUTH_RETURN_KEY) || "/";
+  sessionStorage.removeItem(OAUTH_RETURN_KEY);
+  window.history.replaceState({}, "", returnPath);
+  return true;
+}
+
+export function consumeOAuthError() {
+  const error = sessionStorage.getItem(OAUTH_ERROR_KEY) || "";
+  sessionStorage.removeItem(OAUTH_ERROR_KEY);
+  return error;
+}
+
+async function refreshAccountToken() {
+  const {refreshToken} = getAccountTokens();
+  if (!refreshToken) throw new Error("没有可用的刷新令牌");
+  if (!refreshPromise) {
+    refreshPromise = axios.post(`${baseUrl()}/accounts/refresh`, {
+      refresh_token: refreshToken,
+    }).then((response) => {
+      const data = unwrap(response);
+      saveAccountTokens({accessToken: data.access_token});
+      return data.access_token;
+    }).finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+client.interceptors.request.use((config) => {
+  config.baseURL = baseUrl();
+  const {accessToken} = getAccountTokens();
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  return config;
+});
+
+client.interceptors.response.use((response) => {
+  const renewedToken = response.headers["x-new-access-token"];
+  if (renewedToken) saveAccountTokens({accessToken: renewedToken});
+  return response;
+}, async (error) => {
+  const original = error.config;
+  if (error.response?.status === 401 && !original?._v2Retried && getAccountTokens().refreshToken) {
+    original._v2Retried = true;
+    try {
+      const token = await refreshAccountToken();
+      original.headers.Authorization = `Bearer ${token}`;
+      return client(original);
+    } catch {
+      clearAccountTokens();
+    }
+  }
+  return Promise.reject(error);
+});
+
+export function describeApiError(error, fallback = "请求失败") {
+  const data = error?.response?.data;
+  const validation = data?.details?.errors?.[0];
+  return validation?.message || data?.message || error?.message || fallback;
+}
+
+export async function getOAuthProviders() {
+  return unwrap(await client.get("/accounts/oauth/providers"));
+}
+
+export async function getLocalAuthStatus() {
+  return unwrap(await client.get("/accounts/local/status"));
+}
+
+export async function loginWithSchoolAccount({schoolCode, username, password}) {
+  const result = unwrap(await client.post("/accounts/local/login", {
+    schoolCode,
+    username,
+    password,
+  }));
+  saveAccountTokens({
+    accessToken: result.access_token,
+    refreshToken: result.refresh_token,
+  });
+  return result.account;
+}
+
+export async function bootstrapSchoolAdministrator(input) {
+  const result = unwrap(await client.post("/accounts/local/bootstrap", input));
+  saveAccountTokens({
+    accessToken: result.access_token,
+    refreshToken: result.refresh_token,
+  });
+  return result.account;
+}
+
+export async function recoverSchoolOwner(input) {
+  return unwrap(await client.post("/accounts/local/recover-owner", input));
+}
+
+export function startOAuthLogin(provider, returnPath = "/") {
+  sessionStorage.setItem(OAUTH_RETURN_KEY, returnPath);
+  const redirectUri = `${window.location.origin}${returnPath}`;
+  window.location.assign(
+    `${baseUrl()}/accounts/oauth/${encodeURIComponent(provider)}?redirect_uri=${encodeURIComponent(redirectUri)}`,
+  );
+}
+
+export const classworksV2Api = {
+  async schools() {
+    return unwrap(await client.get("/api/v2/catalog/schools"));
+  },
+  async currentTerm(schoolId) {
+    return unwrap(await client.get("/api/v2/catalog/terms/current", {params: {schoolId}}));
+  },
+  async grades(termId) {
+    return unwrap(await client.get("/api/v2/catalog/grades", {params: {termId}}));
+  },
+  async subjects(schoolId) {
+    return unwrap(await client.get("/api/v2/catalog/subjects", {params: {schoolId}}));
+  },
+  async workspaces(params) {
+    return unwrap(await client.get("/api/v2/catalog/workspaces", {params}));
+  },
+  async courseOptions(administrativeClassId) {
+    return unwrap(await client.get(
+      `/api/v2/catalog/administrative-classes/${administrativeClassId}/course-options`,
+    ));
+  },
+  async feed(workspaceIds) {
+    return unwrap(await client.get("/api/v2/publications/feed", {
+      params: {workspaceIds: workspaceIds.join(",")},
+    }));
+  },
+  async profile() {
+    return unwrap(await client.get("/accounts/profile"));
+  },
+  async logout() {
+    return unwrap(await client.post("/accounts/logout"));
+  },
+  async changeLocalPin(input) {
+    return unwrap(await client.post("/accounts/local/change-pin", input));
+  },
+  async myWorkspaces() {
+    return unwrap(await client.get("/api/v2/me/workspaces"));
+  },
+  async mySchools() {
+    return unwrap(await client.get("/api/v2/me/schools"));
+  },
+  async bindClassroomScreen(schoolId, input) {
+    const result = unwrap(await client.post(
+      `/api/v2/admin/schools/${schoolId}/classroom-screens/bind`,
+      input,
+    ));
+    saveClassroomScreenToken(result.token);
+    return result;
+  },
+  async classroomScreenSession() {
+    return unwrap(await client.get("/api/v2/classroom-screens/session", {
+      headers: screenHeaders(),
+    }));
+  },
+  async classroomScreenFeed() {
+    return unwrap(await client.get("/api/v2/classroom-screens/feed", {
+      headers: screenHeaders(),
+    }));
+  },
+  async classroomStudents() {
+    return unwrap(await client.get("/api/v2/classroom-screens/students", {
+      headers: screenHeaders(),
+    }));
+  },
+  async replaceClassroomStudents(students) {
+    return unwrap(await client.put(
+      "/api/v2/classroom-screens/students",
+      {students},
+      {headers: screenHeaders()},
+    ));
+  },
+  async classroomAttendance(date) {
+    return unwrap(await client.get(`/api/v2/classroom-screens/attendance/${date}`, {
+      headers: screenHeaders(),
+    }));
+  },
+  async saveClassroomAttendance(date, attendance) {
+    return unwrap(await client.put(
+      `/api/v2/classroom-screens/attendance/${date}`,
+      attendance,
+      {headers: screenHeaders()},
+    ));
+  },
+  async createScreenPublication(input) {
+    return unwrap(await client.post("/api/v2/classroom-screens/publications", input, {
+      headers: screenHeaders(),
+    }));
+  },
+  async updateScreenPublication(publication, input) {
+    return unwrap(await client.patch(
+      `/api/v2/classroom-screens/publications/${publication.id}`,
+      input,
+      {headers: screenHeaders({"If-Match": `"${publication.revision}"`})},
+    ));
+  },
+  async screenPublicationRevisions(publicationId) {
+    return unwrap(await client.get(
+      `/api/v2/classroom-screens/publications/${publicationId}/revisions`,
+      {headers: screenHeaders()},
+    ));
+  },
+  async restoreScreenPublication(publication, sourceRevision) {
+    return unwrap(await client.post(
+      `/api/v2/classroom-screens/publications/${publication.id}/restore`,
+      {sourceRevision},
+      {headers: screenHeaders({"If-Match": `"${publication.revision}"`})},
+    ));
+  },
+  async organizationTemplate() {
+    return unwrap(await client.get("/api/v2/admin/organization/template"));
+  },
+  async importOrganization(organization, dryRun = true) {
+    return unwrap(await client.post("/api/v2/admin/organization/import", organization, {
+      params: {dryRun},
+    }));
+  },
+  async workspaceMemberships(schoolId, termId) {
+    return unwrap(await client.get(
+      `/api/v2/admin/schools/${schoolId}/workspace-memberships`,
+      {params: termId ? {termId} : {}},
+    ));
+  },
+  async importWorkspaceMemberships(input, dryRun = true) {
+    return unwrap(await client.post("/api/v2/admin/workspace-memberships/import", input, {
+      params: {dryRun},
+    }));
+  },
+  async importLocalTeachers(input, dryRun = true) {
+    return unwrap(await client.post("/api/v2/admin/local-teachers/import", input, {
+      params: {dryRun},
+    }));
+  },
+  async localAccounts(schoolId) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/local-accounts`));
+  },
+  async createLocalAdministrator(schoolId, input) {
+    return unwrap(await client.post(`/api/v2/admin/schools/${schoolId}/local-admins`, input));
+  },
+  async updateLocalAccount(schoolId, accountId, input) {
+    return unwrap(await client.patch(
+      `/api/v2/admin/schools/${schoolId}/local-accounts/${accountId}`,
+      input,
+    ));
+  },
+  async deactivateLocalAccount(schoolId, accountId) {
+    return unwrap(await client.delete(
+      `/api/v2/admin/schools/${schoolId}/local-accounts/${accountId}`,
+    ));
+  },
+  async schoolMembers(schoolId) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/members`));
+  },
+  async setTermStatus(termId, status) {
+    return unwrap(await client.post(`/api/v2/admin/terms/${termId}/status`, {status}));
+  },
+  async cloneTerm(termId, input) {
+    return unwrap(await client.post(`/api/v2/admin/terms/${termId}/clone`, input));
+  },
+  async removeWorkspaceMember(workspaceId, accountId) {
+    await client.delete(`/api/v2/admin/workspaces/${workspaceId}/members/${accountId}`);
+  },
+  async removeWorkspaceInvitation(workspaceId, invitationId) {
+    await client.delete(`/api/v2/admin/workspaces/${workspaceId}/invitations/${invitationId}`);
+  },
+  async publications(params = {}) {
+    return unwrap(await client.get("/api/v2/publications", {params}));
+  },
+  async createPublication(input) {
+    return unwrap(await client.post("/api/v2/publications", input));
+  },
+  async publicationRevisions(id) {
+    return unwrap(await client.get(`/api/v2/publications/${id}/revisions`));
+  },
+  async certifyPublication(publication) {
+    return unwrap(await client.post(
+      `/api/v2/publications/${publication.id}/certify`,
+      {},
+      {headers: {"If-Match": `"${publication.revision}"`}},
+    ));
+  },
+  async restorePublication(publication, sourceRevision) {
+    return unwrap(await client.post(
+      `/api/v2/publications/${publication.id}/restore`,
+      {sourceRevision},
+      {headers: {"If-Match": `"${publication.revision}"`}},
+    ));
+  },
+  async updatePublication(id, revision, input) {
+    return unwrap(await client.patch(`/api/v2/publications/${id}`, input, {
+      headers: {"If-Match": `"${revision}"`},
+    }));
+  },
+  async withdrawPublication(id, revision) {
+    return unwrap(await client.post(`/api/v2/publications/${id}/withdraw`, {}, {
+      headers: {"If-Match": `"${revision}"`},
+    }));
+  },
+  async clonePublication(id, input = {}) {
+    return unwrap(await client.post(`/api/v2/publications/${id}/clone`, input));
+  },
+};
+
+export default client;

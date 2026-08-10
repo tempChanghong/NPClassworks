@@ -269,7 +269,7 @@ const handleAutoAuthorize = () => {
   const authDomain = getSetting('server.authDomain')
   const appId = 'd158067f53627d2b98babe8bffd2fd7d'
   const currentDomain = window.location.origin
-  const callbackUrl = encodeURIComponent(`${currentDomain}/authorizecallback`)
+  const callbackUrl = encodeURIComponent(`${currentDomain}/authorize`)
   const uuid = getSetting('device.uuid') || '00000000-0000-4000-8000-000000000000'
 
   let url = `${authDomain}/authorize?app_id=${appId}&mode=callback&callback_url=${callbackUrl}&remark=Classworks 自动授权 来自${window.location.hostname} ${new Date().toLocaleString()}`
