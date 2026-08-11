@@ -226,10 +226,7 @@ import {computed, reactive, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {todayBoardDate} from "@/utils/boardDate";
 import {
-  loadTeacherTargetPreferences,
-  rememberTeacherTargets,
   teacherTargetCombinationId,
-  toggleFavoriteTeacherTargets,
 } from "@/utils/teacherTargetPreferences";
 
 const props = defineProps({
@@ -243,7 +240,6 @@ const store = useClassworksV2Store();
 const saving = ref(false);
 const publishing = ref(false);
 const localError = ref("");
-const targetPreferencesRevision = ref(0);
 
 function localDateTime(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
@@ -273,10 +269,7 @@ const eligibleTargets = computed(() =>
   store.eligibleTeacherWorkspaces(form.type, form.subjectId),
 );
 const isEditing = computed(() => Boolean(props.editingPublication));
-const targetPreferences = computed(() => {
-  targetPreferencesRevision.value;
-  return loadTeacherTargetPreferences(store.account?.id);
-});
+const targetPreferences = computed(() => store.teacherTargetPreferences);
 const currentTargetCombination = computed(() => ({
   type: form.type,
   subjectId: form.type === "ASSIGNMENT" ? form.subjectId : null,
@@ -342,8 +335,7 @@ function applyTargetShortcut(shortcut) {
 }
 
 function toggleCurrentTargetsFavorite() {
-  toggleFavoriteTeacherTargets(store.account?.id, currentTargetCombination.value);
-  targetPreferencesRevision.value += 1;
+  store.toggleTeacherTargetFavorite(currentTargetCombination.value);
 }
 
 function reset() {
@@ -389,8 +381,7 @@ async function submit(status) {
     const publication = isEditing.value
       ? await store.updatePublication(props.editingPublication, input)
       : await store.publish(input);
-    rememberTeacherTargets(store.account?.id, currentTargetCombination.value);
-    targetPreferencesRevision.value += 1;
+    store.rememberTeacherTargetCombination(currentTargetCombination.value);
     reset();
     emit("published", publication);
   } catch {

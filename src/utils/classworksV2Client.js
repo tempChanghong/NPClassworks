@@ -213,6 +213,12 @@ export const classworksV2Api = {
   async changeLocalPin(input) {
     return unwrap(await client.post("/accounts/local/change-pin", input));
   },
+  async teacherTargetPreferences() {
+    return unwrap(await client.get("/accounts/preferences/teacher-targets"));
+  },
+  async saveTeacherTargetPreferences(preferences) {
+    return unwrap(await client.put("/accounts/preferences/teacher-targets", {preferences}));
+  },
   async myWorkspaces() {
     return unwrap(await client.get("/api/v2/me/workspaces"));
   },

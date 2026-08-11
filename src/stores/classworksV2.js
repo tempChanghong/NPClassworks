@@ -20,6 +20,15 @@ import {
   sanitizeCourseGroupIds,
 } from "@/utils/classworksSelection";
 import {sanitizeBoardDate, todayBoardDate} from "@/utils/boardDate";
+import {
+  loadTeacherTargetPreferences,
+  loadTeacherTargetSyncState,
+  mergeTeacherTargetPreferences,
+  rememberTeacherTargets,
+  sanitizeTeacherTargetPreferences,
+  saveTeacherTargetPreferences,
+  toggleFavoriteTeacherTargets,
+} from "@/utils/teacherTargetPreferences";
 
 const SELECTION_KEY = "classworks-v2-student-selection";
 let realtimeCleanup = [];
@@ -69,6 +78,11 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     teacherLoading: false,
     teacherPublicationsLoading: false,
     teacherError: "",
+    teacherTargetPreferences: sanitizeTeacherTargetPreferences(),
+    teacherTargetPreferencesSynced: false,
+    teacherTargetPreferencesSyncing: false,
+    teacherTargetPreferencesSyncPending: false,
+    teacherTargetPreferencesError: "",
 
     screenSession: null,
     screenLoading: false,
@@ -401,6 +415,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         this.memberships = memberships;
         this.teacherPublications = publications.items || [];
         this.schoolMemberships = schoolMemberships;
+        await this.hydrateTeacherTargetPreferences();
         const schoolIds = [...new Set(
           memberships.map((membership) => membership.workspace.term.school.id),
         )];
@@ -429,6 +444,87 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
           (rule) => rule.subjectId === subjectId && rule.deliveryMode === "ADMIN_CLASS",
         );
       });
+    },
+
+    async hydrateTeacherTargetPreferences() {
+      if (!this.account?.id) return;
+      const accountId = this.account.id;
+      const local = loadTeacherTargetPreferences(accountId);
+      const syncState = loadTeacherTargetSyncState(accountId);
+      this.teacherTargetPreferences = local;
+      this.teacherTargetPreferencesSyncing = true;
+      this.teacherTargetPreferencesError = "";
+      try {
+        const remoteResult = await classworksV2Api.teacherTargetPreferences();
+        const remote = sanitizeTeacherTargetPreferences(remoteResult.preferences);
+        const remoteEmpty = !remote.favorites.length && !remote.recent.length;
+        const next = syncState.dirty || remoteEmpty
+          ? mergeTeacherTargetPreferences(local, remote)
+          : remote;
+        if (syncState.dirty || (remoteEmpty && (next.favorites.length || next.recent.length))) {
+          await classworksV2Api.saveTeacherTargetPreferences(next);
+        }
+        this.teacherTargetPreferences = saveTeacherTargetPreferences(
+          accountId,
+          next,
+          localStorage,
+          {dirty: false},
+        );
+        this.teacherTargetPreferencesSynced = true;
+      } catch (error) {
+        this.teacherTargetPreferencesSynced = false;
+        this.teacherTargetPreferencesError = describeApiError(error, "偏好暂存于本机，联网后可重新同步");
+      } finally {
+        this.teacherTargetPreferencesSyncing = false;
+      }
+    },
+
+    async syncTeacherTargetPreferences() {
+      if (!this.account?.id) return;
+      if (this.teacherTargetPreferencesSyncing) {
+        this.teacherTargetPreferencesSyncPending = true;
+        return;
+      }
+      this.teacherTargetPreferencesSyncing = true;
+      this.teacherTargetPreferencesError = "";
+      do {
+        this.teacherTargetPreferencesSyncPending = false;
+        const snapshot = this.teacherTargetPreferences;
+        const serializedSnapshot = JSON.stringify(snapshot);
+        try {
+          const result = await classworksV2Api.saveTeacherTargetPreferences(snapshot);
+          if (JSON.stringify(this.teacherTargetPreferences) === serializedSnapshot) {
+            this.teacherTargetPreferences = saveTeacherTargetPreferences(
+              this.account.id,
+              result.preferences,
+              localStorage,
+              {dirty: false},
+            );
+            this.teacherTargetPreferencesSynced = true;
+          } else {
+            this.teacherTargetPreferencesSyncPending = true;
+          }
+        } catch (error) {
+          this.teacherTargetPreferencesSynced = false;
+          this.teacherTargetPreferencesError = describeApiError(error, "同步失败，偏好已保存在本机");
+          this.teacherTargetPreferencesSyncPending = false;
+        }
+      } while (this.teacherTargetPreferencesSyncPending);
+      this.teacherTargetPreferencesSyncing = false;
+    },
+
+    rememberTeacherTargetCombination(combination) {
+      if (!this.account?.id) return;
+      this.teacherTargetPreferences = rememberTeacherTargets(this.account.id, combination);
+      this.teacherTargetPreferencesSynced = false;
+      void this.syncTeacherTargetPreferences();
+    },
+
+    toggleTeacherTargetFavorite(combination) {
+      if (!this.account?.id) return;
+      this.teacherTargetPreferences = toggleFavoriteTeacherTargets(this.account.id, combination);
+      this.teacherTargetPreferencesSynced = false;
+      void this.syncTeacherTargetPreferences();
     },
 
     async publish(input) {
@@ -663,6 +759,11 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.teacherPublications = [];
       this.teacherPublicationsLoading = false;
       this.schoolMemberships = [];
+      this.teacherTargetPreferences = sanitizeTeacherTargetPreferences();
+      this.teacherTargetPreferencesSynced = false;
+      this.teacherTargetPreferencesSyncing = false;
+      this.teacherTargetPreferencesSyncPending = false;
+      this.teacherTargetPreferencesError = "";
     },
   },
 });

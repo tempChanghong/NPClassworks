@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   loadTeacherTargetPreferences,
+  loadTeacherTargetSyncState,
+  mergeTeacherTargetPreferences,
   rememberTeacherTargets,
   teacherTargetCombinationId,
   toggleFavoriteTeacherTargets,
@@ -41,4 +43,25 @@ test("favorite targets can be added and removed", () => {
   assert.equal(loadTeacherTargetPreferences("teacher-1", storage).favorites.length, 1);
   toggleFavoriteTeacherTargets("teacher-1", combination, storage);
   assert.equal(loadTeacherTargetPreferences("teacher-1", storage).favorites.length, 0);
+});
+
+test("local changes are marked dirty until an account sync succeeds", () => {
+  const storage = memoryStorage();
+  rememberTeacherTargets("teacher-1", {
+    type: "NOTICE",
+    targetWorkspaceIds: ["class-1"],
+  }, storage);
+  assert.equal(loadTeacherTargetSyncState("teacher-1", storage).dirty, true);
+});
+
+test("local and remote teacher targets merge by newest unique combination", () => {
+  const merged = mergeTeacherTargetPreferences(
+    {favorites: [{type: "NOTICE", targetWorkspaceIds: ["a"], savedAt: "2026-08-10T00:00:00Z"}]},
+    {favorites: [
+      {type: "NOTICE", targetWorkspaceIds: ["a"], savedAt: "2026-08-11T00:00:00Z"},
+      {type: "NOTICE", targetWorkspaceIds: ["b"], savedAt: "2026-08-09T00:00:00Z"},
+    ]},
+  );
+  assert.equal(merged.favorites.length, 2);
+  assert.equal(merged.favorites[0].savedAt, "2026-08-11T00:00:00.000Z");
 });

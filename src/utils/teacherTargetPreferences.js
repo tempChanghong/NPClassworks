@@ -6,17 +6,24 @@ export function teacherTargetPreferencesKey(accountId) {
   return `classworks-v2-teacher-targets:${accountId || "anonymous"}`;
 }
 
+export function teacherTargetSyncStateKey(accountId) {
+  return `classworks-v2-teacher-targets-sync:${accountId || "anonymous"}`;
+}
+
 function normalizedCombination(value) {
   const targetWorkspaceIds = [...new Set(
     (Array.isArray(value?.targetWorkspaceIds) ? value.targetWorkspaceIds : [])
       .filter((id) => typeof id === "string" && id),
   )].sort();
   if (!targetWorkspaceIds.length) return null;
+  const savedAt = typeof value?.savedAt === "string" && Number.isFinite(Date.parse(value.savedAt))
+    ? new Date(value.savedAt).toISOString()
+    : new Date().toISOString();
   return {
     type: value?.type === "NOTICE" ? "NOTICE" : "ASSIGNMENT",
     subjectId: value?.type === "NOTICE" ? null : value?.subjectId || null,
     targetWorkspaceIds,
-    savedAt: typeof value?.savedAt === "string" ? value.savedAt : new Date().toISOString(),
+    savedAt,
   };
 }
 
@@ -54,10 +61,37 @@ export function loadTeacherTargetPreferences(accountId, storage = localStorage) 
   }
 }
 
-function save(accountId, preferences, storage) {
+export function loadTeacherTargetSyncState(accountId, storage = localStorage) {
+  try {
+    const value = JSON.parse(storage.getItem(teacherTargetSyncStateKey(accountId))) || {};
+    return {dirty: value.dirty === true, lastSyncedAt: value.lastSyncedAt || null};
+  } catch {
+    return {dirty: false, lastSyncedAt: null};
+  }
+}
+
+export function saveTeacherTargetPreferences(
+  accountId,
+  preferences,
+  storage = localStorage,
+  {dirty = true} = {},
+) {
   const sanitized = sanitizeTeacherTargetPreferences(preferences);
   storage.setItem(teacherTargetPreferencesKey(accountId), JSON.stringify(sanitized));
+  storage.setItem(teacherTargetSyncStateKey(accountId), JSON.stringify({
+    dirty,
+    lastSyncedAt: dirty ? loadTeacherTargetSyncState(accountId, storage).lastSyncedAt : new Date().toISOString(),
+  }));
   return sanitized;
+}
+
+export function mergeTeacherTargetPreferences(...values) {
+  const mergeList = (key) => values.flatMap((value) => sanitizeTeacherTargetPreferences(value)[key])
+    .sort((left, right) => Date.parse(right.savedAt) - Date.parse(left.savedAt));
+  return sanitizeTeacherTargetPreferences({
+    favorites: mergeList("favorites"),
+    recent: mergeList("recent"),
+  });
 }
 
 export function rememberTeacherTargets(accountId, combination, storage = localStorage) {
@@ -65,7 +99,7 @@ export function rememberTeacherTargets(accountId, combination, storage = localSt
   const normalized = normalizedCombination(combination);
   if (!normalized) return preferences;
   const id = teacherTargetCombinationId(normalized);
-  return save(accountId, {
+  return saveTeacherTargetPreferences(accountId, {
     ...preferences,
     recent: [normalized, ...preferences.recent.filter(
       (item) => teacherTargetCombinationId(item) !== id,
@@ -79,7 +113,7 @@ export function toggleFavoriteTeacherTargets(accountId, combination, storage = l
   if (!normalized) return preferences;
   const id = teacherTargetCombinationId(normalized);
   const exists = preferences.favorites.some((item) => teacherTargetCombinationId(item) === id);
-  return save(accountId, {
+  return saveTeacherTargetPreferences(accountId, {
     ...preferences,
     favorites: exists
       ? preferences.favorites.filter((item) => teacherTargetCombinationId(item) !== id)

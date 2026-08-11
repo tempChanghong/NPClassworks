@@ -241,6 +241,40 @@
                     </v-btn>
                   </SettingRow>
                   <SettingRow
+                    :description="teacherTargetPreferencesDescription"
+                    title="常用发布目标"
+                  >
+                    <template #scope>
+                      <ScopeChip type="account" />
+                    </template>
+                    <div class="d-flex align-center flex-wrap ga-2">
+                      <v-chip
+                        :color="store.teacherTargetPreferencesSynced ? 'success' : 'warning'"
+                        :prepend-icon="store.teacherTargetPreferencesSynced ? 'mdi-cloud-check-outline' : 'mdi-cloud-alert-outline'"
+                        variant="tonal"
+                      >
+                        {{ store.teacherTargetPreferencesSynced ? "已同步" : "本机暂存" }}
+                      </v-chip>
+                      <v-btn
+                        :loading="store.teacherTargetPreferencesSyncing"
+                        prepend-icon="mdi-cloud-sync-outline"
+                        variant="tonal"
+                        @click="syncTeacherPreferences"
+                      >
+                        立即同步
+                      </v-btn>
+                    </div>
+                  </SettingRow>
+                  <v-alert
+                    v-if="store.teacherTargetPreferencesError"
+                    class="mb-5"
+                    density="compact"
+                    type="warning"
+                    variant="tonal"
+                  >
+                    {{ store.teacherTargetPreferencesError }}
+                  </v-alert>
+                  <SettingRow
                     v-if="canOpenAdmin"
                     description="班级结构、账号、学科和大屏绑定属于全校配置。"
                     title="学校管理"
@@ -653,6 +687,10 @@ const selectionDescription = computed(() => store.selectedWorkspaceIds.length
 const canOpenAdmin = computed(() => store.schoolMemberships.some((membership) =>
   ["OWNER", "ADMIN"].includes(membership.role),
 ));
+const teacherTargetPreferencesDescription = computed(() => {
+  const preferences = store.teacherTargetPreferences;
+  return `已收藏 ${preferences.favorites.length} 组，保留 ${preferences.recent.length} 条最近使用记录；登录同一教师账号可跨设备使用`;
+});
 const screenClassName = computed(() => store.screenSession?.binding?.administrativeClass?.name || "班级大屏");
 const screenWorkspaceCount = computed(() => store.screenSession?.workspaces?.length || 0);
 const storageDescription = computed(() => {
@@ -733,6 +771,11 @@ function goBack() {
 function openTeacherWorkbench() {
   store.selectionDialog = false;
   router.push({path: "/", query: {mode: "teacher"}});
+}
+
+async function syncTeacherPreferences() {
+  await store.syncTeacherTargetPreferences();
+  notify(store.teacherTargetPreferencesSynced ? "常用发布目标已同步" : "同步失败，数据仍保存在当前设备");
 }
 
 function reloadApp() {
