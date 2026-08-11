@@ -4,6 +4,7 @@ export const SCREEN_DISPLAY_DEFAULTS = Object.freeze({
   columns: "auto",
   showSecondaryMetadata: true,
   urgentNoticeSound: true,
+  antiBurnInShift: false,
 });
 
 const DENSITIES = new Set(["compact", "comfortable"]);
@@ -23,6 +24,9 @@ export function sanitizeScreenDisplaySettings(value = {}) {
     urgentNoticeSound: typeof value.urgentNoticeSound === "boolean"
       ? value.urgentNoticeSound
       : SCREEN_DISPLAY_DEFAULTS.urgentNoticeSound,
+    antiBurnInShift: typeof value.antiBurnInShift === "boolean"
+      ? value.antiBurnInShift
+      : SCREEN_DISPLAY_DEFAULTS.antiBurnInShift,
   };
 }
 

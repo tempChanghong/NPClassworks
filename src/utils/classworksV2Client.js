@@ -199,9 +199,9 @@ export const classworksV2Api = {
       `/api/v2/catalog/administrative-classes/${administrativeClassId}/course-options`,
     ));
   },
-  async feed(workspaceIds) {
+  async feed(workspaceIds, boardDate) {
     return unwrap(await client.get("/api/v2/publications/feed", {
-      params: {workspaceIds: workspaceIds.join(",")},
+      params: {workspaceIds: workspaceIds.join(","), boardDate},
     }));
   },
   async profile() {
@@ -232,10 +232,25 @@ export const classworksV2Api = {
       headers: screenHeaders(),
     }));
   },
-  async classroomScreenFeed() {
+  async classroomScreenFeed(boardDate) {
     return unwrap(await client.get("/api/v2/classroom-screens/feed", {
+      params: {boardDate},
       headers: screenHeaders(),
     }));
+  },
+  async acknowledgeScreenNotifications(items) {
+    return unwrap(await client.post(
+      "/api/v2/classroom-screens/notification-deliveries",
+      {items},
+      {headers: screenHeaders()},
+    ));
+  },
+  async copyClassroomScreenBoard(sourceBoardDate, targetBoardDate) {
+    return unwrap(await client.post(
+      "/api/v2/classroom-screens/board/copy",
+      {sourceBoardDate, targetBoardDate},
+      {headers: screenHeaders()},
+    ));
   },
   async classroomStudents() {
     return unwrap(await client.get("/api/v2/classroom-screens/students", {
@@ -350,6 +365,9 @@ export const classworksV2Api = {
   },
   async publicationRevisions(id) {
     return unwrap(await client.get(`/api/v2/publications/${id}/revisions`));
+  },
+  async notificationScreenDeliveries(id) {
+    return unwrap(await client.get(`/api/v2/publications/${id}/screen-deliveries`));
   },
   async certifyPublication(publication) {
     return unwrap(await client.post(

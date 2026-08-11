@@ -17,6 +17,7 @@
       <v-card
         :color="publication.type === 'NOTICE' ? priorityColor(publication.priority) : undefined"
         class="publication-card rounded-xl"
+        :class="dueCardClass(publication)"
         :variant="publication.type === 'NOTICE' ? 'tonal' : 'elevated'"
       >
         <v-card-title class="publication-title d-flex align-center flex-wrap">
@@ -78,12 +79,19 @@
             </span>
             <span
               v-if="publication.type === 'ASSIGNMENT' && publication.dueAt"
-              class="text-error font-weight-bold"
             >
-              <v-icon
+              <v-chip
+                :color="dueState(publication)?.color"
                 size="small"
-                icon="mdi-calendar-alert"
-              /> 截止 {{ formatDateTime(publication.dueAt) }}
+                variant="tonal"
+              >
+                <v-icon
+                  class="mr-1"
+                  size="small"
+                  :icon="dueState(publication)?.icon"
+                />
+                {{ dueState(publication)?.label }} {{ formatDateTime(publication.dueAt) }}
+              </v-chip>
             </span>
             <span
               v-if="publication.type === 'NOTICE' && publication.expiresAt"
@@ -124,6 +132,7 @@
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {SCREEN_DISPLAY_DEFAULTS, sanitizeScreenDisplaySettings} from "@/utils/screenDisplaySettings";
+import {assignmentDueState} from "@/utils/publicationFeed";
 
 const props = defineProps({
   publications: {type: Array, default: () => []},
@@ -135,7 +144,9 @@ defineEmits(["edit", "history"]);
 
 const gridContainer = ref(null);
 const gridItems = ref([]);
+const now = ref(new Date());
 let resizeObserver;
+let clockTimer;
 
 const normalizedSettings = computed(() => sanitizeScreenDisplaySettings(props.settings));
 const gridStyle = computed(() => {
@@ -179,13 +190,19 @@ async function observeGridItems() {
 
 onMounted(() => {
   resizeObserver = new window.ResizeObserver(resizeAllGridItems);
+  clockTimer = window.setInterval(() => {
+    now.value = new Date();
+  }, 60_000);
   observeGridItems();
 });
 
 watch(() => props.publications, observeGridItems, {deep: true});
 watch(gridStyle, () => nextTick(resizeAllGridItems));
 
-onBeforeUnmount(() => resizeObserver?.disconnect());
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  window.clearInterval(clockTimer);
+});
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -203,6 +220,15 @@ function priorityColor(priority) {
 
 function priorityLabel(priority) {
   return {URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通"}[priority] || "普通";
+}
+
+function dueState(publication) {
+  return assignmentDueState(publication.dueAt, now.value);
+}
+
+function dueCardClass(publication) {
+  const state = publication.type === "ASSIGNMENT" ? dueState(publication) : null;
+  return state ? `publication-card--${state.key}` : "";
 }
 
 function publicationSource(publication) {
@@ -236,6 +262,9 @@ function targetNames(publication) {
 }
 
 .publication-card:hover { transform: translateY(-2px); }
+.publication-card--overdue { border-left: 4px solid rgb(var(--v-theme-error)); }
+.publication-card--today,
+.publication-card--soon { border-left: 4px solid rgb(var(--v-theme-warning)); }
 .publication-title { gap: 8px; padding: 20px 20px 8px; }
 .publication-icon { margin-right: 2px; }
 .target-name { font-size: 0.75em; font-weight: 400; }

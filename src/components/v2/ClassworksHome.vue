@@ -27,7 +27,7 @@
       </v-btn>
       <v-btn
         value="teacher"
-        prepend-icon="mdi-human-male-board"
+        prepend-icon="mdi-account-tie-outline"
       >
         教师
       </v-btn>
@@ -136,16 +136,21 @@
       />
 
       <template v-else-if="store.selectedWorkspaceIds.length">
-        <HomeworkFeedGrid
+        <BoardDateNavigator
+          class="mb-4"
+          :date="store.boardDate"
+          @change="store.setBoardDate"
+        />
+        <OrganizedHomeworkFeed
           v-if="store.feed.length"
           :publications="store.feed"
         />
 
         <v-empty-state
           v-else
-          headline="目前没有新作业"
+          :headline="`${boardDateLabel}没有作业`"
           icon="mdi-check-circle-outline"
-          text="已发布的作业和通知会自动出现在这里"
+          text="可以切换到前一天、后一天或选择其他日期查看"
         />
       </template>
     </template>
@@ -157,6 +162,7 @@
         @edit="openScreenComposer"
         @history="openHistory($event, 'screen')"
         @tools="classroomToolsDialog = true"
+        @copy-board="copyScreenBoardToToday"
       />
       <v-alert
         v-else
@@ -197,7 +203,8 @@
             variant="tonal"
           >
             <v-icon
-              icon="mdi-human-male-board"
+              class="teacher-login-icon"
+              icon="mdi-account-tie-outline"
               size="40"
             />
           </v-avatar>
@@ -343,89 +350,17 @@
             cols="12"
             lg="5"
           >
-            <v-card
-              class="rounded-xl"
-              variant="flat"
-            >
-              <v-card-title class="d-flex align-center pa-5">
-                最近发布
-                <v-spacer />
-                <v-btn
-                  icon="mdi-refresh"
-                  variant="text"
-                  @click="store.refreshTeacherPublications()"
-                />
-              </v-card-title>
-              <v-list lines="three">
-                <template
-                  v-for="publication in store.teacherPublications"
-                  :key="publication.id"
-                >
-                  <v-list-item
-                    :subtitle="publicationSummary(publication)"
-                    :title="publication.title || publication.content || '未命名草稿'"
-                  >
-                    <template #prepend>
-                      <v-avatar
-                        :color="statusColor(publication.status)"
-                        variant="tonal"
-                      >
-                        <v-icon :icon="publication.type === 'NOTICE' ? 'mdi-bullhorn-outline' : 'mdi-book-outline'" />
-                      </v-avatar>
-                    </template>
-                    <template #append>
-                      <v-menu>
-                        <template #activator="{props}">
-                          <v-btn
-                            v-bind="props"
-                            icon="mdi-dots-vertical"
-                            variant="text"
-                          />
-                        </template>
-                        <v-list>
-                          <v-list-item
-                            v-if="publication.status === 'PUBLISHED' && !publication.isCertified"
-                            class="text-success"
-                            prepend-icon="mdi-check-decagram-outline"
-                            title="认证当前版本"
-                            @click="certifyPublication(publication)"
-                          />
-                          <v-list-item
-                            prepend-icon="mdi-history"
-                            title="版本历史与恢复"
-                            @click="openHistory(publication, 'teacher')"
-                          />
-                          <v-list-item
-                            v-if="publication.status !== 'WITHDRAWN'"
-                            prepend-icon="mdi-pencil-outline"
-                            title="编辑"
-                            @click="editingPublication = publication"
-                          />
-                          <v-list-item
-                            prepend-icon="mdi-content-copy"
-                            title="复制为草稿"
-                            @click="clonePublication(publication)"
-                          />
-                          <v-list-item
-                            v-if="publication.status !== 'WITHDRAWN'"
-                            class="text-error"
-                            prepend-icon="mdi-undo-variant"
-                            title="撤回"
-                            @click="withdrawPublication(publication)"
-                          />
-                        </v-list>
-                      </v-menu>
-                    </template>
-                  </v-list-item>
-                  <v-divider />
-                </template>
-              </v-list>
-              <v-empty-state
-                v-if="!store.teacherPublications.length"
-                icon="mdi-text-box-plus-outline"
-                text="还没有发布记录"
-              />
-            </v-card>
+            <TeacherPublicationManager
+              :loading="store.teacherPublicationsLoading"
+              :publications="store.teacherPublications"
+              @certify="certifyPublication"
+              @clone="clonePublication"
+              @edit="editingPublication = $event"
+              @history="openHistory($event, 'teacher')"
+              @delivery="openNotificationDelivery"
+              @refresh="store.refreshTeacherPublications()"
+              @withdraw="withdrawPublication"
+            />
           </v-col>
         </v-row>
       </template>
@@ -434,6 +369,7 @@
 
   <class-selection-dialog
     v-model="store.selectionDialog"
+    @teacher="openTeacherFromSelection"
   />
   <ClassroomToolsDialog
     v-model="classroomToolsDialog"
@@ -448,6 +384,10 @@
     :mode="historyMode"
     :publication="historyPublication"
     @changed="handleHistoryChanged"
+  />
+  <NotificationDeliveryDialog
+    v-model="notificationDeliveryDialog"
+    :publication="deliveryPublication"
   />
   <v-dialog
     v-model="changePinDialog"
@@ -509,10 +449,14 @@ import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
 import PublicationComposer from "@/components/v2/PublicationComposer.vue";
 import ScreenHomeworkDialog from "@/components/v2/ScreenHomeworkDialog.vue";
 import PublicationHistoryDialog from "@/components/v2/PublicationHistoryDialog.vue";
+import NotificationDeliveryDialog from "@/components/v2/NotificationDeliveryDialog.vue";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import ClassroomToolsDialog from "@/components/v2/ClassroomToolsDialog.vue";
 import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
-import HomeworkFeedGrid from "@/components/v2/HomeworkFeedGrid.vue";
+import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
+import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
+import TeacherPublicationManager from "@/components/v2/TeacherPublicationManager.vue";
+import {boardDateRelativeLabel} from "@/utils/boardDate";
 
 const store = useClassworksV2Store();
 const mode = ref("student");
@@ -534,6 +478,8 @@ const historyDialog = ref(false);
 const historyPublication = ref(null);
 const historyMode = ref("teacher");
 const classroomToolsDialog = ref(false);
+const notificationDeliveryDialog = ref(false);
+const deliveryPublication = ref(null);
 
 const teacherSchoolOptions = computed(() => store.schools.map((school) => ({
   title: school.name,
@@ -553,6 +499,12 @@ const selectionDescription = computed(() => {
     .filter(Boolean);
   return groups.length ? `已选走班：${groups.join("、")}` : "全部课程随行政班，或尚未选择走班课程";
 });
+const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate));
+
+function openTeacherFromSelection() {
+  store.selectionDialog = false;
+  mode.value = "teacher";
+}
 
 watch(mode, async (value) => {
   if (value === "teacher" && !store.account && !store.teacherLoading) store.bootstrapTeacher();
@@ -623,17 +575,6 @@ async function changePin() {
   }
 }
 
-function statusColor(status) {
-  return {PUBLISHED: "success", DRAFT: "warning", WITHDRAWN: "grey"}[status] || "primary";
-}
-
-function publicationSummary(publication) {
-  const status = {PUBLISHED: "已发布", DRAFT: "草稿", WITHDRAWN: "已撤回"}[publication.status];
-  const targets = publication.targets?.map((target) => target.workspace.name).join("、") || "无目标";
-  const certification = publication.isCertified ? "已认证" : "待确认";
-  return `${status} · ${certification} · ${targets} · 版本 ${publication.revision}`;
-}
-
 async function bindScreen() {
   try {
     await store.bindCurrentClassroomScreen();
@@ -662,6 +603,11 @@ function openHistory(publication, modeValue) {
   historyPublication.value = publication;
   historyMode.value = modeValue;
   historyDialog.value = true;
+}
+
+function openNotificationDelivery(publication) {
+  deliveryPublication.value = publication;
+  notificationDeliveryDialog.value = true;
 }
 
 function handleHistoryChanged(publication) {
@@ -695,14 +641,29 @@ async function withdrawPublication(publication) {
 
 async function clonePublication(publication) {
   await store.clone(publication);
-  snackbarText.value = "已复制为新草稿";
+  snackbarText.value = publication.type === "ASSIGNMENT" ? "已复制为今天的新草稿" : "已复制为新草稿";
   snackbar.value = true;
+}
+
+async function copyScreenBoardToToday() {
+  if (!window.confirm(`将${boardDateLabel.value}的作业复制到今天吗？当天已有的相同作业会自动跳过。`)) return;
+  try {
+    const result = await store.copyScreenBoardToToday();
+    snackbarText.value = `已复制 ${result.createdCount} 项，跳过 ${result.skippedCount} 项重复作业`;
+    snackbar.value = true;
+  } catch {
+    // 大屏错误提示已经给出可操作原因。
+  }
 }
 </script>
 
 <style scoped>
 .classworks-v2-page {
   max-width: 1500px;
+}
+
+.teacher-login-icon {
+  top: 15px;
 }
 
 </style>

@@ -197,8 +197,8 @@ export default defineConfig({
       },
       manifest: {
         id: '7C24F2B3.ClassworksPWA',
-        name: 'Classworks PWA',
-        short_name: 'Classworks PWA',
+        name: 'Classworks 作业板',
+        short_name: 'Classworks',
         description: '适用于班级大屏的作业板小工具，支持记录、查看并同步作业。',
         theme_color: '#212121',
         background_color: '#212121',

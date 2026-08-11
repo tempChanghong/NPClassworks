@@ -28,6 +28,7 @@ test("screen display settings are bounded and invalid values use defaults", () =
     columns: "2",
     showSecondaryMetadata: false,
     urgentNoticeSound: true,
+    antiBurnInShift: false,
   });
   assert.equal(sanitizeScreenDisplaySettings({fontScale: 94}).fontScale, 90);
 });

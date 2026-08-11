@@ -48,6 +48,12 @@
           </template>
         </v-autocomplete>
         <v-text-field
+          v-model="form.boardDate"
+          label="作业板日期"
+          type="date"
+          variant="outlined"
+        />
+        <v-text-field
           v-model="form.title"
           label="标题（可选）"
           variant="outlined"
@@ -118,6 +124,7 @@
 <script setup>
 import {computed, reactive, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
+import {todayBoardDate} from "@/utils/boardDate";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -136,6 +143,7 @@ const form = reactive({
   targetWorkspaceId: "",
   title: "",
   content: "",
+  boardDate: todayBoardDate(),
   dueAt: "",
   priority: "NORMAL",
 });
@@ -173,6 +181,9 @@ function loadPublication(publication) {
   form.targetWorkspaceId = publication?.targets?.[0]?.workspaceId || "";
   form.title = publication?.title || "";
   form.content = publication?.content || "";
+  form.boardDate = publication?.boardDate
+    ? String(publication.boardDate).slice(0, 10)
+    : store.boardDate;
   form.dueAt = localDateTime(publication?.dueAt);
   form.priority = publication?.priority || "NORMAL";
 }
@@ -200,6 +211,7 @@ async function save() {
       targetWorkspaceIds: [form.targetWorkspaceId],
       title: form.title,
       content: form.content,
+      boardDate: form.boardDate,
       dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
       priority: form.priority,
       publishAt: props.publication?.publishAt || new Date().toISOString(),

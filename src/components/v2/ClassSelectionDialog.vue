@@ -116,6 +116,14 @@
       </v-card-text>
 
       <v-card-actions class="pa-5 pt-2">
+        <v-btn
+          color="primary"
+          prepend-icon="mdi-account-tie-outline"
+          variant="text"
+          @click="emit('teacher')"
+        >
+          我是教师
+        </v-btn>
         <v-spacer />
         <v-btn
           :disabled="!administrativeClassId || loadingOptions"
@@ -138,7 +146,7 @@ import {computed, reactive, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 
 const props = defineProps({modelValue: Boolean});
-defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue", "teacher"]);
 
 const store = useClassworksV2Store();
 const schoolId = ref("");

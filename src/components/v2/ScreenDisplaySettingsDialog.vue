@@ -92,6 +92,12 @@
           hide-details
           label="新紧急通知播放提示音"
         />
+        <v-switch
+          v-model="draft.antiBurnInShift"
+          color="primary"
+          hide-details
+          label="防烧屏轻微位移（每 5 分钟移动 1～2 像素）"
+        />
       </v-card-text>
       <v-card-actions class="px-5 pb-5">
         <v-btn

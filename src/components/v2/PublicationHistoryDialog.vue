@@ -47,7 +47,10 @@
             :dot-color="item.isCertified ? 'success' : 'warning'"
             size="small"
           >
-            <v-card border variant="flat">
+            <v-card
+              border
+              variant="flat"
+            >
               <v-card-text>
                 <div class="d-flex align-center flex-wrap ga-2 mb-2">
                   <strong>版本 {{ item.revision }}</strong>

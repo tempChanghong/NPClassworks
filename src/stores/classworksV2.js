@@ -19,6 +19,7 @@ import {
   publicationTransitionDelay,
   sanitizeCourseGroupIds,
 } from "@/utils/classworksSelection";
+import {sanitizeBoardDate, todayBoardDate} from "@/utils/boardDate";
 
 const SELECTION_KEY = "classworks-v2-student-selection";
 let realtimeCleanup = [];
@@ -50,6 +51,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     studentSubjects: [],
     selection: loadSavedSelection(),
     feed: [],
+    boardDate: todayBoardDate(),
     feedGeneratedAt: null,
     feedAudience: "student",
     studentLoading: false,
@@ -65,6 +67,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     teacherPublications: [],
     schoolMemberships: [],
     teacherLoading: false,
+    teacherPublicationsLoading: false,
     teacherError: "",
 
     screenSession: null,
@@ -128,7 +131,15 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.studentError = "";
       try {
         this.schools = await classworksV2Api.schools();
-        const schoolId = this.selection.schoolId || (this.schools.length === 1 ? this.schools[0].id : "");
+        const savedSchoolExists = this.schools.some((school) => school.id === this.selection.schoolId);
+        if (this.selection.schoolId && !savedSchoolExists) {
+          this.selection = {};
+          this.courseOptions = null;
+          this.studentNotice = "学校配置已经更新，请重新选择行政班和走班。";
+          localStorage.removeItem(SELECTION_KEY);
+        }
+        const schoolId = (savedSchoolExists ? this.selection.schoolId : "")
+          || (this.schools.length === 1 ? this.schools[0].id : "");
         if (!schoolId) {
           this.selectionDialog = true;
           return;
@@ -246,7 +257,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.feedLoading = true;
       this.studentError = "";
       try {
-        const result = await classworksV2Api.feed(this.selectedWorkspaceIds);
+        const result = await classworksV2Api.feed(this.selectedWorkspaceIds, this.boardDate);
         if (requestId !== feedRequest || this.feedAudience !== "student") return;
         this.feed = result.items || [];
         this.feedGeneratedAt = result.generatedAt;
@@ -266,7 +277,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.feedLoading = true;
       this.screenError = "";
       try {
-        const result = await classworksV2Api.classroomScreenFeed();
+        const result = await classworksV2Api.classroomScreenFeed(this.boardDate);
         if (requestId !== feedRequest || this.feedAudience !== "screen") return;
         this.feed = result.items || [];
         this.feedGeneratedAt = result.generatedAt;
@@ -292,6 +303,27 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       return this.feedAudience === "screen"
         ? this.loadScreenFeed()
         : this.loadStudentFeed();
+    },
+
+    async setBoardDate(value) {
+      const nextDate = sanitizeBoardDate(value, this.boardDate);
+      if (nextDate === this.boardDate) return;
+      this.boardDate = nextDate;
+      await this.loadActiveFeed();
+    },
+
+    async copyScreenBoardToToday() {
+      const targetBoardDate = todayBoardDate();
+      this.screenError = "";
+      try {
+        const result = await classworksV2Api.copyClassroomScreenBoard(this.boardDate, targetBoardDate);
+        this.boardDate = targetBoardDate;
+        await this.loadScreenFeed();
+        return result;
+      } catch (error) {
+        this.screenError = describeApiError(error, "复制作业失败");
+        throw error;
+      }
     },
 
     async setFeedAudience(audience) {
@@ -362,7 +394,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         const [account, memberships, publications, schoolMemberships] = await Promise.all([
           classworksV2Api.profile(),
           classworksV2Api.myWorkspaces(),
-          classworksV2Api.publications(),
+          classworksV2Api.publications({limit: 100}),
           classworksV2Api.mySchools(),
         ]);
         this.account = account;
@@ -566,8 +598,15 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     },
 
     async refreshTeacherPublications() {
-      const result = await classworksV2Api.publications();
-      this.teacherPublications = result.items || [];
+      this.teacherPublicationsLoading = true;
+      try {
+        const result = await classworksV2Api.publications({limit: 100});
+        this.teacherPublications = result.items || [];
+      } catch (error) {
+        this.teacherError = describeApiError(error, "刷新发布记录失败");
+      } finally {
+        this.teacherPublicationsLoading = false;
+      }
     },
 
     async updatePublication(publication, input) {
@@ -600,7 +639,10 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
 
     async clone(publication) {
       try {
-        await classworksV2Api.clonePublication(publication.id);
+        await classworksV2Api.clonePublication(publication.id, {
+          boardDate: publication.type === "ASSIGNMENT" ? todayBoardDate() : null,
+          dueAt: null,
+        });
         await this.refreshTeacherPublications();
       } catch (error) {
         this.teacherError = describeApiError(error, "复制失败");
@@ -619,6 +661,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.memberships = [];
       this.teacherSubjects = [];
       this.teacherPublications = [];
+      this.teacherPublicationsLoading = false;
       this.schoolMemberships = [];
     },
   },

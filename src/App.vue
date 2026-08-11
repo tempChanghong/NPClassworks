@@ -26,6 +26,7 @@
     </router-view>
     <global-message />
     <rate-limit-modal />
+    <PwaLifecyclePrompt />
   </v-app>
 </template>
 
@@ -34,6 +35,7 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useTheme } from "vuetify";
 import { getSetting, watchSettings } from "@/utils/settings";
 import RateLimitModal from "@/components/RateLimitModal.vue";
+import PwaLifecyclePrompt from "@/components/v2/PwaLifecyclePrompt.vue";
 
 const theme = useTheme();
 
@@ -75,12 +77,12 @@ let unwatchSettings = null;
 const onBeforeInstallPrompt = (e) => {
   e.preventDefault();
   window.deferredPwaPrompt = e;
-  window.dispatchEvent(new Event('pwa-prompt-ready'));
+  window.dispatchEvent(new window.Event('pwa-prompt-ready'));
 };
 
 const onAppInstalled = () => {
   window.deferredPwaPrompt = null;
-  window.dispatchEvent(new Event('pwa-installed'));
+  window.dispatchEvent(new window.Event('pwa-installed'));
 };
 
 onMounted(() => {

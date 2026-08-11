@@ -69,6 +69,38 @@
         </template>
       </v-autocomplete>
 
+      <div
+        v-if="targetShortcuts.length"
+        class="mb-4"
+      >
+        <div class="text-caption text-medium-emphasis mb-2">
+          常用与最近目标
+        </div>
+        <div class="d-flex flex-wrap ga-2">
+          <v-chip
+            v-for="shortcut in targetShortcuts"
+            :key="shortcut.id"
+            :prepend-icon="shortcut.favorite ? 'mdi-star' : 'mdi-history'"
+            :color="shortcut.favorite ? 'warning' : undefined"
+            variant="tonal"
+            @click="applyTargetShortcut(shortcut)"
+          >
+            {{ shortcut.label }}
+          </v-chip>
+        </div>
+      </div>
+
+      <v-btn
+        class="mb-4"
+        :disabled="!form.targetWorkspaceIds.length"
+        :prepend-icon="currentTargetsFavorite ? 'mdi-star' : 'mdi-star-outline'"
+        size="small"
+        variant="text"
+        @click="toggleCurrentTargetsFavorite"
+      >
+        {{ currentTargetsFavorite ? "取消收藏当前目标" : "收藏当前目标组合" }}
+      </v-btn>
+
       <v-alert
         class="mb-4"
         color="info"
@@ -76,6 +108,16 @@
       >
         作业目标已按授课规则过滤：一、二班小科可选行政班，走班科目只显示对应教学班。
       </v-alert>
+
+      <v-text-field
+        v-if="form.type === 'ASSIGNMENT'"
+        v-model="form.boardDate"
+        hint="决定这项作业出现在哪一天的作业板上，与定时发布时间相互独立"
+        label="作业板日期"
+        persistent-hint
+        type="date"
+        variant="outlined"
+      />
 
       <v-text-field
         v-model="form.title"
@@ -182,6 +224,13 @@
 <script setup>
 import {computed, reactive, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
+import {todayBoardDate} from "@/utils/boardDate";
+import {
+  loadTeacherTargetPreferences,
+  rememberTeacherTargets,
+  teacherTargetCombinationId,
+  toggleFavoriteTeacherTargets,
+} from "@/utils/teacherTargetPreferences";
 
 const props = defineProps({
   editingPublication: {
@@ -194,6 +243,7 @@ const store = useClassworksV2Store();
 const saving = ref(false);
 const publishing = ref(false);
 const localError = ref("");
+const targetPreferencesRevision = ref(0);
 
 function localDateTime(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
@@ -206,6 +256,7 @@ const form = reactive({
   targetWorkspaceIds: [],
   title: "",
   content: "",
+  boardDate: todayBoardDate(),
   publishAt: localDateTime(),
   dueAt: "",
   expiresAt: "",
@@ -222,6 +273,39 @@ const eligibleTargets = computed(() =>
   store.eligibleTeacherWorkspaces(form.type, form.subjectId),
 );
 const isEditing = computed(() => Boolean(props.editingPublication));
+const targetPreferences = computed(() => {
+  targetPreferencesRevision.value;
+  return loadTeacherTargetPreferences(store.account?.id);
+});
+const currentTargetCombination = computed(() => ({
+  type: form.type,
+  subjectId: form.type === "ASSIGNMENT" ? form.subjectId : null,
+  targetWorkspaceIds: form.targetWorkspaceIds,
+}));
+const currentTargetsFavorite = computed(() => {
+  const id = teacherTargetCombinationId(currentTargetCombination.value);
+  return Boolean(id && targetPreferences.value.favorites.some(
+    (item) => teacherTargetCombinationId(item) === id,
+  ));
+});
+const targetShortcuts = computed(() => {
+  const allowed = new Map(eligibleTargets.value.map((workspace) => [workspace.id, workspace]));
+  const favorites = new Set(targetPreferences.value.favorites.map(teacherTargetCombinationId));
+  const combined = [...targetPreferences.value.favorites, ...targetPreferences.value.recent];
+  const seen = new Set();
+  return combined.filter((item) => {
+    const id = teacherTargetCombinationId(item);
+    if (seen.has(id) || item.type !== form.type || item.subjectId !== (form.subjectId || null)) return false;
+    if (!item.targetWorkspaceIds.every((workspaceId) => allowed.has(workspaceId))) return false;
+    seen.add(id);
+    return true;
+  }).map((item) => ({
+    ...item,
+    id: teacherTargetCombinationId(item),
+    favorite: favorites.has(teacherTargetCombinationId(item)),
+    label: item.targetWorkspaceIds.map((id) => allowed.get(id)?.name).filter(Boolean).join("＋"),
+  }));
+});
 
 watch([() => form.type, () => form.subjectId], () => {
   const allowed = new Set(eligibleTargets.value.map((item) => item.id));
@@ -239,6 +323,9 @@ watch(() => props.editingPublication, (publication) => {
   form.targetWorkspaceIds = publication.targets?.map((target) => target.workspaceId) || [];
   form.title = publication.title || "";
   form.content = publication.content || "";
+  form.boardDate = publication.boardDate
+    ? String(publication.boardDate).slice(0, 10)
+    : todayBoardDate(new Date(publication.publishAt));
   form.publishAt = localDateTime(new Date(publication.publishAt));
   form.dueAt = publication.dueAt ? localDateTime(new Date(publication.dueAt)) : "";
   form.expiresAt = publication.expiresAt ? localDateTime(new Date(publication.expiresAt)) : "";
@@ -250,10 +337,20 @@ function targetSubtitle(workspace) {
   return `${kind} · ${workspace.term?.school?.name || ""}`;
 }
 
+function applyTargetShortcut(shortcut) {
+  form.targetWorkspaceIds = [...shortcut.targetWorkspaceIds];
+}
+
+function toggleCurrentTargetsFavorite() {
+  toggleFavoriteTeacherTargets(store.account?.id, currentTargetCombination.value);
+  targetPreferencesRevision.value += 1;
+}
+
 function reset() {
   form.targetWorkspaceIds = [];
   form.title = "";
   form.content = "";
+  form.boardDate = todayBoardDate();
   form.dueAt = "";
   form.expiresAt = "";
   form.publishAt = localDateTime();
@@ -282,6 +379,7 @@ async function submit(status) {
       targetWorkspaceIds: form.targetWorkspaceIds,
       title: form.title,
       content: form.content,
+      boardDate: form.type === "ASSIGNMENT" ? form.boardDate : null,
       publishAt: new Date(form.publishAt).toISOString(),
       dueAt: form.type === "ASSIGNMENT" && form.dueAt ? new Date(form.dueAt).toISOString() : null,
       expiresAt: form.type === "NOTICE" && form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
@@ -291,6 +389,8 @@ async function submit(status) {
     const publication = isEditing.value
       ? await store.updatePublication(props.editingPublication, input)
       : await store.publish(input);
+    rememberTeacherTargets(store.account?.id, currentTargetCombination.value);
+    targetPreferencesRevision.value += 1;
     reset();
     emit("published", publication);
   } catch {
