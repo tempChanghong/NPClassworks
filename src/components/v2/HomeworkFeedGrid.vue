@@ -18,7 +18,7 @@
         :color="publication.type === 'NOTICE' ? priorityColor(publication.priority) : undefined"
         class="publication-card rounded-xl"
         :class="dueCardClass(publication)"
-        :variant="publication.type === 'NOTICE' ? 'tonal' : 'elevated'"
+        :variant="publication.type === 'NOTICE' ? 'tonal' : screenMode ? 'flat' : 'elevated'"
       >
         <v-card-title class="publication-title d-flex align-center flex-wrap">
           <v-icon
@@ -35,19 +35,19 @@
           <v-spacer />
           <v-chip
             :color="publication.isCertified ? 'success' : 'warning'"
-            size="small"
+            :size="screenMode ? 'x-small' : 'small'"
             variant="tonal"
           >
             <v-icon
               class="mr-1"
               :icon="publication.isCertified ? 'mdi-check-decagram' : 'mdi-alert-circle-outline'"
-              size="small"
+              :size="screenMode ? 'x-small' : 'small'"
             />
             {{ publication.isCertified ? "教师已确认" : "待教师确认" }}
           </v-chip>
           <v-chip
             :color="priorityColor(publication.priority)"
-            size="small"
+            :size="screenMode ? 'x-small' : 'small'"
             variant="tonal"
           >
             {{ priorityLabel(publication.priority) }}
@@ -67,7 +67,7 @@
           <div class="publication-metadata d-flex flex-wrap text-medium-emphasis">
             <span v-if="settings.showSecondaryMetadata">
               <v-icon
-                size="small"
+                :size="screenMode ? 'x-small' : 'small'"
                 icon="mdi-account-outline"
               /> {{ publicationSource(publication) }}
             </span>
@@ -131,7 +131,11 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
-import {SCREEN_DISPLAY_DEFAULTS, sanitizeScreenDisplaySettings} from "@/utils/screenDisplaySettings";
+import {
+  calculateScreenFeedColumns,
+  SCREEN_DISPLAY_DEFAULTS,
+  sanitizeScreenDisplaySettings,
+} from "@/utils/screenDisplaySettings";
 import {assignmentDueState} from "@/utils/publicationFeed";
 
 const props = defineProps({
@@ -139,69 +143,111 @@ const props = defineProps({
   screenMode: Boolean,
   settings: {type: Object, default: () => ({...SCREEN_DISPLAY_DEFAULTS})},
   canEdit: {type: Function, default: () => false},
+  currentTime: {type: [Date, Number, String], default: () => new Date()},
 });
 defineEmits(["edit", "history"]);
 
 const gridContainer = ref(null);
 const gridItems = ref([]);
-const now = ref(new Date());
+const containerWidth = ref(0);
 let resizeObserver;
-let clockTimer;
+let resizeFrame;
+const resizeQueue = new Set();
+const contentOwners = new WeakMap();
 
 const normalizedSettings = computed(() => sanitizeScreenDisplaySettings(props.settings));
 const gridStyle = computed(() => {
   const settings = normalizedSettings.value;
-  const minWidth = Math.round(360 * (settings.fontScale / 100));
+  const width = containerWidth.value || window.innerWidth;
+  const autoColumns = calculateScreenFeedColumns(width, settings.fontScale);
   return {
     "--screen-font-scale": props.screenMode ? settings.fontScale / 100 : 1,
     "--feed-columns": settings.columns === "auto"
-      ? `repeat(auto-fit, minmax(min(100%, ${minWidth}px), 1fr))`
+      ? `repeat(${autoColumns}, minmax(0, 1fr))`
       : `repeat(${settings.columns}, minmax(0, 1fr))`,
   };
 });
 
-function resizeGridItem(item) {
+function resizeGridItems(items) {
   const grid = gridContainer.value;
-  const content = item?.firstElementChild;
-  if (!grid || !content) return;
+  if (!grid || !items.length) return;
 
   const styles = window.getComputedStyle(grid);
   const rowHeight = Number.parseFloat(styles.gridAutoRows) || 1;
   const rowGap = Number.parseFloat(styles.rowGap) || 0;
-  const contentHeight = content.getBoundingClientRect().height;
-  item.style.gridRowEnd = `span ${Math.ceil((contentHeight + rowGap) / (rowHeight + rowGap))}`;
+  const measurements = items.map((item) => ({
+    item,
+    height: item?.firstElementChild?.getBoundingClientRect().height || 0,
+  }));
+  measurements.forEach(({item, height}) => {
+    if (item && height) item.style.gridRowEnd = `span ${Math.ceil((height + rowGap) / (rowHeight + rowGap))}`;
+  });
 }
 
 function resizeAllGridItems() {
-  gridItems.value.forEach(resizeGridItem);
+  scheduleResize(gridItems.value);
+}
+
+function scheduleResize(items) {
+  items.forEach((item) => item && resizeQueue.add(item));
+  if (resizeFrame) return;
+  resizeFrame = window.requestAnimationFrame(() => {
+    resizeFrame = null;
+    const pending = [...resizeQueue];
+    resizeQueue.clear();
+    resizeGridItems(pending);
+  });
 }
 
 async function observeGridItems() {
   await nextTick();
   if (!resizeObserver) return;
   resizeObserver.disconnect();
-  if (gridContainer.value) resizeObserver.observe(gridContainer.value);
+  if (gridContainer.value) {
+    containerWidth.value = gridContainer.value.clientWidth;
+    resizeObserver.observe(gridContainer.value);
+  }
   gridItems.value.forEach((item) => {
     const content = item?.firstElementChild;
-    if (content) resizeObserver.observe(content);
+    if (content) {
+      contentOwners.set(content, item);
+      resizeObserver.observe(content);
+    }
   });
   resizeAllGridItems();
 }
 
 onMounted(() => {
-  resizeObserver = new window.ResizeObserver(resizeAllGridItems);
-  clockTimer = window.setInterval(() => {
-    now.value = new Date();
-  }, 60_000);
+  resizeObserver = new window.ResizeObserver((entries) => {
+    const changedItems = [];
+    entries.forEach((entry) => {
+      if (entry.target === gridContainer.value) {
+        const width = Math.round(entry.contentRect.width);
+        if (width !== containerWidth.value) containerWidth.value = width;
+        changedItems.push(...gridItems.value);
+      } else {
+        changedItems.push(contentOwners.get(entry.target));
+      }
+    });
+    scheduleResize(changedItems);
+  });
   observeGridItems();
 });
 
-watch(() => props.publications, observeGridItems, {deep: true});
+watch(() => props.publications.map((publication) => [
+  publication.id,
+  publication.revision,
+  publication.title,
+  publication.content,
+  publication.isCertified,
+  publication.dueAt,
+  publication.targets?.map((target) => target.workspace?.name).join(","),
+].join(":")).join("|"), observeGridItems);
 watch(gridStyle, () => nextTick(resizeAllGridItems));
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
-  window.clearInterval(clockTimer);
+  if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
 });
 
 function formatDateTime(value) {
@@ -223,7 +269,7 @@ function priorityLabel(priority) {
 }
 
 function dueState(publication) {
-  return assignmentDueState(publication.dueAt, now.value);
+  return assignmentDueState(publication.dueAt, new Date(props.currentTime));
 }
 
 function dueCardClass(publication) {
@@ -258,10 +304,12 @@ function targetNames(publication) {
 .publication-card {
   width: 100%;
   min-width: 0;
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  border: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.8));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.publication-card:hover { transform: translateY(-2px); }
+.publication-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.11) !important; }
 .publication-card--overdue { border-left: 4px solid rgb(var(--v-theme-error)); }
 .publication-card--today,
 .publication-card--soon { border-left: 4px solid rgb(var(--v-theme-warning)); }
@@ -280,8 +328,8 @@ function targetNames(publication) {
 }
 
 .screen-feed .publication-title {
-  font-size: 1.15rem;
-  padding: 16px 18px 6px;
+  font-size: clamp(0.95rem, 0.25vw + 0.72rem, 1.2rem);
+  padding: 14px 18px 5px;
 }
 
 .screen-feed .publication-subtitle {
@@ -293,6 +341,10 @@ function targetNames(publication) {
 .screen-feed .publication-body { padding: 12px 18px 18px; }
 .screen-feed .publication-content { font-size: calc(1rem * var(--screen-font-scale)); line-height: 1.65; }
 .screen-feed .publication-metadata { font-size: 0.75rem; }
+.screen-feed .publication-card {
+  box-shadow: none !important;
+}
+.screen-feed .publication-card:hover { box-shadow: none !important; }
 
 .screen-feed--compact { gap: 10px; }
 .screen-feed--compact .publication-title { padding-top: 10px; }
@@ -302,5 +354,9 @@ function targetNames(publication) {
 
 @media (max-width: 700px) {
   .homework-feed-grid { grid-template-columns: 1fr !important; }
+}
+
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .publication-card { transition: none; }
 }
 </style>

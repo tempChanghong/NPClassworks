@@ -1,5 +1,24 @@
 <template>
+  <button
+    v-if="inline"
+    class="classroom-time-inline"
+    type="button"
+    title="打开全屏时钟"
+    @click="fullscreen = true"
+  >
+    <v-icon
+      class="classroom-time-inline__icon"
+      icon="mdi-clock-outline"
+    />
+    <span class="classroom-time-inline__main">
+      <span class="time-line font-weight-bold">
+        {{ hoursMinutes }}<span class="seconds">{{ seconds }}</span>
+      </span>
+      <span class="classroom-time-inline__date">{{ dateLine }}</span>
+    </span>
+  </button>
   <v-card
+    v-else
     class="classroom-time-card fill-height rounded-xl"
     :class="{'classroom-time-card--compact': compact}"
     color="primary"
@@ -66,7 +85,7 @@
 <script setup>
 import {computed, onMounted, onUnmounted, ref} from "vue";
 
-defineProps({compact: Boolean});
+defineProps({compact: Boolean, inline: Boolean});
 
 const now = ref(new Date());
 const fullscreen = ref(false);
@@ -85,14 +104,28 @@ const dateLine = computed(() => now.value.toLocaleDateString("zh-CN", {
   weekday: "long",
 }));
 
-onMounted(() => {
-  timer = window.setInterval(() => {
+function scheduleClock() {
+  window.clearTimeout(timer);
+  if (document.hidden) return;
+  timer = window.setTimeout(() => {
     now.value = new Date();
-  }, 1000);
+    scheduleClock();
+  }, 1000 - (Date.now() % 1000) + 10);
+}
+
+function handleVisibilityChange() {
+  if (!document.hidden) now.value = new Date();
+  scheduleClock();
+}
+
+onMounted(() => {
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  scheduleClock();
 });
 
 onUnmounted(() => {
-  if (timer) window.clearInterval(timer);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  window.clearTimeout(timer);
 });
 </script>
 
@@ -113,6 +146,43 @@ onUnmounted(() => {
 
 .classroom-time-card--compact .time-line {
   font-size: clamp(2rem, 3vw, 2.75rem);
+}
+
+.classroom-time-inline {
+  align-items: center;
+  background: rgba(var(--v-theme-primary), 0.08);
+  border: 1px solid rgba(var(--v-theme-primary), 0.2);
+  border-radius: 14px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  min-height: 56px;
+  padding: 6px 14px;
+  text-align: left;
+}
+
+.classroom-time-inline__icon {
+  color: rgb(var(--v-theme-primary));
+  font-size: 1.5rem;
+}
+
+.classroom-time-inline__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.classroom-time-inline .time-line {
+  font-size: clamp(1.55rem, 1.25vw + 0.35rem, 2.25rem);
+  white-space: nowrap;
+}
+
+.classroom-time-inline__date {
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  font-size: clamp(0.72rem, 0.16vw + 0.6rem, 0.95rem);
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .time-line {
@@ -156,5 +226,9 @@ onUnmounted(() => {
 
 .fullscreen-date {
   font-size: clamp(1.4rem, 3vw, 2.6rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .classroom-time-inline { transition: none; }
 }
 </style>

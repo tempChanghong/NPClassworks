@@ -15,11 +15,11 @@ import { fileURLToPath, URL } from 'node:url'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: './',
   plugins: [
     VueRouter(),
-    vueDevTools(),
+    mode === 'development' && vueDevTools(),
     Layouts(),
     Vue({
       template: { transformAssetUrls }
@@ -42,7 +42,7 @@ export default defineConfig({
         globPatterns: [
           // 音频由下方 sound-cache 按需缓存。不要把整套声音塞进
           // precache，否则首次安装/更新 PWA 时会一次性下载全部 MP3。
-          '**/*.{js,css,html,ico,png,svg,webmanifest,txt,json,woff2,ttf}',
+          '**/*.{js,css,html,ico,png,svg,webmanifest,txt,json,woff2}',
         ],
         // UAF PDF 导出的三套中文字库接近 24 MB，只有使用导出功能时
         // 才需要。文件仍会复制到 dist，但交给 uaf-cache 首次按需获取。
@@ -384,4 +384,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

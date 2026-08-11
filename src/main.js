@@ -43,6 +43,8 @@ app.mount('#app')
 
 // 异步加载 Clarity（在页面完全加载后）
 const loadClarity = async () => {
+  // 已绑定的一体机以长期稳定显示为主，不加载分析 SDK 和设备指纹。
+  if (localStorage.getItem('classworks-v2-screen-token')) return
   try {
     const { getVisitorId } = await import('./utils/visitorId')
     const Clarity = (await import('@microsoft/clarity')).default

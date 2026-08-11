@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  calculateScreenFeedColumns,
   SCREEN_DISPLAY_DEFAULTS,
   loadScreenDisplaySettings,
   sanitizeScreenDisplaySettings,
@@ -29,6 +30,7 @@ test("screen display settings are bounded and invalid values use defaults", () =
     showSecondaryMetadata: false,
     urgentNoticeSound: true,
     antiBurnInShift: false,
+    performanceMode: "efficient",
   });
   assert.equal(sanitizeScreenDisplaySettings({fontScale: 94}).fontScale, 90);
 });
@@ -47,4 +49,14 @@ test("corrupt saved screen display settings fall back safely", () => {
   const storage = memoryStorage();
   storage.setItem(screenDisplaySettingsKey("screen-a"), "not-json");
   assert.deepEqual(loadScreenDisplaySettings("screen-a", storage), SCREEN_DISPLAY_DEFAULTS);
+});
+
+test("automatic screen columns remain readable at 1080P, 2K and 4K widths", () => {
+  assert.equal(calculateScreenFeedColumns(1920, 130), 3);
+  assert.equal(calculateScreenFeedColumns(2560, 130), 4);
+  assert.equal(calculateScreenFeedColumns(3840, 130), 5);
+
+  assert.equal(calculateScreenFeedColumns(1920, 200), 2);
+  assert.equal(calculateScreenFeedColumns(2560, 200), 3);
+  assert.equal(calculateScreenFeedColumns(3840, 200), 4);
 });

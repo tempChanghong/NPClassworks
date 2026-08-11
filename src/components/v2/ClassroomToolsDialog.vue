@@ -83,6 +83,13 @@
           </v-col>
         </v-row>
 
+        <v-empty-state
+          v-if="!activeTool && !tools.length"
+          headline="课堂工具已全部隐藏"
+          icon="mdi-toolbox-outline"
+          text="可以在大屏设置的“课堂工具”分类中重新启用。"
+        />
+
         <template v-else-if="activeTool === 'attendance'">
           <div class="d-flex align-center flex-wrap ga-3 mb-5">
             <v-chip
@@ -272,6 +279,7 @@ import {useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import NoiseMonitorCard from "@/components/NoiseMonitorCard.vue";
 import RandomPicker from "@/components/RandomPicker.vue";
+import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 
 const props = defineProps({modelValue: Boolean});
 const emit = defineEmits(["update:modelValue"]);
@@ -284,21 +292,23 @@ const rosterText = ref("");
 const savingRoster = ref(false);
 const savingAttendance = ref(false);
 const attendanceDraft = ref({absent: [], late: [], excluded: []});
+const toolSettings = ref(loadClassroomToolSettings(store.screenSession?.binding?.id));
 
 // 工具采用注册表，未来删除随机点名或考试看板时无需改动主页结构。
-const tools = [
+const allTools = [
   {id: "attendance", title: "考勤", description: "记录今日缺勤、迟到和不参与学生", icon: "mdi-account-check-outline", color: "success"},
   {id: "noise", title: "噪声监测", description: "查看教室环境噪声和本地统计", icon: "mdi-waveform", color: "info"},
   {id: "random", title: "随机点名", description: "自动排除今日缺勤等学生", icon: "mdi-account-question-outline", color: "warning"},
   {id: "exam", title: "考试看板", description: "打开现有考试安排与配置工具", icon: "mdi-calendar-check-outline", color: "purple"},
 ];
+const tools = computed(() => allTools.filter((tool) => toolSettings.value.enabledToolIds.includes(tool.id)));
 
 const today = () => {
   const now = new Date();
   const offset = now.getTimezoneOffset() * 60000;
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 };
-const activeToolTitle = computed(() => tools.find((tool) => tool.id === activeTool.value)?.title || "");
+const activeToolTitle = computed(() => tools.value.find((tool) => tool.id === activeTool.value)?.title || "");
 const attendanceCounts = computed(() => ({
   present: Math.max(0, store.classroomStudents.length
     - attendanceDraft.value.absent.length
@@ -322,6 +332,7 @@ watch(() => props.modelValue, async (open) => {
     activeTool.value = "";
     return;
   }
+  toolSettings.value = loadClassroomToolSettings(store.screenSession?.binding?.id);
   await store.loadClassroomTools(today());
   attendanceDraft.value = attendanceFromStore();
 });

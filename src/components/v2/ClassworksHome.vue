@@ -32,10 +32,18 @@
         教师
       </v-btn>
     </v-btn-toggle>
+    <v-btn
+      v-if="appReady && !store.screenSession"
+      class="ml-2"
+      icon="mdi-cog-outline"
+      title="设置"
+      @click="openSettings(mode)"
+    />
   </v-app-bar>
 
   <v-container
     class="classworks-v2-page py-6"
+    :class="{'classworks-v2-page--screen': mode === 'screen'}"
     fluid
   >
     <template v-if="mode === 'student'">
@@ -161,6 +169,7 @@
         @create="openScreenComposer()"
         @edit="openScreenComposer"
         @history="openHistory($event, 'screen')"
+        @settings="openSettings('screen')"
         @tools="classroomToolsDialog = true"
         @copy-board="copyScreenBoardToToday"
       />
@@ -372,6 +381,7 @@
     @teacher="openTeacherFromSelection"
   />
   <ClassroomToolsDialog
+    v-if="classroomToolsDialog"
     v-model="classroomToolsDialog"
   />
   <screen-homework-dialog
@@ -437,7 +447,8 @@
 </template>
 
 <script setup>
-import {computed, onMounted, onUnmounted, ref, watch} from "vue";
+import {computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch} from "vue";
+import {useRoute, useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {
   classworksV2Api,
@@ -451,14 +462,17 @@ import ScreenHomeworkDialog from "@/components/v2/ScreenHomeworkDialog.vue";
 import PublicationHistoryDialog from "@/components/v2/PublicationHistoryDialog.vue";
 import NotificationDeliveryDialog from "@/components/v2/NotificationDeliveryDialog.vue";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
-import ClassroomToolsDialog from "@/components/v2/ClassroomToolsDialog.vue";
 import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import TeacherPublicationManager from "@/components/v2/TeacherPublicationManager.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
 
+const ClassroomToolsDialog = defineAsyncComponent(() => import("@/components/v2/ClassroomToolsDialog.vue"));
+
 const store = useClassworksV2Store();
+const route = useRoute();
+const router = useRouter();
 const mode = ref("student");
 const appReady = ref(false);
 const snackbar = ref(false);
@@ -506,6 +520,10 @@ function openTeacherFromSelection() {
   mode.value = "teacher";
 }
 
+function openSettings(context = mode.value) {
+  router.push({path: "/settings", query: {context}});
+}
+
 watch(mode, async (value) => {
   if (value === "teacher" && !store.account && !store.teacherLoading) store.bootstrapTeacher();
   if (value === "screen") await store.setFeedAudience("screen");
@@ -526,6 +544,7 @@ onMounted(async () => {
     store.bootstrapClassroomScreen(),
   ]);
   if (store.screenSession) mode.value = "screen";
+  else if (route.query.mode === "teacher") mode.value = "teacher";
   appReady.value = true;
   store.startRealtime();
 });
@@ -660,6 +679,13 @@ async function copyScreenBoardToToday() {
 <style scoped>
 .classworks-v2-page {
   max-width: 1500px;
+}
+
+.classworks-v2-page--screen {
+  max-width: none;
+  padding-left: clamp(10px, 1vw, 28px) !important;
+  padding-right: clamp(10px, 1vw, 28px) !important;
+  padding-top: clamp(10px, 1vh, 24px) !important;
 }
 
 .teacher-login-icon {

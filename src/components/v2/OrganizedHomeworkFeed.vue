@@ -80,6 +80,7 @@
         :publications="organized.notices"
         :screen-mode="screenMode"
         :settings="settings"
+        :current-time="now"
         @edit="$emit('edit', $event)"
         @history="$emit('history', $event)"
       />
@@ -108,6 +109,7 @@
         :publications="group.publications"
         :screen-mode="screenMode"
         :settings="settings"
+        :current-time="now"
         @edit="$emit('edit', $event)"
         @history="$emit('history', $event)"
       />
@@ -134,7 +136,7 @@
 </template>
 
 <script setup>
-import {computed, ref, watch} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import HomeworkFeedGrid from "@/components/v2/HomeworkFeedGrid.vue";
 import {SCREEN_DISPLAY_DEFAULTS} from "@/utils/screenDisplaySettings";
 import {organizePublicationFeed, publicationFilterOptions} from "@/utils/publicationFeed";
@@ -151,6 +153,8 @@ defineEmits(["edit", "history"]);
 const subjectId = ref("");
 const workspaceId = ref("");
 const sortMode = ref("smart");
+const now = ref(new Date());
+let minuteTimer;
 const sortOptions = [
   {title: "智能排序", value: "smart"},
   {title: "截止时间", value: "due"},
@@ -176,6 +180,31 @@ const showEmptyState = computed(() => {
 watch(options, (value) => {
   if (subjectId.value && !value.subjects.some((item) => item.value === subjectId.value)) subjectId.value = "";
   if (workspaceId.value && !value.workspaces.some((item) => item.value === workspaceId.value)) workspaceId.value = "";
+});
+
+function scheduleMinuteTick() {
+  window.clearTimeout(minuteTimer);
+  if (document.hidden) return;
+  const delay = 60_000 - (Date.now() % 60_000) + 20;
+  minuteTimer = window.setTimeout(() => {
+    now.value = new Date();
+    scheduleMinuteTick();
+  }, delay);
+}
+
+function handleVisibilityChange() {
+  if (!document.hidden) now.value = new Date();
+  scheduleMinuteTick();
+}
+
+onMounted(() => {
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  scheduleMinuteTick();
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  window.clearTimeout(minuteTimer);
 });
 
 function resetFilters() {

@@ -8,52 +8,56 @@
       color="primary"
       variant="tonal"
     >
-      <v-card-text class="d-flex align-center flex-wrap screen-toolbar-content">
-        <v-avatar
-          color="primary"
-          size="42"
-          variant="flat"
-        >
-          <v-icon icon="mdi-monitor-dashboard" />
-        </v-avatar>
-        <div class="screen-identity">
-          <div class="font-weight-bold screen-class-name">
-            {{ className }}
-          </div>
-          <div class="text-caption text-medium-emphasis">
-            {{ workspaceSummary }}
+      <v-card-text class="screen-toolbar-content">
+        <div class="screen-class-block">
+          <v-avatar
+            color="primary"
+            size="42"
+            variant="flat"
+          >
+            <v-icon icon="mdi-monitor-dashboard" />
+          </v-avatar>
+          <div class="screen-identity">
+            <div class="font-weight-bold screen-class-name">
+              {{ className }}
+            </div>
+            <div class="text-caption text-medium-emphasis">
+              {{ workspaceSummary }}
+            </div>
           </div>
         </div>
-        <v-spacer />
-        <v-btn
-          prepend-icon="mdi-monitor-eye"
-          variant="tonal"
-          @click="settingsDialog = true"
-        >
-          显示设置
-        </v-btn>
-        <v-btn
-          prepend-icon="mdi-toolbox-outline"
-          variant="tonal"
-          @click="$emit('tools')"
-        >
-          课堂工具
-        </v-btn>
-        <v-btn
-          color="primary"
-          prepend-icon="mdi-monitor-edit"
-          variant="elevated"
-          @click="$emit('create')"
-        >
-          录入作业
-        </v-btn>
-        <v-btn
-          :loading="store.feedLoading"
-          icon="mdi-refresh"
-          title="刷新"
-          variant="text"
-          @click="store.loadActiveFeed()"
-        />
+        <ClassroomTimeCard inline />
+        <div class="screen-toolbar-actions">
+          <v-btn
+            prepend-icon="mdi-monitor-eye"
+            variant="tonal"
+            @click="$emit('settings')"
+          >
+            设置
+          </v-btn>
+          <v-btn
+            prepend-icon="mdi-toolbox-outline"
+            variant="tonal"
+            @click="$emit('tools')"
+          >
+            课堂工具
+          </v-btn>
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-monitor-edit"
+            variant="elevated"
+            @click="$emit('create')"
+          >
+            录入作业
+          </v-btn>
+          <v-btn
+            :loading="store.feedLoading"
+            icon="mdi-refresh"
+            title="刷新"
+            variant="text"
+            @click="store.loadActiveFeed()"
+          />
+        </div>
       </v-card-text>
     </v-card>
 
@@ -73,12 +77,8 @@
       :sound-enabled="settings.urgentNoticeSound"
     />
 
-    <div class="screen-time-card">
-      <ClassroomTimeCard compact />
-    </div>
-
     <BoardDateNavigator
-      class="mt-3"
+      class="screen-date-navigator mt-3"
       can-copy-to-today
       :date="store.boardDate"
       @change="store.setBoardDate"
@@ -135,12 +135,6 @@
       icon="mdi-check-circle-outline"
       text="本行政班及相关走班的作业会按日期出现在这里"
     />
-
-    <ScreenDisplaySettingsDialog
-      v-model="settingsDialog"
-      :settings="settings"
-      @save="applySettings"
-    />
   </section>
 </template>
 
@@ -149,7 +143,6 @@ import {computed, onMounted, onUnmounted, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
-import ScreenDisplaySettingsDialog from "@/components/v2/ScreenDisplaySettingsDialog.vue";
 import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
@@ -160,9 +153,8 @@ import {
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 
-defineEmits(["create", "edit", "history", "tools", "copy-board"]);
+defineEmits(["create", "edit", "history", "tools", "copy-board", "settings"]);
 const store = useClassworksV2Store();
-const settingsDialog = ref(false);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const burnInStep = ref(0);
 let burnInTimer = null;
@@ -187,9 +179,18 @@ const burnInStyle = computed(() => {
   return {transform: `translate(${x}px, ${y}px)`};
 });
 
+function updatePerformanceClass() {
+  document.body.classList.toggle(
+    "classworks-screen-efficient",
+    settings.value.performanceMode === "efficient",
+  );
+}
+
 watch(bindingId, (id) => {
   settings.value = loadScreenDisplaySettings(id);
 }, {immediate: true});
+
+watch(() => settings.value.performanceMode, updatePerformanceClass);
 
 watch(() => store.feed.filter((publication) => publication.type === "NOTICE")
   .map((publication) => `${publication.id}:${publication.revision}`).join(","), async () => {
@@ -223,6 +224,8 @@ function handleShortcut(event) {
 }
 
 onMounted(() => {
+  document.body.classList.add("classworks-screen-active");
+  updatePerformanceClass();
   window.addEventListener("keydown", handleShortcut);
   burnInTimer = window.setInterval(() => {
     burnInStep.value += 1;
@@ -230,6 +233,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  document.body.classList.remove("classworks-screen-active");
+  document.body.classList.remove("classworks-screen-efficient");
   window.removeEventListener("keydown", handleShortcut);
   window.clearInterval(burnInTimer);
 });
@@ -242,12 +247,52 @@ onUnmounted(() => {
   transition: transform 1.2s ease;
 }
 .screen-toolbar { position: sticky; top: 68px; z-index: 4; }
-.screen-toolbar-content { gap: 10px; padding: 12px 16px; }
+.screen-toolbar-content {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(210px, 1fr) auto minmax(440px, 1fr);
+  padding: 10px 14px;
+}
+.screen-class-block,
+.screen-toolbar-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+.screen-toolbar-actions { justify-content: flex-end; }
 .screen-identity { min-width: 150px; }
-.screen-class-name { font-size: 1.15rem; }
-.screen-time-card { margin-top: 16px; }
-@media (max-width: 900px) {
+.screen-class-name { font-size: clamp(1.05rem, 0.25vw + 0.85rem, 1.35rem); }
+
+@media (min-width: 2300px) {
+  .screen-toolbar-content { padding: 12px 18px; }
+}
+
+@media (max-width: 1250px) {
   .screen-toolbar { position: static; }
-  .screen-toolbar-content { align-items: flex-start; }
+  .screen-toolbar-content {
+    grid-template-columns: 1fr auto;
+  }
+  .screen-toolbar-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .classroom-screen-view { transition: none; }
+}
+</style>
+
+<style>
+body.classworks-screen-efficient .app-background-image {
+  filter: none !important;
+  transform: none !important;
+  will-change: auto;
+}
+
+body.classworks-screen-active .md3-enter-active,
+body.classworks-screen-active .md3-leave-active {
+  transition-duration: 0.12s;
 }
 </style>
