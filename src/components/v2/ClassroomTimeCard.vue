@@ -19,22 +19,22 @@
   </button>
   <v-card
     v-else
-    class="classroom-time-card fill-height rounded-xl"
+    class="classroom-time-card rounded-xl"
     :class="{'classroom-time-card--compact': compact}"
     color="primary"
     variant="tonal"
     @click="fullscreen = true"
   >
-    <v-card-text class="d-flex align-center pa-5 h-100">
+    <v-card-text class="classroom-time-card__content">
       <v-avatar
-        class="mr-4"
+        class="classroom-time-card__avatar"
         color="primary"
         size="48"
         variant="flat"
       >
         <v-icon icon="mdi-clock-outline" />
       </v-avatar>
-      <div>
+      <div class="classroom-time-card__copy">
         <div class="time-line font-weight-bold">
           {{ hoursMinutes }}<span class="seconds">{{ seconds }}</span>
         </div>
@@ -136,16 +136,28 @@ onUnmounted(() => {
 }
 
 .classroom-time-card--compact {
-  min-height: 96px;
+  min-height: 108px;
 }
 
-.classroom-time-card--compact :deep(.v-card-text) {
-  padding-bottom: 12px !important;
-  padding-top: 12px !important;
+.classroom-time-card__content {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  height: 100%;
+  min-height: inherit;
+  padding: 18px 20px;
+}
+
+.classroom-time-card__avatar {
+  flex: 0 0 auto;
+}
+
+.classroom-time-card__copy {
+  min-width: 0;
 }
 
 .classroom-time-card--compact .time-line {
-  font-size: clamp(2rem, 3vw, 2.75rem);
+  font-size: clamp(2.15rem, 2.25vw, 2.8rem);
 }
 
 .classroom-time-inline {
@@ -188,6 +200,7 @@ onUnmounted(() => {
 .time-line {
   font-size: clamp(2rem, 4vw, 3.25rem);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
   line-height: 1.05;
 }
 

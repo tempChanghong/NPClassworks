@@ -250,9 +250,10 @@ onUnmounted(() => {
 .screen-toolbar-content {
   align-items: center;
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(210px, 1fr) auto minmax(440px, 1fr);
-  padding: 10px 14px;
+  gap: 18px;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(420px, 1fr);
+  min-height: 82px;
+  padding: 10px 16px;
 }
 .screen-class-block,
 .screen-toolbar-actions {
@@ -263,6 +264,15 @@ onUnmounted(() => {
 .screen-toolbar-actions { justify-content: flex-end; }
 .screen-identity { min-width: 150px; }
 .screen-class-name { font-size: clamp(1.05rem, 0.25vw + 0.85rem, 1.35rem); }
+.screen-toolbar :deep(.classroom-time-inline) {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid rgba(var(--v-theme-primary), 0.2);
+  border-radius: 0;
+  border-right: 1px solid rgba(var(--v-theme-primary), 0.2);
+  min-height: 54px;
+  padding: 4px 22px;
+}
 
 @media (min-width: 2300px) {
   .screen-toolbar-content { padding: 12px 18px; }
@@ -272,6 +282,10 @@ onUnmounted(() => {
   .screen-toolbar { position: static; }
   .screen-toolbar-content {
     grid-template-columns: 1fr auto;
+  }
+  .screen-toolbar :deep(.classroom-time-inline) {
+    border-right: 0;
+    padding-right: 0;
   }
   .screen-toolbar-actions {
     grid-column: 1 / -1;

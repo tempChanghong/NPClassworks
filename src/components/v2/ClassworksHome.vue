@@ -47,38 +47,32 @@
     fluid
   >
     <template v-if="mode === 'student'">
-      <v-row class="mb-6 align-stretch">
-        <v-col
-          cols="12"
-          lg="4"
+      <div class="classworks-overview mb-6">
+        <classroom-time-card compact />
+        <v-card
+          class="selection-summary rounded-xl"
+          color="primary"
+          variant="tonal"
         >
-          <classroom-time-card />
-        </v-col>
-        <v-col
-          cols="12"
-          lg="8"
-        >
-          <v-card
-            class="selection-summary fill-height rounded-xl"
-            color="primary"
-            variant="tonal"
-          >
-            <v-card-text class="d-flex align-center flex-wrap ga-3 pa-5 h-100">
+          <v-card-text class="selection-summary__content">
+            <div class="selection-summary__identity">
               <v-avatar
                 color="primary"
+                size="48"
                 variant="flat"
               >
                 <v-icon icon="mdi-account-school" />
               </v-avatar>
-              <div>
-                <div class="text-h6 font-weight-bold">
+              <div class="selection-summary__copy">
+                <div class="selection-summary__title font-weight-bold">
                   {{ store.selectedClassName }}
                 </div>
-                <div class="text-body-2 text-medium-emphasis">
+                <div class="selection-summary__description text-medium-emphasis">
                   {{ selectionDescription }}
                 </div>
               </div>
-              <v-spacer />
+            </div>
+            <div class="selection-summary__actions">
               <v-btn
                 prepend-icon="mdi-tune-variant"
                 variant="tonal"
@@ -102,10 +96,10 @@
                 variant="text"
                 @click="store.loadStudentFeed()"
               />
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
+            </div>
+          </v-card-text>
+        </v-card>
+      </div>
 
       <v-alert
         v-if="store.studentNotice"
@@ -675,6 +669,79 @@ async function copyScreenBoardToToday() {
   }
 }
 </script>
+
+<style scoped>
+.classworks-overview {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(310px, 0.78fr) minmax(0, 1.72fr);
+}
+
+.selection-summary {
+  min-height: 108px;
+}
+
+.selection-summary__content {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  height: 100%;
+  justify-content: space-between;
+  min-height: 108px;
+  padding: 18px 20px;
+}
+
+.selection-summary__identity,
+.selection-summary__actions {
+  align-items: center;
+  display: flex;
+}
+
+.selection-summary__identity {
+  gap: 14px;
+  min-width: 0;
+}
+
+.selection-summary__copy {
+  min-width: 0;
+}
+
+.selection-summary__title {
+  font-size: clamp(1.2rem, 0.45vw + 0.95rem, 1.55rem);
+  line-height: 1.2;
+}
+
+.selection-summary__description {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  margin-top: 5px;
+}
+
+.selection-summary__actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1050px) {
+  .classworks-overview {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .selection-summary__content {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .selection-summary__actions {
+    justify-content: flex-start;
+  }
+}
+</style>
 
 <style scoped>
 .classworks-v2-page {
