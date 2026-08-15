@@ -252,6 +252,9 @@
         <v-tab value="accounts">
           账号与管理员
         </v-tab>
+        <v-tab value="screens">
+          大屏设备
+        </v-tab>
         <v-tab value="terms">
           学期运维
         </v-tab>
@@ -774,6 +777,228 @@
           </template>
         </v-window-item>
 
+        <v-window-item value="screens">
+          <v-alert
+            v-if="!managerMemberships.length"
+            type="warning"
+            variant="tonal"
+          >
+            请先完成学校初始化或取得 OWNER/ADMIN 权限。
+          </v-alert>
+          <template v-else>
+            <v-card class="mb-5 rounded-xl">
+              <v-card-text class="pa-5">
+                <v-row>
+                  <v-col
+                    cols="12"
+                    md="6"
+                  >
+                    <v-select
+                      v-model="selectedSchoolId"
+                      :items="schoolOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="学校"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col
+                    cols="12"
+                    md="6"
+                  >
+                    <v-select
+                      v-model="selectedTermId"
+                      :items="termOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="学期"
+                      variant="outlined"
+                    />
+                  </v-col>
+                </v-row>
+                <v-alert
+                  type="info"
+                  variant="tonal"
+                >
+                  每台一体机使用独立大屏账号首次登录，之后凭设备令牌自动进入。PIN 同时用于临时退出大屏界面；重置设备会立即让原浏览器失效。
+                </v-alert>
+              </v-card-text>
+            </v-card>
+
+            <v-row>
+              <v-col
+                cols="12"
+                lg="4"
+              >
+                <v-card class="rounded-xl">
+                  <v-card-title class="pa-5 pb-2">
+                    创建大屏账号
+                  </v-card-title>
+                  <v-card-text class="px-5 pb-5">
+                    <v-text-field
+                      v-model.trim="newScreenName"
+                      label="设备名称"
+                      placeholder="例如：高二1班一体机"
+                      variant="outlined"
+                    />
+                    <v-text-field
+                      v-model.trim="newScreenLoginCode"
+                      hint="3～32位字母、数字、点、横线或下划线"
+                      label="大屏短账号"
+                      persistent-hint
+                      variant="outlined"
+                    />
+                    <v-text-field
+                      v-model="newScreenPin"
+                      hint="4～8位数字；请交给班主任或管理员保管"
+                      label="大屏 PIN"
+                      persistent-hint
+                      type="password"
+                      variant="outlined"
+                    />
+                    <v-select
+                      v-model="newScreenAdministrativeClassId"
+                      :items="administrativeClassOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="绑定行政班"
+                      variant="outlined"
+                    />
+                    <v-btn
+                      block
+                      color="primary"
+                      :loading="screenBusy"
+                      prepend-icon="mdi-monitor-plus"
+                      @click="createScreenAccount"
+                    >
+                      创建账号
+                    </v-btn>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+              <v-col
+                cols="12"
+                lg="8"
+              >
+                <v-card class="rounded-xl">
+                  <v-card-title class="d-flex align-center pa-5">
+                    已分配大屏
+                    <v-spacer />
+                    <v-btn
+                      :loading="screenBusy"
+                      icon="mdi-refresh"
+                      variant="text"
+                      @click="loadScreenAccounts"
+                    />
+                  </v-card-title>
+                  <v-list lines="three">
+                    <template
+                      v-for="screen in screenAccounts"
+                      :key="screen.id"
+                    >
+                      <v-list-item
+                        :subtitle="screenAccountSummary(screen)"
+                        :title="screen.name"
+                      >
+                        <template #prepend>
+                          <v-avatar :color="screen.isActive ? 'primary' : 'grey'">
+                            <v-icon icon="mdi-monitor-dashboard" />
+                          </v-avatar>
+                        </template>
+                        <template #append>
+                          <div class="d-flex flex-wrap ga-1 justify-end">
+                            <v-btn
+                              size="small"
+                              variant="text"
+                              @click="openScreenEdit(screen)"
+                            >
+                              编辑
+                            </v-btn>
+                            <v-btn
+                              color="warning"
+                              size="small"
+                              variant="text"
+                              @click="resetScreenDevice(screen)"
+                            >
+                              重置设备
+                            </v-btn>
+                            <v-btn
+                              :color="screen.isActive ? 'error' : 'success'"
+                              size="small"
+                              variant="text"
+                              @click="setScreenActive(screen, !screen.isActive)"
+                            >
+                              {{ screen.isActive ? "停用" : "启用" }}
+                            </v-btn>
+                          </div>
+                        </template>
+                      </v-list-item>
+                      <v-divider />
+                    </template>
+                  </v-list>
+                  <v-empty-state
+                    v-if="!screenAccounts.length && !screenBusy"
+                    icon="mdi-monitor-off"
+                    text="当前学校还没有大屏账号"
+                  />
+                </v-card>
+              </v-col>
+            </v-row>
+          </template>
+
+          <v-dialog
+            v-model="screenEditDialog"
+            max-width="560"
+          >
+            <v-card class="rounded-xl">
+              <v-card-title class="pa-5 pb-2">
+                编辑大屏账号
+              </v-card-title>
+              <v-card-text class="px-5">
+                <v-text-field
+                  v-model.trim="screenEdit.name"
+                  label="设备名称"
+                  variant="outlined"
+                />
+                <v-text-field
+                  v-model.trim="screenEdit.loginCode"
+                  label="大屏短账号"
+                  variant="outlined"
+                />
+                <v-select
+                  v-model="screenEdit.administrativeClassId"
+                  :items="administrativeClassOptions"
+                  item-title="title"
+                  item-value="value"
+                  label="绑定行政班"
+                  variant="outlined"
+                />
+                <v-text-field
+                  v-model="screenEdit.pin"
+                  hint="留空表示不修改；修改 PIN 不会让已绑定设备退出"
+                  label="新 PIN（可选）"
+                  persistent-hint
+                  type="password"
+                  variant="outlined"
+                />
+              </v-card-text>
+              <v-card-actions class="px-5 pb-5">
+                <v-spacer />
+                <v-btn @click="screenEditDialog = false">
+                  取消
+                </v-btn>
+                <v-btn
+                  color="primary"
+                  :loading="screenBusy"
+                  @click="saveScreenAccount"
+                >
+                  保存
+                </v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-dialog>
+        </v-window-item>
+
         <v-window-item value="terms">
           <template v-if="managerMemberships.length">
             <v-card class="mb-5 rounded-xl">
@@ -1001,6 +1226,15 @@ const newAdminUsername = ref("");
 const newAdminName = ref("");
 const newAdminPin = ref("");
 const newAdminRole = ref("ADMIN");
+const screenAccounts = ref([]);
+const screenBusy = ref(false);
+const newScreenName = ref("");
+const newScreenLoginCode = ref("");
+const newScreenPin = ref("");
+const newScreenAdministrativeClassId = ref("");
+const screenEditDialog = ref(false);
+const editingScreenId = ref("");
+const screenEdit = ref({name: "", loginCode: "", pin: "", administrativeClassId: ""});
 
 const termBusy = ref(false);
 const cloneSourceTermId = ref("");
@@ -1062,6 +1296,9 @@ const workspaceOptions = computed(() => (roster.value?.workspaces || []).map((wo
   title: `${workspace.name} · ${workspace.code}${workspace.subject ? ` · ${workspace.subject.name}` : ""}`,
   value: workspace.code,
 })));
+const administrativeClassOptions = computed(() => (roster.value?.workspaces || [])
+  .filter((workspace) => workspace.type === "ADMIN_CLASS")
+  .map((workspace) => ({title: `${workspace.name} · ${workspace.code}`, value: workspace.id})));
 
 function roleName(role) {
   return {OWNER: "所有者", ADMIN: "管理员", MANAGER: "管理", TEACHER: "教师", ASSISTANT: "助教", VIEWER: "只读"}[role] || role;
@@ -1441,6 +1678,121 @@ async function loadLocalAccounts() {
   }
 }
 
+async function loadScreenAccounts() {
+  if (!selectedSchoolId.value) {
+    screenAccounts.value = [];
+    return;
+  }
+  screenBusy.value = true;
+  try {
+    screenAccounts.value = await classworksV2Api.classroomScreens(selectedSchoolId.value);
+  } catch (error) {
+    screenAccounts.value = [];
+    errorMessage.value = describeApiError(error, "加载大屏账号失败");
+  } finally {
+    screenBusy.value = false;
+  }
+}
+
+async function createScreenAccount() {
+  screenBusy.value = true;
+  errorMessage.value = "";
+  try {
+    const created = await classworksV2Api.createClassroomScreenAccount(selectedSchoolId.value, {
+      name: newScreenName.value,
+      loginCode: newScreenLoginCode.value,
+      pin: newScreenPin.value,
+      administrativeClassId: newScreenAdministrativeClassId.value,
+    });
+    newScreenName.value = "";
+    newScreenLoginCode.value = "";
+    newScreenPin.value = "";
+    newScreenAdministrativeClassId.value = "";
+    successMessage.value = `大屏账号 ${created.loginCode} 已创建，请在对应一体机上完成首次登录。`;
+    await loadScreenAccounts();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "创建大屏账号失败");
+  } finally {
+    screenBusy.value = false;
+  }
+}
+
+function openScreenEdit(screen) {
+  editingScreenId.value = screen.id;
+  screenEdit.value = {
+    name: screen.name,
+    loginCode: screen.loginCode || "",
+    pin: "",
+    administrativeClassId: screen.administrativeClassId,
+  };
+  screenEditDialog.value = true;
+}
+
+async function saveScreenAccount() {
+  if (!editingScreenId.value) return;
+  screenBusy.value = true;
+  errorMessage.value = "";
+  try {
+    const input = {
+      name: screenEdit.value.name,
+      loginCode: screenEdit.value.loginCode,
+      administrativeClassId: screenEdit.value.administrativeClassId,
+    };
+    if (screenEdit.value.pin) input.pin = screenEdit.value.pin;
+    await classworksV2Api.updateClassroomScreenAccount(
+      selectedSchoolId.value,
+      editingScreenId.value,
+      input,
+    );
+    screenEditDialog.value = false;
+    successMessage.value = "大屏账号已更新。";
+    await loadScreenAccounts();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "更新大屏账号失败");
+  } finally {
+    screenBusy.value = false;
+  }
+}
+
+async function resetScreenDevice(screen) {
+  if (!window.confirm(`重置 ${screen.name} 的设备绑定？原浏览器会立即退出，之后可用同一账号和 PIN 在新设备登录。`)) return;
+  screenBusy.value = true;
+  try {
+    await classworksV2Api.resetClassroomScreenDevice(selectedSchoolId.value, screen.id);
+    successMessage.value = "旧设备登录已失效，可以在新设备上重新登录。";
+    await loadScreenAccounts();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "重置大屏设备失败");
+  } finally {
+    screenBusy.value = false;
+  }
+}
+
+async function setScreenActive(screen, isActive) {
+  const action = isActive ? "启用" : "停用";
+  if (!window.confirm(`${action} ${screen.name}？${isActive ? "" : "停用后该设备将无法读取或修改作业。"}`)) return;
+  screenBusy.value = true;
+  try {
+    await classworksV2Api.updateClassroomScreenAccount(selectedSchoolId.value, screen.id, {isActive});
+    successMessage.value = `大屏账号已${action}。`;
+    await loadScreenAccounts();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, `${action}大屏账号失败`);
+  } finally {
+    screenBusy.value = false;
+  }
+}
+
+function screenAccountSummary(screen) {
+  const login = screen.loginCode ? `账号 ${screen.loginCode}` : "旧版绑定（需设置账号）";
+  const device = screen.deviceFingerprint ? "设备已激活" : "等待设备首次登录";
+  const status = screen.isActive ? "已启用" : "已停用";
+  const lastUsed = screen.lastUsedAt
+    ? `最后使用 ${new Date(screen.lastUsedAt).toLocaleString("zh-CN")}`
+    : "尚未使用";
+  return `${screen.administrativeClass?.name || "未绑定班级"} · ${login} · ${device} · ${status} · ${lastUsed}`;
+}
+
 async function createAdministrator() {
   accountBusy.value = true;
   errorMessage.value = "";
@@ -1603,6 +1955,7 @@ watch(selectedSchoolId, () => {
   cloneSourceTermId.value = activeTerm?.id || termOptions.value[0]?.value || "";
   recentCredentials.value = [];
   loadLocalAccounts();
+  loadScreenAccounts();
 });
 watch(organizationText, () => {
   organizationReport.value = null;
@@ -1629,6 +1982,10 @@ watch(selectedTermId, () => {
 });
 watch(tab, (value) => {
   if (value === "accounts") loadLocalAccounts();
+  if (value === "screens") {
+    loadRoster();
+    loadScreenAccounts();
+  }
 });
 watch(cloneSourceTermId, (termId) => {
   const source = selectedSchoolTerms.value.find((term) => term.id === termId);

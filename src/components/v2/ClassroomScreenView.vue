@@ -57,6 +57,24 @@
             variant="text"
             @click="store.loadActiveFeed()"
           />
+          <v-menu>
+            <template #activator="{props}">
+              <v-btn
+                v-bind="props"
+                icon="mdi-dots-vertical"
+                title="更多"
+                variant="text"
+              />
+            </template>
+            <v-list>
+              <v-list-item
+                prepend-icon="mdi-exit-to-app"
+                subtitle="需验证本大屏 PIN"
+                title="临时退出大屏"
+                @click="$emit('exit')"
+              />
+            </v-list>
+          </v-menu>
         </div>
       </v-card-text>
     </v-card>
@@ -157,7 +175,7 @@ import {
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 
-defineEmits(["create", "edit", "history", "tools", "copy-board", "settings"]);
+defineEmits(["create", "edit", "history", "tools", "copy-board", "settings", "exit"]);
 const store = useClassworksV2Store();
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const burnInStep = ref(0);

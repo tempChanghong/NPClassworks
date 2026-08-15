@@ -558,6 +558,29 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       }
     },
 
+    async loginClassroomScreen({schoolCode, loginCode, pin}) {
+      this.screenLoading = true;
+      this.screenError = "";
+      try {
+        const {getVisitorId} = await import("@/utils/visitorId");
+        const deviceFingerprint = await getVisitorId();
+        await classworksV2Api.loginClassroomScreen({
+          schoolCode,
+          loginCode,
+          pin,
+          deviceFingerprint,
+        });
+        await this.bootstrapClassroomScreen();
+        await this.signOutTeacher();
+        return this.screenSession;
+      } catch (error) {
+        this.screenError = describeApiError(error, "大屏登录失败");
+        throw error;
+      } finally {
+        this.screenLoading = false;
+      }
+    },
+
     async loadClassroomTools(date) {
       if (!this.screenSession) return;
       this.classroomToolsLoading = true;

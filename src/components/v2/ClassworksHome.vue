@@ -13,7 +13,7 @@
       </div>
     </v-app-bar-title>
     <v-btn-toggle
-      v-if="appReady && !store.screenSession"
+      v-if="appReady && (!store.screenSession || screenTemporarilyUnlocked)"
       v-model="mode"
       color="primary"
       mandatory
@@ -31,9 +31,15 @@
       >
         教师
       </v-btn>
+      <v-btn
+        value="screen"
+        prepend-icon="mdi-monitor-dashboard"
+      >
+        大屏
+      </v-btn>
     </v-btn-toggle>
     <v-btn
-      v-if="appReady && !store.screenSession"
+      v-if="appReady && (!store.screenSession || screenTemporarilyUnlocked)"
       class="ml-2"
       icon="mdi-cog-outline"
       title="设置"
@@ -46,6 +52,33 @@
     :class="{'classworks-v2-page--screen': mode === 'screen'}"
     fluid
   >
+    <v-alert
+      v-if="screenTemporarilyUnlocked"
+      class="mb-4 screen-temporary-unlock"
+      color="warning"
+      icon="mdi-monitor-unlock"
+      variant="tonal"
+    >
+      <div class="d-flex align-center flex-wrap ga-3">
+        <div>
+          <div class="font-weight-bold">
+            大屏已临时退出 · 剩余 {{ screenUnlockRemainingLabel }}
+          </div>
+          <div class="text-caption">
+            到时或刷新页面后会自动返回大屏；定时噪声监测仍保持运行。
+          </div>
+        </div>
+        <v-spacer />
+        <v-btn
+          color="warning"
+          prepend-icon="mdi-monitor-lock"
+          variant="flat"
+          @click="returnToScreen"
+        >
+          立即返回大屏
+        </v-btn>
+      </div>
+    </v-alert>
     <template v-if="mode === 'student'">
       <div class="classworks-overview mb-6">
         <classroom-time-card compact />
@@ -166,14 +199,15 @@
         @settings="openSettings('screen')"
         @tools="classroomToolsDialog = true"
         @copy-board="copyScreenBoardToToday"
+        @exit="openScreenExitDialog"
       />
-      <v-alert
-        v-else
-        type="warning"
-        variant="tonal"
-      >
-        当前浏览器尚未绑定为班级大屏，请使用管理员账号在学生端选择行政班后完成绑定。
-      </v-alert>
+      <ScreenAccountLogin
+        v-if="!store.screenSession"
+        :error="store.screenError"
+        :loading="store.screenLoading"
+        :schools="store.schools"
+        @login="loginScreen"
+      />
     </template>
 
     <template v-else>
@@ -372,6 +406,7 @@
 
   <class-selection-dialog
     v-model="store.selectionDialog"
+    @screen="openScreenFromSelection"
     @teacher="openTeacherFromSelection"
   />
   <ClassroomToolsDialog
@@ -432,6 +467,48 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+  <v-dialog
+    v-model="screenExitDialog"
+    max-width="500"
+  >
+    <v-card class="rounded-xl">
+      <v-card-title class="pa-5 pb-2">
+        临时退出班级大屏
+      </v-card-title>
+      <v-card-text class="px-5">
+        <v-alert
+          class="mb-4"
+          type="info"
+          variant="tonal"
+        >
+          验证后可在15分钟内使用“看作业”和“教师”页面。设备不会解绑，刷新页面会立即回到大屏。
+        </v-alert>
+        <v-text-field
+          v-model="screenExitPin"
+          autofocus
+          :error-messages="screenExitError"
+          label="本大屏 PIN"
+          prepend-inner-icon="mdi-lock-outline"
+          type="password"
+          variant="outlined"
+          @keyup.enter="unlockScreenTemporarily"
+        />
+      </v-card-text>
+      <v-card-actions class="px-5 pb-5">
+        <v-spacer />
+        <v-btn @click="screenExitDialog = false">
+          取消
+        </v-btn>
+        <v-btn
+          color="primary"
+          :loading="screenExitBusy"
+          @click="unlockScreenTemporarily"
+        >
+          验证并退出
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
   <v-snackbar
     v-model="snackbar"
     color="success"
@@ -451,6 +528,7 @@ import {
   startOAuthLogin,
 } from "@/utils/classworksV2Client";
 import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
+import ScreenAccountLogin from "@/components/v2/ScreenAccountLogin.vue";
 import PublicationComposer from "@/components/v2/PublicationComposer.vue";
 import ScreenHomeworkDialog from "@/components/v2/ScreenHomeworkDialog.vue";
 import PublicationHistoryDialog from "@/components/v2/PublicationHistoryDialog.vue";
@@ -488,6 +566,14 @@ const historyMode = ref("teacher");
 const classroomToolsDialog = ref(false);
 const notificationDeliveryDialog = ref(false);
 const deliveryPublication = ref(null);
+const screenExitDialog = ref(false);
+const screenExitPin = ref("");
+const screenExitError = ref("");
+const screenExitBusy = ref(false);
+const screenTemporarilyUnlocked = ref(false);
+const screenUnlockRemainingSeconds = ref(0);
+let screenUnlockDeadline = 0;
+let screenUnlockTimer = null;
 
 const teacherSchoolOptions = computed(() => store.schools.map((school) => ({
   title: school.name,
@@ -508,10 +594,20 @@ const selectionDescription = computed(() => {
   return groups.length ? `已选走班：${groups.join("、")}` : "全部课程随行政班，或尚未选择走班课程";
 });
 const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate));
+const screenUnlockRemainingLabel = computed(() => {
+  const minutes = Math.floor(screenUnlockRemainingSeconds.value / 60);
+  const seconds = screenUnlockRemainingSeconds.value % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+});
 
 function openTeacherFromSelection() {
   store.selectionDialog = false;
   mode.value = "teacher";
+}
+
+function openScreenFromSelection() {
+  store.selectionDialog = false;
+  mode.value = "screen";
 }
 
 function openSettings(context = mode.value) {
@@ -519,7 +615,9 @@ function openSettings(context = mode.value) {
 }
 
 watch(mode, async (value) => {
+  if (value === "screen" && screenTemporarilyUnlocked.value) endScreenTemporaryExit();
   if (value === "teacher" && !store.account && !store.teacherLoading) store.bootstrapTeacher();
+  if (value === "screen") store.selectionDialog = false;
   if (value === "screen") await store.setFeedAudience("screen");
   if (value === "student") await store.setFeedAudience("student");
 });
@@ -527,7 +625,7 @@ watch(() => store.schools, (schools) => {
   if (!loginSchoolId.value && schools.length) loginSchoolId.value = schools[0].id;
 }, {deep: true, immediate: true});
 watch(() => store.screenSession, (session) => {
-  if (session && mode.value !== "screen") mode.value = "screen";
+  if (session && mode.value !== "screen" && !screenTemporarilyUnlocked.value) mode.value = "screen";
   if (!session && mode.value === "screen") mode.value = "student";
 });
 
@@ -543,7 +641,59 @@ onMounted(async () => {
   store.startRealtime();
 });
 
-onUnmounted(() => store.stopRealtime());
+onUnmounted(() => {
+  store.stopRealtime();
+  clearInterval(screenUnlockTimer);
+});
+
+function openScreenExitDialog() {
+  screenExitPin.value = "";
+  screenExitError.value = "";
+  screenExitDialog.value = true;
+}
+
+function updateScreenUnlockRemaining() {
+  screenUnlockRemainingSeconds.value = Math.max(0, Math.ceil((screenUnlockDeadline - Date.now()) / 1000));
+  if (screenUnlockRemainingSeconds.value === 0) returnToScreen();
+}
+
+function endScreenTemporaryExit() {
+  screenTemporarilyUnlocked.value = false;
+  screenUnlockDeadline = 0;
+  screenUnlockRemainingSeconds.value = 0;
+  clearInterval(screenUnlockTimer);
+  screenUnlockTimer = null;
+}
+
+function returnToScreen() {
+  endScreenTemporaryExit();
+  mode.value = "screen";
+}
+
+async function unlockScreenTemporarily() {
+  if (!screenExitPin.value) {
+    screenExitError.value = "请输入本大屏 PIN";
+    return;
+  }
+  screenExitBusy.value = true;
+  screenExitError.value = "";
+  try {
+    await classworksV2Api.unlockClassroomScreen(screenExitPin.value);
+    screenExitDialog.value = false;
+    screenExitPin.value = "";
+    screenTemporarilyUnlocked.value = true;
+    screenUnlockDeadline = Date.now() + 15 * 60 * 1000;
+    updateScreenUnlockRemaining();
+    clearInterval(screenUnlockTimer);
+    screenUnlockTimer = window.setInterval(updateScreenUnlockRemaining, 1000);
+    mode.value = "student";
+    store.selectionDialog = false;
+  } catch (error) {
+    screenExitError.value = describeApiError(error, "PIN 验证失败");
+  } finally {
+    screenExitBusy.value = false;
+  }
+}
 
 async function loginTeacher() {
   if (!loginSchool.value || !loginUsername.value || !loginPassword.value) {
@@ -564,6 +714,26 @@ async function loginTeacher() {
     store.teacherError = describeApiError(error, "教师登录失败");
   } finally {
     localLoginBusy.value = false;
+  }
+}
+
+async function loginScreen(input) {
+  const school = store.schools.find((item) => item.id === input.schoolId);
+  if (!school) {
+    store.screenError = "请选择学校";
+    return;
+  }
+  try {
+    await store.loginClassroomScreen({
+      schoolCode: school.code,
+      loginCode: input.loginCode,
+      pin: input.pin,
+    });
+    mode.value = "screen";
+    snackbarText.value = "大屏登录成功，本机以后会自动进入班级大屏";
+    snackbar.value = true;
+  } catch {
+    // Store keeps the actionable server error visible in the login card.
   }
 }
 
@@ -753,6 +923,12 @@ async function copyScreenBoardToToday() {
   padding-left: clamp(10px, 1vw, 28px) !important;
   padding-right: clamp(10px, 1vw, 28px) !important;
   padding-top: clamp(10px, 1vh, 24px) !important;
+}
+
+.screen-temporary-unlock {
+  position: sticky;
+  top: 72px;
+  z-index: 5;
 }
 
 .teacher-login-icon {

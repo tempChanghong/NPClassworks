@@ -233,6 +233,18 @@ export const classworksV2Api = {
     saveClassroomScreenToken(result.token);
     return result;
   },
+  async loginClassroomScreen(input) {
+    const result = unwrap(await client.post("/api/v2/classroom-screens/login", input));
+    saveClassroomScreenToken(result.token);
+    return result;
+  },
+  async unlockClassroomScreen(pin) {
+    return unwrap(await client.post(
+      "/api/v2/classroom-screens/unlock",
+      {pin},
+      {headers: screenHeaders()},
+    ));
+  },
   async classroomScreenSession() {
     return unwrap(await client.get("/api/v2/classroom-screens/session", {
       headers: screenHeaders(),
@@ -346,6 +358,26 @@ export const classworksV2Api = {
   async deactivateLocalAccount(schoolId, accountId) {
     return unwrap(await client.delete(
       `/api/v2/admin/schools/${schoolId}/local-accounts/${accountId}`,
+    ));
+  },
+  async classroomScreens(schoolId) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/classroom-screens`));
+  },
+  async createClassroomScreenAccount(schoolId, input) {
+    return unwrap(await client.post(
+      `/api/v2/admin/schools/${schoolId}/classroom-screen-accounts`,
+      input,
+    ));
+  },
+  async updateClassroomScreenAccount(schoolId, bindingId, input) {
+    return unwrap(await client.patch(
+      `/api/v2/admin/schools/${schoolId}/classroom-screens/${bindingId}`,
+      input,
+    ));
+  },
+  async resetClassroomScreenDevice(schoolId, bindingId) {
+    return unwrap(await client.post(
+      `/api/v2/admin/schools/${schoolId}/classroom-screens/${bindingId}/reset-device`,
     ));
   },
   async schoolMembers(schoolId) {

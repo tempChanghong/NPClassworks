@@ -1,7 +1,6 @@
 <template>
   <v-dialog
     :model-value="modelValue"
-    :persistent="!store.selection.administrativeClassId"
     max-width="760"
     @update:model-value="$emit('update:modelValue', $event)"
   >
@@ -120,9 +119,17 @@
           color="primary"
           prepend-icon="mdi-account-tie-outline"
           variant="text"
-          @click="emit('teacher')"
+          @click="chooseRole('teacher')"
         >
           我是教师
+        </v-btn>
+        <v-btn
+          color="primary"
+          prepend-icon="mdi-monitor-lock"
+          variant="text"
+          @click="chooseRole('screen')"
+        >
+          我是班级大屏
         </v-btn>
         <v-spacer />
         <v-btn
@@ -146,7 +153,7 @@ import {computed, reactive, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 
 const props = defineProps({modelValue: Boolean});
-const emit = defineEmits(["update:modelValue", "teacher"]);
+const emit = defineEmits(["update:modelValue", "teacher", "screen"]);
 
 const store = useClassworksV2Store();
 const schoolId = ref("");
@@ -216,5 +223,10 @@ async function commit() {
   } finally {
     saving.value = false;
   }
+}
+
+function chooseRole(role) {
+  emit("update:modelValue", false);
+  emit(role);
 }
 </script>
