@@ -5,6 +5,7 @@ import {
   subscribeSettingsEvent,
 } from "@wydev/noise-core"
 import {analyzeNoiseWindow, estimatedDbFromRms} from "@/utils/noiseScoring"
+import {classifyMicrophoneError} from "@/utils/microphonePermission"
 
 export {getNoiseControlSettings, resetNoiseControlSettings, saveNoiseControlSettings}
 
@@ -76,10 +77,11 @@ class ClassworksNoiseService {
     this.status = "initializing"
     this.emit()
     try {
-      if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext) {
+      const AudioContextImpl = window.AudioContext || window.webkitAudioContext
+      if (!navigator.mediaDevices?.getUserMedia || !AudioContextImpl) {
         throw new window.DOMException("Microphone API unavailable", "NotSupportedError")
       }
-      this.audioContext = new window.AudioContext({latencyHint: "playback"})
+      this.audioContext = new AudioContextImpl({latencyHint: "playback"})
       const audioSettings = {
         echoCancellation: false,
         noiseSuppression: false,
@@ -115,11 +117,13 @@ class ClassworksNoiseService {
     } catch (error) {
       console.error("噪声监测启动失败", error)
       await this.releaseAudioResources()
-      this.status = error?.name === "NotAllowedError" || error?.name === "SecurityError"
+      const errorCode = classifyMicrophoneError(error, {secureContext: window.isSecureContext})
+      this.status = errorCode === "permission-denied"
         ? "permission-denied"
-        : error?.name === "NotFoundError" || error?.name === "NotSupportedError"
+        : ["unavailable", "unsupported", "insecure-context"].includes(errorCode)
           ? "unavailable"
           : "error"
+      this.signalHealth = {...this.signalHealth, errorCode}
       this.emit()
     }
   }

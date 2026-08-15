@@ -729,6 +729,7 @@ import {
   NOISE_SCHEDULE_DEFAULTS,
   saveNoiseScheduleSettings,
 } from "@/utils/noiseScheduleSettings";
+import {microphonePermissionLabel, queryMicrophonePermission, requestMicrophonePermission} from "@/utils/microphonePermission";
 
 const route = useRoute();
 const router = useRouter();
@@ -768,7 +769,8 @@ const appearance = reactive({
 const screenSettings = ref({...SCREEN_DISPLAY_DEFAULTS});
 const toolSettings = ref({...CLASSROOM_TOOL_DEFAULTS, enabledToolIds: [...CLASSROOM_TOOL_DEFAULTS.enabledToolIds]});
 const noiseSchedule = ref({...NOISE_SCHEDULE_DEFAULTS});
-const noisePermissionReady = ref(false);
+const noisePermissionState = ref("prompt");
+const noisePermissionReady = computed(() => noisePermissionState.value === "granted");
 const bindingId = computed(() => store.screenSession?.binding?.id || "");
 
 const classroomTools = [
@@ -848,6 +850,7 @@ onMounted(async () => {
   ]);
   if (results.every((result) => result.status === "rejected")) loadError.value = "无法连接 Classworks 服务器";
   if (navigator.storage?.estimate) storageEstimate.value = await navigator.storage.estimate();
+  noisePermissionState.value = await queryMicrophonePermission();
   loading.value = false;
 });
 
@@ -917,15 +920,13 @@ function saveNoiseScheduleSetting(field, value) {
 }
 
 async function prepareNoiseMonitoring() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-    stream.getTracks().forEach((track) => track.stop());
-    noisePermissionReady.value = true;
+  const result = await requestMicrophonePermission();
+  noisePermissionState.value = result.state;
+  if (result.state === "granted") {
     noiseSchedule.value = saveNoiseScheduleSettings(bindingId.value, noiseSchedule.value);
-    notify("麦克风权限已授予，定时监测可以自动启动");
-  } catch {
-    noisePermissionReady.value = false;
-    notify("无法取得麦克风权限，请检查浏览器站点权限和一体机麦克风");
+    notify(`麦克风权限已授予，检测到 ${result.devices.length || 1} 个输入设备`);
+  } else {
+    notify(microphonePermissionLabel(result.state));
   }
 }
 

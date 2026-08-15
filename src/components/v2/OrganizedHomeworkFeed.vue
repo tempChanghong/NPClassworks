@@ -87,8 +87,7 @@
     </section>
 
     <section
-      v-for="group in organized.assignmentGroups"
-      :key="group.id"
+      v-if="screenMode && screenAssignments.length"
       class="feed-section mb-5"
     >
       <div class="feed-section-heading">
@@ -96,17 +95,17 @@
           color="primary"
           icon="mdi-book-open-page-variant"
         />
-        <span>{{ group.name }}</span>
+        <span>作业</span>
         <v-chip
           size="x-small"
           variant="tonal"
         >
-          {{ group.publications.length }}
+          {{ screenAssignments.length }}
         </v-chip>
       </div>
       <HomeworkFeedGrid
         :can-edit="canEdit"
-        :publications="group.publications"
+        :publications="screenAssignments"
         :screen-mode="screenMode"
         :settings="settings"
         :current-time="now"
@@ -114,6 +113,37 @@
         @history="$emit('history', $event)"
       />
     </section>
+
+    <template v-else>
+      <section
+        v-for="group in organized.assignmentGroups"
+        :key="group.id"
+        class="feed-section mb-5"
+      >
+        <div class="feed-section-heading">
+          <v-icon
+            color="primary"
+            icon="mdi-book-open-page-variant"
+          />
+          <span>{{ group.name }}</span>
+          <v-chip
+            size="x-small"
+            variant="tonal"
+          >
+            {{ group.publications.length }}
+          </v-chip>
+        </div>
+        <HomeworkFeedGrid
+          :can-edit="canEdit"
+          :publications="group.publications"
+          :screen-mode="screenMode"
+          :settings="settings"
+          :current-time="now"
+          @edit="$emit('edit', $event)"
+          @history="$emit('history', $event)"
+        />
+      </section>
+    </template>
 
     <v-empty-state
       v-if="showEmptyState"
@@ -167,6 +197,8 @@ const organized = computed(() => organizePublicationFeed(props.publications, {
   sortMode: sortMode.value,
   excludeUrgentNotices: props.excludeUrgentNotices,
 }));
+const screenAssignments = computed(() => organized.value.assignmentGroups
+  .flatMap((group) => group.publications));
 const showControls = computed(() => options.value.subjects.length > 1 || options.value.workspaces.length > 1);
 const hasFilters = computed(() => Boolean(subjectId.value || workspaceId.value || sortMode.value !== "smart"));
 const showEmptyState = computed(() => {

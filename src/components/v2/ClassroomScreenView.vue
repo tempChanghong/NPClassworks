@@ -264,7 +264,7 @@ onUnmounted(() => {
   margin: 2px;
   transition: transform 1.2s ease;
 }
-.screen-toolbar { position: sticky; top: 68px; z-index: 4; }
+.screen-toolbar { position: relative; z-index: 1; }
 .screen-toolbar-content {
   align-items: center;
   display: grid;
@@ -297,7 +297,6 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1250px) {
-  .screen-toolbar { position: static; }
   .screen-toolbar-content {
     grid-template-columns: 1fr auto;
   }

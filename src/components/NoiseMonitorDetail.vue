@@ -142,6 +142,14 @@
                 当前设备未检测到麦克风硬件，无法进行噪音监测。请连接麦克风后刷新页面重试。
               </div>
             </v-alert>
+            <v-alert
+              v-else-if="['device-busy', 'constraints-error', 'insecure-context', 'unsupported', 'error'].includes(micPermissionState)"
+              type="warning"
+              variant="tonal"
+              class="ma-4 mb-0"
+            >
+              {{ microphonePermissionMessage }}
+            </v-alert>
 
             <!-- 分贝仪表区 -->
             <div class="noise-dashboard pa-5">
@@ -1109,6 +1117,7 @@ import {
   saveNoiseControlSettings,
   resetNoiseControlSettings,
 } from '@/utils/noiseService';
+import {microphonePermissionLabel} from '@/utils/microphonePermission';
 
 export default {
   name: 'NoiseMonitorDetail',
@@ -1236,6 +1245,9 @@ export default {
         clipping: 'error',
         'no-signal': 'grey',
       })[this.signalHealth.quality] || 'warning'
+    },
+    microphonePermissionMessage() {
+      return microphonePermissionLabel(this.micPermissionState)
     },
     signalQualityLabel() {
       const label = ({

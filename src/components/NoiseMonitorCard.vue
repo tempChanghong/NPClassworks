@@ -135,6 +135,7 @@
 import { defineAsyncComponent } from 'vue'
 import { noiseService } from '@/utils/noiseService'
 import { isWithinNoiseSchedule, loadNoiseScheduleSettings } from '@/utils/noiseScheduleSettings'
+import { queryMicrophonePermission } from '@/utils/microphonePermission'
 
 const NoiseMonitorDetail = defineAsyncComponent(() =>
   import('@/components/NoiseMonitorDetail.vue')
@@ -247,17 +248,7 @@ export default {
   },
   methods: {
     async refreshMicrophonePermission() {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        this.micPermissionState = 'unavailable'
-        return
-      }
-      try {
-        const permission = await navigator.permissions?.query?.({ name: 'microphone' })
-        if (!permission) return
-        this.micPermissionState = permission.state
-      } catch {
-        // 部分浏览器不支持查询麦克风权限，实际启动结果仍会更新状态。
-      }
+      this.micPermissionState = await queryMicrophonePermission()
     },
     signalQualityLabel() {
       const labels = {
@@ -291,6 +282,7 @@ export default {
         this.currentScore = snapshot.currentScore ?? null
         this.scoreDetail = snapshot.currentScoreDetail ?? null
         this.signalHealth = snapshot.signalHealth || this.signalHealth
+        if (snapshot.signalHealth?.errorCode) this.micPermissionState = snapshot.signalHealth.errorCode
 
         const dbVal = Math.max(0, Math.min(100, this.currentDisplayDb))
         this.recentDbValues.push(dbVal)
