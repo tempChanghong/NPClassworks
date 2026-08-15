@@ -11,6 +11,7 @@
         variant="tonal"
       >
         <v-icon
+          class="screen-login-icon"
           icon="mdi-monitor-lock"
           size="40"
         />
@@ -102,3 +103,9 @@ function submit() {
   pin.value = "";
 }
 </script>
+
+<style scoped>
+.screen-login-icon {
+  top: 15px;
+}
+</style>
