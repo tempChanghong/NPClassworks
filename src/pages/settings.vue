@@ -530,6 +530,67 @@
                     @update:model-value="setToolEnabled(tool.id, $event)"
                   />
                 </SettingRow>
+                <template v-if="toolSettings.enabledToolIds.includes('noise')">
+                  <SettingRow
+                    description="到达设定时间后由班级大屏自动启动；结束时间到达后自动停止。"
+                    title="定时噪声监测"
+                  >
+                    <template #scope>
+                      <ScopeChip type="screen" />
+                    </template>
+                    <v-switch
+                      :model-value="noiseSchedule.enabled"
+                      color="primary"
+                      hide-details
+                      @update:model-value="saveNoiseScheduleSetting('enabled', $event)"
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    description="支持跨午夜时段；开始时间与结束时间相同时不会自动启动。"
+                    title="每日监测时段"
+                  >
+                    <template #scope>
+                      <ScopeChip type="screen" />
+                    </template>
+                    <div class="noise-schedule-time-fields">
+                      <v-text-field
+                        density="compact"
+                        hide-details
+                        label="开始"
+                        :model-value="noiseSchedule.startTime"
+                        type="time"
+                        variant="outlined"
+                        @update:model-value="saveNoiseScheduleSetting('startTime', $event)"
+                      />
+                      <span>至</span>
+                      <v-text-field
+                        density="compact"
+                        hide-details
+                        label="结束"
+                        :model-value="noiseSchedule.endTime"
+                        type="time"
+                        variant="outlined"
+                        @update:model-value="saveNoiseScheduleSetting('endTime', $event)"
+                      />
+                    </div>
+                  </SettingRow>
+                  <SettingRow
+                    description="建议部署后由管理员点击一次，避免计划开始时才出现浏览器麦克风授权窗口。"
+                    title="麦克风权限"
+                  >
+                    <template #scope>
+                      <ScopeChip type="device" />
+                    </template>
+                    <v-btn
+                      :color="noisePermissionReady ? 'success' : 'primary'"
+                      :prepend-icon="noisePermissionReady ? 'mdi-microphone-check' : 'mdi-microphone'"
+                      variant="tonal"
+                      @click="prepareNoiseMonitoring"
+                    >
+                      {{ noisePermissionReady ? '麦克风已授权' : '授权麦克风' }}
+                    </v-btn>
+                  </SettingRow>
+                </template>
               </SettingsPanel>
             </template>
 
@@ -663,6 +724,11 @@ import {
   loadClassroomToolSettings,
   saveClassroomToolSettings,
 } from "@/utils/classroomToolSettings";
+import {
+  loadNoiseScheduleSettings,
+  NOISE_SCHEDULE_DEFAULTS,
+  saveNoiseScheduleSettings,
+} from "@/utils/noiseScheduleSettings";
 
 const route = useRoute();
 const router = useRouter();
@@ -701,6 +767,8 @@ const appearance = reactive({
 });
 const screenSettings = ref({...SCREEN_DISPLAY_DEFAULTS});
 const toolSettings = ref({...CLASSROOM_TOOL_DEFAULTS, enabledToolIds: [...CLASSROOM_TOOL_DEFAULTS.enabledToolIds]});
+const noiseSchedule = ref({...NOISE_SCHEDULE_DEFAULTS});
+const noisePermissionReady = ref(false);
 const bindingId = computed(() => store.screenSession?.binding?.id || "");
 
 const classroomTools = [
@@ -762,6 +830,7 @@ watch(bindingId, (id) => {
   if (!id) return;
   screenSettings.value = loadScreenDisplaySettings(id);
   toolSettings.value = loadClassroomToolSettings(id);
+  noiseSchedule.value = loadNoiseScheduleSettings(id);
 }, {immediate: true});
 
 watch(() => [context.value, screenSettings.value.performanceMode], () => {
@@ -839,6 +908,27 @@ function setToolEnabled(id, enabled) {
   notify("课堂工具设置已保存");
 }
 
+function saveNoiseScheduleSetting(field, value) {
+  noiseSchedule.value = saveNoiseScheduleSettings(bindingId.value, {
+    ...noiseSchedule.value,
+    [field]: value,
+  });
+  notify("噪声监测计划已保存到当前大屏");
+}
+
+async function prepareNoiseMonitoring() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    stream.getTracks().forEach((track) => track.stop());
+    noisePermissionReady.value = true;
+    noiseSchedule.value = saveNoiseScheduleSettings(bindingId.value, noiseSchedule.value);
+    notify("麦克风权限已授予，定时监测可以自动启动");
+  } catch {
+    noisePermissionReady.value = false;
+    notify("无法取得麦克风权限，请检查浏览器站点权限和一体机麦克风");
+  }
+}
+
 function goBack() {
   router.push({path: "/", query: context.value === "teacher" ? {mode: "teacher"} : {}});
 }
@@ -879,6 +969,12 @@ async function clearResourceCaches() {
   top: 88px;
 }
 .settings-content { min-width: 0; }
+.noise-schedule-time-fields {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, 160px) auto minmax(120px, 160px);
+}
 .settings-mobile-nav { display: none; }
 .settings-panel {
   background: rgb(var(--v-theme-surface));

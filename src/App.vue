@@ -27,6 +27,7 @@
     <global-message />
     <rate-limit-modal />
     <PwaLifecyclePrompt />
+    <NoiseScheduleManager />
   </v-app>
 </template>
 
@@ -36,6 +37,7 @@ import { useTheme } from "vuetify";
 import { getSetting, watchSettings } from "@/utils/settings";
 import RateLimitModal from "@/components/RateLimitModal.vue";
 import PwaLifecyclePrompt from "@/components/v2/PwaLifecyclePrompt.vue";
+import NoiseScheduleManager from "@/components/v2/NoiseScheduleManager.vue";
 
 const theme = useTheme();
 

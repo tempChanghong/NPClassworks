@@ -32,6 +32,15 @@
           {{ sessionData?.sessionName || '自习中' }}
         </v-chip>
         <v-chip
+          v-if="scheduledActive"
+          color="primary"
+          size="small"
+          variant="tonal"
+          class="mr-2"
+        >
+          计划监测
+        </v-chip>
+        <v-chip
           :color="isMonitoring ? 'success' : 'grey'"
           size="small"
           variant="tonal"
@@ -140,7 +149,7 @@
                       >
                         {{ currentDb }}
                       </span>
-                      <span class="text-caption text-medium-emphasis">dB</span>
+                      <span class="text-caption text-medium-emphasis">估算 dB</span>
                     </div>
                   </div>
                   <div
@@ -158,9 +167,9 @@
                 style="max-width: 500px;"
               >
                 <div class="d-flex justify-space-between text-caption text-medium-emphasis mb-1">
-                  <span>0 dB</span>
+                  <span>低</span>
                   <span>50</span>
-                  <span>100 dB</span>
+                  <span>高</span>
                 </div>
                 <div class="noise-gradient-bar">
                   <div
@@ -394,13 +403,14 @@
               <v-btn
                 v-else
                 color="error"
+                :disabled="scheduledActive"
                 variant="tonal"
                 prepend-icon="mdi-stop"
                 size="large"
                 class="px-6"
                 @click="$emit('stop')"
               >
-                停止监测
+                {{ scheduledActive ? '计划时段内持续监测' : '停止监测' }}
               </v-btn>
               <v-spacer />
               <v-btn
@@ -417,7 +427,7 @@
           <!-- ==================== 统计报告 ==================== -->
           <v-tabs-window-item value="reports">
             <div
-              v-if="sortedDateKeys.length === 0"
+              v-if="sortedDateKeys.length === 0 && recentHistory.length === 0"
               class="text-center text-medium-emphasis py-12"
             >
               <v-icon
@@ -430,7 +440,64 @@
                 暂无统计报告
               </div>
               <div class="text-caption mt-1">
-                在配置的晚自习时间段内，系统会自动记录并生成报告
+                定时或手动监测开始后，系统会在当前大屏本地保存统计片段
+              </div>
+            </div>
+
+            <div
+              v-else-if="sortedDateKeys.length === 0"
+              class="pa-4"
+            >
+              <div class="d-flex align-center mb-3">
+                <div>
+                  <div class="text-subtitle-1 font-weight-bold">
+                    最近监测片段
+                  </div>
+                  <div class="text-caption text-medium-emphasis">
+                    每个片段约 30 秒，仅保存本机统计值，不保存或上传录音。
+                  </div>
+                </div>
+                <v-spacer />
+                <v-btn
+                  color="error"
+                  prepend-icon="mdi-delete-sweep-outline"
+                  size="small"
+                  variant="text"
+                  @click="$emit('clear-history')"
+                >
+                  清空
+                </v-btn>
+              </div>
+              <v-list
+                class="rounded-xl"
+                density="compact"
+                lines="two"
+              >
+                <v-list-item
+                  v-for="slice in recentHistory"
+                  :key="slice.id"
+                  prepend-icon="mdi-chart-timeline-variant"
+                  :subtitle="`${formatFullTime(slice.start)} 至 ${formatFullTime(slice.end)}`"
+                >
+                  <v-list-item-title>
+                    安静评分 {{ slice.score ?? '--' }} · 平均估算声级 {{ Math.round(slice.display?.avgDb ?? 0) }} dB
+                  </v-list-item-title>
+                  <template #append>
+                    <v-chip
+                      :color="metaScoreColor(slice.score)"
+                      size="small"
+                      variant="tonal"
+                    >
+                      P95 {{ Math.round(slice.display?.p95Db ?? 0) }}
+                    </v-chip>
+                  </template>
+                </v-list-item>
+              </v-list>
+              <div
+                v-if="history.length > recentHistory.length"
+                class="text-caption text-medium-emphasis text-center mt-3"
+              >
+                当前显示最近 {{ recentHistory.length }} 个片段
               </div>
             </div>
 
@@ -822,7 +889,7 @@
           >
             mdi-crosshairs-gps
           </v-icon>
-          <span class="text-h6 font-weight-bold">分贝校准</span>
+          <span class="text-h6 font-weight-bold">估算声级校准</span>
           <v-spacer />
           <v-btn
             icon="mdi-close"
@@ -879,7 +946,7 @@
             <span class="text-subtitle-2 font-weight-medium">自动校准</span>
           </div>
           <div class="text-caption text-medium-emphasis mb-3">
-            在已知环境分贝的场景下，输入当前环境的真实分贝值，点击开始后保持环境安静 3 秒。
+            当前数值是浏览器根据麦克风信号换算的估算值，并非专业声级计测量。若有声级计，可输入参考值并保持环境稳定 3 秒进行校准。
           </div>
           <div class="d-flex align-center ga-3 mb-5 flex-wrap">
             <v-text-field
@@ -1049,6 +1116,7 @@ export default {
     lastSlice: { type: Object, default: null },
     history: { type: Array, default: () => [] },
     isMonitoring: { type: Boolean, default: false },
+    scheduledActive: { type: Boolean, default: false },
     micPermissionState: { type: String, default: '' },
     sessionActive: { type: Boolean, default: false },
     sessionData: { type: Object, default: null },
@@ -1149,6 +1217,12 @@ export default {
     },
     selectedReport() {
       return this.dateReports[this.selectedReportIndex] || null
+    },
+    recentHistory() {
+      return [...this.history]
+        .filter(slice => slice?.start && slice?.end)
+        .sort((left, right) => right.start - left.start)
+        .slice(0, 40)
     },
     reportCoverage() {
       if (!this.selectedReport?.samples?.length || !this.selectedReport?.duration) return 0

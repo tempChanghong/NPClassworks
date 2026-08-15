@@ -35,7 +35,7 @@
         </v-chip>
       </div>
 
-      <!-- 分贝显示 -->
+      <!-- 估算声级显示 -->
       <div class="noise-db-display d-flex align-center justify-center flex-grow-1">
         <div class="text-center">
           <div class="d-flex align-end justify-center">
@@ -45,7 +45,7 @@
             >
               {{ currentDb }}
             </span>
-            <span class="text-caption text-medium-emphasis ml-1 mb-1">dB</span>
+            <span class="text-caption text-medium-emphasis ml-1 mb-1">估算 dB</span>
           </div>
           <div
             class="noise-level-label text-caption mt-1"
@@ -115,6 +115,8 @@
     :last-slice="lastSlice"
     :history="history"
     :is-monitoring="isMonitoring"
+    :mic-permission-state="micPermissionState"
+    :scheduled-active="scheduledActive"
     @start="startMonitoring"
     @stop="stopMonitoring"
     @calibrate="handleCalibrate"
@@ -125,6 +127,7 @@
 <script>
 import { defineAsyncComponent } from 'vue'
 import { noiseService } from '@wydev/noise-core'
+import { isWithinNoiseSchedule, loadNoiseScheduleSettings } from '@/utils/noiseScheduleSettings'
 
 const NoiseMonitorDetail = defineAsyncComponent(() =>
   import('@/components/NoiseMonitorDetail.vue')
@@ -136,6 +139,9 @@ const MINI_BAR_COUNT = 16
 export default {
   name: 'NoiseMonitorCard',
   components: { NoiseMonitorDetail },
+  props: {
+    bindingId: { type: String, default: '' },
+  },
   data() {
     return {
       showDetail: false,
@@ -149,6 +155,11 @@ export default {
       lastSlice: null,
       history: [],
       unsubscribe: null,
+      scheduleTimer: null,
+      scheduledActive: false,
+      micPermissionState: 'prompt',
+      lastUiUpdateAt: 0,
+      lastHistorySliceId: '',
       recentDbValues: new Array(MINI_BAR_COUNT).fill(0),
     }
   },
@@ -171,6 +182,7 @@ export default {
         'permission-denied': '无权限',
         error: '错误',
       }
+      if (['permission-denied', 'error'].includes(this.status)) return map[this.status]
       return this.isMonitoring ? (map[this.status] || '未知') : '未启动'
     },
     dbColor() {
@@ -204,49 +216,83 @@ export default {
     },
     miniBarValues() {
       return this.recentDbValues.map(db => {
-        // 将 dB 值 (0-100) 映射到 5%-100% 高度
+        // 将估算声级 (0-100) 映射到 5%-100% 高度
         return Math.max(5, Math.min(100, db))
       })
     },
   },
   mounted() {
     this.history = noiseService.getHistory()
+    this.refreshMicrophonePermission()
+    this.updateScheduledState()
+    this.scheduleTimer = window.setInterval(this.updateScheduledState, 15 * 1000)
+    this.subscribeToService()
   },
   beforeUnmount() {
+    window.clearInterval(this.scheduleTimer)
+    const scheduleKeepsRunning = Boolean(this.bindingId
+      && isWithinNoiseSchedule(loadNoiseScheduleSettings(this.bindingId)))
+    if (this.isMonitoring && !scheduleKeepsRunning) noiseService.stop()
     if (this.unsubscribe) {
       this.unsubscribe()
     }
   },
   methods: {
+    async refreshMicrophonePermission() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        this.micPermissionState = 'unavailable'
+        return
+      }
+      try {
+        const permission = await navigator.permissions?.query?.({ name: 'microphone' })
+        if (!permission) return
+        this.micPermissionState = permission.state
+      } catch {
+        // 部分浏览器不支持查询麦克风权限，实际启动结果仍会更新状态。
+      }
+    },
+    updateScheduledState() {
+      this.scheduledActive = Boolean(this.bindingId
+        && isWithinNoiseSchedule(loadNoiseScheduleSettings(this.bindingId)))
+    },
+    subscribeToService() {
+      if (this.unsubscribe) return
+      this.unsubscribe = noiseService.subscribe((snapshot) => {
+        const statusChanged = snapshot.status !== this.status
+        this.status = snapshot.status
+        this.isMonitoring = ['initializing', 'active'].includes(snapshot.status)
+        if (snapshot.status === 'permission-denied') this.micPermissionState = 'denied'
+        const now = Date.now()
+        if (!statusChanged && snapshot.status === 'active' && now - this.lastUiUpdateAt < 250) return
+        this.lastUiUpdateAt = now
+        this.currentDbfs = snapshot.currentDbfs
+        this.currentDisplayDb = snapshot.currentDisplayDb
+        this.ringBuffer = snapshot.ringBuffer || []
+        this.lastSlice = snapshot.lastSlice || null
+        this.currentScore = snapshot.currentScore ?? null
+        this.scoreDetail = snapshot.currentScoreDetail ?? null
+
+        const dbVal = Math.max(0, Math.min(100, this.currentDisplayDb))
+        this.recentDbValues.push(dbVal)
+        if (this.recentDbValues.length > MINI_BAR_COUNT) this.recentDbValues.shift()
+        const sliceId = snapshot.lastSlice?.id || ''
+        if (sliceId && sliceId !== this.lastHistorySliceId) {
+          this.lastHistorySliceId = sliceId
+          this.history = noiseService.getHistory()
+        }
+      })
+    },
     async startMonitoring() {
       try {
         await noiseService.start()
-        this.isMonitoring = true
-        this.unsubscribe = noiseService.subscribe((snapshot) => {
-          this.status = snapshot.status
-          this.currentDbfs = snapshot.currentDbfs
-          this.currentDisplayDb = snapshot.currentDisplayDb
-          this.ringBuffer = snapshot.ringBuffer || []
-          this.lastSlice = snapshot.lastSlice || null
-          this.currentScore = snapshot.currentScore ?? null
-          this.scoreDetail = snapshot.currentScoreDetail ?? null
-
-          // 更新迷你波形数据
-          const dbVal = Math.max(0, Math.min(100, this.currentDisplayDb))
-          this.recentDbValues.push(dbVal)
-          if (this.recentDbValues.length > MINI_BAR_COUNT) {
-            this.recentDbValues.shift()
-          }
-
-          // 更新历史
-          this.history = noiseService.getHistory()
-        })
       } catch (e) {
         console.error('噪音监测启动失败:', e)
         this.status = 'error'
       }
     },
     stopMonitoring() {
+      this.updateScheduledState()
+      if (this.scheduledActive) return
       if (this.unsubscribe) {
         this.unsubscribe()
         this.unsubscribe = null
@@ -257,6 +303,7 @@ export default {
       this.recentDbValues = new Array(MINI_BAR_COUNT).fill(0)
       this.currentScore = null
       this.scoreDetail = null
+      this.subscribeToService()
     },
     handleCalibrate(targetDb) {
       noiseService.calibrate(targetDb, (success, msg) => {

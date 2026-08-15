@@ -209,7 +209,7 @@
               lg="7"
               md="9"
             >
-              <noise-monitor-card />
+              <noise-monitor-card :binding-id="store.screenSession?.binding?.id || ''" />
               <v-alert
                 class="mt-5"
                 type="info"
