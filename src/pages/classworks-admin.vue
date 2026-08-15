@@ -877,6 +877,108 @@
               </v-card-text>
             </v-card>
 
+            <v-card class="mb-5 rounded-xl">
+              <v-card-title class="d-flex align-center pa-5 pb-2">
+                <v-icon
+                  class="mr-3"
+                  color="primary"
+                  icon="mdi-calendar-clock-outline"
+                />
+                作业快捷截止时间
+              </v-card-title>
+              <v-card-text class="px-5 pb-5">
+                <p class="text-body-2 text-medium-emphasis mb-4">
+                  全校班级大屏共用；录入作业时按下按钮，会从操作当天向后计算对应日期。
+                </p>
+                <v-row
+                  v-for="(preset, index) in homeworkQuickDeadlines"
+                  :key="index"
+                  align="center"
+                  dense
+                >
+                  <v-col
+                    cols="12"
+                    md="5"
+                  >
+                    <v-text-field
+                      v-model.trim="preset.label"
+                      density="comfortable"
+                      hide-details="auto"
+                      label="按钮名称"
+                      maxlength="16"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col
+                    cols="7"
+                    md="3"
+                  >
+                    <v-select
+                      v-model="preset.dayOffset"
+                      density="comfortable"
+                      hide-details="auto"
+                      :items="quickDeadlineDayOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="截止日期"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col
+                    cols="4"
+                    md="3"
+                  >
+                    <v-text-field
+                      v-model="preset.time"
+                      density="comfortable"
+                      hide-details="auto"
+                      label="时间"
+                      type="time"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col
+                    class="d-flex justify-end"
+                    cols="1"
+                  >
+                    <v-btn
+                      :disabled="homeworkQuickDeadlines.length <= 1"
+                      icon="mdi-delete-outline"
+                      title="删除此快捷时间"
+                      variant="text"
+                      @click="homeworkQuickDeadlines.splice(index, 1)"
+                    />
+                  </v-col>
+                </v-row>
+                <div class="d-flex flex-wrap ga-2 mt-4">
+                  <v-btn
+                    :disabled="homeworkQuickDeadlines.length >= 8"
+                    prepend-icon="mdi-plus"
+                    variant="tonal"
+                    @click="addHomeworkQuickDeadline"
+                  >
+                    添加时间
+                  </v-btn>
+                  <v-btn
+                    prepend-icon="mdi-restore"
+                    variant="text"
+                    @click="resetHomeworkQuickDeadlines"
+                  >
+                    恢复默认
+                  </v-btn>
+                  <v-spacer />
+                  <v-btn
+                    color="primary"
+                    :loading="homeworkSettingsBusy"
+                    prepend-icon="mdi-content-save-outline"
+                    @click="saveSchoolHomeworkSettings"
+                  >
+                    保存全校配置
+                  </v-btn>
+                </div>
+              </v-card-text>
+            </v-card>
+
             <v-row>
               <v-col
                 cols="12"
@@ -1227,6 +1329,10 @@ import {
   recoverSchoolOwner,
   startOAuthLogin,
 } from "@/utils/classworksV2Client";
+import {
+  DEFAULT_HOMEWORK_QUICK_DEADLINES,
+  sanitizeHomeworkQuickDeadlines,
+} from "@/utils/homeworkQuickDeadlines";
 
 const signedIn = ref(Boolean(getAccountTokens().accessToken));
 const providers = ref([]);
@@ -1281,6 +1387,8 @@ const newAdminPin = ref("");
 const newAdminRole = ref("ADMIN");
 const screenAccounts = ref([]);
 const screenBusy = ref(false);
+const homeworkSettingsBusy = ref(false);
+const homeworkQuickDeadlines = ref(DEFAULT_HOMEWORK_QUICK_DEADLINES.map((item) => ({...item})));
 const newScreenName = ref("");
 const newScreenLoginCode = ref("");
 const newScreenPin = ref("");
@@ -1307,6 +1415,10 @@ const authModeOptions = [
   {title: "学校通用教师口令（极简）", value: "SHARED_PASSWORD"},
   {title: "OAuth 邮箱（兼容）", value: "OAUTH_EMAIL"},
 ];
+const quickDeadlineDayOptions = Array.from({length: 15}, (_, dayOffset) => ({
+  title: dayOffset === 0 ? "当天" : dayOffset === 1 ? "明天" : dayOffset === 2 ? "后天" : `${dayOffset}天后`,
+  value: dayOffset,
+}));
 
 const publicSchoolOptions = computed(() => publicSchools.value.map((school) => ({
   title: school.name,
@@ -1747,6 +1859,57 @@ async function loadScreenAccounts() {
   }
 }
 
+async function loadSchoolHomeworkSettings() {
+  if (!selectedSchoolId.value) {
+    resetHomeworkQuickDeadlines();
+    return;
+  }
+  homeworkSettingsBusy.value = true;
+  try {
+    const settings = await classworksV2Api.schoolHomeworkSettings(selectedSchoolId.value);
+    homeworkQuickDeadlines.value = sanitizeHomeworkQuickDeadlines(settings.quickDeadlines);
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "加载作业快捷时间失败");
+  } finally {
+    homeworkSettingsBusy.value = false;
+  }
+}
+
+function addHomeworkQuickDeadline() {
+  if (homeworkQuickDeadlines.value.length >= 8) return;
+  homeworkQuickDeadlines.value.push({label: "新时间", dayOffset: 1, time: "17:30"});
+}
+
+function resetHomeworkQuickDeadlines() {
+  homeworkQuickDeadlines.value = DEFAULT_HOMEWORK_QUICK_DEADLINES.map((item) => ({...item}));
+}
+
+async function saveSchoolHomeworkSettings() {
+  const valid = homeworkQuickDeadlines.value.length >= 1 && homeworkQuickDeadlines.value.length <= 8 &&
+    homeworkQuickDeadlines.value.every((preset) => (
+      preset.label.trim() && preset.label.trim().length <= 16 &&
+      Number.isInteger(preset.dayOffset) && preset.dayOffset >= 0 && preset.dayOffset <= 14 &&
+      /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preset.time)
+    ));
+  if (!valid) {
+    errorMessage.value = "请填写1至8个有效快捷时间，名称不超过16字，日期范围为当天至14天后。";
+    return;
+  }
+  homeworkSettingsBusy.value = true;
+  errorMessage.value = "";
+  try {
+    const settings = await classworksV2Api.updateSchoolHomeworkSettings(selectedSchoolId.value, {
+      quickDeadlines: homeworkQuickDeadlines.value,
+    });
+    homeworkQuickDeadlines.value = sanitizeHomeworkQuickDeadlines(settings.quickDeadlines);
+    successMessage.value = "全校大屏作业快捷时间已保存；大屏下次刷新会自动生效。";
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "保存作业快捷时间失败");
+  } finally {
+    homeworkSettingsBusy.value = false;
+  }
+}
+
 async function createScreenAccount() {
   screenBusy.value = true;
   errorMessage.value = "";
@@ -2009,6 +2172,7 @@ watch(selectedSchoolId, () => {
   recentCredentials.value = [];
   loadLocalAccounts();
   loadScreenAccounts();
+  loadSchoolHomeworkSettings();
 });
 watch(organizationText, () => {
   organizationReport.value = null;
@@ -2038,6 +2202,7 @@ watch(tab, (value) => {
   if (value === "screens") {
     loadRoster();
     loadScreenAccounts();
+    loadSchoolHomeworkSettings();
   }
 });
 watch(cloneSourceTermId, (termId) => {

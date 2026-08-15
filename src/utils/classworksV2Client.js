@@ -384,6 +384,12 @@ export const classworksV2Api = {
   async classroomScreens(schoolId) {
     return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/classroom-screens`));
   },
+  async schoolHomeworkSettings(schoolId) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/homework-settings`));
+  },
+  async updateSchoolHomeworkSettings(schoolId, input) {
+    return unwrap(await client.put(`/api/v2/admin/schools/${schoolId}/homework-settings`, input));
+  },
   async createClassroomScreenAccount(schoolId, input) {
     return unwrap(await client.post(
       `/api/v2/admin/schools/${schoolId}/classroom-screen-accounts`,

@@ -512,8 +512,21 @@
   <v-snackbar
     v-model="snackbar"
     color="success"
+    location="bottom"
+    :timeout="6000"
   >
-    {{ snackbarText }}
+    <div class="d-flex align-center ga-3">
+      <v-icon icon="mdi-check-circle-outline" />
+      <span>{{ snackbarText }}</span>
+    </div>
+    <template #actions>
+      <v-btn
+        variant="text"
+        @click="snackbar = false"
+      >
+        知道了
+      </v-btn>
+    </template>
   </v-snackbar>
 </template>
 
@@ -539,6 +552,7 @@ import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import TeacherPublicationManager from "@/components/v2/TeacherPublicationManager.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
+import {screenHomeworkSaveMessage} from "@/utils/screenSaveFeedback";
 
 const ClassroomToolsDialog = defineAsyncComponent(() => import("@/components/v2/ClassroomToolsDialog.vue"));
 
@@ -774,11 +788,9 @@ function openScreenComposer(publication = null) {
   screenComposerDialog.value = true;
 }
 
-function showScreenSavedMessage(publication) {
+function showScreenSavedMessage(publication, context = {}) {
   screenEditingPublication.value = null;
-  snackbarText.value = publication.isCertified
-    ? "已恢复教师确认版本"
-    : "已保存为待教师确认版本，原内容可随时恢复";
+  snackbarText.value = screenHomeworkSaveMessage(publication, context);
   snackbar.value = true;
 }
 

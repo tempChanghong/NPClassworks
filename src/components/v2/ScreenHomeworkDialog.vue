@@ -25,6 +25,24 @@
       </v-card-title>
 
       <v-card-text class="screen-composer__body px-5">
+        <v-alert
+          v-if="draftRestored"
+          class="mb-4"
+          color="info"
+          icon="mdi-file-restore-outline"
+          variant="tonal"
+        >
+          已自动恢复这台大屏上次未保存的内容。
+          <template #append>
+            <v-btn
+              variant="text"
+              @click="discardRecoveredDraft"
+            >
+              放弃草稿
+            </v-btn>
+          </template>
+        </v-alert>
+
         <section class="composer-section">
           <div class="composer-section__label">
             1. 选择科目
@@ -112,22 +130,12 @@
           </div>
           <div class="d-flex align-center flex-wrap ga-2">
             <v-btn
+              v-for="(preset, index) in quickDeadlines"
+              :key="`${preset.label}-${preset.dayOffset}-${preset.time}-${index}`"
               variant="tonal"
-              @click="setTomorrowDue(7, 30)"
+              @click="setQuickDeadline(preset)"
             >
-              明早 7:30
-            </v-btn>
-            <v-btn
-              variant="tonal"
-              @click="setTomorrowDue(12, 0)"
-            >
-              明天 12:00
-            </v-btn>
-            <v-btn
-              variant="tonal"
-              @click="setTomorrowDue(18, 0)"
-            >
-              明晚 18:00
+              {{ preset.label }}
             </v-btn>
             <v-btn
               v-if="form.dueAt"
@@ -247,9 +255,18 @@
 </template>
 
 <script setup>
-import {computed, reactive, ref, watch} from "vue";
+import {computed, nextTick, reactive, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {todayBoardDate} from "@/utils/boardDate";
+import {
+  resolveHomeworkQuickDeadline,
+  sanitizeHomeworkQuickDeadlines,
+} from "@/utils/homeworkQuickDeadlines";
+import {
+  clearScreenHomeworkDraft,
+  loadScreenHomeworkDraft,
+  saveScreenHomeworkDraft,
+} from "@/utils/screenHomeworkDraft";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -264,6 +281,8 @@ const saving = ref(false);
 const localError = ref("");
 const contentFocused = ref(false);
 const advancedPanel = ref();
+const draftRestored = ref(false);
+const draftReady = ref(false);
 const form = reactive({
   subjectId: "",
   targetWorkspaceId: "",
@@ -283,6 +302,9 @@ const eligibleSubjects = computed(() => store.studentSubjects.filter(
   (subject) => store.eligibleScreenWorkspaces(subject.id).length > 0,
 ));
 const eligibleTargets = computed(() => store.eligibleScreenWorkspaces(form.subjectId));
+const quickDeadlines = computed(() => sanitizeHomeworkQuickDeadlines(
+  store.screenSession?.homeworkSettings?.quickDeadlines,
+));
 const canSave = computed(() => Boolean(
   form.subjectId &&
   form.targetWorkspaceId &&
@@ -299,13 +321,22 @@ const dueAtLabel = computed(() => form.dueAt
 
 watch(() => props.publication, loadPublication, {immediate: true});
 watch(() => props.modelValue, (open) => {
-  if (open) loadPublication(props.publication);
+  if (open) restoreDraft();
+  else draftReady.value = false;
 });
 watch(() => form.subjectId, () => {
   if (!eligibleTargets.value.some((workspace) => workspace.id === form.targetWorkspaceId)) {
     form.targetWorkspaceId = eligibleTargets.value.length === 1 ? eligibleTargets.value[0].id : "";
   }
 });
+watch(form, () => {
+  if (!props.modelValue || !draftReady.value) return;
+  saveScreenHomeworkDraft(
+    store.screenSession?.binding?.id,
+    props.publication?.id || "new",
+    form,
+  );
+}, {deep: true});
 
 function localDateTime(value) {
   if (!value) return "";
@@ -328,6 +359,36 @@ function loadPublication(publication) {
   form.priority = publication?.priority || "NORMAL";
 }
 
+function restoreDraft() {
+  draftReady.value = false;
+  draftRestored.value = false;
+  loadPublication(props.publication);
+  const draft = loadScreenHomeworkDraft(
+    store.screenSession?.binding?.id,
+    props.publication?.id || "new",
+  );
+  if (draft) {
+    Object.assign(form, draft);
+    draftRestored.value = true;
+  }
+  nextTick(() => {
+    draftReady.value = true;
+  });
+}
+
+function discardRecoveredDraft() {
+  clearScreenHomeworkDraft(
+    store.screenSession?.binding?.id,
+    props.publication?.id || "new",
+  );
+  draftReady.value = false;
+  draftRestored.value = false;
+  loadPublication(props.publication);
+  nextTick(() => {
+    draftReady.value = true;
+  });
+}
+
 function targetSubtitle(workspace) {
   if (workspace.type === "ADMIN_CLASS") return "本行政班 · 随班科目";
   const sources = workspace.sourceClasses
@@ -337,11 +398,8 @@ function targetSubtitle(workspace) {
   return sources ? `走班教学班 · 涉及 ${sources}` : "相关走班教学班";
 }
 
-function setTomorrowDue(hour, minute) {
-  const value = new Date();
-  value.setDate(value.getDate() + 1);
-  value.setHours(hour, minute, 0, 0);
-  form.dueAt = localDateTime(value);
+function setQuickDeadline(preset) {
+  form.dueAt = localDateTime(resolveHomeworkQuickDeadline(preset));
 }
 
 async function save() {
@@ -356,6 +414,10 @@ async function save() {
   }
   saving.value = true;
   try {
+    const savedContext = {
+      subjectName: eligibleSubjects.value.find((subject) => subject.id === form.subjectId)?.name || "作业",
+      targetName: eligibleTargets.value.find((workspace) => workspace.id === form.targetWorkspaceId)?.name || "目标班级",
+    };
     const saved = await store.saveScreenPublication({
       subjectId: form.subjectId,
       targetWorkspaceIds: [form.targetWorkspaceId],
@@ -366,7 +428,13 @@ async function save() {
       priority: form.priority,
       publishAt: props.publication?.publishAt || new Date().toISOString(),
     }, props.publication);
-    emit("saved", saved);
+    clearScreenHomeworkDraft(
+      store.screenSession?.binding?.id,
+      props.publication?.id || "new",
+    );
+    draftReady.value = false;
+    draftRestored.value = false;
+    emit("saved", saved, savedContext);
     emit("update:modelValue", false);
   } catch {
     // Store exposes the server's conflict/permission message.
