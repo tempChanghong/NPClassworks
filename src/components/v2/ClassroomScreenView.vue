@@ -155,6 +155,23 @@
       icon="mdi-check-circle-outline"
       text="本行政班及相关走班的作业会按日期出现在这里"
     />
+
+    <div
+      class="screen-action-dock"
+      :class="`screen-action-dock--${settings.actionPosition}`"
+    >
+      <v-btn
+        class="screen-action-dock__button"
+        color="primary"
+        elevation="8"
+        prepend-icon="mdi-plus-circle-outline"
+        rounded="xl"
+        size="x-large"
+        @click="$emit('create')"
+      >
+        录入作业
+      </v-btn>
+    </div>
   </section>
 </template>
 
@@ -278,9 +295,26 @@ onUnmounted(() => {
 
 <style scoped>
 .classroom-screen-view {
+  padding-bottom: 104px;
   width: calc(100% - 4px);
   margin: 2px;
   transition: transform 1.2s ease;
+}
+.screen-action-dock {
+  bottom: 24px;
+  display: flex;
+  pointer-events: none;
+  position: fixed;
+  z-index: 20;
+}
+.screen-action-dock--left { left: clamp(20px, 3vw, 64px); }
+.screen-action-dock--center { left: 50%; transform: translateX(-50%); }
+.screen-action-dock--right { right: clamp(20px, 3vw, 64px); }
+.screen-action-dock__button {
+  font-size: clamp(1.05rem, 0.35vw + 0.9rem, 1.35rem);
+  min-height: 68px;
+  min-width: 210px;
+  pointer-events: auto;
 }
 .screen-toolbar { position: relative; z-index: 1; }
 .screen-toolbar-content {

@@ -370,6 +370,32 @@
                 </SettingRow>
 
                 <SettingRow
+                  description="把常用录入按钮放在更容易触及的位置；默认位于屏幕底部中央。"
+                  title="录入按钮位置"
+                >
+                  <template #scope>
+                    <ScopeChip type="screen" />
+                  </template>
+                  <v-btn-toggle
+                    :model-value="screenSettings.actionPosition"
+                    color="primary"
+                    mandatory
+                    variant="outlined"
+                    @update:model-value="saveScreenSetting('actionPosition', $event)"
+                  >
+                    <v-btn value="left">
+                      左侧
+                    </v-btn>
+                    <v-btn value="center">
+                      中央
+                    </v-btn>
+                    <v-btn value="right">
+                      右侧
+                    </v-btn>
+                  </v-btn-toggle>
+                </SettingRow>
+
+                <SettingRow
                   description="隐藏发布来源和发布时间可以进一步压缩卡片。"
                   title="次要信息"
                 >

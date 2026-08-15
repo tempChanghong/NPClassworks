@@ -7,11 +7,13 @@ export const SCREEN_DISPLAY_DEFAULTS = Object.freeze({
   backgroundSystemNotification: true,
   antiBurnInShift: false,
   performanceMode: "efficient",
+  actionPosition: "center",
 });
 
 const DENSITIES = new Set(["compact", "comfortable"]);
 const COLUMNS = new Set(["auto", "1", "2", "3", "4", "5"]);
 const PERFORMANCE_MODES = new Set(["efficient", "standard"]);
+const ACTION_POSITIONS = new Set(["left", "center", "right"]);
 
 export function calculateScreenFeedColumns(width, fontScale = SCREEN_DISPLAY_DEFAULTS.fontScale) {
   const safeWidth = Math.max(0, Number(width) || 0);
@@ -47,6 +49,9 @@ export function sanitizeScreenDisplaySettings(value = {}) {
     performanceMode: PERFORMANCE_MODES.has(value.performanceMode)
       ? value.performanceMode
       : SCREEN_DISPLAY_DEFAULTS.performanceMode,
+    actionPosition: ACTION_POSITIONS.has(value.actionPosition)
+      ? value.actionPosition
+      : SCREEN_DISPLAY_DEFAULTS.actionPosition,
   };
 }
 

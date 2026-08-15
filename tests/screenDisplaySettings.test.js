@@ -32,6 +32,7 @@ test("screen display settings are bounded and invalid values use defaults", () =
     backgroundSystemNotification: true,
     antiBurnInShift: false,
     performanceMode: "efficient",
+    actionPosition: "center",
   });
   assert.equal(sanitizeScreenDisplaySettings({fontScale: 94}).fontScale, 90);
 });
