@@ -12,12 +12,12 @@
       <div class="d-flex align-center flex-wrap ga-2">
         <span>紧急通知</span>
         <v-chip
-          v-if="notices.length > 1"
+          v-if="visibleNotices.length > 1"
           color="white"
           size="small"
           variant="tonal"
         >
-          另有 {{ notices.length - 1 }} 条
+          另有 {{ visibleNotices.length - 1 }} 条
         </v-chip>
       </div>
     </template>
@@ -38,62 +38,111 @@
       显示至 {{ formatDateTime(currentNotice.expiresAt) }}
     </div>
 
-    <template
-      v-if="soundEnabled"
-      #append
-    >
+    <div class="urgent-notice-actions mt-3">
       <v-btn
+        v-if="visibleNotices.length > 1"
+        :disabled="currentIndex === 0"
+        icon="mdi-chevron-left"
+        size="small"
+        title="上一条紧急通知"
+        variant="tonal"
+        @click="currentIndex -= 1"
+      />
+      <span
+        v-if="visibleNotices.length > 1"
+        class="text-caption font-weight-medium"
+      >
+        {{ currentIndex + 1 }} / {{ visibleNotices.length }}
+      </span>
+      <v-btn
+        v-if="visibleNotices.length > 1"
+        :disabled="currentIndex >= visibleNotices.length - 1"
+        icon="mdi-chevron-right"
+        size="small"
+        title="下一条紧急通知"
+        variant="tonal"
+        @click="currentIndex += 1"
+      />
+      <v-spacer />
+      <v-btn
+        v-if="soundEnabled"
         icon="mdi-volume-high"
+        size="small"
         title="播放提示音"
         variant="tonal"
         @click="playAlertSound"
       />
-    </template>
+      <v-btn
+        prepend-icon="mdi-check-bold"
+        size="small"
+        variant="elevated"
+        @click="acknowledgeCurrent"
+      >
+        知道了
+      </v-btn>
+    </div>
   </v-alert>
 </template>
 
 <script setup>
-import {computed, watch} from "vue";
-import {defaultSingleSound, playSound} from "@/utils/soundList";
+import {computed, ref, watch} from "vue";
+import {getSetting} from "@/utils/settings";
+import {playSound} from "@/utils/soundList";
+import {
+  createNotificationAlertController,
+  readAcknowledgedNotificationKeys,
+  rememberAcknowledgedNotification,
+} from "@/utils/notificationAlerts";
 
 const props = defineProps({
   notices: {type: Array, default: () => []},
   soundEnabled: Boolean,
+  systemNotificationEnabled: Boolean,
   bindingId: {type: String, default: "unbound"},
 });
+const emit = defineEmits(["acknowledge"]);
 
-const currentNotice = computed(() => props.notices[0] || null);
+const currentIndex = ref(0);
+const acknowledgedKeys = ref(readAcknowledgedNotificationKeys(props.bindingId));
+const visibleNotices = computed(() => props.notices.filter((notice) =>
+  !acknowledgedKeys.value.has(`${notice.id}:${notice.revision}`),
+));
+const currentNotice = computed(() => visibleNotices.value[currentIndex.value] || null);
 const alertKeys = computed(() => props.notices.map((notice) => `${notice.id}:${notice.revision}`));
-const storageKey = computed(() => `classworks-v2-urgent-notices-seen:${props.bindingId}`);
+let alertController = createNotificationAlertController({scopeId: props.bindingId});
 
-function readSeenKeys() {
-  try {
-    const value = JSON.parse(localStorage.getItem(storageKey.value));
-    return new Set(Array.isArray(value) ? value : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function rememberSeenKeys(keys) {
-  try {
-    localStorage.setItem(storageKey.value, JSON.stringify([...keys].slice(-100)));
-  } catch {
-    // The banner still works when browser storage is unavailable.
-  }
+function rememberAcknowledgedKey(notice) {
+  acknowledgedKeys.value = rememberAcknowledgedNotification(notice, props.bindingId);
 }
 
 function playAlertSound() {
-  playSound(defaultSingleSound);
+  playSound(getSetting("notification.urgentSound"));
 }
 
-watch(alertKeys, (keys) => {
-  const seen = readSeenKeys();
-  const hasNewNotice = keys.some((key) => !seen.has(key));
-  keys.forEach((key) => seen.add(key));
-  rememberSeenKeys(seen);
-  if (hasNewNotice && props.soundEnabled) playAlertSound();
+watch(() => props.bindingId, (bindingId) => {
+  alertController = createNotificationAlertController({scopeId: bindingId});
+  acknowledgedKeys.value = readAcknowledgedNotificationKeys(bindingId);
+  currentIndex.value = 0;
+});
+
+watch(() => visibleNotices.value.length, (length) => {
+  currentIndex.value = Math.max(0, Math.min(currentIndex.value, length - 1));
+});
+
+watch(alertKeys, () => {
+  alertController.alert(props.notices, {
+    soundEnabled: props.soundEnabled,
+    soundFile: getSetting("notification.urgentSound"),
+    systemNotificationEnabled: props.systemNotificationEnabled,
+  });
 }, {immediate: true});
+
+function acknowledgeCurrent() {
+  if (!currentNotice.value) return;
+  const notice = currentNotice.value;
+  rememberAcknowledgedKey(notice);
+  emit("acknowledge", notice);
+}
 
 function formatDateTime(value) {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -113,5 +162,10 @@ function formatDateTime(value) {
   line-height: 1.55;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+.urgent-notice-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 </style>

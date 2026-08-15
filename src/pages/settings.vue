@@ -393,7 +393,7 @@
                 title="通知与声音"
               >
                 <SettingRow
-                  description="首次播放声音时，浏览器可能要求进行一次用户交互。"
+                  description="页面失焦或 PWA 最小化后仍会播放；首次使用请点击测试按钮解锁浏览器音频。"
                   title="紧急通知提示音"
                 >
                   <template #scope>
@@ -405,6 +405,54 @@
                     hide-details
                     @update:model-value="saveScreenSetting('urgentNoticeSound', $event)"
                   />
+                </SettingRow>
+                <SettingRow
+                  description="立即播放当前紧急铃声，同时完成浏览器要求的首次用户交互。"
+                  title="测试并启用声音"
+                >
+                  <template #scope>
+                    <ScopeChip type="device" />
+                  </template>
+                  <v-btn
+                    prepend-icon="mdi-volume-high"
+                    variant="tonal"
+                    @click="testNotificationSound"
+                  >
+                    播放测试音
+                  </v-btn>
+                </SettingRow>
+                <SettingRow
+                  :description="`页面失焦时额外显示 Windows 通知；${notificationPermissionLabel}`"
+                  title="后台系统通知"
+                >
+                  <template #scope>
+                    <ScopeChip type="screen" />
+                  </template>
+                  <div class="d-flex align-center ga-2">
+                    <v-btn
+                      v-if="notificationPermission === 'default'"
+                      prepend-icon="mdi-bell-check-outline"
+                      variant="tonal"
+                      @click="enableSystemNotifications"
+                    >
+                      授予权限
+                    </v-btn>
+                    <v-chip
+                      v-else-if="notificationPermission === 'denied'"
+                      color="warning"
+                      prepend-icon="mdi-bell-off-outline"
+                      variant="tonal"
+                    >
+                      请在浏览器站点设置中允许
+                    </v-chip>
+                    <v-switch
+                      :disabled="notificationPermission !== 'granted'"
+                      :model-value="screenSettings.backgroundSystemNotification"
+                      color="primary"
+                      hide-details
+                      @update:model-value="saveScreenSetting('backgroundSystemNotification', $event)"
+                    />
+                  </div>
                 </SettingRow>
               </SettingsPanel>
             </template>
@@ -604,6 +652,7 @@ import SettingsPanel from "@/components/v2/settings/SettingsPanel.vue";
 import SettingRow from "@/components/v2/settings/SettingRow.vue";
 import ScopeChip from "@/components/v2/settings/ScopeChip.vue";
 import {getSetting, setSetting} from "@/utils/settings";
+import {playSoundAsync} from "@/utils/soundList";
 import {
   loadScreenDisplaySettings,
   saveScreenDisplaySettings,
@@ -624,6 +673,13 @@ const activeSection = ref(String(route.query.section || "appearance"));
 const snackbar = ref(false);
 const snackbarText = ref("");
 const storageEstimate = ref(null);
+const notificationPermission = ref(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+const notificationPermissionLabel = computed(() => ({
+  granted: "Windows 通知权限已授予",
+  denied: "Windows 通知权限已被浏览器阻止",
+  default: "尚未授予 Windows 通知权限",
+  unsupported: "当前浏览器不支持系统通知",
+}[notificationPermission.value]));
 
 const requestedContext = computed(() => ["student", "teacher", "screen"].includes(String(route.query.context))
   ? String(route.query.context)
@@ -754,6 +810,27 @@ function saveScreenSetting(field, value) {
     [field]: value,
   });
   notify("当前大屏设置已保存");
+}
+
+async function testNotificationSound() {
+  try {
+    await playSoundAsync(getSetting("notification.urgentSound"));
+    notify("测试音已播放；页面失焦后仍会使用此声音");
+  } catch {
+    notify("浏览器阻止了声音播放，请检查站点声音权限");
+  }
+}
+
+async function enableSystemNotifications() {
+  if (typeof Notification === "undefined") {
+    notificationPermission.value = "unsupported";
+    notify("当前浏览器不支持 Windows 系统通知");
+    return;
+  }
+  notificationPermission.value = await Notification.requestPermission();
+  notify(notificationPermission.value === "granted"
+    ? "Windows 系统通知已启用；Classworks 提示音仍会独立播放"
+    : "系统通知未获授权，应用内提示音不受影响");
 }
 
 function setToolEnabled(id, enabled) {

@@ -29,6 +29,7 @@ test("screen display settings are bounded and invalid values use defaults", () =
     columns: "2",
     showSecondaryMetadata: false,
     urgentNoticeSound: true,
+    backgroundSystemNotification: true,
     antiBurnInShift: false,
     performanceMode: "efficient",
   });

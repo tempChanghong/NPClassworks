@@ -4,6 +4,7 @@ export const SCREEN_DISPLAY_DEFAULTS = Object.freeze({
   columns: "auto",
   showSecondaryMetadata: true,
   urgentNoticeSound: true,
+  backgroundSystemNotification: true,
   antiBurnInShift: false,
   performanceMode: "efficient",
 });
@@ -37,6 +38,9 @@ export function sanitizeScreenDisplaySettings(value = {}) {
     urgentNoticeSound: typeof value.urgentNoticeSound === "boolean"
       ? value.urgentNoticeSound
       : SCREEN_DISPLAY_DEFAULTS.urgentNoticeSound,
+    backgroundSystemNotification: typeof value.backgroundSystemNotification === "boolean"
+      ? value.backgroundSystemNotification
+      : SCREEN_DISPLAY_DEFAULTS.backgroundSystemNotification,
     antiBurnInShift: typeof value.antiBurnInShift === "boolean"
       ? value.antiBurnInShift
       : SCREEN_DISPLAY_DEFAULTS.antiBurnInShift,

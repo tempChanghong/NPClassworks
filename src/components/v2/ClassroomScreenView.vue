@@ -75,6 +75,8 @@
       :binding-id="bindingId"
       :notices="urgentNotices"
       :sound-enabled="settings.urgentNoticeSound"
+      :system-notification-enabled="settings.backgroundSystemNotification"
+      @acknowledge="acknowledgeNotice"
     />
 
     <BoardDateNavigator
@@ -147,6 +149,8 @@ import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
 import {classworksV2Api} from "@/utils/classworksV2Client";
+import {createNotificationDeliveryQueue} from "@/utils/notificationDeliveryQueue";
+import {notificationAlertKey, readAcknowledgedNotificationKeys} from "@/utils/notificationAlerts";
 import {
   loadScreenDisplaySettings,
   saveScreenDisplaySettings,
@@ -158,6 +162,9 @@ const store = useClassworksV2Store();
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const burnInStep = ref(0);
 let burnInTimer = null;
+const notificationDeliveryQueue = createNotificationDeliveryQueue({
+  send: (items) => classworksV2Api.acknowledgeScreenNotifications(items),
+});
 
 const bindingId = computed(() => store.screenSession?.binding?.id || "");
 const urgentNotices = computed(() => store.feed.filter((publication) =>
@@ -193,19 +200,27 @@ watch(bindingId, (id) => {
 watch(() => settings.value.performanceMode, updatePerformanceClass);
 
 watch(() => store.feed.filter((publication) => publication.type === "NOTICE")
-  .map((publication) => `${publication.id}:${publication.revision}`).join(","), async () => {
+  .map((publication) => `${publication.id}:${publication.revision}`).join(","), () => {
+  const acknowledged = readAcknowledgedNotificationKeys(bindingId.value);
   const items = store.feed.filter((publication) => publication.type === "NOTICE").map((publication) => ({
     publicationId: publication.id,
     revision: publication.revision,
     displayed: true,
+    acknowledged: acknowledged.has(notificationAlertKey(publication)),
   }));
   if (!items.length || !store.screenSession) return;
-  try {
-    await classworksV2Api.acknowledgeScreenNotifications(items);
-  } catch {
-    // 回执失败不应遮挡作业；下一次刷新会自动重试。
-  }
+  notificationDeliveryQueue.enqueue(items);
 }, {immediate: true});
+
+function acknowledgeNotice(publication) {
+  if (!publication?.id || !store.screenSession) return;
+  notificationDeliveryQueue.enqueue([{
+    publicationId: publication.id,
+    revision: publication.revision,
+    displayed: true,
+    acknowledged: true,
+  }]);
+}
 
 function applySettings(value) {
   settings.value = saveScreenDisplaySettings(bindingId.value, value);
@@ -227,6 +242,7 @@ onMounted(() => {
   document.body.classList.add("classworks-screen-active");
   updatePerformanceClass();
   window.addEventListener("keydown", handleShortcut);
+  window.addEventListener("online", notificationDeliveryQueue.retryNow);
   burnInTimer = window.setInterval(() => {
     burnInStep.value += 1;
   }, 5 * 60 * 1000);
@@ -236,6 +252,8 @@ onUnmounted(() => {
   document.body.classList.remove("classworks-screen-active");
   document.body.classList.remove("classworks-screen-efficient");
   window.removeEventListener("keydown", handleShortcut);
+  window.removeEventListener("online", notificationDeliveryQueue.retryNow);
+  notificationDeliveryQueue.dispose();
   window.clearInterval(burnInTimer);
 });
 </script>

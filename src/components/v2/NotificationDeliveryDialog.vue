@@ -46,8 +46,8 @@
             </v-list-item-title>
             <v-list-item-subtitle>
               {{ deliveryState(item).label }}
-              <template v-if="item.delivery?.displayedAt">
-                · {{ formatDateTime(item.delivery.displayedAt) }}
+              <template v-if="deliveryTime(item)">
+                · {{ formatDateTime(deliveryTime(item)) }}
               </template>
             </v-list-item-subtitle>
             <template #append>
@@ -113,14 +113,21 @@ async function load() {
 }
 
 function deliveryState(item) {
+  if (item.delivery?.revision === result.value?.revision && item.delivery?.acknowledgedAt) {
+    return {label: "当前版本已由大屏确认", icon: "mdi-check-decagram", color: "success"};
+  }
   if (item.delivery?.revision === result.value?.revision && item.delivery?.displayedAt) {
-    return {label: "当前版本已展示", icon: "mdi-check-circle", color: "success"};
+    return {label: "当前版本已展示，等待确认", icon: "mdi-eye-check", color: "info"};
   }
   if (item.delivery?.revision === result.value?.revision) {
     return {label: "当前版本已收到", icon: "mdi-check", color: "info"};
   }
   if (item.delivery) return {label: "只收到过较早版本", icon: "mdi-history", color: "warning"};
   return {label: "尚未收到当前通知", icon: "mdi-clock-outline", color: "grey"};
+}
+
+function deliveryTime(item) {
+  return item.delivery?.acknowledgedAt || item.delivery?.displayedAt || item.delivery?.receivedAt;
 }
 
 function onlineLabel(value) {
