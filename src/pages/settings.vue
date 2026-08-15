@@ -706,8 +706,6 @@ const bindingId = computed(() => store.screenSession?.binding?.id || "");
 const classroomTools = [
   {id: "attendance", title: "考勤", description: "记录缺勤、迟到和不参与学生。"},
   {id: "noise", title: "噪声监测", description: "在本机分析教室环境噪声。"},
-  {id: "random", title: "随机点名", description: "未来可能删除；关闭后不再显示入口。"},
-  {id: "exam", title: "考试看板", description: "未来可能删除；关闭后不再显示入口。"},
 ];
 
 const commonItems = [

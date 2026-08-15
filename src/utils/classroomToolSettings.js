@@ -1,4 +1,4 @@
-export const CLASSROOM_TOOL_IDS = Object.freeze(["attendance", "noise", "random", "exam"]);
+export const CLASSROOM_TOOL_IDS = Object.freeze(["attendance", "noise"]);
 
 export const CLASSROOM_TOOL_DEFAULTS = Object.freeze({
   enabledToolIds: [...CLASSROOM_TOOL_IDS],

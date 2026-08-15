@@ -138,7 +138,7 @@
           <v-empty-state
             v-if="!store.classroomStudents.length"
             icon="mdi-account-school-outline"
-            text="先录入行政班学生名单，考勤和随机点名会共用这份名单。"
+            text="先录入行政班学生名单，之后即可记录每日考勤。"
             title="尚未录入学生名单"
           >
             <template #actions>
@@ -222,12 +222,6 @@
         </template>
       </v-container>
 
-      <RandomPicker
-        ref="randomPicker"
-        :attendance="randomPickerAttendance"
-        :student-list="store.classroomStudents.map((student) => student.name)"
-      />
-
       <v-dialog
         v-model="rosterDialog"
         max-width="680"
@@ -242,7 +236,7 @@
               type="info"
               variant="tonal"
             >
-              每行一名学生；可填写“学号 姓名”，也可以只填写姓名。考勤和随机点名共用此名单。
+              每行一名学生；可填写“学号 姓名”，也可以只填写姓名。名单仅保存在学校服务器中供考勤使用。
             </v-alert>
             <v-textarea
               v-model="rosterText"
@@ -275,18 +269,14 @@
 
 <script setup>
 import {computed, ref, watch} from "vue";
-import {useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import NoiseMonitorCard from "@/components/NoiseMonitorCard.vue";
-import RandomPicker from "@/components/RandomPicker.vue";
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 
 const props = defineProps({modelValue: Boolean});
-const emit = defineEmits(["update:modelValue"]);
-const router = useRouter();
+defineEmits(["update:modelValue"]);
 const store = useClassworksV2Store();
 const activeTool = ref("");
-const randomPicker = ref(null);
 const rosterDialog = ref(false);
 const rosterText = ref("");
 const savingRoster = ref(false);
@@ -294,12 +284,9 @@ const savingAttendance = ref(false);
 const attendanceDraft = ref({absent: [], late: [], excluded: []});
 const toolSettings = ref(loadClassroomToolSettings(store.screenSession?.binding?.id));
 
-// 工具采用注册表，未来删除随机点名或考试看板时无需改动主页结构。
 const allTools = [
   {id: "attendance", title: "考勤", description: "记录今日缺勤、迟到和不参与学生", icon: "mdi-account-check-outline", color: "success"},
   {id: "noise", title: "噪声监测", description: "查看教室环境噪声和本地统计", icon: "mdi-waveform", color: "info"},
-  {id: "random", title: "随机点名", description: "自动排除今日缺勤等学生", icon: "mdi-account-question-outline", color: "warning"},
-  {id: "exam", title: "考试看板", description: "打开现有考试安排与配置工具", icon: "mdi-calendar-check-outline", color: "purple"},
 ];
 const tools = computed(() => allTools.filter((tool) => toolSettings.value.enabledToolIds.includes(tool.id)));
 
@@ -318,15 +305,6 @@ const attendanceCounts = computed(() => ({
   late: attendanceDraft.value.late.length,
   excluded: attendanceDraft.value.excluded.length,
 }));
-const namesForIds = (ids) => ids.map(
-  (id) => store.classroomStudents.find((student) => student.id === id)?.name,
-).filter(Boolean);
-const randomPickerAttendance = computed(() => ({
-  absent: namesForIds(attendanceDraft.value.absent),
-  late: namesForIds(attendanceDraft.value.late),
-  exclude: namesForIds(attendanceDraft.value.excluded),
-}));
-
 watch(() => props.modelValue, async (open) => {
   if (!open) {
     activeTool.value = "";
@@ -346,20 +324,6 @@ function attendanceFromStore() {
 }
 
 function openTool(id) {
-  if (id === "random") {
-    if (!store.classroomStudents.length) {
-      activeTool.value = "attendance";
-      openRosterEditor();
-      return;
-    }
-    randomPicker.value.dialog = true;
-    return;
-  }
-  if (id === "exam") {
-    emit("update:modelValue", false);
-    router.push("/examschedule");
-    return;
-  }
   activeTool.value = id;
 }
 

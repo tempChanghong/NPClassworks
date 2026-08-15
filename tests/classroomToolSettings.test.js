@@ -19,7 +19,7 @@ function memoryStorage() {
 test("classroom tool settings keep only known tools in stable order", () => {
   assert.deepEqual(sanitizeClassroomToolSettings({
     enabledToolIds: ["exam", "unknown", "attendance"],
-  }).enabledToolIds, ["attendance", "exam"]);
+  }).enabledToolIds, ["attendance"]);
 });
 
 test("classroom tool settings persist independently for each screen", () => {
@@ -27,7 +27,7 @@ test("classroom tool settings persist independently for each screen", () => {
   saveClassroomToolSettings("a", {enabledToolIds: ["attendance", "noise"]}, storage);
   saveClassroomToolSettings("b", {enabledToolIds: ["random"]}, storage);
   assert.deepEqual(loadClassroomToolSettings("a", storage).enabledToolIds, ["attendance", "noise"]);
-  assert.deepEqual(loadClassroomToolSettings("b", storage).enabledToolIds, ["random"]);
+  assert.deepEqual(loadClassroomToolSettings("b", storage).enabledToolIds, []);
   assert.notEqual(classroomToolSettingsKey("a"), classroomToolSettingsKey("b"));
   assert.deepEqual(loadClassroomToolSettings("missing", storage).enabledToolIds, CLASSROOM_TOOL_IDS);
 });

@@ -30,18 +30,6 @@
           <hitokoto-card />
         </div>
 
-        <!-- 考试卡片 -->
-        <div
-          v-else-if="item.type === 'exam'"
-          style="height: 100%"
-        >
-          <concise-exam-card
-            :exam-id="item.data.examId"
-            :content-style="contentStyle"
-            @click="$emit('open-exam-detail', item.data.examId)"
-          />
-        </div>
-
         <!-- 出勤卡片 -->
         <v-card
           v-else-if="item.type === 'attendance'"
@@ -300,7 +288,6 @@
 <script>
 import HitokotoCard from "@/components/HitokotoCard.vue";
 import TimeCard from "@/components/TimeCard.vue";
-import ConciseExamCard from "@/components/home/ConciseExamCard.vue";
 import {getSetting} from "@/utils/settings.js";
 
 export default {
@@ -308,7 +295,6 @@ export default {
   components: {
     HitokotoCard,
     TimeCard,
-    ConciseExamCard,
   },
   props: {
     sortedItems: {
@@ -344,11 +330,6 @@ export default {
   data() {
     return {
       isReadOnlyToken: false,
-    }
-  },
-  computed: {
-    settings() {
-      return settings
     }
   },
   async mounted() {

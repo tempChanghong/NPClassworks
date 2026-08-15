@@ -48,9 +48,6 @@
       <setting-item :setting-key="'display.dynamicSort'" />
 
       <v-divider class="my-2" />
-      <setting-item :setting-key="'display.showRandomButton'" />
-
-      <v-divider class="my-2" />
       <setting-item :setting-key="'display.showFullscreenButton'" />
 
       <v-divider class="my-2" />
@@ -64,9 +61,6 @@
 
       <v-divider class="my-2" />
       <setting-item :setting-key="'display.showAntiScreenBurnCard'" />
-
-      <v-divider class="my-2" />
-      <setting-item :setting-key="'display.showExamScheduleButton'" />
 
       <v-divider class="my-2" />
       <setting-item :setting-key="'display.showUafTransfer'" />

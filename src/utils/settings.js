@@ -157,13 +157,6 @@ const settingsDefinitions = {
     icon: "mdi-sort-variant",
     // 启用后会根据内容自动调整卡片顺序，提供更好的视觉体验
   },
-  "display.showRandomButton": {
-    type: "boolean",
-    default: false,
-    description: "是否显示随机点人按钮",
-    icon: "mdi-shuffle-variant",
-    // 控制是否显示随机排序按钮，可用于随机调整卡片顺序
-  },
   "display.showFullscreenButton": {
     type: "boolean",
     default: true,
@@ -195,13 +188,6 @@ const settingsDefinitions = {
     default: true,
     description: "是否显示列表卡片",
     icon: "mdi-list-box",
-  },
-  "display.showExamScheduleButton": {
-    type: "boolean",
-    default: true,
-    description: "是否显示考试看板",
-    icon: "mdi-calendar-check",
-    // 控制是否在主页显示考试看板按钮，指向考试安排页面
   },
   "display.showUafTransfer": {
     type: "boolean",
@@ -498,66 +484,6 @@ const settingsDefinitions = {
     description: "持续通知铃声",
     icon: "mdi-bell-alert",
     // 设置紧急通知时循环播放的音频文件
-  },
-
-  // 随机点名设置
-  "randomPicker.enabled": {
-    type: "boolean",
-    default: true,
-    description: "是否启用随机点名功能",
-    icon: "mdi-account-question",
-  },
-  "randomPicker.animation": {
-    type: "boolean",
-    default: true,
-    description: "是否启用随机点名动画效果",
-    icon: "mdi-animation-play",
-  },
-  "randomPicker.defaultCount": {
-    type: "number",
-    default: 1,
-    validate: (value) => value >= 1 && value,
-    description: "默认抽取人数",
-    icon: "mdi-counter",
-  },
-  "randomPicker.excludeAbsent": {
-    type: "boolean",
-    default: true,
-    description: "是否排除请假学生",
-    icon: "mdi-account-off",
-  },
-  "randomPicker.excludeLate": {
-    type: "boolean",
-    default: false,
-    description: "是否排除迟到学生",
-    icon: "mdi-clock-alert",
-  },
-  "randomPicker.excludeExcluded": {
-    type: "boolean",
-    default: true,
-    description: "是否排除不参与学生",
-    icon: "mdi-account-cancel",
-  },
-  "randomPicker.mode": {
-    type: "string",
-    default: "name",
-    validate: (value) => ["name", "number"].includes(value),
-    description: "随机点名模式",
-    icon: "mdi-format-list-numbered",
-  },
-  "randomPicker.maxNumber": {
-    type: "number",
-    default: 60,
-    validate: (value) => value >= 1 && value,
-    description: "学号模式最大值",
-    icon: "mdi-numeric",
-  },
-  "randomPicker.minNumber": {
-    type: "number",
-    default: 1,
-    validate: (value) => value >= 1 && value,
-    description: "学号模式最小值",
-    icon: "mdi-numeric-negative-1",
   },
 
   // PWA 设置

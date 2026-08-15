@@ -63,30 +63,6 @@
       {{ isFullscreen ? "退出全屏" : "全屏" }}
     </v-btn>
     <v-btn
-      v-if="showRandomPickerButton"
-      append-icon="mdi-dice-multiple"
-      class="ml-2"
-      color="amber"
-      prepend-icon="mdi-account-question"
-      size="large"
-      @click="$emit('open-random-picker')"
-    >
-      随机点名
-    </v-btn>
-
-    <v-btn
-      v-if="showExamScheduleButton"
-      prepend-icon="mdi-calendar-check"
-      size="large"
-      class="ml-2"
-      color="green"
-      @click="$emit('add-exam-card')"
-    >
-      考试看板
-    </v-btn>
-
-
-    <v-btn
       v-if="showListCardButton"
       class="ml-2"
       color="primary-darken-1"
@@ -144,8 +120,6 @@ export default {
   props: {
     synced: Boolean,
     loadingUpload: Boolean,
-    showRandomPickerButton: Boolean,
-    showExamScheduleButton: Boolean,
     showListCardButton: Boolean,
     showFullscreenButton: Boolean,
     isFullscreen: Boolean,
@@ -157,10 +131,8 @@ export default {
   emits: [
     "upload",
     "show-sync-message",
-    "open-random-picker",
     "toggle-fullscreen",
     "add-test-card",
-    "add-exam-card",
     "open-uaf-export",
     "open-uaf-import",
   ],
