@@ -333,6 +333,27 @@ export const classworksV2Api = {
       {params: termId ? {termId} : {}},
     ));
   },
+  async managedAcademicStructure(schoolId, termId) {
+    return unwrap(await client.get(
+      `/api/v2/admin/schools/${schoolId}/academic-structure`,
+      {params: {termId}},
+    ));
+  },
+  async replaceAdministrativeClassSubjectRules(schoolId, administrativeClassId, input) {
+    return unwrap(await client.put(
+      `/api/v2/admin/schools/${schoolId}/administrative-classes/${administrativeClassId}/subject-rules`,
+      input,
+    ));
+  },
+  async createManagedCourseGroup(schoolId, input) {
+    return unwrap(await client.post(`/api/v2/admin/schools/${schoolId}/course-groups`, input));
+  },
+  async updateManagedCourseGroup(schoolId, courseGroupId, input) {
+    return unwrap(await client.patch(
+      `/api/v2/admin/schools/${schoolId}/course-groups/${courseGroupId}`,
+      input,
+    ));
+  },
   async importWorkspaceMemberships(input, dryRun = true) {
     return unwrap(await client.post("/api/v2/admin/workspace-memberships/import", input, {
       params: {dryRun},

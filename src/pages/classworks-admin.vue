@@ -246,6 +246,9 @@
         <v-tab value="organization">
           组织与班级
         </v-tab>
+        <v-tab value="structure">
+          授课结构
+        </v-tab>
         <v-tab value="teachers">
           教师分配
         </v-tab>
@@ -369,6 +372,55 @@
               />
             </v-card-text>
           </v-card>
+        </v-window-item>
+
+        <v-window-item value="structure">
+          <v-alert
+            v-if="!managerMemberships.length"
+            type="warning"
+            variant="tonal"
+          >
+            请先完成学校初始化或取得 OWNER/ADMIN 权限。
+          </v-alert>
+          <template v-else>
+            <v-card class="mb-5 rounded-xl">
+              <v-card-text class="pa-5">
+                <v-row>
+                  <v-col
+                    cols="12"
+                    md="6"
+                  >
+                    <v-select
+                      v-model="selectedSchoolId"
+                      :items="schoolOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="学校"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col
+                    cols="12"
+                    md="6"
+                  >
+                    <v-select
+                      v-model="selectedTermId"
+                      :items="termOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="学期"
+                      variant="outlined"
+                    />
+                  </v-col>
+                </v-row>
+              </v-card-text>
+            </v-card>
+            <AcademicStructureManager
+              v-if="selectedSchoolId && selectedTermId"
+              :school-id="selectedSchoolId"
+              :term-id="selectedTermId"
+            />
+          </template>
         </v-window-item>
 
         <v-window-item value="teachers">
@@ -1163,6 +1215,7 @@
 <script setup>
 import {computed, onMounted, ref, watch} from "vue";
 import ValidationReport from "@/components/v2/ValidationReport.vue";
+import AcademicStructureManager from "@/components/admin/AcademicStructureManager.vue";
 import {
   bootstrapSchoolAdministrator,
   classworksV2Api,
