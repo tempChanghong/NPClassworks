@@ -723,7 +723,7 @@
 <script>
 import { SettingsManager, watchSettings, getSetting, setSetting } from '@/utils/settings'
 import { playSound, defaultSingleSound } from '@/utils/soundList'
-import { noiseService } from '@wydev/noise-core'
+import { noiseService } from '@/utils/noiseService'
 import { defineAsyncComponent } from 'vue'
 import dataProvider from '@/utils/dataProvider'
 

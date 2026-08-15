@@ -7,7 +7,7 @@
 
 <script setup>
 import {onMounted, onUnmounted, watch} from "vue";
-import {noiseService} from "@wydev/noise-core";
+import {noiseService} from "@/utils/noiseService";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 import {

@@ -53,6 +53,12 @@
           >
             {{ noiseLevel }}
           </div>
+          <div
+            v-if="isMonitoring"
+            class="text-caption text-medium-emphasis mt-1"
+          >
+            {{ signalQualityLabel }}
+          </div>
         </div>
       </div>
 
@@ -111,6 +117,7 @@
     :db-color="dbColor"
     :current-score="currentScore"
     :score-detail="scoreDetail"
+    :signal-health="signalHealth"
     :ring-buffer="ringBuffer"
     :last-slice="lastSlice"
     :history="history"
@@ -126,7 +133,7 @@
 
 <script>
 import { defineAsyncComponent } from 'vue'
-import { noiseService } from '@wydev/noise-core'
+import { noiseService } from '@/utils/noiseService'
 import { isWithinNoiseSchedule, loadNoiseScheduleSettings } from '@/utils/noiseScheduleSettings'
 
 const NoiseMonitorDetail = defineAsyncComponent(() =>
@@ -151,6 +158,7 @@ export default {
       currentDisplayDb: 0,
       currentScore: null,
       scoreDetail: null,
+      signalHealth: { quality: 'no-signal', confidence: 0, coverage: 0 },
       ringBuffer: [],
       lastSlice: null,
       history: [],
@@ -251,6 +259,17 @@ export default {
         // 部分浏览器不支持查询麦克风权限，实际启动结果仍会更新状态。
       }
     },
+    signalQualityLabel() {
+      const labels = {
+        good: '信号正常',
+        'low-coverage': '正在积累样本',
+        silent: '信号过低',
+        clipping: '麦克风输入过载',
+        'no-signal': '等待麦克风信号',
+      }
+      const label = labels[this.signalHealth.quality] || '检查信号'
+      return `${label} · 可信度 ${this.signalHealth.confidence || 0}%`
+    },
     updateScheduledState() {
       this.scheduledActive = Boolean(this.bindingId
         && isWithinNoiseSchedule(loadNoiseScheduleSettings(this.bindingId)))
@@ -271,6 +290,7 @@ export default {
         this.lastSlice = snapshot.lastSlice || null
         this.currentScore = snapshot.currentScore ?? null
         this.scoreDetail = snapshot.currentScoreDetail ?? null
+        this.signalHealth = snapshot.signalHealth || this.signalHealth
 
         const dbVal = Math.max(0, Math.min(100, this.currentDisplayDb))
         this.recentDbValues.push(dbVal)

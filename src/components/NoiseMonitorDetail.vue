@@ -41,6 +41,15 @@
           计划监测
         </v-chip>
         <v-chip
+          v-if="isMonitoring"
+          :color="signalQualityColor"
+          size="small"
+          variant="tonal"
+          class="mr-2"
+        >
+          {{ signalQualityLabel }}
+        </v-chip>
+        <v-chip
           :color="isMonitoring ? 'success' : 'grey'"
           size="small"
           variant="tonal"
@@ -1099,7 +1108,7 @@ import {
   getNoiseControlSettings,
   saveNoiseControlSettings,
   resetNoiseControlSettings,
-} from '@wydev/noise-core';
+} from '@/utils/noiseService';
 
 export default {
   name: 'NoiseMonitorDetail',
@@ -1112,6 +1121,7 @@ export default {
     dbColor: { type: String, default: 'grey' },
     currentScore: { type: Number, default: null },
     scoreDetail: { type: Object, default: null },
+    signalHealth: { type: Object, default: () => ({quality: 'no-signal', confidence: 0, coverage: 0}) },
     ringBuffer: { type: Array, default: () => [] },
     lastSlice: { type: Object, default: null },
     history: { type: Array, default: () => [] },
@@ -1217,6 +1227,25 @@ export default {
     },
     selectedReport() {
       return this.dateReports[this.selectedReportIndex] || null
+    },
+    signalQualityColor() {
+      return ({
+        good: 'success',
+        'low-coverage': 'info',
+        silent: 'warning',
+        clipping: 'error',
+        'no-signal': 'grey',
+      })[this.signalHealth.quality] || 'warning'
+    },
+    signalQualityLabel() {
+      const label = ({
+        good: '信号正常',
+        'low-coverage': '正在积累样本',
+        silent: '信号过低',
+        clipping: '输入过载',
+        'no-signal': '等待信号',
+      })[this.signalHealth.quality] || '信号异常'
+      return `${label} · 覆盖 ${this.signalHealth.coverage || 0}%`
     },
     recentHistory() {
       return [...this.history]
