@@ -10,6 +10,7 @@ import {onMounted, onUnmounted, watch} from "vue";
 import {noiseService} from "@/utils/noiseService";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
+import {loadMicrophoneDeviceSettings} from "@/utils/microphoneDeviceSettings";
 import {
   isWithinNoiseSchedule,
   loadNoiseScheduleSettings,
@@ -55,7 +56,7 @@ async function evaluateSchedule({retry = false} = {}) {
       && attemptedWindowKey === windowKey
       && ["permission-denied", "error"].includes(serviceStatus)) return;
     attemptedWindowKey = windowKey;
-    await noiseService.start();
+    await noiseService.start({deviceId: loadMicrophoneDeviceSettings(bindingId).deviceId});
   } finally {
     evaluationPending = false;
   }

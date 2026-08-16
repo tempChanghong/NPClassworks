@@ -13,7 +13,7 @@
       </div>
     </v-app-bar-title>
     <v-btn-toggle
-      v-if="appReady && (!store.screenSession || screenTemporarilyUnlocked)"
+      v-if="showMainNavigation"
       v-model="mode"
       color="primary"
       mandatory
@@ -39,7 +39,7 @@
       </v-btn>
     </v-btn-toggle>
     <v-btn
-      v-if="appReady && (!store.screenSession || screenTemporarilyUnlocked)"
+      v-if="showMainNavigation"
       class="ml-2"
       icon="mdi-cog-outline"
       title="设置"
@@ -79,7 +79,32 @@
         </v-btn>
       </div>
     </v-alert>
-    <template v-if="mode === 'student'">
+    <v-btn
+      v-if="showOobeBack"
+      class="mb-4"
+      prepend-icon="mdi-arrow-left"
+      variant="text"
+      @click="returnToOobe"
+    >
+      返回选择使用方式
+    </v-btn>
+
+    <ClassworksOobe
+      v-if="oobeLanding"
+      :school-count="store.schools.length"
+      @admin="router.push('/classworks-admin')"
+      @select="beginOobeRole"
+    />
+
+    <ScreenOobeChecklist
+      v-else-if="screenOobePending && store.screenSession"
+      :binding-id="store.screenSession.binding.id"
+      :class-name="store.screenSession.binding.administrativeClass?.name"
+      :screen-name="store.screenSession.binding.name"
+      @complete="finishScreenOobe"
+    />
+
+    <template v-else-if="mode === 'student'">
       <div class="classworks-overview mb-6">
         <classroom-time-card compact />
         <v-card
@@ -406,8 +431,6 @@
 
   <class-selection-dialog
     v-model="store.selectionDialog"
-    @screen="openScreenFromSelection"
-    @teacher="openTeacherFromSelection"
   />
   <ClassroomToolsDialog
     v-if="classroomToolsDialog"
@@ -551,8 +574,20 @@ import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import TeacherPublicationManager from "@/components/v2/TeacherPublicationManager.vue";
+import ClassworksOobe from "@/components/v2/ClassworksOobe.vue";
+import ScreenOobeChecklist from "@/components/v2/ScreenOobeChecklist.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
 import {screenHomeworkSaveMessage} from "@/utils/screenSaveFeedback";
+import {
+  CLASSWORKS_OOBE_VERSION,
+  completeClassworksOobe,
+  completeScreenOobe,
+  isScreenOobeComplete,
+  loadClassworksOobeState,
+  rememberClassworksOobeRole,
+  saveClassworksOobeState,
+  shouldShowClassworksOobe,
+} from "@/utils/classworksOobe";
 
 const ClassroomToolsDialog = defineAsyncComponent(() => import("@/components/v2/ClassroomToolsDialog.vue"));
 
@@ -561,6 +596,9 @@ const route = useRoute();
 const router = useRouter();
 const mode = ref("student");
 const appReady = ref(false);
+const oobeState = ref(loadClassworksOobeState());
+const oobeLanding = ref(false);
+const screenOobePending = ref(false);
 const snackbar = ref(false);
 const snackbarText = ref("");
 const editingPublication = ref(null);
@@ -598,6 +636,25 @@ const showOAuthLogin = computed(() => Boolean(
   store.oauthProviders.length &&
   (loginSchool.value?.teacherAuthMode === "OAUTH_EMAIL" || loginSchool.value?.allowOAuthTeacherLogin),
 ));
+const showMainNavigation = computed(() => Boolean(
+  appReady.value &&
+  !oobeLanding.value &&
+  !screenOobePending.value &&
+  (
+    oobeState.value.completed ||
+    store.isTeacherSignedIn ||
+    store.selection.administrativeClassId ||
+    store.screenSession
+  ) &&
+  (!store.screenSession || screenTemporarilyUnlocked.value),
+));
+const showOobeBack = computed(() => Boolean(
+  appReady.value &&
+  !oobeLanding.value &&
+  !screenOobePending.value &&
+  !store.screenSession &&
+  !oobeState.value.completed,
+));
 
 const selectionDescription = computed(() => {
   const groups = Object.values(store.selection.courseGroupIds || {})
@@ -614,14 +671,38 @@ const screenUnlockRemainingLabel = computed(() => {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 });
 
-function openTeacherFromSelection() {
-  store.selectionDialog = false;
-  mode.value = "teacher";
+function beginOobeRole(role) {
+  oobeState.value = rememberClassworksOobeRole(role);
+  oobeLanding.value = false;
+  mode.value = role;
+  if (role === "student") store.selectionDialog = true;
 }
 
-function openScreenFromSelection() {
+function returnToOobe() {
   store.selectionDialog = false;
-  mode.value = "screen";
+  oobeState.value = saveClassworksOobeState({
+    ...oobeState.value,
+    version: CLASSWORKS_OOBE_VERSION,
+    completed: false,
+  });
+  oobeLanding.value = true;
+}
+
+function finishRoleOobe(role) {
+  oobeState.value = completeClassworksOobe(role);
+  oobeLanding.value = false;
+  if (route.query.oobe === "1") {
+    const nextQuery = {...route.query};
+    delete nextQuery.oobe;
+    router.replace({path: "/", query: nextQuery});
+  }
+}
+
+function finishScreenOobe() {
+  const bindingId = store.screenSession?.binding?.id;
+  if (bindingId) completeScreenOobe(bindingId);
+  finishRoleOobe("screen");
+  screenOobePending.value = false;
 }
 
 function openSettings(context = mode.value) {
@@ -640,17 +721,61 @@ watch(() => store.schools, (schools) => {
 }, {deep: true, immediate: true});
 watch(() => store.screenSession, (session) => {
   if (session && mode.value !== "screen" && !screenTemporarilyUnlocked.value) mode.value = "screen";
+  if (session && !screenTemporarilyUnlocked.value) {
+    oobeLanding.value = false;
+    screenOobePending.value = !isScreenOobeComplete(session.binding.id);
+  }
   if (!session && mode.value === "screen") mode.value = "student";
+});
+watch(() => store.account, (account) => {
+  if (account && mode.value === "teacher") finishRoleOobe("teacher");
+});
+watch(() => store.selection.administrativeClassId, (administrativeClassId) => {
+  if (administrativeClassId && mode.value === "student" && !screenTemporarilyUnlocked.value) {
+    finishRoleOobe("student");
+  }
 });
 
 onMounted(async () => {
   await Promise.all([
-    store.bootstrapStudent(),
+    store.bootstrapStudent({promptForSelection: false}),
     store.bootstrapTeacher(),
     store.bootstrapClassroomScreen(),
   ]);
-  if (store.screenSession) mode.value = "screen";
-  else if (route.query.mode === "teacher") mode.value = "teacher";
+  const hasStudentSelection = Boolean(store.selection.administrativeClassId);
+  const forceOobe = route.query.oobe === "1";
+  if (store.screenSession) {
+    mode.value = "screen";
+    oobeLanding.value = false;
+    screenOobePending.value = forceOobe || !isScreenOobeComplete(store.screenSession.binding.id);
+  } else if (forceOobe) {
+    oobeState.value = saveClassworksOobeState({...oobeState.value, completed: false});
+    oobeLanding.value = true;
+  } else if (route.query.mode === "teacher") {
+    mode.value = "teacher";
+    oobeLanding.value = false;
+  } else if (store.isTeacherSignedIn && (!hasStudentSelection || oobeState.value.roleHint === "teacher")) {
+    mode.value = "teacher";
+    finishRoleOobe("teacher");
+  } else if (hasStudentSelection) {
+    mode.value = "student";
+    finishRoleOobe("student");
+  } else if (
+    oobeState.value.version === CLASSWORKS_OOBE_VERSION &&
+    oobeState.value.completed &&
+    oobeState.value.roleHint
+  ) {
+    mode.value = oobeState.value.roleHint;
+    oobeLanding.value = false;
+    if (mode.value === "student") store.selectionDialog = true;
+  } else {
+    oobeLanding.value = shouldShowClassworksOobe({
+      state: oobeState.value,
+      hasStudentSelection,
+      isTeacherSignedIn: store.isTeacherSignedIn,
+      hasScreenSession: Boolean(store.screenSession),
+    });
+  }
   appReady.value = true;
   store.startRealtime();
 });

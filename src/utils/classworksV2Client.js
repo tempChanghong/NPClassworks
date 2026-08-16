@@ -191,6 +191,9 @@ export const classworksV2Api = {
   async subjects(schoolId) {
     return unwrap(await client.get("/api/v2/catalog/subjects", {params: {schoolId}}));
   },
+  async publicSchoolHomeworkSettings(schoolId) {
+    return unwrap(await client.get(`/api/v2/catalog/schools/${schoolId}/homework-settings`));
+  },
   async workspaces(params) {
     return unwrap(await client.get("/api/v2/catalog/workspaces", {params}));
   },

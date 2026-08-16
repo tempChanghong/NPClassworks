@@ -115,22 +115,6 @@
       </v-card-text>
 
       <v-card-actions class="pa-5 pt-2">
-        <v-btn
-          color="primary"
-          prepend-icon="mdi-account-tie-outline"
-          variant="text"
-          @click="chooseRole('teacher')"
-        >
-          我是教师
-        </v-btn>
-        <v-btn
-          color="primary"
-          prepend-icon="mdi-monitor-lock"
-          variant="text"
-          @click="chooseRole('screen')"
-        >
-          我是班级大屏
-        </v-btn>
         <v-spacer />
         <v-btn
           :disabled="!administrativeClassId || loadingOptions"
@@ -153,7 +137,7 @@ import {computed, reactive, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 
 const props = defineProps({modelValue: Boolean});
-const emit = defineEmits(["update:modelValue", "teacher", "screen"]);
+defineEmits(["update:modelValue"]);
 
 const store = useClassworksV2Store();
 const schoolId = ref("");
@@ -225,8 +209,4 @@ async function commit() {
   }
 }
 
-function chooseRole(role) {
-  emit("update:modelValue", false);
-  emit(role);
-}
 </script>

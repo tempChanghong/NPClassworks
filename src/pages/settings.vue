@@ -616,6 +616,19 @@
                       {{ noisePermissionReady ? '麦克风已授权' : '授权麦克风' }}
                     </v-btn>
                   </SettingRow>
+                  <SettingRow
+                    description="选择物理麦克风并测试输入信号，避开没有声音的虚拟设备。选择结果仅对当前大屏生效。"
+                    title="采集麦克风"
+                  >
+                    <template #scope>
+                      <ScopeChip type="screen" />
+                    </template>
+                    <MicrophoneDevicePicker
+                      :binding-id="bindingId"
+                      @permission="noisePermissionState = $event"
+                      @saved="notify('当前大屏的麦克风设置已保存')"
+                    />
+                  </SettingRow>
                 </template>
               </SettingsPanel>
             </template>
@@ -664,6 +677,21 @@
                     @click="reloadApp"
                   >
                     重新加载
+                  </v-btn>
+                </SettingRow>
+                <SettingRow
+                  description="重新选择设备用途；班级大屏只重新检查声音、通知、麦克风和字号，不会解除设备绑定。"
+                  title="重新运行首次设置"
+                >
+                  <template #scope>
+                    <ScopeChip type="device" />
+                  </template>
+                  <v-btn
+                    prepend-icon="mdi-creation-outline"
+                    variant="tonal"
+                    @click="restartOobe"
+                  >
+                    打开引导
                   </v-btn>
                 </SettingRow>
                 <SettingRow
@@ -735,6 +763,7 @@ import {computed, onMounted, onUnmounted, reactive, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
+import MicrophoneDevicePicker from "@/components/v2/MicrophoneDevicePicker.vue";
 import SettingsPanel from "@/components/v2/settings/SettingsPanel.vue";
 import SettingRow from "@/components/v2/settings/SettingRow.vue";
 import ScopeChip from "@/components/v2/settings/ScopeChip.vue";
@@ -756,6 +785,7 @@ import {
   saveNoiseScheduleSettings,
 } from "@/utils/noiseScheduleSettings";
 import {microphonePermissionLabel, queryMicrophonePermission, requestMicrophonePermission} from "@/utils/microphonePermission";
+import {resetScreenOobe} from "@/utils/classworksOobe";
 
 const route = useRoute();
 const router = useRouter();
@@ -972,6 +1002,11 @@ async function syncTeacherPreferences() {
 
 function reloadApp() {
   window.location.reload();
+}
+
+function restartOobe() {
+  if (bindingId.value) resetScreenOobe(bindingId.value);
+  router.push({path: "/", query: {oobe: "1"}});
 }
 
 async function clearResourceCaches() {

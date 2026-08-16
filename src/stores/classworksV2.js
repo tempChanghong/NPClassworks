@@ -73,6 +73,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     oauthProviders: [],
     memberships: [],
     teacherSubjects: [],
+    teacherHomeworkSettingsBySchool: {},
     teacherPublications: [],
     schoolMemberships: [],
     teacherLoading: false,
@@ -140,7 +141,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
   },
 
   actions: {
-    async bootstrapStudent() {
+    async bootstrapStudent({promptForSelection = true} = {}) {
       this.studentLoading = true;
       this.studentError = "";
       try {
@@ -155,7 +156,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         const schoolId = (savedSchoolExists ? this.selection.schoolId : "")
           || (this.schools.length === 1 ? this.schools[0].id : "");
         if (!schoolId) {
-          this.selectionDialog = true;
+          this.selectionDialog = promptForSelection;
           return;
         }
         await this.loadSchool(schoolId, {preserveSelection: true});
@@ -179,10 +180,10 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
             if (this.feedAudience === "student") await this.loadStudentFeed();
           } else {
             this.clearStudentSelection();
-            this.selectionDialog = true;
+            this.selectionDialog = promptForSelection;
           }
         } else {
-          this.selectionDialog = true;
+          this.selectionDialog = promptForSelection;
         }
       } catch (error) {
         this.studentError = describeApiError(error, "加载学校和班级失败");
@@ -419,10 +420,15 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         const schoolIds = [...new Set(
           memberships.map((membership) => membership.workspace.term.school.id),
         )];
-        const subjectLists = await Promise.all(
-          schoolIds.map((schoolId) => classworksV2Api.subjects(schoolId)),
-        );
+        const [subjectLists, homeworkSettings] = await Promise.all([
+          Promise.all(schoolIds.map((schoolId) => classworksV2Api.subjects(schoolId))),
+          Promise.all(schoolIds.map(async (schoolId) => [
+            schoolId,
+            await classworksV2Api.publicSchoolHomeworkSettings(schoolId),
+          ])),
+        ]);
         this.teacherSubjects = subjectLists.flat();
+        this.teacherHomeworkSettingsBySchool = Object.fromEntries(homeworkSettings);
       } catch (error) {
         this.teacherError = describeApiError(error, "加载教师工作台失败");
         if (error.response?.status === 401) {
@@ -779,6 +785,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.account = null;
       this.memberships = [];
       this.teacherSubjects = [];
+      this.teacherHomeworkSettingsBySchool = {};
       this.teacherPublications = [];
       this.teacherPublicationsLoading = false;
       this.schoolMemberships = [];

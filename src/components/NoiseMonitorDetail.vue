@@ -1,11 +1,16 @@
 <template>
-  <v-dialog
-    :model-value="modelValue"
-    max-width="900"
-    scrollable
-    @update:model-value="$emit('update:modelValue', $event)"
+  <component
+    :is="embedded ? 'div' : 'VDialog'"
+    :class="{'noise-detail-embedded': embedded}"
+    :model-value="embedded ? undefined : modelValue"
+    max-width="1180"
+    :scrollable="!embedded"
+    @update:model-value="!embedded && $emit('update:modelValue', $event)"
   >
-    <v-card class="rounded-xl noise-detail-card">
+    <v-card
+      class="rounded-xl noise-detail-card"
+      :flat="embedded"
+    >
       <!-- 顶部标题栏 -->
       <v-card-title class="d-flex align-center pa-4">
         <v-icon
@@ -14,7 +19,7 @@
         >
           mdi-waveform
         </v-icon>
-        <span class="text-h6 font-weight-bold">环境噪音监测</span>
+        <span class="text-h6 font-weight-bold">环境噪声监测</span>
         <v-spacer />
         <v-chip
           v-if="sessionActive"
@@ -58,6 +63,7 @@
           {{ isMonitoring ? '监测中' : '已停止' }}
         </v-chip>
         <v-btn
+          v-if="!embedded"
           icon="mdi-close"
           size="small"
           variant="text"
@@ -96,7 +102,7 @@
 
       <v-card-text
         class="pa-0"
-        style="max-height: 70vh;"
+        :style="{maxHeight: embedded ? 'none' : '78vh'}"
       >
         <v-tabs-window v-model="activeTab">
           <!-- ==================== 实时监测 ==================== -->
@@ -119,8 +125,17 @@
                 麦克风权限被拒绝
               </div>
               <div class="text-body-2">
-                浏览器已拒绝麦克风访问，无法进行噪音监测。请在浏览器地址栏左侧的锁图标中重新授予麦克风权限，然后刷新页面。
+                浏览器已拒绝麦克风访问，无法进行噪声监测。请在浏览器地址栏左侧的锁图标中重新授予麦克风权限，然后刷新页面。
               </div>
+              <v-btn
+                class="mt-3"
+                prepend-icon="mdi-microphone-settings"
+                size="small"
+                variant="tonal"
+                @click="showMicrophoneDialog = true"
+              >
+                检查麦克风设备
+              </v-btn>
             </v-alert>
             <v-alert
               v-else-if="micPermissionState === 'unavailable'"
@@ -139,8 +154,17 @@
                 未检测到麦克风
               </div>
               <div class="text-body-2">
-                当前设备未检测到麦克风硬件，无法进行噪音监测。请连接麦克风后刷新页面重试。
+                当前设备未检测到麦克风硬件，无法进行噪声监测。请连接麦克风后刷新页面重试。
               </div>
+              <v-btn
+                class="mt-3"
+                prepend-icon="mdi-microphone-settings"
+                size="small"
+                variant="tonal"
+                @click="showMicrophoneDialog = true"
+              >
+                重新扫描设备
+              </v-btn>
             </v-alert>
             <v-alert
               v-else-if="['device-busy', 'constraints-error', 'insecure-context', 'unsupported', 'error'].includes(micPermissionState)"
@@ -149,11 +173,22 @@
               class="ma-4 mb-0"
             >
               {{ microphonePermissionMessage }}
+              <div>
+                <v-btn
+                  class="mt-2"
+                  prepend-icon="mdi-microphone-settings"
+                  size="small"
+                  variant="tonal"
+                  @click="showMicrophoneDialog = true"
+                >
+                  测试或更换麦克风
+                </v-btn>
+              </div>
             </v-alert>
 
             <!-- 分贝仪表区 -->
             <div class="noise-dashboard pa-5">
-              <div class="d-flex align-center justify-center">
+              <div class="noise-summary-grid">
                 <div class="text-center">
                   <div
                     class="noise-gauge-ring"
@@ -176,6 +211,44 @@
                     {{ noiseLevel }}
                   </div>
                 </div>
+                <v-card
+                  class="noise-device-summary"
+                  rounded="xl"
+                  variant="tonal"
+                >
+                  <v-card-text>
+                    <div class="d-flex align-center ga-2 mb-3">
+                      <v-icon
+                        color="primary"
+                        icon="mdi-microphone-outline"
+                      />
+                      <div class="flex-grow-1 overflow-hidden">
+                        <div class="text-caption text-medium-emphasis">
+                          当前采集设备
+                        </div>
+                        <div class="text-subtitle-2 font-weight-bold text-truncate">
+                          {{ microphone.label || '系统默认麦克风' }}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="d-flex align-center justify-space-between mb-2">
+                      <span class="text-body-2">当前阈值</span>
+                      <strong>{{ alertThreshold }} dB</strong>
+                    </div>
+                    <div class="d-flex align-center justify-space-between mb-3">
+                      <span class="text-body-2">评分样本</span>
+                      <strong>{{ signalHealth.coverage || 0 }}%</strong>
+                    </div>
+                    <v-btn
+                      block
+                      prepend-icon="mdi-tune-variant"
+                      variant="tonal"
+                      @click="showMicrophoneDialog = true"
+                    >
+                      测试或更换麦克风
+                    </v-btn>
+                  </v-card-text>
+                </v-card>
               </div>
 
               <!-- 分贝条 -->
@@ -184,15 +257,22 @@
                 style="max-width: 500px;"
               >
                 <div class="d-flex justify-space-between text-caption text-medium-emphasis mb-1">
-                  <span>低</span>
-                  <span>50</span>
-                  <span>高</span>
+                  <span>20</span>
+                  <span>40</span>
+                  <span>60</span>
+                  <span>80</span>
+                  <span>100</span>
                 </div>
                 <div class="noise-gradient-bar">
                   <div
+                    class="noise-threshold-marker"
+                    :style="{ left: `${Math.min(100, Math.max(0, (alertThreshold - 20) / 80 * 100))}%` }"
+                    :title="`当前阈值 ${alertThreshold} dB`"
+                  />
+                  <div
                     v-if="isMonitoring && typeof currentDb === 'number'"
                     class="noise-indicator"
-                    :style="{ left: `${Math.min(100, Math.max(0, currentDb))}%` }"
+                    :style="{ left: `${Math.min(100, Math.max(0, (currentDb - 20) / 80 * 100))}%` }"
                   />
                 </div>
               </div>
@@ -210,10 +290,10 @@
                 >
                   mdi-chart-line
                 </v-icon>
-                <span class="text-subtitle-2 font-weight-medium">噪音走势</span>
+                <span class="text-subtitle-2 font-weight-medium">噪声走势</span>
                 <v-spacer />
                 <span class="text-caption text-medium-emphasis">
-                  最近 {{ ringBuffer.length }} 个采样
+                  最近约 {{ Math.round(ringBuffer.length / 10) }} 秒
                 </span>
               </div>
               <div
@@ -305,6 +385,15 @@
                 </v-icon>
                 <span class="text-subtitle-2 font-weight-medium">实时评分</span>
               </div>
+              <v-alert
+                v-if="isMonitoring && !scoreIsStable"
+                class="mb-4"
+                density="compact"
+                type="info"
+                variant="tonal"
+              >
+                正在积累稳定样本，当前分数为试算结果；还需约 {{ scoreWarmupSeconds }} 秒。
+              </v-alert>
               <div
                 v-if="currentScore !== null"
                 class="d-flex flex-wrap ga-4"
@@ -331,7 +420,7 @@
                         {{ scoreLabel }}
                       </div>
                       <div class="text-caption text-medium-emphasis">
-                        综合评分 (0-100)
+                        {{ scoreIsStable ? '综合评分 (0-100)' : '试算评分，暂未稳定' }}
                       </div>
                     </div>
                   </v-card-text>
@@ -346,7 +435,7 @@
                 >
                   <v-card-text class="pa-4">
                     <div class="text-subtitle-2 font-weight-medium mb-2">
-                      扣分扣因
+                      扣分原因
                     </div>
                     <div
                       v-for="item in scorePenaltyItems"
@@ -427,7 +516,7 @@
                 class="px-6"
                 @click="$emit('stop')"
               >
-                {{ scheduledActive ? '计划时段内持续监测' : '停止监测' }}
+                {{ scheduledActive ? `由计划托管 · ${scheduledEndTime || '结束时'}停止` : '停止监测' }}
               </v-btn>
               <v-spacer />
               <v-btn
@@ -468,10 +557,10 @@
               <div class="d-flex align-center mb-3">
                 <div>
                   <div class="text-subtitle-1 font-weight-bold">
-                    最近监测片段
+                    按日期汇总
                   </div>
                   <div class="text-caption text-medium-emphasis">
-                    每个片段约 30 秒，仅保存本机统计值，不保存或上传录音。
+                    每个片段约30秒；仅保存本机统计值，不保存或上传录音。
                   </div>
                 </div>
                 <v-spacer />
@@ -480,42 +569,76 @@
                   prepend-icon="mdi-delete-sweep-outline"
                   size="small"
                   variant="text"
-                  @click="$emit('clear-history')"
+                  @click="confirmClearMode = 'history'"
                 >
                   清空
                 </v-btn>
               </div>
-              <v-list
-                class="rounded-xl"
-                density="compact"
-                lines="two"
-              >
-                <v-list-item
-                  v-for="slice in recentHistory"
-                  :key="slice.id"
-                  prepend-icon="mdi-chart-timeline-variant"
-                  :subtitle="`${formatFullTime(slice.start)} 至 ${formatFullTime(slice.end)}`"
+              <v-expansion-panels variant="accordion">
+                <v-expansion-panel
+                  v-for="group in dailyHistoryGroups"
+                  :key="group.dateKey"
+                  class="rounded-xl mb-2"
                 >
-                  <v-list-item-title>
-                    安静评分 {{ slice.score ?? '--' }} · 平均估算声级 {{ Math.round(slice.display?.avgDb ?? 0) }} dB
-                  </v-list-item-title>
-                  <template #append>
-                    <v-chip
-                      :color="metaScoreColor(slice.score)"
-                      size="small"
-                      variant="tonal"
+                  <v-expansion-panel-title>
+                    <div class="history-day-title">
+                      <div>
+                        <div class="font-weight-bold">
+                          {{ formatDateLabel(group.dateKey) }}
+                        </div>
+                        <div class="text-caption text-medium-emphasis">
+                          {{ group.count }} 个片段 · 约 {{ group.durationMinutes }} 分钟
+                        </div>
+                      </div>
+                      <div class="history-day-stats">
+                        <v-chip
+                          :color="metaScoreColor(group.averageScore)"
+                          size="small"
+                          variant="tonal"
+                        >
+                          均分 {{ group.averageScore ?? '--' }}
+                        </v-chip>
+                        <v-chip
+                          size="small"
+                          variant="tonal"
+                        >
+                          平均 {{ group.averageDb ?? '--' }} dB
+                        </v-chip>
+                        <v-chip
+                          size="small"
+                          variant="tonal"
+                        >
+                          P95峰值 {{ group.peakP95 ?? '--' }} dB
+                        </v-chip>
+                      </div>
+                    </div>
+                  </v-expansion-panel-title>
+                  <v-expansion-panel-text>
+                    <v-list
+                      density="compact"
+                      lines="two"
                     >
-                      P95 {{ Math.round(slice.display?.p95Db ?? 0) }}
-                    </v-chip>
-                  </template>
-                </v-list-item>
-              </v-list>
-              <div
-                v-if="history.length > recentHistory.length"
-                class="text-caption text-medium-emphasis text-center mt-3"
-              >
-                当前显示最近 {{ recentHistory.length }} 个片段
-              </div>
+                      <v-list-item
+                        v-for="slice in group.slices"
+                        :key="slice.id"
+                        prepend-icon="mdi-chart-timeline-variant"
+                        :subtitle="`${formatFullTime(slice.start)} 至 ${formatFullTime(slice.end)}`"
+                        :title="`安静评分 ${slice.score ?? '--'} · 平均估算声级 ${Math.round(slice.display?.avgDb ?? 0)} dB`"
+                      >
+                        <template #append>
+                          <v-chip
+                            :color="metaScoreColor(slice.score)"
+                            size="small"
+                            variant="tonal"
+                          >
+                            P95 {{ Math.round(slice.display?.p95Db ?? 0) }}
+                          </v-chip>
+                        </template>
+                      </v-list-item>
+                    </v-list>
+                  </v-expansion-panel-text>
+                </v-expansion-panel>
+              </v-expansion-panels>
             </div>
 
             <template v-else>
@@ -712,7 +835,7 @@
                 <div class="pa-5">
                   <div class="d-flex align-center mb-3">
                     <span class="report-section-line bg-teal" />
-                    <span class="text-subtitle-2 font-weight-bold ml-2">噪音走势</span>
+                    <span class="text-subtitle-2 font-weight-bold ml-2">噪声走势</span>
                   </div>
                   <div
                     ref="reportChartContainer"
@@ -787,7 +910,7 @@
                   </div>
                   <div class="text-caption text-medium-emphasis mt-2">
                     统计范围：{{ formatFullTime(selectedReport.startTime) }} - {{ formatFullTime(selectedReport.endTime) }}；
-                    噪音报警阈值: {{ selectedReport.alertThresholdDb || 55 }} dB；
+                    噪声报警阈值: {{ selectedReport.alertThresholdDb || 55 }} dB；
                     覆盖率: {{ reportCoverage }}%
                   </div>
                 </div>
@@ -808,7 +931,7 @@
                     >
                       <v-card-text class="pa-4">
                         <div class="text-subtitle-2 font-weight-medium mb-3">
-                          噪音等级分布
+                          噪声等级分布
                         </div>
                         <div class="noise-level-distribution">
                           <div
@@ -849,7 +972,7 @@
                       </v-card-text>
                     </v-card>
 
-                    <!-- 扣分扣因 -->
+                    <!-- 扣分原因 -->
                     <v-card
                       variant="outlined"
                       rounded="xl"
@@ -858,7 +981,7 @@
                     >
                       <v-card-text class="pa-4">
                         <div class="text-subtitle-2 font-weight-medium mb-3">
-                          扣分扣因 (越长扣分越多)
+                          扣分原因（越长扣分越多）
                         </div>
                         <div
                           v-for="item in reportPenaltyItems"
@@ -891,6 +1014,36 @@
         </v-tabs-window>
       </v-card-text>
     </v-card>
+
+    <!-- 麦克风设备 -->
+    <v-dialog
+      v-model="showMicrophoneDialog"
+      max-width="680"
+    >
+      <v-card class="rounded-xl">
+        <v-card-title class="d-flex align-center pa-5 pb-2">
+          <v-icon
+            class="mr-2"
+            color="primary"
+            icon="mdi-microphone-settings"
+          />
+          测试或更换麦克风
+          <v-spacer />
+          <v-btn
+            icon="mdi-close"
+            size="small"
+            variant="text"
+            @click="showMicrophoneDialog = false"
+          />
+        </v-card-title>
+        <v-card-text class="pa-5">
+          <MicrophoneDevicePicker
+            :binding-id="bindingId"
+            @saved="showMicrophoneDialog = false"
+          />
+        </v-card-text>
+      </v-card>
+    </v-dialog>
 
     <!-- 校准对话框 -->
     <v-dialog
@@ -1085,10 +1238,7 @@
       <v-card>
         <v-card-title>确认清空</v-card-title>
         <v-card-text>
-          {{ confirmClearMode === 'all'
-            ? '确定要清空所有日期的统计报告吗？此操作不可撤销。'
-            : `确定要清空 ${formatDateLabel(selectedDate)} 的统计报告吗？此操作不可撤销。`
-          }}
+          {{ confirmClearMessage }}
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -1107,7 +1257,7 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-dialog>
+  </component>
 </template>
 
 <script>
@@ -1118,10 +1268,16 @@ import {
   resetNoiseControlSettings,
 } from '@/utils/noiseService';
 import {microphonePermissionLabel} from '@/utils/microphonePermission';
+import {summarizeNoiseHistoryByDay} from '@/utils/noiseHistorySummary';
+import MicrophoneDevicePicker from '@/components/v2/MicrophoneDevicePicker.vue';
+import {VDialog} from 'vuetify/components';
 
 export default {
   name: 'NoiseMonitorDetail',
+  components: { MicrophoneDevicePicker, VDialog },
   props: {
+    embedded: { type: Boolean, default: false },
+    bindingId: { type: String, default: '' },
     modelValue: { type: Boolean, default: false },
     status: { type: String, default: '' },
     currentDb: { type: [Number, String], default: '--' },
@@ -1136,6 +1292,9 @@ export default {
     history: { type: Array, default: () => [] },
     isMonitoring: { type: Boolean, default: false },
     scheduledActive: { type: Boolean, default: false },
+    scheduledEndTime: { type: String, default: '' },
+    microphone: { type: Object, default: () => ({deviceId: 'default', label: '系统默认麦克风'}) },
+    thresholdDb: { type: Number, default: 55 },
     micPermissionState: { type: String, default: '' },
     sessionActive: { type: Boolean, default: false },
     sessionData: { type: Object, default: null },
@@ -1153,6 +1312,7 @@ export default {
       selectedReportIndex: 0,
       // 校准
       showCalibrateDialog: false,
+      showMicrophoneDialog: false,
       calibrationSettings: {},
       calibrateTargetDb: 40,
       isCalibrating: false,
@@ -1180,7 +1340,13 @@ export default {
       return '极度嘈杂'
     },
     alertThreshold() {
-      return this.sessionConfig?.alertThresholdDb || 55
+      return Number.isFinite(this.thresholdDb) ? this.thresholdDb : 55
+    },
+    scoreIsStable() {
+      return (this.signalHealth.coverage || 0) >= 80
+    },
+    scoreWarmupSeconds() {
+      return Math.max(0, Math.ceil((80 - (this.signalHealth.coverage || 0)) * 0.6))
     },
     scorePenaltyItems() {
       if (!this.scoreDetail) return []
@@ -1213,6 +1379,7 @@ export default {
       return [20, 40, 60, 80].map(val => ({ val, y: this.reportDbToY(val) }))
     },
     waveformPath() {
+      if (!this.modelValue || this.activeTab !== 'realtime') return null
       if (!this.ringBuffer || this.ringBuffer.length < 2) return null
       const w = this.waveformWidth
       const points = this.ringBuffer.slice(-120)
@@ -1229,6 +1396,11 @@ export default {
     },
     showConfirmClear() {
       return this.confirmClearMode !== ''
+    },
+    confirmClearMessage() {
+      if (this.confirmClearMode === 'all') return '确定要清空所有日期的统计报告吗？此操作不可撤销。'
+      if (this.confirmClearMode === 'history') return '确定要清空当前大屏保存的所有噪声统计片段吗？此操作不可撤销。'
+      return `确定要清空 ${this.formatDateLabel(this.selectedDate)} 的统计报告吗？此操作不可撤销。`
     },
     sortedDateKeys() {
       if (!this.reportMeta?.dates) return []
@@ -1265,11 +1437,15 @@ export default {
         .sort((left, right) => right.start - left.start)
         .slice(0, 40)
     },
+    dailyHistoryGroups() {
+      return summarizeNoiseHistoryByDay(this.history)
+    },
     reportCoverage() {
       if (!this.selectedReport?.samples?.length || !this.selectedReport?.duration) return 0
       return ((this.selectedReport.samples.length * 2 / (this.selectedReport.duration / 1000)) * 100).toFixed(1)
     },
     reportWaveformPath() {
+      if (!this.modelValue || this.activeTab !== 'reports') return null
       if (!this.selectedReport?.samples?.length) return null
       const samples = this.selectedReport.samples
       if (samples.length < 2) return null
@@ -1365,7 +1541,7 @@ export default {
       }
     },
     dbToY(db) {
-      return 120 - Math.max(0, Math.min(100, db)) / 100 * 120
+      return 120 - (Math.max(20, Math.min(100, db)) - 20) / 80 * 120
     },
     reportDbToY(db) {
       return 140 - Math.max(0, Math.min(100, db)) / 100 * 140
@@ -1373,6 +1549,8 @@ export default {
     doClearReports() {
       if (this.confirmClearMode === 'all') {
         this.$emit('clear-all-reports')
+      } else if (this.confirmClearMode === 'history') {
+        this.$emit('clear-history')
       } else if (this.confirmClearMode === 'date') {
         this.$emit('clear-date-reports', this.selectedDate)
       }
@@ -1396,6 +1574,7 @@ export default {
       return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     },
     metaScoreColor(score) {
+      if (!Number.isFinite(score)) return 'grey'
       if (score >= 80) return 'success'
       if (score >= 60) return 'warning'
       return 'error'
@@ -1474,7 +1653,29 @@ export default {
 </script>
 
 <style scoped lang="scss">
+.noise-detail-embedded {
+  width: 100%;
+}
+
 .noise-detail-card {
+  .noise-summary-grid {
+    align-items: center;
+    display: grid;
+    gap: 28px;
+    grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 1.2fr);
+    margin: 0 auto;
+    max-width: 720px;
+
+    @media (max-width: 700px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .noise-device-summary {
+    border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+    text-align: left;
+  }
+
   .noise-dashboard {
     background: linear-gradient(
       135deg,
@@ -1541,11 +1742,46 @@ export default {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   }
 
+  .noise-threshold-marker {
+    border-left: 2px dashed rgba(var(--v-theme-on-surface), 0.75);
+    height: 18px;
+    position: absolute;
+    top: -5px;
+    transform: translateX(-1px);
+  }
+
   .noise-waveform {
     background: rgba(var(--v-theme-surface-variant), 0.15);
     border-radius: 12px;
     padding: 8px;
     overflow: hidden;
+  }
+}
+
+.history-day-title {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding-right: 12px;
+  width: 100%;
+}
+
+.history-day-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .history-day-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .history-day-stats {
+    justify-content: flex-start;
   }
 }
 

@@ -1,5 +1,6 @@
 <template>
   <v-card
+    v-if="!expanded"
     class="noise-monitor-card"
     elevation="2"
     border
@@ -22,7 +23,7 @@
           mdi-microphone
         </v-icon>
         <span class="text-subtitle-2 font-weight-medium text-medium-emphasis">
-          环境噪音监测
+          环境噪声监测
         </span>
         <v-spacer />
         <v-chip
@@ -100,7 +101,7 @@
             class="text-caption text-medium-emphasis"
             style="font-size: 10px; line-height: 1;"
           >
-            评分
+            {{ scoreIsStable ? '评分' : '试算' }}
           </div>
         </div>
       </div>
@@ -110,6 +111,7 @@
   <!-- 详情对话框 -->
   <noise-monitor-detail
     v-model="showDetail"
+    :embedded="expanded"
     :status="status"
     :current-db="currentDb"
     :current-dbfs="currentDbfs"
@@ -124,6 +126,10 @@
     :is-monitoring="isMonitoring"
     :mic-permission-state="micPermissionState"
     :scheduled-active="scheduledActive"
+    :scheduled-end-time="scheduledEndTime"
+    :binding-id="bindingId"
+    :microphone="currentMicrophone"
+    :threshold-db="thresholdDb"
     @start="startMonitoring"
     @stop="stopMonitoring"
     @calibrate="handleCalibrate"
@@ -136,6 +142,7 @@ import { defineAsyncComponent } from 'vue'
 import { noiseService } from '@/utils/noiseService'
 import { isWithinNoiseSchedule, loadNoiseScheduleSettings } from '@/utils/noiseScheduleSettings'
 import { queryMicrophonePermission } from '@/utils/microphonePermission'
+import { loadMicrophoneDeviceSettings } from '@/utils/microphoneDeviceSettings'
 
 const NoiseMonitorDetail = defineAsyncComponent(() =>
   import('@/components/NoiseMonitorDetail.vue')
@@ -149,6 +156,7 @@ export default {
   components: { NoiseMonitorDetail },
   props: {
     bindingId: { type: String, default: '' },
+    expanded: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -159,6 +167,8 @@ export default {
       currentDisplayDb: 0,
       currentScore: null,
       scoreDetail: null,
+      currentMicrophone: { deviceId: 'default', label: '系统默认麦克风' },
+      thresholdDb: 55,
       signalHealth: { quality: 'no-signal', confidence: 0, coverage: 0 },
       ringBuffer: [],
       lastSlice: null,
@@ -166,6 +176,7 @@ export default {
       unsubscribe: null,
       scheduleTimer: null,
       scheduledActive: false,
+      scheduledEndTime: '',
       micPermissionState: 'prompt',
       lastUiUpdateAt: 0,
       lastHistorySliceId: '',
@@ -185,7 +196,7 @@ export default {
     },
     statusLabel() {
       const map = {
-        initializing: '就绪',
+        initializing: '正在启动',
         active: '监测中',
         paused: '已暂停',
         'permission-denied': '无权限',
@@ -223,6 +234,9 @@ export default {
       if (this.currentScore >= 60) return 'warning'
       return 'error'
     },
+    scoreIsStable() {
+      return (this.signalHealth.coverage || 0) >= 80
+    },
     miniBarValues() {
       return this.recentDbValues.map(db => {
         // 将估算声级 (0-100) 映射到 5%-100% 高度
@@ -259,11 +273,16 @@ export default {
         'no-signal': '等待麦克风信号',
       }
       const label = labels[this.signalHealth.quality] || '检查信号'
+      const coverage = this.signalHealth.coverage || 0
+      if (this.status === 'active' && coverage < 80) {
+        return `${label} · 还需约 ${Math.ceil((80 - coverage) * 0.6)} 秒`
+      }
       return `${label} · 可信度 ${this.signalHealth.confidence || 0}%`
     },
     updateScheduledState() {
-      this.scheduledActive = Boolean(this.bindingId
-        && isWithinNoiseSchedule(loadNoiseScheduleSettings(this.bindingId)))
+      const schedule = this.bindingId ? loadNoiseScheduleSettings(this.bindingId) : null
+      this.scheduledActive = Boolean(schedule && isWithinNoiseSchedule(schedule))
+      this.scheduledEndTime = schedule?.endTime || ''
     },
     subscribeToService() {
       if (this.unsubscribe) return
@@ -282,6 +301,8 @@ export default {
         this.currentScore = snapshot.currentScore ?? null
         this.scoreDetail = snapshot.currentScoreDetail ?? null
         this.signalHealth = snapshot.signalHealth || this.signalHealth
+        this.currentMicrophone = snapshot.microphone || this.currentMicrophone
+        this.thresholdDb = snapshot.thresholdDb ?? this.thresholdDb
         if (snapshot.signalHealth?.errorCode) this.micPermissionState = snapshot.signalHealth.errorCode
 
         const dbVal = Math.max(0, Math.min(100, this.currentDisplayDb))
@@ -296,9 +317,12 @@ export default {
     },
     async startMonitoring() {
       try {
-        await noiseService.start()
+        const deviceId = this.bindingId
+          ? loadMicrophoneDeviceSettings(this.bindingId).deviceId
+          : undefined
+        await noiseService.start({ deviceId })
       } catch (e) {
-        console.error('噪音监测启动失败:', e)
+        console.error('噪声监测启动失败:', e)
         this.status = 'error'
       }
     },

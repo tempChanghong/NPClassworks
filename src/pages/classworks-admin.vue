@@ -465,6 +465,116 @@
               </v-card-text>
             </v-card>
 
+            <v-card class="mb-5 rounded-xl">
+              <v-card-title class="d-flex align-center pa-5 pb-2">
+                <v-icon class="mr-3" color="primary" icon="mdi-lightning-bolt-outline" />
+                作业快捷输入
+              </v-card-title>
+              <v-card-text class="px-5 pb-5">
+                <p class="text-body-2 text-medium-emphasis mb-4">
+                  教师端和班级大屏共用。未选择学科时表示全科通用；限定学科的词只在对应科目下出现，排列顺序与此处一致。
+                </p>
+                <v-row
+                  v-for="(item, index) in homeworkQuickInputs"
+                  :key="index"
+                  align="center"
+                  dense
+                >
+                  <v-col cols="12" sm="3" md="2">
+                    <v-text-field
+                      v-model.trim="item.label"
+                      density="comfortable"
+                      hide-details="auto"
+                      label="按钮名称"
+                      maxlength="16"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col cols="12" sm="5" md="3">
+                    <v-text-field
+                      v-model="item.text"
+                      :disabled="item.insertMode === 'NEW_LINE'"
+                      density="comfortable"
+                      hide-details="auto"
+                      label="插入内容"
+                      maxlength="120"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col cols="6" sm="4" md="2">
+                    <v-text-field
+                      v-model.trim="item.group"
+                      density="comfortable"
+                      hide-details="auto"
+                      label="分组"
+                      maxlength="16"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col cols="6" sm="4" md="2">
+                    <v-select
+                      v-model="item.insertMode"
+                      density="comfortable"
+                      hide-details="auto"
+                      :items="quickInputModeOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="操作"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col cols="10" sm="7" md="2">
+                    <v-select
+                      v-model="item.subjectIds"
+                      chips
+                      closable-chips
+                      density="comfortable"
+                      hide-details="auto"
+                      :items="homeworkQuickInputSubjects"
+                      item-title="name"
+                      item-value="id"
+                      label="适用学科（空为全科）"
+                      multiple
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col class="d-flex justify-end" cols="2" sm="1">
+                    <v-btn
+                      icon="mdi-delete-outline"
+                      title="删除此快捷词"
+                      variant="text"
+                      @click="homeworkQuickInputs.splice(index, 1)"
+                    />
+                  </v-col>
+                </v-row>
+                <v-alert v-if="!homeworkQuickInputs.length" class="mb-3" type="info" variant="tonal">
+                  当前已关闭快捷输入；保存后教师端和大屏将不显示快捷词。
+                </v-alert>
+                <div class="d-flex flex-wrap ga-2 mt-4">
+                  <v-btn
+                    :disabled="homeworkQuickInputs.length >= 64"
+                    prepend-icon="mdi-plus"
+                    variant="tonal"
+                    @click="addHomeworkQuickInput"
+                  >
+                    添加快捷词
+                  </v-btn>
+                  <v-btn prepend-icon="mdi-restore" variant="text" @click="resetHomeworkQuickInputs">
+                    恢复默认
+                  </v-btn>
+                  <v-spacer />
+                  <v-btn
+                    color="primary"
+                    :loading="homeworkSettingsBusy"
+                    prepend-icon="mdi-content-save-outline"
+                    @click="saveSchoolHomeworkSettings"
+                  >
+                    保存全校配置
+                  </v-btn>
+                </div>
+              </v-card-text>
+            </v-card>
+
             <v-row>
               <v-col
                 cols="12"
@@ -888,7 +998,7 @@
               </v-card-title>
               <v-card-text class="px-5 pb-5">
                 <p class="text-body-2 text-medium-emphasis mb-4">
-                  全校班级大屏共用；录入作业时按下按钮，会从操作当天向后计算对应日期。
+                  全校班级大屏共用；支持按操作当天向后计算，也支持自动选择下一个指定星期。
                 </p>
                 <v-row
                   v-for="(preset, index) in homeworkQuickDeadlines"
@@ -914,7 +1024,7 @@
                     md="3"
                   >
                     <v-select
-                      v-model="preset.dayOffset"
+                      :model-value="quickDeadlineDateValue(preset)"
                       density="comfortable"
                       hide-details="auto"
                       :items="quickDeadlineDayOptions"
@@ -922,6 +1032,7 @@
                       item-value="value"
                       label="截止日期"
                       variant="outlined"
+                      @update:model-value="updateQuickDeadlineDateRule(preset, $event)"
                     />
                   </v-col>
                   <v-col
@@ -1333,6 +1444,10 @@ import {
   DEFAULT_HOMEWORK_QUICK_DEADLINES,
   sanitizeHomeworkQuickDeadlines,
 } from "@/utils/homeworkQuickDeadlines";
+import {
+  DEFAULT_HOMEWORK_QUICK_INPUTS,
+  sanitizeHomeworkQuickInputs,
+} from "@/utils/homeworkQuickInputs";
 
 const signedIn = ref(Boolean(getAccountTokens().accessToken));
 const providers = ref([]);
@@ -1389,6 +1504,8 @@ const screenAccounts = ref([]);
 const screenBusy = ref(false);
 const homeworkSettingsBusy = ref(false);
 const homeworkQuickDeadlines = ref(DEFAULT_HOMEWORK_QUICK_DEADLINES.map((item) => ({...item})));
+const homeworkQuickInputs = ref(DEFAULT_HOMEWORK_QUICK_INPUTS.map((item) => ({...item, subjectIds: []})));
+const homeworkQuickInputSubjects = ref([]);
 const newScreenName = ref("");
 const newScreenLoginCode = ref("");
 const newScreenPin = ref("");
@@ -1415,10 +1532,20 @@ const authModeOptions = [
   {title: "学校通用教师口令（极简）", value: "SHARED_PASSWORD"},
   {title: "OAuth 邮箱（兼容）", value: "OAUTH_EMAIL"},
 ];
-const quickDeadlineDayOptions = Array.from({length: 15}, (_, dayOffset) => ({
+const quickDeadlineDayOptions = [
+  ...Array.from({length: 15}, (_, dayOffset) => ({
   title: dayOffset === 0 ? "当天" : dayOffset === 1 ? "明天" : dayOffset === 2 ? "后天" : `${dayOffset}天后`,
-  value: dayOffset,
-}));
+    value: `relative:${dayOffset}`,
+  })),
+  ...[1, 2, 3, 4, 5, 6, 0].map((weekday) => ({
+    title: `下${["周日", "周一", "周二", "周三", "周四", "周五", "周六"][weekday]}`,
+    value: `next-weekday:${weekday}`,
+  })),
+];
+const quickInputModeOptions = [
+  {title: "插入文字", value: "INLINE"},
+  {title: "换行", value: "NEW_LINE"},
+];
 
 const publicSchoolOptions = computed(() => publicSchools.value.map((school) => ({
   title: school.name,
@@ -1862,12 +1989,19 @@ async function loadScreenAccounts() {
 async function loadSchoolHomeworkSettings() {
   if (!selectedSchoolId.value) {
     resetHomeworkQuickDeadlines();
+    resetHomeworkQuickInputs();
+    homeworkQuickInputSubjects.value = [];
     return;
   }
   homeworkSettingsBusy.value = true;
   try {
-    const settings = await classworksV2Api.schoolHomeworkSettings(selectedSchoolId.value);
+    const [settings, subjects] = await Promise.all([
+      classworksV2Api.schoolHomeworkSettings(selectedSchoolId.value),
+      classworksV2Api.subjects(selectedSchoolId.value),
+    ]);
     homeworkQuickDeadlines.value = sanitizeHomeworkQuickDeadlines(settings.quickDeadlines);
+    homeworkQuickInputs.value = sanitizeHomeworkQuickInputs(settings.quickInputs);
+    homeworkQuickInputSubjects.value = subjects;
   } catch (error) {
     errorMessage.value = describeApiError(error, "加载作业快捷时间失败");
   } finally {
@@ -1880,19 +2014,60 @@ function addHomeworkQuickDeadline() {
   homeworkQuickDeadlines.value.push({label: "新时间", dayOffset: 1, time: "17:30"});
 }
 
+function quickDeadlineDateValue(preset) {
+  return preset.dateRule === "next-weekday"
+    ? `next-weekday:${preset.weekday}`
+    : `relative:${preset.dayOffset}`;
+}
+
+function updateQuickDeadlineDateRule(preset, value) {
+  const [rule, rawValue] = String(value).split(":");
+  if (rule === "next-weekday") {
+    preset.dateRule = "next-weekday";
+    preset.weekday = Number(rawValue);
+    delete preset.dayOffset;
+    return;
+  }
+  delete preset.dateRule;
+  delete preset.weekday;
+  preset.dayOffset = Number(rawValue);
+}
+
 function resetHomeworkQuickDeadlines() {
   homeworkQuickDeadlines.value = DEFAULT_HOMEWORK_QUICK_DEADLINES.map((item) => ({...item}));
+}
+
+function addHomeworkQuickInput() {
+  if (homeworkQuickInputs.value.length >= 64) return;
+  homeworkQuickInputs.value.push({label: "新词", text: "", group: "常用", subjectIds: [], insertMode: "INLINE"});
+}
+
+function resetHomeworkQuickInputs() {
+  homeworkQuickInputs.value = DEFAULT_HOMEWORK_QUICK_INPUTS.map((item) => ({...item, subjectIds: []}));
 }
 
 async function saveSchoolHomeworkSettings() {
   const valid = homeworkQuickDeadlines.value.length >= 1 && homeworkQuickDeadlines.value.length <= 8 &&
     homeworkQuickDeadlines.value.every((preset) => (
       preset.label.trim() && preset.label.trim().length <= 16 &&
-      Number.isInteger(preset.dayOffset) && preset.dayOffset >= 0 && preset.dayOffset <= 14 &&
+      (preset.dateRule === "next-weekday"
+        ? Number.isInteger(preset.weekday) && preset.weekday >= 0 && preset.weekday <= 6
+        : Number.isInteger(preset.dayOffset) && preset.dayOffset >= 0 && preset.dayOffset <= 14) &&
       /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preset.time)
     ));
   if (!valid) {
-    errorMessage.value = "请填写1至8个有效快捷时间，名称不超过16字，日期范围为当天至14天后。";
+    errorMessage.value = "请填写1至8个有效快捷时间，名称不超过16字，并选择有效的相对日期或下周星期。";
+    return;
+  }
+  const quickInputsValid = homeworkQuickInputs.value.length <= 64 && homeworkQuickInputs.value.every((item) => (
+    item.label?.trim() && item.label.trim().length <= 16 &&
+    String(item.text || "").trim().length <= 120 && String(item.group || "").trim().length <= 16 &&
+    ["INLINE", "NEW_LINE"].includes(item.insertMode) &&
+    (item.insertMode === "NEW_LINE" || String(item.text || "").trim()) &&
+    Array.isArray(item.subjectIds)
+  ));
+  if (!quickInputsValid) {
+    errorMessage.value = "请检查快捷词：按钮名必填且不超过16字，普通快捷词必须填写插入内容。";
     return;
   }
   homeworkSettingsBusy.value = true;
@@ -1900,9 +2075,11 @@ async function saveSchoolHomeworkSettings() {
   try {
     const settings = await classworksV2Api.updateSchoolHomeworkSettings(selectedSchoolId.value, {
       quickDeadlines: homeworkQuickDeadlines.value,
+      quickInputs: homeworkQuickInputs.value,
     });
     homeworkQuickDeadlines.value = sanitizeHomeworkQuickDeadlines(settings.quickDeadlines);
-    successMessage.value = "全校大屏作业快捷时间已保存；大屏下次刷新会自动生效。";
+    homeworkQuickInputs.value = sanitizeHomeworkQuickInputs(settings.quickInputs);
+    successMessage.value = "全校作业快捷时间和快捷词已保存；教师端和大屏刷新后生效。";
   } catch (error) {
     errorMessage.value = describeApiError(error, "保存作业快捷时间失败");
   } finally {

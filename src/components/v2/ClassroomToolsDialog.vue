@@ -206,10 +206,11 @@
           <v-row justify="center">
             <v-col
               cols="12"
-              lg="7"
-              md="9"
             >
-              <noise-monitor-card :binding-id="store.screenSession?.binding?.id || ''" />
+              <noise-monitor-card
+                :binding-id="store.screenSession?.binding?.id || ''"
+                expanded
+              />
               <v-alert
                 class="mt-5"
                 type="info"

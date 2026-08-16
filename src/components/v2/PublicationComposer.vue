@@ -125,12 +125,20 @@
         variant="outlined"
       />
       <v-textarea
+        ref="contentInput"
         v-model="form.content"
         auto-grow
         label="正文"
         placeholder="使用换行分条填写"
         rows="5"
         variant="outlined"
+      />
+      <HomeworkQuickInputBar
+        v-if="form.type === 'ASSIGNMENT'"
+        density="teacher"
+        :items="quickInputs"
+        :subject-id="form.subjectId"
+        @insert="insertQuickInput"
       />
 
       <v-row>
@@ -222,12 +230,14 @@
 </template>
 
 <script setup>
-import {computed, reactive, ref, watch} from "vue";
+import {computed, nextTick, reactive, ref, watch} from "vue";
+import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {todayBoardDate} from "@/utils/boardDate";
 import {
   teacherTargetCombinationId,
 } from "@/utils/teacherTargetPreferences";
+import {insertHomeworkQuickInput, sanitizeHomeworkQuickInputs} from "@/utils/homeworkQuickInputs";
 
 const props = defineProps({
   editingPublication: {
@@ -240,6 +250,7 @@ const store = useClassworksV2Store();
 const saving = ref(false);
 const publishing = ref(false);
 const localError = ref("");
+const contentInput = ref(null);
 
 function localDateTime(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
@@ -270,6 +281,10 @@ const eligibleTargets = computed(() =>
 );
 const isEditing = computed(() => Boolean(props.editingPublication));
 const targetPreferences = computed(() => store.teacherTargetPreferences);
+const quickInputs = computed(() => {
+  const subject = store.teacherSubjects.find((item) => item.id === form.subjectId);
+  return sanitizeHomeworkQuickInputs(store.teacherHomeworkSettingsBySchool[subject?.schoolId]?.quickInputs);
+});
 const currentTargetCombination = computed(() => ({
   type: form.type,
   subjectId: form.type === "ASSIGNMENT" ? form.subjectId : null,
@@ -336,6 +351,21 @@ function applyTargetShortcut(shortcut) {
 
 function toggleCurrentTargetsFavorite() {
   store.toggleTeacherTargetFavorite(currentTargetCombination.value);
+}
+
+async function insertQuickInput(item) {
+  const textarea = contentInput.value?.$el?.querySelector("textarea");
+  const result = insertHomeworkQuickInput(
+    form.content,
+    textarea?.selectionStart,
+    textarea?.selectionEnd,
+    item,
+  );
+  form.content = result.value;
+  await nextTick();
+  const nextTextarea = contentInput.value?.$el?.querySelector("textarea");
+  nextTextarea?.focus();
+  nextTextarea?.setSelectionRange(result.cursor, result.cursor);
 }
 
 function reset() {

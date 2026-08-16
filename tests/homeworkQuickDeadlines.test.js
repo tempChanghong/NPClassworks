@@ -23,3 +23,14 @@ test("homework quick deadlines resolve across month boundaries", () => {
   assert.equal(result.getHours(), 7);
   assert.equal(result.getMinutes(), 30);
 });
+
+test("next weekday deadlines always choose the following matching weekday", () => {
+  const preset = {label: "下周一 7:30", dateRule: "next-weekday", weekday: 1, time: "07:30"};
+  const fromFriday = resolveHomeworkQuickDeadline(preset, new Date(2026, 7, 28, 20, 0));
+  assert.equal(fromFriday.getFullYear(), 2026);
+  assert.equal(fromFriday.getMonth(), 7);
+  assert.equal(fromFriday.getDate(), 31);
+  assert.equal(fromFriday.getDay(), 1);
+  assert.equal(fromFriday.getHours(), 7);
+  assert.equal(resolveHomeworkQuickDeadline(preset, new Date(2026, 7, 31, 8, 0)).getDate(), 7);
+});

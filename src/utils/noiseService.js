@@ -6,10 +6,12 @@ import {
 } from "@wydev/noise-core"
 import {analyzeNoiseWindow, estimatedDbFromRms} from "@/utils/noiseScoring"
 import {classifyMicrophoneError} from "@/utils/microphonePermission"
+import {testMicrophoneInput} from "@/utils/microphoneDeviceSettings"
 
 export {getNoiseControlSettings, resetNoiseControlSettings, saveNoiseControlSettings}
 
 const FRAME_MS = 100
+const ANALYSIS_INTERVAL_MS = 500
 const SCORE_WINDOW_MS = 60_000
 const SLICE_MS = 30_000
 const HISTORY_KEY = "noise-slices-v2"
@@ -39,10 +41,15 @@ class ClassworksNoiseService {
     this.currentScore = null
     this.currentScoreDetail = null
     this.signalHealth = {quality: "no-signal", confidence: 0, coverage: 0}
+    this.lastAnalysisAt = 0
     this.calibration = null
     this.settings = getNoiseControlSettings()
+    this.preferredDeviceId = this.settings.microphoneDeviceId || "default"
+    this.currentMicrophone = {deviceId: this.preferredDeviceId, label: "系统默认麦克风"}
     this.unsubscribeSettings = subscribeSettingsEvent(event => {
       this.settings = event.detail
+      this.preferredDeviceId = this.settings.microphoneDeviceId || this.preferredDeviceId
+      this.emit()
     })
   }
 
@@ -63,6 +70,8 @@ class ClassworksNoiseService {
       currentScore: this.currentScore,
       currentScoreDetail: this.currentScoreDetail,
       signalHealth: {...this.signalHealth},
+      microphone: {...this.currentMicrophone},
+      thresholdDb: Number.isFinite(this.settings?.maxLevelDb) ? this.settings.maxLevelDb : 55,
     }
   }
 
@@ -72,8 +81,9 @@ class ClassworksNoiseService {
     this.listeners.forEach(listener => listener(snapshot))
   }
 
-  async start() {
+  async start({deviceId} = {}) {
     if (["active", "initializing"].includes(this.status)) return
+    if (deviceId) this.preferredDeviceId = deviceId
     this.status = "initializing"
     this.emit()
     try {
@@ -88,11 +98,16 @@ class ClassworksNoiseService {
         autoGainControl: false,
         channelCount: 1,
       }
-      if (this.settings.microphoneDeviceId) {
-        audioSettings.deviceId = {exact: this.settings.microphoneDeviceId}
+      if (this.preferredDeviceId) {
+        audioSettings.deviceId = {exact: this.preferredDeviceId}
       }
       this.stream = await navigator.mediaDevices.getUserMedia({audio: audioSettings})
       this.stream.getAudioTracks().forEach(track => {
+        const trackSettings = track.getSettings?.() || {}
+        this.currentMicrophone = {
+          deviceId: trackSettings.deviceId || this.preferredDeviceId,
+          label: track.label || (this.preferredDeviceId === "default" ? "系统默认麦克风" : "已选择的麦克风"),
+        }
         track.addEventListener("ended", () => this.handleTrackEnded(), {once: true})
       })
       this.sourceNode = this.audioContext.createMediaStreamSource(this.stream)
@@ -112,6 +127,7 @@ class ClassworksNoiseService {
       }
       if (this.audioContext.state === "suspended") await this.audioContext.resume()
       this.sliceStart = Date.now()
+      this.lastAnalysisAt = 0
       this.status = "active"
       this.emit()
     } catch (error) {
@@ -190,17 +206,23 @@ class ClassworksNoiseService {
     this.sliceFrames.push(frame)
     this.processCalibration(frame)
 
-    const analysis = analyzeNoiseWindow(this.windowFrames)
-    this.currentScore = analysis.score
-    this.currentScoreDetail = analysis.scoreDetail
-    this.signalHealth = {
-      quality: analysis.quality,
-      confidence: analysis.confidence,
-      coverage: analysis.coverage,
-      baselineDbfs: analysis.baselineDbfs,
-      eventCount: analysis.eventCount,
+    let analysis = null
+    if (!this.lastAnalysisAt || timestamp - this.lastAnalysisAt >= ANALYSIS_INTERVAL_MS) {
+      analysis = analyzeNoiseWindow(this.windowFrames)
+      this.lastAnalysisAt = timestamp
+      this.currentScore = analysis.score
+      this.currentScoreDetail = analysis.scoreDetail
+      this.signalHealth = {
+        quality: analysis.quality,
+        confidence: analysis.confidence,
+        coverage: analysis.coverage,
+        baselineDbfs: analysis.baselineDbfs,
+        eventCount: analysis.eventCount,
+      }
     }
-    if (timestamp - this.sliceStart >= SLICE_MS) this.finalizeSlice(timestamp, analysis)
+    if (timestamp - this.sliceStart >= SLICE_MS) {
+      this.finalizeSlice(timestamp, analysis || analyzeNoiseWindow(this.sliceFrames, {windowMs: SLICE_MS}))
+    }
     this.emit()
   }
 
@@ -226,6 +248,31 @@ class ClassworksNoiseService {
       return
     }
     this.calibration = {targetDb, callback, startedAt: Date.now(), rmsValues: []}
+  }
+
+  async setMicrophoneDevice(deviceId = "default", {restart = false, label = ""} = {}) {
+    const normalized = typeof deviceId === "string" && deviceId.trim() ? deviceId.trim() : "default"
+    const shouldRestart = restart && ["active", "initializing"].includes(this.status)
+    if (shouldRestart) await this.stop()
+    this.preferredDeviceId = normalized
+    this.currentMicrophone = {
+      deviceId: normalized,
+      label: label || (normalized === "default" ? "系统默认麦克风" : "已选择的麦克风"),
+    }
+    saveNoiseControlSettings({microphoneDeviceId: normalized})
+    this.settings = getNoiseControlSettings()
+    if (shouldRestart) await this.start({deviceId: normalized})
+    else this.emit()
+  }
+
+  async testMicrophoneDevice(deviceId = "default") {
+    const shouldResume = ["active", "initializing"].includes(this.status)
+    if (shouldResume) await this.stop()
+    try {
+      return await testMicrophoneInput(deviceId)
+    } finally {
+      if (shouldResume) await this.start({deviceId: this.preferredDeviceId})
+    }
   }
 
   finalizeSlice(end, analysis = analyzeNoiseWindow(this.sliceFrames, {windowMs: SLICE_MS})) {

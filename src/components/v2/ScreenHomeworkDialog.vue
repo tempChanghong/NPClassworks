@@ -110,6 +110,7 @@
             3. 输入作业
           </div>
           <v-textarea
+            ref="contentInput"
             v-model="form.content"
             auto-grow
             autofocus
@@ -122,6 +123,12 @@
             @blur="contentFocused = false"
             @focus="contentFocused = true"
           />
+          <HomeworkQuickInputBar
+            density="screen"
+            :items="quickInputs"
+            :subject-id="form.subjectId"
+            @insert="insertQuickInput"
+          />
         </section>
 
         <section class="composer-section">
@@ -131,7 +138,7 @@
           <div class="d-flex align-center flex-wrap ga-2">
             <v-btn
               v-for="(preset, index) in quickDeadlines"
-              :key="`${preset.label}-${preset.dayOffset}-${preset.time}-${index}`"
+              :key="`${preset.label}-${preset.dateRule || 'relative'}-${preset.dayOffset ?? preset.weekday}-${preset.time}-${index}`"
               variant="tonal"
               @click="setQuickDeadline(preset)"
             >
@@ -257,11 +264,13 @@
 <script setup>
 import {computed, nextTick, reactive, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
+import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {todayBoardDate} from "@/utils/boardDate";
 import {
   resolveHomeworkQuickDeadline,
   sanitizeHomeworkQuickDeadlines,
 } from "@/utils/homeworkQuickDeadlines";
+import {insertHomeworkQuickInput, sanitizeHomeworkQuickInputs} from "@/utils/homeworkQuickInputs";
 import {
   clearScreenHomeworkDraft,
   loadScreenHomeworkDraft,
@@ -280,6 +289,7 @@ const store = useClassworksV2Store();
 const saving = ref(false);
 const localError = ref("");
 const contentFocused = ref(false);
+const contentInput = ref(null);
 const advancedPanel = ref();
 const draftRestored = ref(false);
 const draftReady = ref(false);
@@ -304,6 +314,9 @@ const eligibleSubjects = computed(() => store.studentSubjects.filter(
 const eligibleTargets = computed(() => store.eligibleScreenWorkspaces(form.subjectId));
 const quickDeadlines = computed(() => sanitizeHomeworkQuickDeadlines(
   store.screenSession?.homeworkSettings?.quickDeadlines,
+));
+const quickInputs = computed(() => sanitizeHomeworkQuickInputs(
+  store.screenSession?.homeworkSettings?.quickInputs,
 ));
 const canSave = computed(() => Boolean(
   form.subjectId &&
@@ -343,6 +356,16 @@ function localDateTime(value) {
   const date = new Date(value);
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+async function insertQuickInput(item) {
+  const textarea = contentInput.value?.$el?.querySelector("textarea");
+  const result = insertHomeworkQuickInput(form.content, textarea?.selectionStart, textarea?.selectionEnd, item);
+  form.content = result.value;
+  await nextTick();
+  const nextTextarea = contentInput.value?.$el?.querySelector("textarea");
+  nextTextarea?.focus();
+  nextTextarea?.setSelectionRange(result.cursor, result.cursor);
 }
 
 function loadPublication(publication) {
