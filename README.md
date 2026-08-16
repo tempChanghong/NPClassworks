@@ -1,64 +1,72 @@
-# Classworks
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./images/官网用星火动力反色.svg">
+    <img src="./images/星火动力0702.svg" width="112" alt="星火动力 NOVARK POWER">
+  </picture>
+</p>
 
-![GitHub](https://img.shields.io/github/license/ZeroCatDev/Classworks?style=flat-square)
-![GitHub stars](https://img.shields.io/github/stars/ZeroCatDev/Classworks?style=flat-square)
-![GitHub forks](https://img.shields.io/github/forks/ZeroCatDev/Classworks?style=flat-square)
-![GitHub issues](https://img.shields.io/github/issues/ZeroCatDev/Classworks?style=flat-square)
-![Classworks](./images/banner.png)
+<h1 align="center">NPClassworks</h1>
 
-适用于班级大屏的作业板小工具
+<p align="center">
+  面向班级大屏、教师和学生的统一作业板<br>
+  由 <strong>星火动力（NOVARK POWER）</strong> 维护
+</p>
 
-请打开 [https://cs.houlangs.com](https://cs.houlang.cloud) 立刻使用
+![License](https://img.shields.io/github/license/tempChanghong/NPClassworks?style=flat-square)
+![Vue](https://img.shields.io/badge/Vue-3-42b883?style=flat-square&logo=vuedotjs&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-ready-5a0fc8?style=flat-square&logo=pwa&logoColor=white)
 
-## 交流
+NPClassworks 基于 [Classworks](https://github.com/Moonrend/Classworks) 深度改造，针对高中行政班、选科定班和走班教学并存的实际场景设计。前端是一套 Vue 3 + Vuetify 3 PWA，需要与 [NPClassworksKV](https://github.com/tempChanghong/NPClassworksKV) 后端配合使用。
 
-QQ：[964979747](https://qm.qq.com/q/4RX45b1Oac)
+## 主要能力
 
-## 📦 快速开始
+- 学生、教师、班级大屏三种界面和首次使用引导
+- 行政班、走班教学班和特殊定班规则统一建模
+- 作业与通知实时同步，支持教师认证、修订历史和不可删除备份
+- 大屏快速录入、学校级快捷词与快捷截止时间
+- 教师一次登录管理多个行政班和走班教学班
+- 大屏独立账号、设备绑定、显示设置和课堂工具
+- 通知提示音、系统通知、噪声监测和麦克风选择
+- 适配 1080P、2K、4K 班级一体机
 
-### 环境准备
+## 技术栈
 
-- Node.js 16+
-- pnpm
+- Vue 3、Vuetify 3、Pinia、Vue Router
+- Vite 5、PWA / Workbox
+- Socket.IO 实时同步
+- IndexedDB 本地数据与 HTTP 服务端数据提供器
 
-### 安装步骤
+## 本地开发
+
+环境要求：Node.js 22+、pnpm 10+。完整联调还需要本地运行 NPClassworksKV。
 
 ```bash
-# 克隆项目
-git clone https://github.com/ZeroCatDev/Classworks.git
-cd Classworks
-
-# 安装依赖
+git clone https://github.com/tempChanghong/NPClassworks.git
+cd NPClassworks
 pnpm install
-
-# 启动开发服务器
 pnpm run dev
-
-# 构建生产版本
-pnpm run build
 ```
 
+开发服务器默认监听 `http://localhost:3031`。
 
-## 🤝 参与贡献
+```bash
+pnpm test
+pnpm run build
+pnpm run lint
+```
 
-Classworks 非常欢迎你的加入！[提一个 Issue](https://github.com/ZeroCatDev/Classworks/issues/new) 或者提交一个 Pull Request。对于小白问题，最好在 qq 群里问，我们会尽量回答。
+## 部署
 
-ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/version/1/3/0/) 行为规范
-<br/>孙悟元 希望你遵循 [提问的智慧](https://github.com/ryanhanwu/How-To-Ask-Questions-The-Smart-Way/blob/main/README-zh_CN.md)
+生产环境建议让前后端保持同源，由反向代理统一提供 HTTPS，并将 `/api`、`/accounts`、`/auth`、`/kv`、`/socket.io` 等后端路径转发至 NPClassworksKV。部署前请先阅读后端仓库的生产配置说明并执行数据库迁移。
 
-## 👥 联系我们
+## 项目关系与致谢
 
-- QQ交流群：964979747
-- 开发者：[@SunWuyuan](https://github.com/Sunwuyuan)
-- 官网：[ZeroCat](https://zerocat.dev)
+NPClassworks 是 Classworks 的衍生项目，不是 Classworks 官方版本。感谢 Classworks 原作者和所有上游贡献者；本项目保留上游版权与许可证声明。
 
-## 🙏 致谢
+项目维护与部署支持：**星火动力（NOVARK POWER）**。
 
-感谢所有为项目做出贡献的开发者！
+品牌素材位于 [`images`](./images)；反色版本用于深色背景，请勿改变图形比例。
 
-## 📄 开源协议
+## 开源协议
 
-ZeroCat 社区项目遵循 [AGPL-3.0 许可证](LICENSE)。
-
-
-Copyright (C) 2020-2026  Sunwuyuan.
+本项目遵循 [GNU AGPL-3.0](./LICENSE)。分发或部署修改版本时，请同时遵守上游项目和本项目的许可证要求。
