@@ -5,16 +5,25 @@
     :class="`homework-quick-input--${density}`"
   >
     <div class="homework-quick-input__label">
-      <v-icon icon="mdi-lightning-bolt-outline" size="small" />
+      <v-icon
+        icon="mdi-lightning-bolt-outline"
+        size="small"
+      />
       快捷输入
-      <span v-if="!subjectId" class="text-medium-emphasis">（选择科目后显示对应词）</span>
+      <span
+        v-if="!subjectId"
+        class="text-medium-emphasis"
+      >（选择科目后显示对应词）</span>
     </div>
     <div
       v-for="group in groups"
       :key="group.name"
       class="homework-quick-input__group"
     >
-      <span v-if="groups.length > 1" class="homework-quick-input__group-name">{{ group.name }}</span>
+      <span
+        v-if="groups.length > 1"
+        class="homework-quick-input__group-name"
+      >{{ group.name }}</span>
       <div class="homework-quick-input__buttons">
         <v-btn
           v-for="(item, index) in group.items"

@@ -8,7 +8,7 @@ export function teacherPublicationState(publication) {
     return {key: "draft", label: "草稿", color: "warning", icon: "mdi-file-edit-outline"};
   }
   if (!publication.isCertified) {
-    return {key: "pending", label: "待确认", color: "warning", icon: "mdi-alert-circle-outline"};
+    return {key: "pending", label: "待教师确认", color: "warning", icon: "mdi-alert-circle-outline"};
   }
   return {key: "published", label: "已发布", color: "success", icon: "mdi-check-decagram-outline"};
 }

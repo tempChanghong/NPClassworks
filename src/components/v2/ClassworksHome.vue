@@ -29,7 +29,13 @@
         value="teacher"
         prepend-icon="mdi-account-tie-outline"
       >
-        教师
+        <v-badge
+          color="warning"
+          :content="store.teacherActionCenter.summary.total"
+          :model-value="store.teacherActionCenter.summary.total > 0"
+        >
+          教师
+        </v-badge>
       </v-btn>
       <v-btn
         value="screen"
@@ -203,6 +209,7 @@
         />
         <OrganizedHomeworkFeed
           v-if="store.feed.length"
+          completion-enabled
           :publications="store.feed"
         />
 
@@ -397,6 +404,17 @@
           </v-card-text>
         </v-card>
 
+        <TeacherActionCenter
+          :busy-id="teacherActionBusyId"
+          :center="store.teacherActionCenter"
+          :loading="store.teacherActionCenterLoading"
+          @certify="certifyActionItem"
+          @edit="editingPublication = $event"
+          @history="openHistory($event, 'teacher')"
+          @refresh="store.refreshTeacherActionCenter()"
+          @restore="restoreActionItem"
+        />
+
         <v-row>
           <v-col
             cols="12"
@@ -406,6 +424,7 @@
               :editing-publication="editingPublication"
               @cancel="editingPublication = null"
               @published="showPublishedMessage"
+              @reload-latest="editingPublication = $event"
             />
           </v-col>
           <v-col
@@ -446,6 +465,7 @@
     :mode="historyMode"
     :publication="historyPublication"
     @changed="handleHistoryChanged"
+    @refreshed="historyPublication = $event"
   />
   <NotificationDeliveryDialog
     v-model="notificationDeliveryDialog"
@@ -534,13 +554,23 @@
   </v-dialog>
   <v-snackbar
     v-model="snackbar"
-    color="success"
+    :color="snackbarColor"
     location="bottom"
     :timeout="6000"
   >
     <div class="d-flex align-center ga-3">
-      <v-icon icon="mdi-check-circle-outline" />
-      <span>{{ snackbarText }}</span>
+      <v-icon :icon="snackbarIcon" />
+      <div>
+        <div class="font-weight-bold">
+          {{ snackbarText }}
+        </div>
+        <div
+          v-if="snackbarDetail"
+          class="text-body-2 mt-1"
+        >
+          {{ snackbarDetail }}
+        </div>
+      </div>
     </div>
     <template #actions>
       <v-btn
@@ -574,10 +604,15 @@ import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import TeacherPublicationManager from "@/components/v2/TeacherPublicationManager.vue";
+import TeacherActionCenter from "@/components/v2/TeacherActionCenter.vue";
 import ClassworksOobe from "@/components/v2/ClassworksOobe.vue";
 import ScreenOobeChecklist from "@/components/v2/ScreenOobeChecklist.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
-import {screenHomeworkSaveMessage} from "@/utils/screenSaveFeedback";
+import {
+  screenHomeworkSaveFeedback,
+  teacherPublicationSaveFeedback,
+} from "@/utils/screenSaveFeedback";
+import {isPublicationRevisionConflict} from "@/utils/publicationConflict";
 import {
   CLASSWORKS_OOBE_VERSION,
   completeClassworksOobe,
@@ -601,7 +636,11 @@ const oobeLanding = ref(false);
 const screenOobePending = ref(false);
 const snackbar = ref(false);
 const snackbarText = ref("");
+const snackbarDetail = ref("");
+const snackbarColor = ref("success");
+const snackbarIcon = ref("mdi-check-circle-outline");
 const editingPublication = ref(null);
+const teacherActionBusyId = ref("");
 const loginSchoolId = ref("");
 const loginUsername = ref("");
 const loginPassword = ref("");
@@ -626,6 +665,19 @@ const screenTemporarilyUnlocked = ref(false);
 const screenUnlockRemainingSeconds = ref(0);
 let screenUnlockDeadline = 0;
 let screenUnlockTimer = null;
+
+function showFeedback({
+  title,
+  detail = "",
+  color = "success",
+  icon = "mdi-check-circle-outline",
+}) {
+  snackbarText.value = title;
+  snackbarDetail.value = detail;
+  snackbarColor.value = color;
+  snackbarIcon.value = icon;
+  snackbar.value = true;
+}
 
 const teacherSchoolOptions = computed(() => store.schools.map((school) => ({
   title: school.name,
@@ -869,8 +921,7 @@ async function loginScreen(input) {
       pin: input.pin,
     });
     mode.value = "screen";
-    snackbarText.value = "大屏登录成功，本机以后会自动进入班级大屏";
-    snackbar.value = true;
+    showFeedback({title: "大屏登录成功", detail: "本机以后会自动进入班级大屏"});
   } catch {
     // Store keeps the actionable server error visible in the login card.
   }
@@ -888,8 +939,7 @@ async function changePin() {
     newPin.value = "";
     changePinDialog.value = false;
     await store.signOutTeacher();
-    snackbarText.value = "PIN 已修改，请使用新 PIN 重新登录";
-    snackbar.value = true;
+    showFeedback({title: "PIN 已修改", detail: "请使用新 PIN 重新登录"});
   } catch (error) {
     store.teacherError = describeApiError(error, "修改 PIN 失败");
   } finally {
@@ -901,8 +951,7 @@ async function bindScreen() {
   try {
     await store.bindCurrentClassroomScreen();
     mode.value = "screen";
-    snackbarText.value = "大屏绑定成功，管理员已安全退出，现在可以直接使用大屏";
-    snackbar.value = true;
+    showFeedback({title: "大屏绑定成功", detail: "管理员已安全退出，现在可以直接使用大屏"});
   } catch {
     // Store shows the server error in the page alert.
   }
@@ -915,8 +964,7 @@ function openScreenComposer(publication = null) {
 
 function showScreenSavedMessage(publication, context = {}) {
   screenEditingPublication.value = null;
-  snackbarText.value = screenHomeworkSaveMessage(publication, context);
-  snackbar.value = true;
+  showFeedback(screenHomeworkSaveFeedback(publication, context));
 }
 
 function openHistory(publication, modeValue) {
@@ -931,46 +979,141 @@ function openNotificationDelivery(publication) {
 }
 
 function handleHistoryChanged(publication) {
+  const restored = publication.revision !== historyPublication.value?.revision;
   historyPublication.value = publication;
-  snackbarText.value = publication.isCertified ? "当前版本已通过教师确认" : "历史版本已恢复";
-  snackbar.value = true;
+  showFeedback(restored
+    ? {
+        title: "历史版本已恢复",
+        detail: `当前状态：教师已确认 · 新版本 ${publication.revision}`,
+        icon: "mdi-backup-restore",
+      }
+    : {
+        title: "当前版本已通过教师确认",
+        detail: `版本 ${publication.revision} · 待处理事项已完成`,
+        icon: "mdi-check-decagram-outline",
+      });
 }
 
 async function certifyPublication(publication) {
   try {
     await store.certify(publication);
-    snackbarText.value = "当前版本已认证";
-    snackbar.value = true;
-  } catch {
-    // Teacher error alert already contains the actionable reason.
+    showFeedback({
+      title: "当前版本已通过教师确认",
+      detail: `版本 ${publication.revision} · 待处理事项已完成`,
+      icon: "mdi-check-decagram-outline",
+    });
+  } catch (error) {
+    if (isPublicationRevisionConflict(error)) {
+      await Promise.all([store.refreshTeacherPublications(), store.refreshTeacherActionCenter()]);
+      showFeedback({
+        title: "没有确认旧版本",
+        detail: "内容已被其他设备修改，列表已刷新，请检查最新版本",
+        color: "warning",
+        icon: "mdi-alert-outline",
+      });
+    }
   }
 }
 
-function showPublishedMessage(publication) {
+async function certifyActionItem(item) {
+  teacherActionBusyId.value = item.id;
+  try {
+    await store.certify(item.publication);
+    showFeedback({
+      title: "当前版本已通过教师确认",
+      detail: `版本 ${item.publication.revision} · 待处理事项已完成`,
+      icon: "mdi-check-decagram-outline",
+    });
+  } catch (error) {
+    if (isPublicationRevisionConflict(error)) {
+      await store.refreshTeacherActionCenter();
+      showFeedback({
+        title: "没有确认旧版本",
+        detail: "内容刚刚发生变化，请重新检查最新版本",
+        color: "warning",
+        icon: "mdi-alert-outline",
+      });
+    }
+  } finally {
+    teacherActionBusyId.value = "";
+  }
+}
+
+async function restoreActionItem(item) {
+  const revision = item.lastCertifiedRevision?.revision;
+  if (!revision) return;
+  if (!window.confirm(`恢复教师确认的版本 #${revision} 吗？当前内容仍会保留在版本历史中。`)) return;
+  teacherActionBusyId.value = item.id;
+  try {
+    await store.restoreRevision(item.publication, revision, "teacher");
+    showFeedback({
+      title: `已恢复教师确认版本 #${revision}`,
+      detail: "当前状态：教师已确认 · 原来的当前版本仍保留在历史中",
+      icon: "mdi-backup-restore",
+    });
+  } catch (error) {
+    if (isPublicationRevisionConflict(error)) {
+      await store.refreshTeacherActionCenter();
+      showFeedback({
+        title: "没有恢复旧版本",
+        detail: "当前内容已发生变化，待处理中心已刷新，请重新比较版本",
+        color: "warning",
+        icon: "mdi-alert-outline",
+      });
+    }
+  } finally {
+    teacherActionBusyId.value = "";
+  }
+}
+
+function showPublishedMessage(publication, context = {}) {
   editingPublication.value = null;
-  snackbarText.value = publication.status === "DRAFT" ? "草稿已保存" : "发布成功";
-  snackbar.value = true;
+  showFeedback(teacherPublicationSaveFeedback(publication, context));
 }
 
 async function withdrawPublication(publication) {
   if (!window.confirm(`确定撤回“${publication.title || publication.content.slice(0, 20)}”吗？`)) return;
-  await store.withdraw(publication);
-  snackbarText.value = "已撤回";
-  snackbar.value = true;
+  try {
+    await store.withdraw(publication);
+    showFeedback({
+      title: `${publication.type === "NOTICE" ? "通知" : "作业"}已撤回`,
+      detail: "当前状态：不再向学生端和大屏展示",
+      color: "info",
+      icon: "mdi-undo-variant",
+    });
+  } catch (error) {
+    if (isPublicationRevisionConflict(error)) {
+      await Promise.all([store.refreshTeacherPublications(), store.refreshTeacherActionCenter()]);
+      showFeedback({
+        title: "没有撤回旧版本",
+        detail: "内容已被其他设备修改，发布列表已刷新",
+        color: "warning",
+        icon: "mdi-alert-outline",
+      });
+    }
+  }
 }
 
 async function clonePublication(publication) {
   await store.clone(publication);
-  snackbarText.value = publication.type === "ASSIGNMENT" ? "已复制为今天的新草稿" : "已复制为新草稿";
-  snackbar.value = true;
+  showFeedback({
+    title: publication.type === "ASSIGNMENT" ? "已复制为今天的新作业草稿" : "已复制为新通知草稿",
+    detail: "当前状态：尚未发布",
+    color: "info",
+    icon: "mdi-content-copy",
+  });
 }
 
 async function copyScreenBoardToToday() {
   if (!window.confirm(`将${boardDateLabel.value}的作业复制到今天吗？当天已有的相同作业会自动跳过。`)) return;
   try {
     const result = await store.copyScreenBoardToToday();
-    snackbarText.value = `已复制 ${result.createdCount} 项，跳过 ${result.skippedCount} 项重复作业`;
-    snackbar.value = true;
+    showFeedback({
+      title: `已复制 ${result.createdCount} 项作业`,
+      detail: `跳过 ${result.skippedCount} 项重复作业 · 新副本等待教师确认`,
+      color: "warning",
+      icon: "mdi-content-copy",
+    });
   } catch {
     // 大屏错误提示已经给出可操作原因。
   }

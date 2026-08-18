@@ -225,6 +225,35 @@
         </v-expansion-panels>
 
         <v-alert
+          v-if="conflict"
+          class="mb-4"
+          color="warning"
+          icon="mdi-source-branch-sync"
+          title="其他设备已经修改了这项作业"
+          variant="tonal"
+        >
+          <div>{{ conflictMessage }}</div>
+          <div class="d-flex flex-wrap ga-2 mt-3">
+            <v-btn
+              :loading="conflictReloading"
+              prepend-icon="mdi-cloud-download-outline"
+              variant="flat"
+              @click="reloadLatest"
+            >
+              放弃本机输入并载入最新版
+            </v-btn>
+            <v-btn
+              :loading="conflictCopying"
+              prepend-icon="mdi-content-copy"
+              variant="tonal"
+              @click="saveConflictCopy"
+            >
+              另存为一项新作业
+            </v-btn>
+          </div>
+        </v-alert>
+
+        <v-alert
           v-if="localError || store.screenError"
           class="mb-4"
           type="error"
@@ -247,7 +276,7 @@
         </v-btn>
         <v-btn
           color="primary"
-          :disabled="!canSave"
+          :disabled="!canSave || Boolean(conflict)"
           :loading="saving"
           min-width="180"
           prepend-icon="mdi-content-save-outline"
@@ -276,6 +305,10 @@ import {
   loadScreenHomeworkDraft,
   saveScreenHomeworkDraft,
 } from "@/utils/screenHomeworkDraft";
+import {
+  publicationConflictMessage,
+  publicationConflictState,
+} from "@/utils/publicationConflict";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -288,6 +321,10 @@ const emit = defineEmits(["update:modelValue", "saved"]);
 const store = useClassworksV2Store();
 const saving = ref(false);
 const localError = ref("");
+const basePublication = ref(props.publication);
+const conflict = ref(null);
+const conflictReloading = ref(false);
+const conflictCopying = ref(false);
 const contentFocused = ref(false);
 const contentInput = ref(null);
 const advancedPanel = ref();
@@ -323,6 +360,7 @@ const canSave = computed(() => Boolean(
   form.targetWorkspaceId &&
   (form.title.trim() || form.content.trim()),
 ));
+const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
 const dueAtLabel = computed(() => form.dueAt
   ? new Intl.DateTimeFormat("zh-CN", {
       month: "numeric",
@@ -332,7 +370,11 @@ const dueAtLabel = computed(() => form.dueAt
     }).format(new Date(form.dueAt))
   : "");
 
-watch(() => props.publication, loadPublication, {immediate: true});
+watch(() => props.publication, (publication) => {
+  basePublication.value = publication;
+  conflict.value = null;
+  loadPublication(publication);
+}, {immediate: true});
 watch(() => props.modelValue, (open) => {
   if (open) restoreDraft();
   else draftReady.value = false;
@@ -346,7 +388,7 @@ watch(form, () => {
   if (!props.modelValue || !draftReady.value) return;
   saveScreenHomeworkDraft(
     store.screenSession?.binding?.id,
-    props.publication?.id || "new",
+    basePublication.value?.id || "new",
     form,
   );
 }, {deep: true});
@@ -385,10 +427,10 @@ function loadPublication(publication) {
 function restoreDraft() {
   draftReady.value = false;
   draftRestored.value = false;
-  loadPublication(props.publication);
+  loadPublication(basePublication.value);
   const draft = loadScreenHomeworkDraft(
     store.screenSession?.binding?.id,
-    props.publication?.id || "new",
+    basePublication.value?.id || "new",
   );
   if (draft) {
     Object.assign(form, draft);
@@ -402,11 +444,11 @@ function restoreDraft() {
 function discardRecoveredDraft() {
   clearScreenHomeworkDraft(
     store.screenSession?.binding?.id,
-    props.publication?.id || "new",
+    basePublication.value?.id || "new",
   );
   draftReady.value = false;
   draftRestored.value = false;
-  loadPublication(props.publication);
+  loadPublication(basePublication.value);
   nextTick(() => {
     draftReady.value = true;
   });
@@ -440,6 +482,7 @@ async function save() {
     const savedContext = {
       subjectName: eligibleSubjects.value.find((subject) => subject.id === form.subjectId)?.name || "作业",
       targetName: eligibleTargets.value.find((workspace) => workspace.id === form.targetWorkspaceId)?.name || "目标班级",
+      operation: basePublication.value ? "updated" : "created",
     };
     const saved = await store.saveScreenPublication({
       subjectId: form.subjectId,
@@ -449,20 +492,73 @@ async function save() {
       boardDate: form.boardDate,
       dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
       priority: form.priority,
-      publishAt: props.publication?.publishAt || new Date().toISOString(),
-    }, props.publication);
+      publishAt: basePublication.value?.publishAt || new Date().toISOString(),
+    }, basePublication.value);
     clearScreenHomeworkDraft(
       store.screenSession?.binding?.id,
-      props.publication?.id || "new",
+      basePublication.value?.id || "new",
     );
     draftReady.value = false;
     draftRestored.value = false;
     emit("saved", saved, savedContext);
     emit("update:modelValue", false);
-  } catch {
-    // Store exposes the server's conflict/permission message.
+  } catch (error) {
+    const nextConflict = publicationConflictState(error, basePublication.value?.revision);
+    if (nextConflict) {
+      conflict.value = nextConflict;
+      localError.value = "";
+      store.screenError = "";
+    }
   } finally {
     saving.value = false;
+  }
+}
+
+async function reloadLatest() {
+  if (!basePublication.value || !conflict.value) return;
+  if (!window.confirm("载入服务器最新版会放弃当前输入。也可以先将当前输入另存为一项新作业。")) return;
+  conflictReloading.value = true;
+  localError.value = "";
+  try {
+    const latest = await store.latestPublication(basePublication.value.id, "screen");
+    basePublication.value = latest;
+    conflict.value = null;
+    loadPublication(latest);
+  } catch (error) {
+    localError.value = error.response?.data?.message || error.message || "载入最新版失败";
+  } finally {
+    conflictReloading.value = false;
+  }
+}
+
+async function saveConflictCopy() {
+  if (!conflict.value) return;
+  conflictCopying.value = true;
+  localError.value = "";
+  try {
+    const savedContext = {
+      subjectName: eligibleSubjects.value.find((subject) => subject.id === form.subjectId)?.name || "作业",
+      targetName: eligibleTargets.value.find((workspace) => workspace.id === form.targetWorkspaceId)?.name || "目标班级",
+      operation: "created",
+    };
+    const saved = await store.saveScreenPublication({
+      subjectId: form.subjectId,
+      targetWorkspaceIds: [form.targetWorkspaceId],
+      title: form.title,
+      content: form.content,
+      boardDate: form.boardDate,
+      dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
+      priority: form.priority,
+      publishAt: new Date().toISOString(),
+    });
+    clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new");
+    conflict.value = null;
+    emit("saved", saved, savedContext);
+    emit("update:modelValue", false);
+  } catch {
+    localError.value = store.screenError;
+  } finally {
+    conflictCopying.value = false;
   }
 }
 </script>

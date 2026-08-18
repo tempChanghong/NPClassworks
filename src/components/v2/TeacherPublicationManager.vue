@@ -186,7 +186,7 @@
                     v-if="state(publication).key === 'pending'"
                     class="text-success"
                     prepend-icon="mdi-check-decagram-outline"
-                    title="认证当前版本"
+                    title="教师确认当前版本"
                     @click="$emit('certify', publication)"
                   />
                   <v-list-item
@@ -271,7 +271,7 @@ const typeOptions = [
 ];
 const stateOptions = [
   {title: "全部", value: "", color: "primary", icon: "mdi-format-list-bulleted"},
-  {title: "待确认", value: "pending", color: "warning", icon: "mdi-alert-circle-outline"},
+  {title: "待教师确认", value: "pending", color: "warning", icon: "mdi-alert-circle-outline"},
   {title: "草稿", value: "draft", color: "warning", icon: "mdi-file-edit-outline"},
   {title: "已发布", value: "published", color: "success", icon: "mdi-check-decagram-outline"},
   {title: "已撤回", value: "withdrawn", color: "grey", icon: "mdi-undo-variant"},

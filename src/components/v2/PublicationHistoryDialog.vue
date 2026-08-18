@@ -13,14 +13,14 @@
         不可删除的版本历史
         <v-spacer />
         <v-btn
-          v-if="mode === 'teacher' && publication && !publication.isCertified"
+          v-if="mode === 'teacher' && workingPublication && !workingPublication.isCertified"
           color="success"
           :loading="certifying"
           prepend-icon="mdi-check-decagram-outline"
           variant="tonal"
           @click="certifyCurrent"
         >
-          认证当前版本
+          教师确认当前版本
         </v-btn>
       </v-card-title>
       <v-card-text class="px-5">
@@ -79,11 +79,11 @@
                   {{ item.snapshot.title }}
                 </div>
                 <div class="revision-content">
-                  {{ item.purgedAt ? "该未认证备份已按三天保留策略清理正文" : (item.snapshot.content || "（无正文）") }}
+                  {{ item.purgedAt ? "该待教师确认备份已按三天保留策略清理正文" : (item.snapshot.content || "（无正文）") }}
                 </div>
                 <div class="d-flex justify-end mt-3">
                   <v-btn
-                    :disabled="item.revision === publication?.revision || item.snapshot.status === 'WITHDRAWN' || Boolean(item.purgedAt)"
+                    :disabled="item.revision === workingPublication?.revision || item.snapshot.status === 'WITHDRAWN' || Boolean(item.purgedAt)"
                     :loading="restoringRevision === item.revision"
                     prepend-icon="mdi-backup-restore"
                     size="small"
@@ -119,14 +119,16 @@
 <script setup>
 import {ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
+import {isPublicationRevisionConflict} from "@/utils/publicationConflict";
 
 const props = defineProps({
   modelValue: Boolean,
   publication: {type: Object, default: null},
   mode: {type: String, default: "teacher"},
 });
-const emit = defineEmits(["update:modelValue", "changed"]);
+const emit = defineEmits(["update:modelValue", "changed", "refreshed"]);
 const store = useClassworksV2Store();
+const workingPublication = ref(props.publication);
 const revisions = ref([]);
 const loading = ref(false);
 const certifying = ref(false);
@@ -134,14 +136,17 @@ const restoringRevision = ref(null);
 const error = ref("");
 
 watch(() => props.modelValue, (open) => {
-  if (open && props.publication) load();
+  if (open && props.publication) {
+    workingPublication.value = props.publication;
+    load();
+  }
 });
 
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    revisions.value = await store.publicationRevisions(props.publication, props.mode);
+    revisions.value = await store.publicationRevisions(workingPublication.value, props.mode);
   } catch (loadError) {
     error.value = loadError.response?.data?.message || loadError.message || "加载历史失败";
   } finally {
@@ -167,11 +172,13 @@ async function certifyCurrent() {
   certifying.value = true;
   error.value = "";
   try {
-    const changed = await store.certify(props.publication);
+    const changed = await store.certify(workingPublication.value);
+    workingPublication.value = changed;
     emit("changed", changed);
     await load();
-  } catch {
-    error.value = store.teacherError;
+  } catch (caught) {
+    if (isPublicationRevisionConflict(caught)) await refreshConflict("教师确认");
+    else error.value = store.teacherError;
   } finally {
     certifying.value = false;
   }
@@ -181,13 +188,27 @@ async function restore(item) {
   restoringRevision.value = item.revision;
   error.value = "";
   try {
-    const changed = await store.restoreRevision(props.publication, item.revision, props.mode);
+    const changed = await store.restoreRevision(workingPublication.value, item.revision, props.mode);
+    workingPublication.value = changed;
     emit("changed", changed);
     await load();
-  } catch {
-    error.value = props.mode === "screen" ? store.screenError : store.teacherError;
+  } catch (caught) {
+    if (isPublicationRevisionConflict(caught)) await refreshConflict("恢复");
+    else error.value = props.mode === "screen" ? store.screenError : store.teacherError;
   } finally {
     restoringRevision.value = null;
+  }
+}
+
+async function refreshConflict(action) {
+  try {
+    const latest = await store.latestPublication(workingPublication.value.id, props.mode);
+    workingPublication.value = latest;
+    emit("refreshed", latest);
+    await load();
+    error.value = `${action}未执行：内容已被其他设备修改，已载入服务器最新版本，请重新检查后操作。`;
+  } catch (caught) {
+    error.value = caught.response?.data?.message || caught.message || "载入最新版本失败";
   }
 }
 </script>

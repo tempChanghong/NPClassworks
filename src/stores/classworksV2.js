@@ -75,9 +75,15 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     teacherSubjects: [],
     teacherHomeworkSettingsBySchool: {},
     teacherPublications: [],
+    teacherActionCenter: {
+      items: [],
+      total: 0,
+      summary: {total: 0, changedAfterCertified: 0, createdByScreen: 0, other: 0, dueSoon: 0, overdue: 0},
+    },
     schoolMemberships: [],
     teacherLoading: false,
     teacherPublicationsLoading: false,
+    teacherActionCenterLoading: false,
     teacherError: "",
     teacherTargetPreferences: sanitizeTeacherTargetPreferences(),
     teacherTargetPreferencesSynced: false,
@@ -137,6 +143,12 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       if (state.selection.administrativeClassId) ids.push(state.selection.administrativeClassId);
       ids.push(...Object.values(state.selection.courseGroupIds || {}).filter(Boolean));
       return [...new Set(ids)];
+    },
+    realtimeWorkspaceIds() {
+      return [...new Set([
+        ...this.activeWorkspaceIds,
+        ...this.teacherWorkspaces.map((workspace) => workspace.id),
+      ])];
     },
   },
 
@@ -242,7 +254,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       saveSelection(this.selection);
       if (this.feedAudience === "student") {
         leaveWorkspaces(oldWorkspaceIds);
-        joinWorkspaces(this.selectedWorkspaceIds);
+        joinWorkspaces(this.realtimeWorkspaceIds);
       }
       this.selectionDialog = false;
       if (this.feedAudience === "student") await this.loadStudentFeed();
@@ -258,6 +270,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       clearTimeout(transitionTimer);
       transitionTimer = null;
       localStorage.removeItem(SELECTION_KEY);
+      joinWorkspaces(this.realtimeWorkspaceIds);
     },
 
     async loadStudentFeed() {
@@ -307,7 +320,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
           this.screenSession = null;
           this.feedAudience = "student";
           this.feed = [];
-          joinWorkspaces(this.selectedWorkspaceIds);
+          joinWorkspaces(this.realtimeWorkspaceIds);
         }
       } finally {
         if (requestId === feedRequest) this.feedLoading = false;
@@ -348,7 +361,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       leaveWorkspaces(oldWorkspaceIds);
       this.feedAudience = nextAudience;
       this.feed = [];
-      joinWorkspaces(this.activeWorkspaceIds);
+      joinWorkspaces(this.realtimeWorkspaceIds);
       return this.loadActiveFeed();
     },
 
@@ -369,7 +382,13 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       fallbackTimer = null;
       const refresh = () => {
         clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => this.loadActiveFeed(), 250);
+        refreshTimer = setTimeout(() => {
+          void this.loadActiveFeed();
+          if (this.isTeacherSignedIn) {
+            void this.refreshTeacherPublications();
+            void this.refreshTeacherActionCenter();
+          }
+        }, 250);
       };
       for (const event of [
         "publication.created",
@@ -380,11 +399,12 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       ]) {
         realtimeCleanup.push(socketOn(event, refresh));
       }
-      realtimeCleanup.push(onConnect(() => joinWorkspaces(this.activeWorkspaceIds)));
-      joinWorkspaces(this.activeWorkspaceIds);
+      realtimeCleanup.push(onConnect(() => joinWorkspaces(this.realtimeWorkspaceIds)));
+      joinWorkspaces(this.realtimeWorkspaceIds);
       fallbackTimer = setInterval(() => {
-        if (this.activeWorkspaceIds.length > 0 && document.visibilityState !== "hidden") {
-          this.loadActiveFeed();
+        if (document.visibilityState !== "hidden") {
+          if (this.activeWorkspaceIds.length > 0) void this.loadActiveFeed();
+          if (this.isTeacherSignedIn) void this.refreshTeacherActionCenter();
         }
       }, 5 * 60 * 1000);
     },
@@ -406,16 +426,19 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       try {
         this.oauthProviders = await getOAuthProviders();
         if (!getAccountTokens().accessToken) return;
-        const [account, memberships, publications, schoolMemberships] = await Promise.all([
+        const [account, memberships, publications, actionCenter, schoolMemberships] = await Promise.all([
           classworksV2Api.profile(),
           classworksV2Api.myWorkspaces(),
           classworksV2Api.publications({limit: 100}),
+          classworksV2Api.actionRequiredPublications({limit: 50}),
           classworksV2Api.mySchools(),
         ]);
         this.account = account;
         this.memberships = memberships;
         this.teacherPublications = publications.items || [];
+        this.teacherActionCenter = actionCenter;
         this.schoolMemberships = schoolMemberships;
+        joinWorkspaces(this.realtimeWorkspaceIds);
         await this.hydrateTeacherTargetPreferences();
         const schoolIds = [...new Set(
           memberships.map((membership) => membership.workspace.term.school.id),
@@ -680,7 +703,9 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
           ? await classworksV2Api.updateScreenPublication(publication, input)
           : await classworksV2Api.createScreenPublication(input);
         await this.loadActiveFeed();
-        if (this.isTeacherSignedIn) await this.refreshTeacherPublications();
+        if (this.isTeacherSignedIn) {
+          await Promise.all([this.refreshTeacherPublications(), this.refreshTeacherActionCenter()]);
+        }
         return saved;
       } catch (error) {
         this.screenError = describeApiError(error, "保存大屏作业失败");
@@ -694,14 +719,20 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         : classworksV2Api.publicationRevisions(publication.id);
     },
 
+    async latestPublication(publicationId, mode = "teacher") {
+      return mode === "screen"
+        ? classworksV2Api.screenPublication(publicationId)
+        : classworksV2Api.publication(publicationId);
+    },
+
     async certify(publication) {
       try {
         const certified = await classworksV2Api.certifyPublication(publication);
-        await this.refreshTeacherPublications();
+        await Promise.all([this.refreshTeacherPublications(), this.refreshTeacherActionCenter()]);
         await this.loadActiveFeed();
         return certified;
       } catch (error) {
-        this.teacherError = describeApiError(error, "认证失败");
+        this.teacherError = describeApiError(error, "教师确认失败");
         throw error;
       }
     },
@@ -711,7 +742,9 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         const restored = mode === "screen"
           ? await classworksV2Api.restoreScreenPublication(publication, sourceRevision)
           : await classworksV2Api.restorePublication(publication, sourceRevision);
-        if (this.isTeacherSignedIn) await this.refreshTeacherPublications();
+        if (this.isTeacherSignedIn) {
+          await Promise.all([this.refreshTeacherPublications(), this.refreshTeacherActionCenter()]);
+        }
         await this.loadActiveFeed();
         return restored;
       } catch (error) {
@@ -734,6 +767,18 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       }
     },
 
+    async refreshTeacherActionCenter() {
+      if (!this.isTeacherSignedIn) return;
+      this.teacherActionCenterLoading = true;
+      try {
+        this.teacherActionCenter = await classworksV2Api.actionRequiredPublications({limit: 50});
+      } catch (error) {
+        this.teacherError = describeApiError(error, "刷新待处理事项失败");
+      } finally {
+        this.teacherActionCenterLoading = false;
+      }
+    },
+
     async updatePublication(publication, input) {
       this.teacherError = "";
       try {
@@ -742,7 +787,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
           publication.revision,
           input,
         );
-        await this.refreshTeacherPublications();
+        await Promise.all([this.refreshTeacherPublications(), this.refreshTeacherActionCenter()]);
         await this.loadActiveFeed();
         return updated;
       } catch (error) {
@@ -754,7 +799,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     async withdraw(publication) {
       try {
         await classworksV2Api.withdrawPublication(publication.id, publication.revision);
-        await this.refreshTeacherPublications();
+        await Promise.all([this.refreshTeacherPublications(), this.refreshTeacherActionCenter()]);
         await this.loadActiveFeed();
       } catch (error) {
         this.teacherError = describeApiError(error, "撤回失败");
@@ -776,6 +821,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     },
 
     async signOutTeacher() {
+      const teacherWorkspaceIds = this.teacherWorkspaces.map((workspace) => workspace.id);
       try {
         if (getAccountTokens().accessToken) await classworksV2Api.logout();
       } catch {
@@ -787,13 +833,21 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.teacherSubjects = [];
       this.teacherHomeworkSettingsBySchool = {};
       this.teacherPublications = [];
+      this.teacherActionCenter = {
+        items: [],
+        total: 0,
+        summary: {total: 0, changedAfterCertified: 0, createdByScreen: 0, other: 0, dueSoon: 0, overdue: 0},
+      };
       this.teacherPublicationsLoading = false;
+      this.teacherActionCenterLoading = false;
       this.schoolMemberships = [];
       this.teacherTargetPreferences = sanitizeTeacherTargetPreferences();
       this.teacherTargetPreferencesSynced = false;
       this.teacherTargetPreferencesSyncing = false;
       this.teacherTargetPreferencesSyncPending = false;
       this.teacherTargetPreferencesError = "";
+      leaveWorkspaces(teacherWorkspaceIds);
+      joinWorkspaces(this.activeWorkspaceIds);
     },
   },
 });

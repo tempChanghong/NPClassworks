@@ -297,7 +297,7 @@
 
             <template v-else-if="activeSection === 'screen-display'">
               <SettingsPanel
-                description="只调整当前教室大屏的作业可读性。正文会放大，学科和认证标签保持紧凑。"
+                description="只调整当前教室大屏的作业可读性。正文会放大，学科和教师确认标签保持紧凑。"
                 icon="mdi-monitor-eye"
                 title="显示与布局"
               >
@@ -724,7 +724,7 @@
                   icon="mdi-source-fork"
                   variant="tonal"
                 >
-                  NPClassworks 基于 Classworks 改造，保留熟悉的作业板体验，并增加教师工作台、走班模型、认证版本和大屏绑定。
+                  NPClassworks 基于 Classworks 改造，保留熟悉的作业板体验，并增加教师工作台、走班模型、教师确认与版本记录、大屏绑定。
                 </v-alert>
                 <SettingRow
                   description="学校结构和账号配置由管理员后台统一维护。"

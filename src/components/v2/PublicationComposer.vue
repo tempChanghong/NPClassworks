@@ -189,6 +189,106 @@
         </v-col>
       </v-row>
 
+      <v-card
+        class="publication-preview mb-4"
+        color="primary"
+        variant="tonal"
+      >
+        <v-card-title class="d-flex align-center text-subtitle-1 font-weight-bold pb-1">
+          <v-icon
+            class="mr-2"
+            icon="mdi-eye-outline"
+          />
+          发布目标预览
+        </v-card-title>
+        <v-card-text class="pt-2">
+          <div class="d-flex flex-wrap ga-2 mb-3">
+            <v-chip
+              :prepend-icon="form.type === 'ASSIGNMENT' ? 'mdi-book-open-page-variant' : 'mdi-bullhorn-outline'"
+              size="small"
+              variant="flat"
+            >
+              {{ form.type === "ASSIGNMENT" ? (selectedSubject?.name || "未选择科目") : "通知" }}
+            </v-chip>
+            <v-chip
+              :color="priorityPreview.color"
+              size="small"
+              variant="tonal"
+            >
+              {{ priorityPreview.label }}
+            </v-chip>
+            <v-chip
+              prepend-icon="mdi-clock-outline"
+              size="small"
+              variant="tonal"
+            >
+              {{ publishTimePreview }}
+            </v-chip>
+          </div>
+          <div
+            v-if="selectedTargets.length"
+            class="mb-2"
+          >
+            <div class="font-weight-bold mb-2">
+              将发布到 {{ selectedTargets.length }} 个班级/教学班
+            </div>
+            <div class="d-flex flex-wrap ga-2">
+              <v-chip
+                v-for="target in selectedTargets"
+                :key="target.id"
+                :prepend-icon="target.type === 'ADMIN_CLASS' ? 'mdi-home-group' : 'mdi-account-group-outline'"
+                size="small"
+                variant="outlined"
+              >
+                {{ target.name }} · {{ target.type === "ADMIN_CLASS" ? "行政班" : "走班" }}
+              </v-chip>
+            </div>
+          </div>
+          <v-alert
+            v-else
+            density="compact"
+            type="warning"
+            variant="tonal"
+          >
+            尚未选择发布目标，正式发布前需要至少选择一个班级。
+          </v-alert>
+          <div class="text-caption text-medium-emphasis mt-3">
+            {{ lifecyclePreview }}
+          </div>
+        </v-card-text>
+      </v-card>
+
+      <v-alert
+        v-if="conflict"
+        class="mb-3"
+        color="warning"
+        icon="mdi-source-branch-sync"
+        title="检测到并发修改，未覆盖服务器内容"
+        variant="tonal"
+      >
+        <div>{{ conflictMessage }}</div>
+        <div class="d-flex flex-wrap ga-2 mt-3">
+          <v-btn
+            :loading="conflictReloading"
+            prepend-icon="mdi-cloud-download-outline"
+            size="small"
+            variant="flat"
+            @click="reloadLatest"
+          >
+            放弃本机输入并载入最新版
+          </v-btn>
+          <v-btn
+            :loading="conflictCopying"
+            prepend-icon="mdi-content-copy"
+            size="small"
+            variant="tonal"
+            @click="saveConflictCopy"
+          >
+            将本机输入另存为草稿
+          </v-btn>
+        </div>
+      </v-alert>
+
       <v-alert
         v-if="localError"
         class="mb-3"
@@ -210,6 +310,7 @@
       <v-spacer />
       <v-btn
         v-if="!isEditing || editingPublication.status === 'DRAFT'"
+        :disabled="Boolean(conflict)"
         :loading="saving"
         variant="tonal"
         @click="submit('DRAFT')"
@@ -217,6 +318,7 @@
         保存草稿
       </v-btn>
       <v-btn
+        :disabled="Boolean(conflict)"
         :loading="publishing"
         color="primary"
         prepend-icon="mdi-send"
@@ -238,6 +340,10 @@ import {
   teacherTargetCombinationId,
 } from "@/utils/teacherTargetPreferences";
 import {insertHomeworkQuickInput, sanitizeHomeworkQuickInputs} from "@/utils/homeworkQuickInputs";
+import {
+  publicationConflictMessage,
+  publicationConflictState,
+} from "@/utils/publicationConflict";
 
 const props = defineProps({
   editingPublication: {
@@ -245,16 +351,30 @@ const props = defineProps({
     default: null,
   },
 });
-const emit = defineEmits(["published", "cancel"]);
+const emit = defineEmits(["published", "cancel", "reload-latest"]);
 const store = useClassworksV2Store();
 const saving = ref(false);
 const publishing = ref(false);
 const localError = ref("");
+const conflict = ref(null);
+const conflictInput = ref(null);
+const conflictReloading = ref(false);
+const conflictCopying = ref(false);
 const contentInput = ref(null);
 
 function localDateTime(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function formatPreviewDateTime(date) {
+  if (Number.isNaN(date.getTime())) return "时间未填写";
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 const form = reactive({
@@ -279,7 +399,36 @@ const priorities = [
 const eligibleTargets = computed(() =>
   store.eligibleTeacherWorkspaces(form.type, form.subjectId),
 );
+const selectedTargets = computed(() => {
+  const byId = new Map(eligibleTargets.value.map((workspace) => [workspace.id, workspace]));
+  return form.targetWorkspaceIds.map((id) => byId.get(id)).filter(Boolean);
+});
+const selectedSubject = computed(() => store.teacherSubjects.find((item) => item.id === form.subjectId));
+const priorityPreview = computed(() => ({
+  NORMAL: {label: "普通", color: "primary"},
+  IMPORTANT: {label: "重要", color: "warning"},
+  URGENT: {label: "紧急", color: "error"},
+}[form.priority] || {label: "普通", color: "primary"}));
+const publishTimePreview = computed(() => {
+  const time = new Date(form.publishAt);
+  if (Number.isNaN(time.getTime())) return "发布时间未填写";
+  return time.getTime() <= Date.now() + 60_000
+    ? "发布后立即显示"
+    : `${formatPreviewDateTime(time)}开始显示`;
+});
+const lifecyclePreview = computed(() => {
+  if (form.type === "ASSIGNMENT") {
+    const board = form.boardDate ? `显示在 ${form.boardDate} 作业板` : "未选择作业板日期";
+    return form.dueAt
+      ? `${board}，截止 ${formatPreviewDateTime(new Date(form.dueAt))}`
+      : `${board}，未设置截止时间`;
+  }
+  return form.expiresAt
+    ? `通知将在 ${formatPreviewDateTime(new Date(form.expiresAt))} 自动停止显示`
+    : "通知不会自动失效，需要教师手动撤下";
+});
 const isEditing = computed(() => Boolean(props.editingPublication));
+const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
 const targetPreferences = computed(() => store.teacherTargetPreferences);
 const quickInputs = computed(() => {
   const subject = store.teacherSubjects.find((item) => item.id === form.subjectId);
@@ -322,6 +471,9 @@ watch([() => form.type, () => form.subjectId], () => {
 });
 
 watch(() => props.editingPublication, (publication) => {
+  conflict.value = null;
+  conflictInput.value = null;
+  localError.value = "";
   if (!publication) {
     reset();
     return;
@@ -393,8 +545,10 @@ async function submit(status) {
     return;
   }
   const flag = status === "DRAFT" ? saving : publishing;
+  let submittedInput = null;
   flag.value = true;
   try {
+    const operation = isEditing.value ? "updated" : "created";
     const input = {
       type: form.type,
       subjectId: form.type === "ASSIGNMENT" ? form.subjectId : null,
@@ -408,16 +562,55 @@ async function submit(status) {
       priority: form.priority,
       status,
     };
+    submittedInput = input;
     const publication = isEditing.value
       ? await store.updatePublication(props.editingPublication, input)
       : await store.publish(input);
     store.rememberTeacherTargetCombination(currentTargetCombination.value);
     reset();
-    emit("published", publication);
+    emit("published", publication, {operation});
+  } catch (error) {
+    const nextConflict = publicationConflictState(error, props.editingPublication?.revision);
+    if (nextConflict) {
+      conflict.value = nextConflict;
+      conflictInput.value = submittedInput;
+      localError.value = "";
+    } else {
+      localError.value = store.teacherError;
+    }
+  } finally {
+    flag.value = false;
+  }
+}
+
+async function reloadLatest() {
+  if (!props.editingPublication || !conflict.value) return;
+  if (!window.confirm("载入服务器最新版会放弃当前表单输入。若需要保留，请先另存为草稿。")) return;
+  conflictReloading.value = true;
+  try {
+    const latest = await store.latestPublication(props.editingPublication.id, "teacher");
+    emit("reload-latest", latest);
+  } catch (error) {
+    localError.value = error.response?.data?.message || error.message || "载入最新版失败";
+  } finally {
+    conflictReloading.value = false;
+  }
+}
+
+async function saveConflictCopy() {
+  if (!conflictInput.value) return;
+  conflictCopying.value = true;
+  localError.value = "";
+  try {
+    const copied = await store.publish({...conflictInput.value, status: "DRAFT"});
+    reset();
+    conflict.value = null;
+    conflictInput.value = null;
+    emit("published", copied, {operation: "created"});
   } catch {
     localError.value = store.teacherError;
   } finally {
-    flag.value = false;
+    conflictCopying.value = false;
   }
 }
 </script>

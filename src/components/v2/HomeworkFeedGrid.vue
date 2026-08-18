@@ -17,7 +17,10 @@
       <v-card
         :color="publication.type === 'NOTICE' ? priorityColor(publication.priority) : undefined"
         class="publication-card rounded-xl"
-        :class="dueCardClass(publication)"
+        :class="[
+          dueCardClass(publication),
+          {'publication-card--completed': isCompleted(publication)},
+        ]"
         :variant="publication.type === 'NOTICE' ? 'tonal' : screenMode ? 'flat' : 'elevated'"
       >
         <v-card-title class="publication-title d-flex align-center flex-wrap">
@@ -33,6 +36,16 @@
             {{ targetNames(publication) }}
           </span>
           <v-spacer />
+          <v-chip
+            v-if="isCompleted(publication)"
+            color="success"
+            prepend-icon="mdi-check-circle"
+            size="small"
+            title="完成状态仅保存在这台设备"
+            variant="tonal"
+          >
+            本机已完成
+          </v-chip>
           <v-chip
             :color="publication.isCertified ? 'success' : 'warning'"
             :size="screenMode ? 'x-small' : 'small'"
@@ -104,23 +117,35 @@
             </span>
           </div>
           <div
-            v-if="screenMode && canEdit(publication)"
+            v-if="(screenMode && canEdit(publication)) || (completionEnabled && publication.type === 'ASSIGNMENT')"
             class="publication-actions d-flex justify-end"
           >
+            <template v-if="screenMode && canEdit(publication)">
+              <v-btn
+                icon="mdi-history"
+                size="small"
+                title="版本历史"
+                variant="text"
+                @click="$emit('history', publication)"
+              />
+              <v-btn
+                prepend-icon="mdi-pencil-outline"
+                size="small"
+                variant="tonal"
+                @click="$emit('edit', publication)"
+              >
+                修改
+              </v-btn>
+            </template>
             <v-btn
-              icon="mdi-history"
+              v-if="completionEnabled && publication.type === 'ASSIGNMENT'"
+              :color="isCompleted(publication) ? 'success' : undefined"
+              :prepend-icon="isCompleted(publication) ? 'mdi-check-circle' : 'mdi-check-circle-outline'"
               size="small"
-              title="版本历史"
-              variant="text"
-              @click="$emit('history', publication)"
-            />
-            <v-btn
-              prepend-icon="mdi-pencil-outline"
-              size="small"
-              variant="tonal"
-              @click="$emit('edit', publication)"
+              :variant="isCompleted(publication) ? 'tonal' : 'text'"
+              @click="$emit('toggle-complete', publication)"
             >
-              修改
+              {{ isCompleted(publication) ? "取消完成" : "标记完成" }}
             </v-btn>
           </div>
         </v-card-text>
@@ -137,6 +162,7 @@ import {
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 import {assignmentDueState} from "@/utils/publicationFeed";
+import {isStudentHomeworkCompleted} from "@/utils/studentHomeworkCompletion";
 
 const props = defineProps({
   publications: {type: Array, default: () => []},
@@ -144,8 +170,10 @@ const props = defineProps({
   settings: {type: Object, default: () => ({...SCREEN_DISPLAY_DEFAULTS})},
   canEdit: {type: Function, default: () => false},
   currentTime: {type: [Date, Number, String], default: () => new Date()},
+  completionEnabled: Boolean,
+  completionRecords: {type: Object, default: () => ({})},
 });
-defineEmits(["edit", "history"]);
+defineEmits(["edit", "history", "toggle-complete"]);
 
 const gridContainer = ref(null);
 const gridItems = ref([]);
@@ -243,6 +271,7 @@ watch(() => props.publications.map((publication) => [
   publication.dueAt,
   publication.targets?.map((target) => target.workspace?.name).join(","),
 ].join(":")).join("|"), observeGridItems);
+watch(() => props.completionRecords, observeGridItems, {deep: true});
 watch(gridStyle, () => nextTick(resizeAllGridItems));
 
 onBeforeUnmount(() => {
@@ -275,6 +304,11 @@ function dueState(publication) {
 function dueCardClass(publication) {
   const state = publication.type === "ASSIGNMENT" ? dueState(publication) : null;
   return state ? `publication-card--${state.key}` : "";
+}
+
+function isCompleted(publication) {
+  return props.completionEnabled
+    && isStudentHomeworkCompleted(publication, props.completionRecords);
 }
 
 function publicationSource(publication) {
@@ -313,6 +347,11 @@ function targetNames(publication) {
 .publication-card--overdue { border-left: 4px solid rgb(var(--v-theme-error)); }
 .publication-card--today,
 .publication-card--soon { border-left: 4px solid rgb(var(--v-theme-warning)); }
+.publication-card--completed {
+  border-color: rgba(var(--v-theme-success), 0.55);
+  background-image: linear-gradient(rgba(var(--v-theme-success), 0.035), rgba(var(--v-theme-success), 0.035));
+}
+.publication-card--completed .publication-content { color: rgba(var(--v-theme-on-surface), 0.72); }
 .publication-title { gap: 8px; padding: 20px 20px 8px; }
 .publication-icon { margin-right: 2px; }
 .target-name { font-size: 0.75em; font-weight: 400; }

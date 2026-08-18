@@ -467,7 +467,11 @@
 
             <v-card class="mb-5 rounded-xl">
               <v-card-title class="d-flex align-center pa-5 pb-2">
-                <v-icon class="mr-3" color="primary" icon="mdi-lightning-bolt-outline" />
+                <v-icon
+                  class="mr-3"
+                  color="primary"
+                  icon="mdi-lightning-bolt-outline"
+                />
                 作业快捷输入
               </v-card-title>
               <v-card-text class="px-5 pb-5">
@@ -480,7 +484,11 @@
                   align="center"
                   dense
                 >
-                  <v-col cols="12" sm="3" md="2">
+                  <v-col
+                    cols="12"
+                    sm="3"
+                    md="2"
+                  >
                     <v-text-field
                       v-model.trim="item.label"
                       density="comfortable"
@@ -490,7 +498,11 @@
                       variant="outlined"
                     />
                   </v-col>
-                  <v-col cols="12" sm="5" md="3">
+                  <v-col
+                    cols="12"
+                    sm="5"
+                    md="3"
+                  >
                     <v-text-field
                       v-model="item.text"
                       :disabled="item.insertMode === 'NEW_LINE'"
@@ -501,7 +513,11 @@
                       variant="outlined"
                     />
                   </v-col>
-                  <v-col cols="6" sm="4" md="2">
+                  <v-col
+                    cols="6"
+                    sm="4"
+                    md="2"
+                  >
                     <v-text-field
                       v-model.trim="item.group"
                       density="comfortable"
@@ -511,7 +527,11 @@
                       variant="outlined"
                     />
                   </v-col>
-                  <v-col cols="6" sm="4" md="2">
+                  <v-col
+                    cols="6"
+                    sm="4"
+                    md="2"
+                  >
                     <v-select
                       v-model="item.insertMode"
                       density="comfortable"
@@ -523,7 +543,11 @@
                       variant="outlined"
                     />
                   </v-col>
-                  <v-col cols="10" sm="7" md="2">
+                  <v-col
+                    cols="10"
+                    sm="7"
+                    md="2"
+                  >
                     <v-select
                       v-model="item.subjectIds"
                       chips
@@ -538,7 +562,11 @@
                       variant="outlined"
                     />
                   </v-col>
-                  <v-col class="d-flex justify-end" cols="2" sm="1">
+                  <v-col
+                    class="d-flex justify-end"
+                    cols="2"
+                    sm="1"
+                  >
                     <v-btn
                       icon="mdi-delete-outline"
                       title="删除此快捷词"
@@ -547,7 +575,12 @@
                     />
                   </v-col>
                 </v-row>
-                <v-alert v-if="!homeworkQuickInputs.length" class="mb-3" type="info" variant="tonal">
+                <v-alert
+                  v-if="!homeworkQuickInputs.length"
+                  class="mb-3"
+                  type="info"
+                  variant="tonal"
+                >
                   当前已关闭快捷输入；保存后教师端和大屏将不显示快捷词。
                 </v-alert>
                 <div class="d-flex flex-wrap ga-2 mt-4">
@@ -559,7 +592,11 @@
                   >
                     添加快捷词
                   </v-btn>
-                  <v-btn prepend-icon="mdi-restore" variant="text" @click="resetHomeworkQuickInputs">
+                  <v-btn
+                    prepend-icon="mdi-restore"
+                    variant="text"
+                    @click="resetHomeworkQuickInputs"
+                  >
                     恢复默认
                   </v-btn>
                   <v-spacer />

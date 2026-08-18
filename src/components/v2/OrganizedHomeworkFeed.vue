@@ -40,6 +40,26 @@
           variant="outlined"
         />
         <v-spacer />
+        <template v-if="completionEnabled && completionStats.total">
+          <v-chip
+            color="success"
+            prepend-icon="mdi-check-circle-outline"
+            size="small"
+            title="完成状态仅保存在这台设备"
+            variant="tonal"
+          >
+            本机已完成 {{ completionStats.completed }}/{{ completionStats.total }}
+          </v-chip>
+          <v-btn
+            v-if="completionStats.completed"
+            :prepend-icon="hideCompleted ? 'mdi-eye-outline' : 'mdi-eye-off-outline'"
+            size="small"
+            variant="text"
+            @click="hideCompleted = !hideCompleted"
+          >
+            {{ hideCompleted ? "显示已完成" : "隐藏已完成" }}
+          </v-btn>
+        </template>
         <v-chip
           size="small"
           variant="tonal"
@@ -81,8 +101,11 @@
         :screen-mode="screenMode"
         :settings="settings"
         :current-time="now"
+        :completion-enabled="completionEnabled"
+        :completion-records="completionRecords"
         @edit="$emit('edit', $event)"
         @history="$emit('history', $event)"
+        @toggle-complete="toggleCompletion"
       />
     </section>
 
@@ -109,8 +132,11 @@
         :screen-mode="screenMode"
         :settings="settings"
         :current-time="now"
+        :completion-enabled="completionEnabled"
+        :completion-records="completionRecords"
         @edit="$emit('edit', $event)"
         @history="$emit('history', $event)"
+        @toggle-complete="toggleCompletion"
       />
     </section>
 
@@ -139,8 +165,11 @@
           :screen-mode="screenMode"
           :settings="settings"
           :current-time="now"
+          :completion-enabled="completionEnabled"
+          :completion-records="completionRecords"
           @edit="$emit('edit', $event)"
           @history="$emit('history', $event)"
+          @toggle-complete="toggleCompletion"
         />
       </section>
     </template>
@@ -148,12 +177,21 @@
     <v-empty-state
       v-if="showEmptyState"
       class="rounded-xl"
-      headline="没有符合条件的作业"
-      icon="mdi-filter-off-outline"
-      text="可以清除筛选条件查看当前日期的全部内容"
+      :headline="hideCompleted ? '已完成作业已隐藏' : '没有符合条件的作业'"
+      :icon="hideCompleted ? 'mdi-check-circle-outline' : 'mdi-filter-off-outline'"
+      :text="hideCompleted ? '完成状态仅保存在这台设备，可以随时重新显示' : '可以清除筛选条件查看当前日期的全部内容'"
     >
       <template #actions>
         <v-btn
+          v-if="hideCompleted"
+          color="success"
+          variant="tonal"
+          @click="hideCompleted = false"
+        >
+          显示已完成
+        </v-btn>
+        <v-btn
+          v-else
           color="primary"
           variant="tonal"
           @click="resetFilters"
@@ -170,6 +208,12 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import HomeworkFeedGrid from "@/components/v2/HomeworkFeedGrid.vue";
 import {SCREEN_DISPLAY_DEFAULTS} from "@/utils/screenDisplaySettings";
 import {organizePublicationFeed, publicationFilterOptions} from "@/utils/publicationFeed";
+import {
+  isStudentHomeworkCompleted,
+  loadStudentHomeworkCompletions,
+  setStudentHomeworkCompleted,
+  studentHomeworkCompletionStats,
+} from "@/utils/studentHomeworkCompletion";
 
 const props = defineProps({
   publications: {type: Array, default: () => []},
@@ -177,12 +221,15 @@ const props = defineProps({
   settings: {type: Object, default: () => ({...SCREEN_DISPLAY_DEFAULTS})},
   canEdit: {type: Function, default: () => false},
   excludeUrgentNotices: Boolean,
+  completionEnabled: Boolean,
 });
 defineEmits(["edit", "history"]);
 
 const subjectId = ref("");
 const workspaceId = ref("");
 const sortMode = ref("smart");
+const completionRecords = ref(props.completionEnabled ? loadStudentHomeworkCompletions() : {});
+const hideCompleted = ref(false);
 const now = ref(new Date());
 let minuteTimer;
 const sortOptions = [
@@ -191,7 +238,10 @@ const sortOptions = [
   {title: "最新发布", value: "recent"},
 ];
 const options = computed(() => publicationFilterOptions(props.publications));
-const organized = computed(() => organizePublicationFeed(props.publications, {
+const visiblePublications = computed(() => hideCompleted.value
+  ? props.publications.filter((publication) => !isStudentHomeworkCompleted(publication, completionRecords.value))
+  : props.publications);
+const organized = computed(() => organizePublicationFeed(visiblePublications.value, {
   subjectId: subjectId.value,
   workspaceId: workspaceId.value,
   sortMode: sortMode.value,
@@ -199,7 +249,10 @@ const organized = computed(() => organizePublicationFeed(props.publications, {
 }));
 const screenAssignments = computed(() => organized.value.assignmentGroups
   .flatMap((group) => group.publications));
-const showControls = computed(() => options.value.subjects.length > 1 || options.value.workspaces.length > 1);
+const completionStats = computed(() => studentHomeworkCompletionStats(props.publications, completionRecords.value));
+const showControls = computed(() => props.completionEnabled
+  || options.value.subjects.length > 1
+  || options.value.workspaces.length > 1);
 const hasFilters = computed(() => Boolean(subjectId.value || workspaceId.value || sortMode.value !== "smart"));
 const showEmptyState = computed(() => {
   if (organized.value.visibleCount) return false;
@@ -243,6 +296,14 @@ function resetFilters() {
   subjectId.value = "";
   workspaceId.value = "";
   sortMode.value = "smart";
+}
+
+function toggleCompletion(publication) {
+  if (!props.completionEnabled) return;
+  completionRecords.value = setStudentHomeworkCompleted(
+    publication,
+    !isStudentHomeworkCompleted(publication, completionRecords.value),
+  );
 }
 </script>
 

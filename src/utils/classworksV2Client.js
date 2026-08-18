@@ -309,6 +309,12 @@ export const classworksV2Api = {
       {headers: screenHeaders({"If-Match": `"${publication.revision}"`})},
     ));
   },
+  async screenPublication(publicationId) {
+    return unwrap(await client.get(
+      `/api/v2/classroom-screens/publications/${publicationId}`,
+      {headers: screenHeaders()},
+    ));
+  },
   async screenPublicationRevisions(publicationId) {
     return unwrap(await client.get(
       `/api/v2/classroom-screens/publications/${publicationId}/revisions`,
@@ -428,8 +434,14 @@ export const classworksV2Api = {
   async publications(params = {}) {
     return unwrap(await client.get("/api/v2/publications", {params}));
   },
+  async actionRequiredPublications(params = {}) {
+    return unwrap(await client.get("/api/v2/publications/action-required", {params}));
+  },
   async createPublication(input) {
     return unwrap(await client.post("/api/v2/publications", input));
+  },
+  async publication(id) {
+    return unwrap(await client.get(`/api/v2/publications/${id}`));
   },
   async publicationRevisions(id) {
     return unwrap(await client.get(`/api/v2/publications/${id}/revisions`));

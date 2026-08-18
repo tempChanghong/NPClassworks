@@ -117,7 +117,7 @@ function deliveryState(item) {
     return {label: "当前版本已由大屏确认", icon: "mdi-check-decagram", color: "success"};
   }
   if (item.delivery?.revision === result.value?.revision && item.delivery?.displayedAt) {
-    return {label: "当前版本已展示，等待确认", icon: "mdi-eye-check", color: "info"};
+    return {label: "当前版本已展示，等待大屏确认收到", icon: "mdi-eye-check", color: "info"};
   }
   if (item.delivery?.revision === result.value?.revision) {
     return {label: "当前版本已收到", icon: "mdi-check", color: "info"};
