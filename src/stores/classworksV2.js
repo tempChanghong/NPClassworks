@@ -14,6 +14,7 @@ import {
   leaveWorkspaces,
   on as socketOn,
   onConnect,
+  onConnectionState,
 } from "@/utils/socketClient";
 import {
   publicationTransitionDelay,
@@ -29,6 +30,19 @@ import {
   saveTeacherTargetPreferences,
   toggleFavoriteTeacherTargets,
 } from "@/utils/teacherTargetPreferences";
+import {
+  enqueueScreenPublication,
+  loadScreenPublicationQueue,
+  removeScreenPublicationQueueItem,
+  updateScreenPublicationQueueItem,
+} from "@/utils/screenPublicationQueue";
+import {
+  clearCachedScreenSession,
+  loadCachedScreenFeed,
+  loadCachedScreenSession,
+  saveCachedScreenFeed,
+  saveCachedScreenSession,
+} from "@/utils/screenOfflineCache";
 
 const SELECTION_KEY = "classworks-v2-student-selection";
 let realtimeCleanup = [];
@@ -37,6 +51,11 @@ let transitionTimer = null;
 let fallbackTimer = null;
 let courseOptionsRequest = 0;
 let feedRequest = 0;
+let screenSyncCleanup = [];
+
+function isTransientScreenRequestError(error) {
+  return !error?.response || [502, 503, 504].includes(error.response.status);
+}
 
 function loadSavedSelection() {
   try {
@@ -94,6 +113,11 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     screenSession: null,
     screenLoading: false,
     screenError: "",
+    screenNetworkOnline: typeof navigator === "undefined" ? true : navigator.onLine,
+    screenRealtimeConnected: false,
+    screenPendingUploads: [],
+    screenSyncing: false,
+    screenLastSyncedAt: null,
     classroomStudents: [],
     classroomAttendance: {date: "", absent: [], late: [], excluded: []},
     classroomToolsLoading: false,
@@ -149,6 +173,16 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         ...this.activeWorkspaceIds,
         ...this.teacherWorkspaces.map((workspace) => workspace.id),
       ])];
+    },
+    screenPendingReviewCount(state) {
+      return state.screenPendingUploads.filter((item) => item.status === "needs_review").length;
+    },
+    screenSyncState(state) {
+      if (!state.screenNetworkOnline) return "offline";
+      if (state.screenSyncing) return "syncing";
+      if (state.screenPendingUploads.length) return "pending";
+      if (!state.screenRealtimeConnected) return "reconnecting";
+      return "synced";
     },
   },
 
@@ -309,14 +343,25 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         if (requestId !== feedRequest || this.feedAudience !== "screen") return;
         this.feed = result.items || [];
         this.feedGeneratedAt = result.generatedAt;
+        saveCachedScreenFeed(this.screenSession.binding.id, this.boardDate, result);
         this.scheduleFeedTransition(result.nextTransitionAt);
       } catch (error) {
         if (requestId !== feedRequest || this.feedAudience !== "screen") return;
+        const cached = isTransientScreenRequestError(error)
+          ? loadCachedScreenFeed(this.screenSession?.binding?.id, this.boardDate)
+          : null;
+        if (cached) {
+          this.feed = cached.items || [];
+          this.feedGeneratedAt = cached.generatedAt;
+          this.screenError = "当前处于离线模式，正在显示这台大屏上次同步的作业";
+          return;
+        }
         this.screenError = describeApiError(error, "加载大屏作业失败");
         if ([401, 409].includes(error.response?.status)) {
           const oldWorkspaceIds = this.activeWorkspaceIds;
           leaveWorkspaces(oldWorkspaceIds);
           clearClassroomScreenToken();
+          clearCachedScreenSession();
           this.screenSession = null;
           this.feedAudience = "student";
           this.feed = [];
@@ -578,10 +623,17 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.screenError = "";
       try {
         this.screenSession = await classworksV2Api.classroomScreenSession();
+        saveCachedScreenSession(this.screenSession);
       } catch (error) {
-        this.screenSession = null;
-        this.screenError = describeApiError(error, "加载大屏绑定失败");
-        if (error.response?.status === 401) clearClassroomScreenToken();
+        const cached = isTransientScreenRequestError(error) ? loadCachedScreenSession() : null;
+        this.screenSession = cached;
+        this.screenError = cached
+          ? "网络不可用，已载入这台大屏上次同步的班级配置"
+          : describeApiError(error, "加载大屏绑定失败");
+        if (error.response?.status === 401) {
+          clearClassroomScreenToken();
+          clearCachedScreenSession();
+        }
       } finally {
         this.screenLoading = false;
       }
@@ -696,8 +748,16 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       });
     },
 
-    async saveScreenPublication(input, publication = null) {
+    async saveScreenPublication(input, publication = null, queueContext = {}) {
       this.screenError = "";
+      if (publication && !this.screenNetworkOnline) {
+        const error = new Error("离线状态下不能修改现有作业，当前输入已保留为草稿，请联网后再保存");
+        this.screenError = error.message;
+        throw error;
+      }
+      if (!publication && !this.screenNetworkOnline) {
+        return this.enqueueOfflineScreenPublication(input, queueContext);
+      }
       try {
         const saved = publication
           ? await classworksV2Api.updateScreenPublication(publication, input)
@@ -708,9 +768,133 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         }
         return saved;
       } catch (error) {
+        if (!publication && isTransientScreenRequestError(error)) {
+          this.screenError = "";
+          return this.enqueueOfflineScreenPublication(input, queueContext);
+        }
         this.screenError = describeApiError(error, "保存大屏作业失败");
         throw error;
       }
+    },
+
+    initializeScreenSync() {
+      screenSyncCleanup.forEach((cleanup) => cleanup());
+      screenSyncCleanup = [];
+      const bindingId = this.screenSession?.binding?.id;
+      this.screenPendingUploads = bindingId ? loadScreenPublicationQueue(bindingId) : [];
+      const updateOnline = () => {
+        this.screenNetworkOnline = navigator.onLine;
+        if (this.screenNetworkOnline) void this.flushScreenPublicationQueue();
+      };
+      window.addEventListener("online", updateOnline);
+      window.addEventListener("offline", updateOnline);
+      screenSyncCleanup.push(() => window.removeEventListener("online", updateOnline));
+      screenSyncCleanup.push(() => window.removeEventListener("offline", updateOnline));
+      screenSyncCleanup.push(onConnectionState(({connected}) => {
+        this.screenRealtimeConnected = connected;
+        if (connected) void this.flushScreenPublicationQueue();
+      }));
+      const retryTimer = window.setInterval(() => {
+        if (this.screenNetworkOnline && this.screenPendingUploads.some((item) => item.status === "pending")) {
+          void this.flushScreenPublicationQueue();
+        }
+      }, 30_000);
+      screenSyncCleanup.push(() => window.clearInterval(retryTimer));
+      updateOnline();
+    },
+
+    stopScreenSync() {
+      screenSyncCleanup.forEach((cleanup) => cleanup());
+      screenSyncCleanup = [];
+    },
+
+    enqueueOfflineScreenPublication(input, context = {}) {
+      const bindingId = this.screenSession?.binding?.id;
+      if (!bindingId) throw new Error("大屏尚未绑定，无法保存离线作业");
+      this.screenPendingUploads = enqueueScreenPublication(bindingId, input, context);
+      return {
+        offlineQueued: true,
+        id: this.screenPendingUploads.at(-1)?.id,
+        type: "ASSIGNMENT",
+        priority: input.priority || "NORMAL",
+        status: "PUBLISHED",
+        revision: null,
+      };
+    },
+
+    async flushScreenPublicationQueue() {
+      const bindingId = this.screenSession?.binding?.id;
+      if (!bindingId || !this.screenNetworkOnline || this.screenSyncing) return;
+      const pending = loadScreenPublicationQueue(bindingId).filter((item) => item.status === "pending");
+      if (!pending.length) {
+        this.screenPendingUploads = loadScreenPublicationQueue(bindingId);
+        return;
+      }
+      this.screenSyncing = true;
+      let savedAny = false;
+      try {
+        for (const item of pending) {
+          try {
+            await classworksV2Api.createScreenPublication(item.input);
+            this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, item.id);
+            savedAny = true;
+          } catch (error) {
+            if (isTransientScreenRequestError(error)) break;
+            this.screenPendingUploads = updateScreenPublicationQueueItem(bindingId, item.id, {
+              attempts: item.attempts + 1,
+              status: "needs_review",
+              error: {
+                code: error.response?.data?.code || "SCREEN_UPLOAD_FAILED",
+                message: error.response?.data?.message || error.message || "提交失败",
+                details: error.response?.data?.details || null,
+              },
+            });
+          }
+        }
+        if (savedAny) {
+          this.screenLastSyncedAt = new Date().toISOString();
+          await this.loadActiveFeed();
+        }
+      } finally {
+        this.screenPendingUploads = loadScreenPublicationQueue(bindingId);
+        this.screenSyncing = false;
+      }
+    },
+
+    async retryScreenQueuedPublication(itemId, {allowDuplicate = false} = {}) {
+      const bindingId = this.screenSession?.binding?.id;
+      const item = this.screenPendingUploads.find((candidate) => candidate.id === itemId);
+      if (!bindingId || !item || !this.screenNetworkOnline) return false;
+      this.screenSyncing = true;
+      try {
+        await classworksV2Api.createScreenPublication({
+          ...item.input,
+          ...(allowDuplicate ? {allowDuplicate: true} : {}),
+        });
+        this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, item.id);
+        this.screenLastSyncedAt = new Date().toISOString();
+        await this.loadActiveFeed();
+        return true;
+      } catch (error) {
+        this.screenPendingUploads = updateScreenPublicationQueueItem(bindingId, item.id, {
+          attempts: item.attempts + 1,
+          status: isTransientScreenRequestError(error) ? "pending" : "needs_review",
+          error: {
+            code: error.response?.data?.code || "SCREEN_UPLOAD_FAILED",
+            message: error.response?.data?.message || error.message || "提交失败",
+            details: error.response?.data?.details || null,
+          },
+        });
+        return false;
+      } finally {
+        this.screenSyncing = false;
+      }
+    },
+
+    removeScreenQueuedPublication(itemId) {
+      const bindingId = this.screenSession?.binding?.id;
+      if (!bindingId) return;
+      this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, itemId);
     },
 
     async publicationRevisions(publication, mode = "teacher") {

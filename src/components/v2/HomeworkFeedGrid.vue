@@ -20,6 +20,7 @@
         :class="[
           dueCardClass(publication),
           {'publication-card--completed': isCompleted(publication)},
+          {'publication-card--updated-after-completion': isUpdatedAfterCompletion(publication)},
         ]"
         :variant="publication.type === 'NOTICE' ? 'tonal' : screenMode ? 'flat' : 'elevated'"
       >
@@ -45,6 +46,16 @@
             variant="tonal"
           >
             本机已完成
+          </v-chip>
+          <v-chip
+            v-else-if="isUpdatedAfterCompletion(publication)"
+            color="warning"
+            prepend-icon="mdi-update"
+            size="small"
+            title="你标记完成后，教师又修改了这项作业"
+            variant="tonal"
+          >
+            完成后有更新
           </v-chip>
           <v-chip
             :color="publication.isCertified ? 'success' : 'warning'"
@@ -145,7 +156,7 @@
               :variant="isCompleted(publication) ? 'tonal' : 'text'"
               @click="$emit('toggle-complete', publication)"
             >
-              {{ isCompleted(publication) ? "取消完成" : "标记完成" }}
+              {{ isCompleted(publication) ? "取消完成" : isUpdatedAfterCompletion(publication) ? "确认新版已完成" : "标记完成" }}
             </v-btn>
           </div>
         </v-card-text>
@@ -162,7 +173,10 @@ import {
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 import {assignmentDueState} from "@/utils/publicationFeed";
-import {isStudentHomeworkCompleted} from "@/utils/studentHomeworkCompletion";
+import {
+  isStudentHomeworkCompleted,
+  isStudentHomeworkUpdatedAfterCompletion,
+} from "@/utils/studentHomeworkCompletion";
 
 const props = defineProps({
   publications: {type: Array, default: () => []},
@@ -311,6 +325,11 @@ function isCompleted(publication) {
     && isStudentHomeworkCompleted(publication, props.completionRecords);
 }
 
+function isUpdatedAfterCompletion(publication) {
+  return props.completionEnabled
+    && isStudentHomeworkUpdatedAfterCompletion(publication, props.completionRecords);
+}
+
 function publicationSource(publication) {
   if (publication.latestActorType === "CLASSROOM_SCREEN") {
     return publication.latestScreenBinding?.name || "班级大屏";
@@ -352,6 +371,7 @@ function targetNames(publication) {
   background-image: linear-gradient(rgba(var(--v-theme-success), 0.035), rgba(var(--v-theme-success), 0.035));
 }
 .publication-card--completed .publication-content { color: rgba(var(--v-theme-on-surface), 0.72); }
+.publication-card--updated-after-completion { border-color: rgba(var(--v-theme-warning), 0.65); }
 .publication-title { gap: 8px; padding: 20px 20px 8px; }
 .publication-icon { margin-right: 2px; }
 .target-name { font-size: 0.75em; font-weight: 400; }

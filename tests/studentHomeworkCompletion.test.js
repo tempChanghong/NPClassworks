@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   isStudentHomeworkCompleted,
+  isStudentHomeworkUpdatedAfterCompletion,
   loadStudentHomeworkCompletions,
   setStudentHomeworkCompleted,
   studentHomeworkCompletionStats,
@@ -22,6 +23,7 @@ test("completion is local and tied to the current publication revision", () => {
   const records = setStudentHomeworkCompleted(assignment, true, storage, Date.now());
   assert.equal(isStudentHomeworkCompleted(assignment, records), true);
   assert.equal(isStudentHomeworkCompleted({...assignment, revision: 3}, records), false);
+  assert.equal(isStudentHomeworkUpdatedAfterCompletion({...assignment, revision: 3}, records), true);
   assert.deepEqual(loadStudentHomeworkCompletions(storage), records);
 });
 
@@ -38,7 +40,7 @@ test("completion statistics ignore notices", () => {
     assignment,
     {id: "homework-2", type: "ASSIGNMENT", revision: 1},
     {id: "notice-1", type: "NOTICE", revision: 1},
-  ], records), {total: 2, completed: 1});
+  ], records), {total: 2, completed: 1, updated: 0});
 });
 
 test("invalid stored data is ignored", () => {

@@ -50,6 +50,15 @@
           >
             本机已完成 {{ completionStats.completed }}/{{ completionStats.total }}
           </v-chip>
+          <v-chip
+            v-if="completionStats.updated"
+            color="warning"
+            prepend-icon="mdi-update"
+            size="small"
+            variant="tonal"
+          >
+            {{ completionStats.updated }} 项完成后有更新
+          </v-chip>
           <v-btn
             v-if="completionStats.completed"
             :prepend-icon="hideCompleted ? 'mdi-eye-outline' : 'mdi-eye-off-outline'"

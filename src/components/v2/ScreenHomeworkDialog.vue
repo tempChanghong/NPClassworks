@@ -542,7 +542,7 @@ async function save(allowDuplicate = false) {
       priority: form.priority,
       publishAt: basePublication.value?.publishAt || new Date().toISOString(),
       ...(allowDuplicate ? {allowDuplicate: true} : {}),
-    }, basePublication.value);
+    }, basePublication.value, savedContext);
     clearScreenHomeworkDraft(
       store.screenSession?.binding?.id,
       basePublication.value?.id || "new",
@@ -608,7 +608,7 @@ async function saveConflictCopy() {
       priority: form.priority,
       publishAt: new Date().toISOString(),
       allowDuplicate: true,
-    });
+    }, null, savedContext);
     clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new");
     conflict.value = null;
     emit("saved", saved, savedContext);

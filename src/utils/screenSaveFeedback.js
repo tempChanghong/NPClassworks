@@ -28,6 +28,14 @@ function formattedDateTime(value) {
 }
 
 export function screenHomeworkSaveFeedback(publication = {}, context = {}) {
+  if (publication.offlineQueued) {
+    return {
+      title: "作业已保存在本机",
+      detail: `${targetLabel(publication, context)} · 网络恢复后将自动提交，提交前不会出现在其他设备上`,
+      color: "info",
+      icon: "mdi-cloud-upload-outline",
+    };
+  }
   const operation = context.operation === "updated" ? "修改已保存" : "已新增";
   const target = targetLabel(publication, context);
   if (publication.isCertified) {

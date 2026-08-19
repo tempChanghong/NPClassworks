@@ -39,6 +39,14 @@ export function isStudentHomeworkCompleted(publication, records) {
   return records?.[publication.id]?.revision === publication.revision;
 }
 
+export function isStudentHomeworkUpdatedAfterCompletion(publication, records) {
+  if (!publication?.id || publication.type !== "ASSIGNMENT") return false;
+  const completedRevision = records?.[publication.id]?.revision;
+  return Number.isInteger(completedRevision)
+    && completedRevision > 0
+    && completedRevision < publication.revision;
+}
+
 export function setStudentHomeworkCompleted(publication, completed, storage, now = Date.now()) {
   const target = storageOrNull(storage);
   const records = loadStudentHomeworkCompletions(target);
@@ -62,5 +70,6 @@ export function studentHomeworkCompletionStats(publications, records) {
   return {
     total: assignments.length,
     completed: assignments.filter((item) => isStudentHomeworkCompleted(item, records)).length,
+    updated: assignments.filter((item) => isStudentHomeworkUpdatedAfterCompletion(item, records)).length,
   };
 }

@@ -61,3 +61,12 @@ test("screen feedback exposes color and icon for pending certification", () => {
   assert.equal(feedback.color, "warning");
   assert.equal(feedback.icon, "mdi-clock-alert-outline");
 });
+
+test("offline screen saves explain that submission is still pending", () => {
+  const feedback = screenHomeworkSaveFeedback({offlineQueued: true}, {
+    subjectName: "物理",
+    targetName: "物理A1",
+  });
+  assert.equal(feedback.title, "作业已保存在本机");
+  assert.match(feedback.detail, /网络恢复后将自动提交/);
+});

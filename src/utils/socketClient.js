@@ -9,6 +9,19 @@ import {getEffectiveServerUrl, isRotationEnabled} from '@/utils/serverRotation';
 let socket = null;
 let connectedDomain = null;
 const listeners = new Set();
+const connectionListeners = new Set();
+
+function connectionSnapshot() {
+  return {
+    connected: Boolean(socket?.connected),
+    reconnecting: Boolean(socket && !socket.connected),
+  };
+}
+
+function notifyConnectionListeners() {
+  const state = connectionSnapshot();
+  connectionListeners.forEach((handler) => handler(state));
+}
 
 export function getServerUrl() {
   const envUrl = import.meta.env.VITE_SERVER_URL;
@@ -46,6 +59,9 @@ export function getSocket() {
     // Server rotation is handled at the HTTP request level, not Socket.IO level.
     // If the Socket.IO server goes down, the connection will fail until the server recovers.
     socket = io(serverUrl, {transports:  ["polling","websocket"]});
+    socket.on("connect", notifyConnectionListeners);
+    socket.on("disconnect", notifyConnectionListeners);
+    socket.on("connect_error", notifyConnectionListeners);
 
     // Re-attach previously registered event handlers on new socket instance
     listeners.forEach(({event, handler}) => {
@@ -106,6 +122,13 @@ export function onConnect(handler) {
   return () => s.off('connect', handler);
 }
 
+export function onConnectionState(handler) {
+  getSocket();
+  connectionListeners.add(handler);
+  handler(connectionSnapshot());
+  return () => connectionListeners.delete(handler);
+}
+
 export function sendEvent(type, content = null) {
   const s = getSocket();
   s.emit('send-event', {
@@ -124,4 +147,5 @@ export function disconnect() {
   socket = null;
   connectedDomain = null;
   listeners.clear();
+  notifyConnectionListeners();
 }

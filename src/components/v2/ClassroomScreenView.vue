@@ -25,6 +25,7 @@
               {{ workspaceSummary }}
             </div>
           </div>
+          <ScreenSyncStatus />
         </div>
         <ClassroomTimeCard inline />
         <div class="screen-toolbar-actions">
@@ -182,6 +183,7 @@ import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
+import ScreenSyncStatus from "@/components/v2/ScreenSyncStatus.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
 import {classworksV2Api} from "@/utils/classworksV2Client";
 import {createNotificationDeliveryQueue} from "@/utils/notificationDeliveryQueue";
