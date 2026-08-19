@@ -259,6 +259,49 @@
       </v-card>
 
       <v-alert
+        v-if="duplicateWarning"
+        class="mb-3"
+        color="warning"
+        icon="mdi-content-duplicate"
+        title="这项作业可能已经发布过"
+        variant="tonal"
+      >
+        <div>{{ duplicateWarning.message }}。系统没有保存本次内容。</div>
+        <v-list
+          class="duplicate-list mt-2 rounded-lg"
+          density="compact"
+          lines="two"
+        >
+          <v-list-item
+            v-for="item in duplicateWarning.duplicates"
+            :key="item.id"
+            prepend-icon="mdi-book-check-outline"
+            :subtitle="duplicateAssignmentDescription(item)"
+            :title="item.title || item.content || '未命名作业'"
+          />
+        </v-list>
+        <div class="d-flex flex-wrap ga-2 mt-3">
+          <v-btn
+            prepend-icon="mdi-pencil-outline"
+            size="small"
+            variant="text"
+            @click="duplicateWarning = null"
+          >
+            返回修改
+          </v-btn>
+          <v-btn
+            :loading="duplicateStatus === 'DRAFT' ? saving : publishing"
+            prepend-icon="mdi-send-check-outline"
+            size="small"
+            variant="flat"
+            @click="submit(duplicateStatus, true)"
+          >
+            确认仍然{{ duplicateStatus === "DRAFT" ? "保存" : "发布" }}
+          </v-btn>
+        </div>
+      </v-alert>
+
+      <v-alert
         v-if="conflict"
         class="mb-3"
         color="warning"
@@ -310,7 +353,7 @@
       <v-spacer />
       <v-btn
         v-if="!isEditing || editingPublication.status === 'DRAFT'"
-        :disabled="Boolean(conflict)"
+        :disabled="Boolean(conflict || duplicateWarning)"
         :loading="saving"
         variant="tonal"
         @click="submit('DRAFT')"
@@ -318,7 +361,7 @@
         保存草稿
       </v-btn>
       <v-btn
-        :disabled="Boolean(conflict)"
+        :disabled="Boolean(conflict || duplicateWarning)"
         :loading="publishing"
         color="primary"
         prepend-icon="mdi-send"
@@ -344,6 +387,10 @@ import {
   publicationConflictMessage,
   publicationConflictState,
 } from "@/utils/publicationConflict";
+import {
+  duplicateAssignmentDescription,
+  publicationDuplicateState,
+} from "@/utils/publicationDuplicate";
 
 const props = defineProps({
   editingPublication: {
@@ -360,6 +407,8 @@ const conflict = ref(null);
 const conflictInput = ref(null);
 const conflictReloading = ref(false);
 const conflictCopying = ref(false);
+const duplicateWarning = ref(null);
+const duplicateStatus = ref("PUBLISHED");
 const contentInput = ref(null);
 
 function localDateTime(date = new Date()) {
@@ -469,9 +518,13 @@ watch([() => form.type, () => form.subjectId], () => {
   form.targetWorkspaceIds = form.targetWorkspaceIds.filter((id) => allowed.has(id));
   if (form.type === "NOTICE") form.subjectId = "";
 });
+watch(form, () => {
+  duplicateWarning.value = null;
+}, {deep: true});
 
 watch(() => props.editingPublication, (publication) => {
   conflict.value = null;
+  duplicateWarning.value = null;
   conflictInput.value = null;
   localError.value = "";
   if (!publication) {
@@ -530,7 +583,7 @@ function reset() {
   form.publishAt = localDateTime();
 }
 
-async function submit(status) {
+async function submit(status, allowDuplicate = false) {
   localError.value = "";
   if (form.type === "ASSIGNMENT" && !form.subjectId) {
     localError.value = "作业必须选择科目";
@@ -561,6 +614,7 @@ async function submit(status) {
       expiresAt: form.type === "NOTICE" && form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
       priority: form.priority,
       status,
+      ...(allowDuplicate ? {allowDuplicate: true} : {}),
     };
     submittedInput = input;
     const publication = isEditing.value
@@ -570,6 +624,15 @@ async function submit(status) {
     reset();
     emit("published", publication, {operation});
   } catch (error) {
+    const duplicate = publicationDuplicateState(error);
+    if (duplicate) {
+      duplicateWarning.value = duplicate;
+      duplicateStatus.value = status;
+      conflict.value = null;
+      localError.value = "";
+      store.teacherError = "";
+      return;
+    }
     const nextConflict = publicationConflictState(error, props.editingPublication?.revision);
     if (nextConflict) {
       conflict.value = nextConflict;

@@ -225,6 +225,47 @@
         </v-expansion-panels>
 
         <v-alert
+          v-if="duplicateWarning"
+          class="mb-4"
+          color="warning"
+          icon="mdi-content-duplicate"
+          title="相同作业可能已经录入"
+          variant="tonal"
+        >
+          <div>{{ duplicateWarning.message }}。本次输入尚未保存，请先核对。</div>
+          <v-list
+            class="duplicate-list mt-2 rounded-lg"
+            density="compact"
+            lines="two"
+          >
+            <v-list-item
+              v-for="item in duplicateWarning.duplicates"
+              :key="item.id"
+              prepend-icon="mdi-book-check-outline"
+              :subtitle="duplicateAssignmentDescription(item)"
+              :title="item.title || item.content || '未命名作业'"
+            />
+          </v-list>
+          <div class="d-flex flex-wrap ga-2 mt-3">
+            <v-btn
+              prepend-icon="mdi-pencil-outline"
+              variant="text"
+              @click="duplicateWarning = null"
+            >
+              返回修改
+            </v-btn>
+            <v-btn
+              :loading="saving"
+              prepend-icon="mdi-content-save-check-outline"
+              variant="flat"
+              @click="save(true)"
+            >
+              确认仍然保存
+            </v-btn>
+          </div>
+        </v-alert>
+
+        <v-alert
           v-if="conflict"
           class="mb-4"
           color="warning"
@@ -276,12 +317,12 @@
         </v-btn>
         <v-btn
           color="primary"
-          :disabled="!canSave || Boolean(conflict)"
+          :disabled="!canSave || Boolean(conflict || duplicateWarning)"
           :loading="saving"
           min-width="180"
           prepend-icon="mdi-content-save-outline"
           size="x-large"
-          @click="save"
+          @click="save(false)"
         >
           保存作业
         </v-btn>
@@ -309,6 +350,10 @@ import {
   publicationConflictMessage,
   publicationConflictState,
 } from "@/utils/publicationConflict";
+import {
+  duplicateAssignmentDescription,
+  publicationDuplicateState,
+} from "@/utils/publicationDuplicate";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -325,6 +370,7 @@ const basePublication = ref(props.publication);
 const conflict = ref(null);
 const conflictReloading = ref(false);
 const conflictCopying = ref(false);
+const duplicateWarning = ref(null);
 const contentFocused = ref(false);
 const contentInput = ref(null);
 const advancedPanel = ref();
@@ -373,6 +419,7 @@ const dueAtLabel = computed(() => form.dueAt
 watch(() => props.publication, (publication) => {
   basePublication.value = publication;
   conflict.value = null;
+  duplicateWarning.value = null;
   loadPublication(publication);
 }, {immediate: true});
 watch(() => props.modelValue, (open) => {
@@ -385,6 +432,7 @@ watch(() => form.subjectId, () => {
   }
 });
 watch(form, () => {
+  duplicateWarning.value = null;
   if (!props.modelValue || !draftReady.value) return;
   saveScreenHomeworkDraft(
     store.screenSession?.binding?.id,
@@ -467,7 +515,7 @@ function setQuickDeadline(preset) {
   form.dueAt = localDateTime(resolveHomeworkQuickDeadline(preset));
 }
 
-async function save() {
+async function save(allowDuplicate = false) {
   localError.value = "";
   if (!form.subjectId || !form.targetWorkspaceId) {
     localError.value = "请选择科目和具体班级";
@@ -493,6 +541,7 @@ async function save() {
       dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
       priority: form.priority,
       publishAt: basePublication.value?.publishAt || new Date().toISOString(),
+      ...(allowDuplicate ? {allowDuplicate: true} : {}),
     }, basePublication.value);
     clearScreenHomeworkDraft(
       store.screenSession?.binding?.id,
@@ -503,6 +552,14 @@ async function save() {
     emit("saved", saved, savedContext);
     emit("update:modelValue", false);
   } catch (error) {
+    const duplicate = publicationDuplicateState(error);
+    if (duplicate) {
+      duplicateWarning.value = duplicate;
+      conflict.value = null;
+      localError.value = "";
+      store.screenError = "";
+      return;
+    }
     const nextConflict = publicationConflictState(error, basePublication.value?.revision);
     if (nextConflict) {
       conflict.value = nextConflict;
@@ -550,6 +607,7 @@ async function saveConflictCopy() {
       dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
       priority: form.priority,
       publishAt: new Date().toISOString(),
+      allowDuplicate: true,
     });
     clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new");
     conflict.value = null;
