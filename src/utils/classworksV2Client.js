@@ -76,6 +76,32 @@ export async function initializeInstanceCore(input) {
   return result;
 }
 
+export async function getInstanceSetupContext() {
+  return unwrap(await client.get("/api/v2/setup/context", {headers: setupHeaders()}));
+}
+
+export async function getInstanceSetupOrganizationTemplate() {
+  return unwrap(await client.get("/api/v2/setup/organization/template", {headers: setupHeaders()}));
+}
+
+export async function importInstanceSetupOrganization(organization, dryRun = true) {
+  return unwrap(await client.post("/api/v2/setup/organization/import", organization, {
+    headers: setupHeaders(),
+    params: {dryRun},
+  }));
+}
+
+export async function importInstanceSetupTeachers(assignmentPlan, dryRun = true) {
+  return unwrap(await client.post("/api/v2/setup/teachers/import", assignmentPlan, {
+    headers: setupHeaders(),
+    params: {dryRun},
+  }));
+}
+
+export async function createInstanceSetupScreen(input) {
+  return unwrap(await client.post("/api/v2/setup/screens", input, {headers: setupHeaders()}));
+}
+
 export async function completeInstanceSetup() {
   const result = unwrap(await client.post("/api/v2/setup/complete", {}, {headers: setupHeaders()}));
   clearSetupToken();
