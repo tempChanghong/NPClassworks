@@ -415,6 +415,11 @@
                 </v-row>
               </v-card-text>
             </v-card>
+            <TeachingRelationshipOverview
+              v-if="selectedSchoolId && selectedTermId"
+              :school-id="selectedSchoolId"
+              :term-id="selectedTermId"
+            />
             <AcademicStructureManager
               v-if="selectedSchoolId && selectedTermId"
               :school-id="selectedSchoolId"
@@ -464,6 +469,12 @@
                 </v-row>
               </v-card-text>
             </v-card>
+
+            <StaffResponsibilityManager
+              v-if="selectedSchoolId && selectedTermId"
+              :school-id="selectedSchoolId"
+              :term-id="selectedTermId"
+            />
 
             <v-card class="mb-5 rounded-xl">
               <v-card-title class="d-flex align-center pa-5 pb-2">
@@ -1466,6 +1477,8 @@
 import {computed, onMounted, ref, watch} from "vue";
 import ValidationReport from "@/components/v2/ValidationReport.vue";
 import AcademicStructureManager from "@/components/admin/AcademicStructureManager.vue";
+import TeachingRelationshipOverview from "@/components/admin/TeachingRelationshipOverview.vue";
+import StaffResponsibilityManager from "@/components/admin/StaffResponsibilityManager.vue";
 import {
   bootstrapSchoolAdministrator,
   classworksV2Api,

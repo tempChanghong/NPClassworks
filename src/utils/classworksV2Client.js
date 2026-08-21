@@ -348,6 +348,57 @@ export const classworksV2Api = {
       {params: {termId}},
     ));
   },
+  async teachingRelationships(schoolId, termId, gradeId = "") {
+    return unwrap(await client.get(
+      `/api/v2/admin/schools/${schoolId}/teaching-relationships`,
+      {params: {termId, ...(gradeId ? {gradeId} : {})}},
+    ));
+  },
+  async staffResponsibilities(schoolId, termId) {
+    return unwrap(await client.get(
+      `/api/v2/admin/schools/${schoolId}/staff-responsibilities`,
+      {params: {termId}},
+    ));
+  },
+  async saveGradeLeadership(schoolId, input) {
+    return unwrap(await client.put(`/api/v2/admin/schools/${schoolId}/grade-leaderships`, input));
+  },
+  async removeGradeLeadership(schoolId, leadershipId) {
+    return unwrap(await client.delete(
+      `/api/v2/admin/schools/${schoolId}/grade-leaderships/${leadershipId}`,
+    ));
+  },
+  async saveClassLeadership(schoolId, input) {
+    return unwrap(await client.put(`/api/v2/admin/schools/${schoolId}/class-leaderships`, input));
+  },
+  async removeClassLeadership(schoolId, leadershipId) {
+    return unwrap(await client.delete(
+      `/api/v2/admin/schools/${schoolId}/class-leaderships/${leadershipId}`,
+    ));
+  },
+  async updateStaffResponsibilityPolicy(schoolId, input) {
+    return unwrap(await client.put(
+      `/api/v2/admin/schools/${schoolId}/staff-responsibility-policy`,
+      input,
+    ));
+  },
+  async saveTeachingAssignment(schoolId, input) {
+    return unwrap(await client.put(
+      `/api/v2/admin/schools/${schoolId}/teaching-assignments`,
+      input,
+    ));
+  },
+  async saveTeachingAssignmentsBulk(schoolId, input) {
+    return unwrap(await client.put(
+      `/api/v2/admin/schools/${schoolId}/teaching-assignments/bulk`,
+      input,
+    ));
+  },
+  async removeTeachingAssignment(schoolId, assignmentId) {
+    return unwrap(await client.delete(
+      `/api/v2/admin/schools/${schoolId}/teaching-assignments/${assignmentId}`,
+    ));
+  },
   async replaceAdministrativeClassSubjectRules(schoolId, administrativeClassId, input) {
     return unwrap(await client.put(
       `/api/v2/admin/schools/${schoolId}/administrative-classes/${administrativeClassId}/subject-rules`,
