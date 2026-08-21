@@ -6,6 +6,7 @@ const REFRESH_TOKEN_KEY = "classworks-v2-refresh-token";
 const OAUTH_RETURN_KEY = "classworks-v2-oauth-return";
 const OAUTH_ERROR_KEY = "classworks-v2-oauth-error";
 const SCREEN_TOKEN_KEY = "classworks-v2-screen-token";
+const SETUP_TOKEN_KEY = "classworks-v2-setup-token";
 
 const client = axios.create({
   timeout: 15000,
@@ -49,6 +50,36 @@ export function saveClassroomScreenToken(token) {
 
 export function clearClassroomScreenToken() {
   localStorage.removeItem(SCREEN_TOKEN_KEY);
+}
+
+export function clearSetupToken() {
+  sessionStorage.removeItem(SETUP_TOKEN_KEY);
+}
+
+function setupHeaders() {
+  return {"X-Classworks-Setup-Token": sessionStorage.getItem(SETUP_TOKEN_KEY) || ""};
+}
+
+export async function getInstanceSetupStatus() {
+  return unwrap(await client.get("/api/v2/setup/status"));
+}
+
+export async function createInstanceSetupSession(setupKey) {
+  const result = unwrap(await client.post("/api/v2/setup/session", {setupKey}));
+  sessionStorage.setItem(SETUP_TOKEN_KEY, result.token);
+  return result;
+}
+
+export async function initializeInstanceCore(input) {
+  const result = unwrap(await client.post("/api/v2/setup/initialize", input, {headers: setupHeaders()}));
+  saveAccountTokens({accessToken: result.access_token, refreshToken: result.refresh_token});
+  return result;
+}
+
+export async function completeInstanceSetup() {
+  const result = unwrap(await client.post("/api/v2/setup/complete", {}, {headers: setupHeaders()}));
+  clearSetupToken();
+  return result;
 }
 
 function screenHeaders(extra = {}) {
