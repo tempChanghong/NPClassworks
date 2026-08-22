@@ -61,6 +61,13 @@ pnpm run lint
 
 生产环境建议让前后端保持同源，由反向代理统一提供 HTTPS，并将 `/api`、`/accounts`、`/auth`、`/kv`、`/socket.io` 等后端路径转发至 NPClassworksKV。部署前请先阅读后端仓库的生产配置说明并执行数据库迁移。
 
+联合生产栈由同级的 NPClassworksKV 仓库统一启动，必须显式加载生产环境文件：
+
+```bash
+cd ../NPClassworksKV
+docker compose --env-file deploy/.env.production up -d --build
+```
+
 ## 项目关系与致谢
 
 NPClassworks 是 Classworks 的衍生项目，不是 Classworks 官方版本。感谢 Classworks 原作者和所有上游贡献者；本项目保留上游版权与许可证声明。
