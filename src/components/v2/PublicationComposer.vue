@@ -167,7 +167,7 @@
           <v-text-field
             v-else
             v-model="form.expiresAt"
-            hint="到达该时间后，通知会自动从学生端和大屏消失"
+            hint="留空时默认在发布三天后的同一时间自动消失"
             label="自动失效时间（可选）"
             persistent-hint
             type="datetime-local"
@@ -472,9 +472,13 @@ const lifecyclePreview = computed(() => {
       ? `${board}，截止 ${formatPreviewDateTime(new Date(form.dueAt))}`
       : `${board}，未设置截止时间`;
   }
-  return form.expiresAt
-    ? `通知将在 ${formatPreviewDateTime(new Date(form.expiresAt))} 自动停止显示`
-    : "通知不会自动失效，需要教师手动撤下";
+  if (form.expiresAt) {
+    return `通知将在 ${formatPreviewDateTime(new Date(form.expiresAt))} 自动停止显示`;
+  }
+  const publishAt = new Date(form.publishAt);
+  if (Number.isNaN(publishAt.getTime())) return "填写发布时间后，将默认显示三天";
+  const defaultExpiry = new Date(publishAt.getTime() + 3 * 24 * 60 * 60 * 1000);
+  return `未指定失效时间，将在 ${formatPreviewDateTime(defaultExpiry)} 自动停止显示`;
 });
 const isEditing = computed(() => Boolean(props.editingPublication));
 const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
