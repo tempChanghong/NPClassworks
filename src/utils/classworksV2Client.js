@@ -527,11 +527,28 @@ export const classworksV2Api = {
   async schoolMembers(schoolId) {
     return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/members`));
   },
+  async managementOverview(schoolId, termId) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/management-overview`, {
+      params: {termId},
+    }));
+  },
   async setTermStatus(termId, status) {
     return unwrap(await client.post(`/api/v2/admin/terms/${termId}/status`, {status}));
   },
   async cloneTerm(termId, input) {
     return unwrap(await client.post(`/api/v2/admin/terms/${termId}/clone`, input));
+  },
+  async previewTermTransition(termId, input) {
+    return unwrap(await client.post(`/api/v2/admin/terms/${termId}/transition/preview`, input));
+  },
+  async createTermTransition(termId, input) {
+    return unwrap(await client.post(`/api/v2/admin/terms/${termId}/transition`, input));
+  },
+  async termTransitionReadiness(termId) {
+    return unwrap(await client.get(`/api/v2/admin/terms/${termId}/transition-readiness`));
+  },
+  async activateTermTransition(termId, input = {}) {
+    return unwrap(await client.post(`/api/v2/admin/terms/${termId}/activate`, input));
   },
   async removeWorkspaceMember(workspaceId, accountId) {
     await client.delete(`/api/v2/admin/workspaces/${workspaceId}/members/${accountId}`);

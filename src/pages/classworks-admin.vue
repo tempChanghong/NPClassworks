@@ -243,6 +243,9 @@
         class="mb-5"
         color="primary"
       >
+        <v-tab value="overview">
+          管理总览
+        </v-tab>
         <v-tab value="organization">
           组织与班级
         </v-tab>
@@ -264,6 +267,55 @@
       </v-tabs>
 
       <v-window v-model="tab">
+        <v-window-item value="overview">
+          <v-alert
+            v-if="!managerMemberships.length"
+            type="warning"
+            variant="tonal"
+          >
+            请先完成学校初始化或取得 OWNER/ADMIN 权限。
+          </v-alert>
+          <template v-else>
+            <v-card class="mb-5 rounded-xl">
+              <v-card-text class="pa-5">
+                <v-row>
+                  <v-col
+                    cols="12"
+                    md="6"
+                  >
+                    <v-select
+                      v-model="selectedSchoolId"
+                      :items="schoolOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="学校"
+                      variant="outlined"
+                    />
+                  </v-col>
+                  <v-col
+                    cols="12"
+                    md="6"
+                  >
+                    <v-select
+                      v-model="selectedTermId"
+                      :items="termOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="诊断学期"
+                      variant="outlined"
+                    />
+                  </v-col>
+                </v-row>
+              </v-card-text>
+            </v-card>
+            <SchoolManagementOverview
+              v-if="selectedSchoolId && selectedTermId"
+              :school-id="selectedSchoolId"
+              :term-id="selectedTermId"
+              @navigate="tab = $event"
+            />
+          </template>
+        </v-window-item>
         <v-window-item value="organization">
           <v-card class="rounded-xl">
             <v-card-title class="d-flex align-center flex-wrap ga-2 pa-5">
@@ -1333,7 +1385,7 @@
               >
                 <v-card class="rounded-xl">
                   <v-card-title class="pa-5 pb-2">
-                    复制为新学期
+                    建立下一学期
                   </v-card-title>
                   <v-card-text class="px-5 pb-5">
                     <v-select
@@ -1385,13 +1437,71 @@
                         />
                       </v-col>
                     </v-row>
+                    <div class="text-subtitle-2 mb-2">
+                      继承内容
+                    </div>
+                    <v-switch
+                      v-model="carryWorkspaceMembers"
+                      color="primary"
+                      density="compact"
+                      hide-details
+                      label="教师访问权限"
+                    />
+                    <v-switch
+                      v-model="carryTeachingAssignments"
+                      color="primary"
+                      density="compact"
+                      hide-details
+                      label="任课关系"
+                    />
+                    <v-switch
+                      v-model="carryLeaderships"
+                      color="primary"
+                      density="compact"
+                      hide-details
+                      label="年级组长与班主任职责"
+                    />
+                    <v-switch
+                      v-model="carryPendingInvitations"
+                      color="primary"
+                      density="compact"
+                      hide-details
+                      label="未认领的 OAuth 邀请"
+                    />
+                    <v-alert
+                      v-if="termTransitionPreview"
+                      class="my-4"
+                      type="info"
+                      variant="tonal"
+                    >
+                      将复制 {{ termTransitionPreview.counts.grades }} 个年级、
+                      {{ termTransitionPreview.counts.workspaces }} 个教学空间、
+                      {{ termTransitionPreview.counts.teachingAssignments }} 条任课关系和
+                      {{ termTransitionPreview.counts.gradeLeaderships + termTransitionPreview.counts.classLeaderships }} 条管理职责。
+                      <div
+                        v-for="warning in termTransitionPreview.warnings"
+                        :key="warning"
+                        class="mt-2"
+                      >
+                        {{ warning }}
+                      </div>
+                    </v-alert>
+                    <v-btn
+                      block
+                      class="mb-2"
+                      :loading="termBusy"
+                      variant="tonal"
+                      @click="previewTermTransition"
+                    >
+                      预检迁移内容
+                    </v-btn>
                     <v-btn
                       block
                       color="primary"
                       :loading="termBusy"
                       @click="cloneTerm"
                     >
-                      复制班级、教师与待认领分配
+                      建立草稿学期
                     </v-btn>
                     <v-alert
                       class="mt-4"
@@ -1436,7 +1546,7 @@
                               color="success"
                               size="small"
                               variant="text"
-                              @click="changeTermStatus(term, 'ACTIVE')"
+                              @click="prepareTermActivation(term)"
                             >
                               启用
                             </v-btn>
@@ -1466,6 +1576,75 @@
                 </v-card>
               </v-col>
             </v-row>
+            <v-dialog
+              v-model="termActivationDialog"
+              max-width="760"
+            >
+              <v-card class="rounded-xl">
+                <v-card-title class="pa-5 pb-2">
+                  启用 {{ activationReadiness?.term?.name || "学期" }}
+                </v-card-title>
+                <v-card-text class="px-5 pb-2">
+                  <v-alert
+                    :type="activationReadiness?.ready ? 'success' : 'warning'"
+                    variant="tonal"
+                  >
+                    <template v-if="activationReadiness?.ready">
+                      启用前检查已通过。当前启用学期将归档，学生端将立即切换。
+                    </template>
+                    <template v-else>
+                      发现 {{ activationReadiness?.blockingDiagnostics?.length || 0 }} 个阻断项。建议先修复；确需切换时可勾选强制启用。
+                    </template>
+                  </v-alert>
+                  <v-list
+                    v-if="activationReadiness?.blockingDiagnostics?.length"
+                    class="my-3"
+                    density="compact"
+                  >
+                    <v-list-item
+                      v-for="(item, index) in activationReadiness.blockingDiagnostics"
+                      :key="`${item.code}-${index}`"
+                      prepend-icon="mdi-alert-circle"
+                      :subtitle="item.code"
+                      :title="item.message"
+                    />
+                  </v-list>
+                  <v-divider class="my-4" />
+                  <div class="text-body-2">
+                    大屏迁移：可匹配 {{ activationReadiness?.mappedScreens || 0 }} 台，
+                    无法匹配 {{ activationReadiness?.unmappedScreens?.length || 0 }} 台。
+                  </div>
+                  <v-switch
+                    v-model="activationRebindScreens"
+                    color="primary"
+                    label="按行政班代码迁移大屏绑定"
+                  />
+                  <v-switch
+                    v-if="activationReadiness && !activationReadiness.ready"
+                    v-model="activationForce"
+                    color="warning"
+                    label="我已了解风险，强制启用"
+                  />
+                </v-card-text>
+                <v-card-actions class="px-5 pb-5">
+                  <v-spacer />
+                  <v-btn
+                    variant="text"
+                    @click="termActivationDialog = false"
+                  >
+                    取消
+                  </v-btn>
+                  <v-btn
+                    color="success"
+                    :disabled="!activationReadiness?.ready && !activationForce"
+                    :loading="termBusy"
+                    @click="activateTerm"
+                  >
+                    确认切换学期
+                  </v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
           </template>
         </v-window-item>
       </v-window>
@@ -1479,6 +1658,7 @@ import ValidationReport from "@/components/v2/ValidationReport.vue";
 import AcademicStructureManager from "@/components/admin/AcademicStructureManager.vue";
 import TeachingRelationshipOverview from "@/components/admin/TeachingRelationshipOverview.vue";
 import StaffResponsibilityManager from "@/components/admin/StaffResponsibilityManager.vue";
+import SchoolManagementOverview from "@/components/admin/SchoolManagementOverview.vue";
 import {
   bootstrapSchoolAdministrator,
   classworksV2Api,
@@ -1505,7 +1685,7 @@ const publicSchools = ref([]);
 const localAuthStatus = ref({bootstrapRequired: false, bootstrapAvailable: false});
 const profile = ref(null);
 const schoolMemberships = ref([]);
-const tab = ref("organization");
+const tab = ref("overview");
 const errorMessage = ref("");
 const successMessage = ref("");
 const loginBusy = ref(false);
@@ -1571,6 +1751,15 @@ const cloneAcademicYear = ref(new Date().getFullYear());
 const cloneSemester = ref(1);
 const cloneStartsAt = ref("");
 const cloneEndsAt = ref("");
+const carryWorkspaceMembers = ref(true);
+const carryTeachingAssignments = ref(true);
+const carryLeaderships = ref(true);
+const carryPendingInvitations = ref(false);
+const termTransitionPreview = ref(null);
+const termActivationDialog = ref(false);
+const activationReadiness = ref(null);
+const activationForce = ref(false);
+const activationRebindScreens = ref(true);
 
 const roleOptions = [
   {title: "教师", value: "TEACHER"},
@@ -2366,27 +2555,95 @@ async function changeTermStatus(term, status) {
   }
 }
 
+function termTransitionInput() {
+  return {
+    name: cloneTermName.value,
+    academicYear: cloneAcademicYear.value,
+    semester: cloneSemester.value,
+    startsAt: cloneStartsAt.value || null,
+    endsAt: cloneEndsAt.value || null,
+    carryWorkspaceMembers: carryWorkspaceMembers.value,
+    carryTeachingAssignments: carryTeachingAssignments.value,
+    carryLeaderships: carryLeaderships.value,
+    carryPendingInvitations: carryPendingInvitations.value,
+  };
+}
+
+async function previewTermTransition() {
+  if (!cloneSourceTermId.value) {
+    errorMessage.value = "请选择源学期";
+    return;
+  }
+  termBusy.value = true;
+  errorMessage.value = "";
+  try {
+    termTransitionPreview.value = await classworksV2Api.previewTermTransition(
+      cloneSourceTermId.value,
+      termTransitionInput(),
+    );
+  } catch (error) {
+    termTransitionPreview.value = null;
+    errorMessage.value = describeApiError(error, "学期迁移预检失败");
+  } finally {
+    termBusy.value = false;
+  }
+}
+
 async function cloneTerm() {
   if (!cloneSourceTermId.value) {
     errorMessage.value = "请选择源学期";
     return;
   }
-  if (!window.confirm("复制会继承班级结构、教师权限和未认领 OAuth 分配，确定继续吗？")) return;
+  if (!termTransitionPreview.value) {
+    await previewTermTransition();
+    if (!termTransitionPreview.value) return;
+  }
+  if (!window.confirm("将按当前选项建立新学期草稿。创建后可继续调整，确定继续吗？")) return;
   termBusy.value = true;
   try {
-    const result = await classworksV2Api.cloneTerm(cloneSourceTermId.value, {
-      name: cloneTermName.value,
-      academicYear: cloneAcademicYear.value,
-      semester: cloneSemester.value,
-      startsAt: cloneStartsAt.value || null,
-      endsAt: cloneEndsAt.value || null,
-    });
-    successMessage.value = `已创建草稿学期：${result.name}，复制 ${result.workspaces} 个教学空间。`;
+    const result = await classworksV2Api.createTermTransition(cloneSourceTermId.value, termTransitionInput());
+    successMessage.value = `已创建草稿学期：${result.name}，复制 ${result.workspaces} 个教学空间、${result.teachingAssignments} 条任课关系。`;
     await bootstrap();
     cloneSourceTermId.value = result.id;
     cloneTermName.value = "";
+    termTransitionPreview.value = null;
   } catch (error) {
-    errorMessage.value = describeApiError(error, "复制学期失败");
+    errorMessage.value = describeApiError(error, "建立新学期失败");
+  } finally {
+    termBusy.value = false;
+  }
+}
+
+async function prepareTermActivation(term) {
+  termBusy.value = true;
+  errorMessage.value = "";
+  activationReadiness.value = null;
+  activationForce.value = false;
+  activationRebindScreens.value = true;
+  try {
+    activationReadiness.value = await classworksV2Api.termTransitionReadiness(term.id);
+    termActivationDialog.value = true;
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "学期启用检查失败");
+  } finally {
+    termBusy.value = false;
+  }
+}
+
+async function activateTerm() {
+  if (!activationReadiness.value?.term?.id) return;
+  termBusy.value = true;
+  errorMessage.value = "";
+  try {
+    const result = await classworksV2Api.activateTermTransition(activationReadiness.value.term.id, {
+      force: activationForce.value,
+      rebindScreens: activationRebindScreens.value,
+    });
+    successMessage.value = `已切换到${result.term.name}，迁移 ${result.reboundScreens} 台大屏。`;
+    termActivationDialog.value = false;
+    await bootstrap();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "启用学期失败");
   } finally {
     termBusy.value = false;
   }
@@ -2440,6 +2697,20 @@ watch(cloneSourceTermId, (termId) => {
   cloneAcademicYear.value = nextYear;
   cloneSemester.value = nextSemester;
   cloneTermName.value = `${nextYear}-${nextYear + 1}学年第${nextSemester === 1 ? "一" : "二"}学期`;
+  termTransitionPreview.value = null;
+});
+watch([
+  cloneTermName,
+  cloneAcademicYear,
+  cloneSemester,
+  cloneStartsAt,
+  cloneEndsAt,
+  carryWorkspaceMembers,
+  carryTeachingAssignments,
+  carryLeaderships,
+  carryPendingInvitations,
+], () => {
+  termTransitionPreview.value = null;
 });
 watch(adminRoleOptions, (options) => {
   if (!options.some((option) => option.value === newAdminRole.value)) {
