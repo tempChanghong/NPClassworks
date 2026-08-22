@@ -261,6 +261,9 @@
         <v-tab value="screens">
           大屏设备
         </v-tab>
+        <v-tab value="audit">
+          审计记录
+        </v-tab>
         <v-tab value="terms">
           学期运维
         </v-tab>
@@ -1266,12 +1269,35 @@
                         :title="screen.name"
                       >
                         <template #prepend>
-                          <v-avatar :color="screen.isActive ? 'primary' : 'grey'">
+                          <v-avatar :color="screenDutyColor(screen.dutyState)">
                             <v-icon icon="mdi-monitor-dashboard" />
                           </v-avatar>
                         </template>
                         <template #append>
                           <div class="d-flex flex-wrap ga-1 justify-end">
+                            <v-chip
+                              :color="screenDutyColor(screen.dutyState)"
+                              size="small"
+                              variant="tonal"
+                            >
+                              {{ screenDutyName(screen.dutyState) }}
+                            </v-chip>
+                            <v-btn
+                              :disabled="!['ONLINE', 'DEGRADED'].includes(screen.dutyState)"
+                              size="small"
+                              variant="text"
+                              @click="issueScreenCommand(screen, 'REFRESH_DATA')"
+                            >
+                              刷新数据
+                            </v-btn>
+                            <v-btn
+                              :disabled="!['ONLINE', 'DEGRADED'].includes(screen.dutyState)"
+                              size="small"
+                              variant="text"
+                              @click="issueScreenCommand(screen, 'RELOAD_APP')"
+                            >
+                              重载页面
+                            </v-btn>
                             <v-btn
                               size="small"
                               variant="text"
@@ -1362,6 +1388,27 @@
               </v-card-actions>
             </v-card>
           </v-dialog>
+        </v-window-item>
+
+        <v-window-item value="audit">
+          <template v-if="managerMemberships.length">
+            <v-card class="mb-5 rounded-xl">
+              <v-card-text class="pa-5">
+                <v-select
+                  v-model="selectedSchoolId"
+                  :items="schoolOptions"
+                  item-title="title"
+                  item-value="value"
+                  label="学校"
+                  variant="outlined"
+                />
+              </v-card-text>
+            </v-card>
+            <AuditLogViewer
+              v-if="selectedSchoolId"
+              :school-id="selectedSchoolId"
+            />
+          </template>
         </v-window-item>
 
         <v-window-item value="terms">
@@ -1653,12 +1700,13 @@
 </template>
 
 <script setup>
-import {computed, onMounted, ref, watch} from "vue";
+import {computed, onMounted, onUnmounted, ref, watch} from "vue";
 import ValidationReport from "@/components/v2/ValidationReport.vue";
 import AcademicStructureManager from "@/components/admin/AcademicStructureManager.vue";
 import TeachingRelationshipOverview from "@/components/admin/TeachingRelationshipOverview.vue";
 import StaffResponsibilityManager from "@/components/admin/StaffResponsibilityManager.vue";
 import SchoolManagementOverview from "@/components/admin/SchoolManagementOverview.vue";
+import AuditLogViewer from "@/components/admin/AuditLogViewer.vue";
 import {
   bootstrapSchoolAdministrator,
   classworksV2Api,
@@ -1743,6 +1791,7 @@ const newScreenAdministrativeClassId = ref("");
 const screenEditDialog = ref(false);
 const editingScreenId = ref("");
 const screenEdit = ref({name: "", loginCode: "", pin: "", administrativeClassId: ""});
+let screenDutyTimer = null;
 
 const termBusy = ref(false);
 const cloneSourceTermId = ref("");
@@ -2419,10 +2468,42 @@ function screenAccountSummary(screen) {
   const login = screen.loginCode ? `账号 ${screen.loginCode}` : "旧版绑定（需设置账号）";
   const device = screen.deviceFingerprint ? "设备已激活" : "等待设备首次登录";
   const status = screen.isActive ? "已启用" : "已停用";
-  const lastUsed = screen.lastUsedAt
-    ? `最后使用 ${new Date(screen.lastUsedAt).toLocaleString("zh-CN")}`
-    : "尚未使用";
-  return `${screen.administrativeClass?.name || "未绑定班级"} · ${login} · ${device} · ${status} · ${lastUsed}`;
+  const heartbeat = screen.lastHeartbeatAt
+    ? `心跳 ${new Date(screen.lastHeartbeatAt).toLocaleString("zh-CN")}`
+    : "尚无值守心跳";
+  const runtime = screen.runtimeStatus
+    ? `v${screen.runtimeStatus.appVersion || "?"} · ${screen.runtimeStatus.syncState || "unknown"}${screen.runtimeStatus.pendingUploads ? ` · 待同步 ${screen.runtimeStatus.pendingUploads}` : ""}`
+    : "无运行状态";
+  return `${screen.administrativeClass?.name || "未绑定班级"} · ${login} · ${device} · ${status} · ${heartbeat} · ${runtime}`;
+}
+
+function screenDutyName(state) {
+  return {
+    ONLINE: "在线",
+    DEGRADED: "需关注",
+    OFFLINE: "离线",
+    NOT_ACTIVATED: "未激活",
+    DISABLED: "已停用",
+  }[state] || "未知";
+}
+
+function screenDutyColor(state) {
+  return {ONLINE: "success", DEGRADED: "warning", OFFLINE: "error", NOT_ACTIVATED: "info", DISABLED: "grey"}[state] || "grey";
+}
+
+async function issueScreenCommand(screen, type) {
+  const action = type === "RELOAD_APP" ? "重新载入页面" : "立即刷新数据";
+  if (!window.confirm(`要求 ${screen.name} ${action}？指令将在下一次心跳时执行。`)) return;
+  screenBusy.value = true;
+  try {
+    await classworksV2Api.issueClassroomScreenCommand(selectedSchoolId.value, screen.id, type);
+    successMessage.value = `已向 ${screen.name} 下发“${action}”指令。`;
+    await loadScreenAccounts();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "下发值守指令失败");
+  } finally {
+    screenBusy.value = false;
+  }
 }
 
 async function createAdministrator() {
@@ -2687,6 +2768,11 @@ watch(tab, (value) => {
     loadRoster();
     loadScreenAccounts();
     loadSchoolHomeworkSettings();
+    window.clearInterval(screenDutyTimer);
+    screenDutyTimer = window.setInterval(loadScreenAccounts, 30_000);
+  } else {
+    window.clearInterval(screenDutyTimer);
+    screenDutyTimer = null;
   }
 });
 watch(cloneSourceTermId, (termId) => {
@@ -2719,6 +2805,7 @@ watch(adminRoleOptions, (options) => {
 });
 
 onMounted(bootstrap);
+onUnmounted(() => window.clearInterval(screenDutyTimer));
 </script>
 
 <style scoped>

@@ -1,4 +1,5 @@
 import {defineStore} from "pinia";
+import packageInfo from "../../package.json";
 import {
   classworksV2Api,
   clearAccountTokens,
@@ -86,6 +87,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     feedLoading: false,
     studentError: "",
     studentNotice: "",
+    selectionIssues: [],
+    selectionNeedsConfirmation: false,
     selectionDialog: false,
 
     account: null,
@@ -118,6 +121,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     screenPendingUploads: [],
     screenSyncing: false,
     screenLastSyncedAt: null,
+    screenHeartbeatAt: null,
     classroomStudents: [],
     classroomAttendance: {date: "", absent: [], late: [], excluded: []},
     classroomToolsLoading: false,
@@ -223,6 +227,30 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
               saveSelection(this.selection);
               this.studentNotice = "班级配置已经更新，已移除失效的走班选择，请确认当前选班。";
             }
+            try {
+              const validation = await classworksV2Api.validateStudentSelection(
+                this.selection.administrativeClassId,
+                {
+                  courseGroupIds: this.selection.courseGroupIds || {},
+                  declinedSubjectIds: this.selection.declinedSubjectIds || [],
+                },
+              );
+              this.selectionIssues = validation.issues || [];
+              this.selectionNeedsConfirmation = false;
+              this.selection = {
+                ...this.selection,
+                courseGroupIds: validation.normalized.courseGroupIds,
+                declinedSubjectIds: validation.normalized.declinedSubjectIds,
+                confirmedAt: validation.confirmedAt,
+              };
+              saveSelection(this.selection);
+            } catch (validationError) {
+              const validation = validationError.response?.data?.data;
+              this.selectionIssues = validation?.issues || [];
+              this.selectionNeedsConfirmation = true;
+              this.studentNotice = "请重新确认走班选择：每个走班科目都要选择教学班或明确标记为不修读。";
+              this.selectionDialog = promptForSelection;
+            }
             if (this.feedAudience === "student") await this.loadStudentFeed();
           } else {
             this.clearStudentSelection();
@@ -251,6 +279,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       if (!preserveSelection || this.selection.schoolId !== schoolId) {
         this.selection = {schoolId, courseGroupIds: {}};
         this.courseOptions = null;
+        this.selectionIssues = [];
+        this.selectionNeedsConfirmation = false;
       }
     },
 
@@ -263,7 +293,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       return result;
     },
 
-    async commitStudentSelection({schoolId, administrativeClassId, courseGroupIds}) {
+    async commitStudentSelection({schoolId, administrativeClassId, courseGroupIds, declinedSubjectIds}) {
       const school = this.schools.find((item) => item.id === schoolId);
       const administrativeClass = this.administrativeClasses.find(
         (item) => item.id === administrativeClassId,
@@ -273,10 +303,18 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         await this.loadCourseOptions(administrativeClassId);
       }
       const oldWorkspaceIds = this.selectedWorkspaceIds;
-      const sanitizedCourseGroupIds = sanitizeCourseGroupIds(
-        this.courseOptions,
-        courseGroupIds,
-      );
+      let validation;
+      try {
+        validation = await classworksV2Api.validateStudentSelection(administrativeClassId, {
+          courseGroupIds,
+          declinedSubjectIds,
+        });
+      } catch (error) {
+        this.selectionIssues = error.response?.data?.data?.issues || [];
+        this.selectionNeedsConfirmation = true;
+        throw error;
+      }
+      const sanitizedCourseGroupIds = validation.normalized.courseGroupIds;
       this.selection = {
         schoolId,
         schoolName: school.name,
@@ -284,7 +322,11 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         administrativeClassId,
         administrativeClassName: administrativeClass.name,
         courseGroupIds: sanitizedCourseGroupIds,
+        declinedSubjectIds: validation.normalized.declinedSubjectIds,
+        confirmedAt: validation.confirmedAt,
       };
+      this.selectionIssues = validation.issues || [];
+      this.selectionNeedsConfirmation = false;
       saveSelection(this.selection);
       if (this.feedAudience === "student") {
         leaveWorkspaces(oldWorkspaceIds);
@@ -300,6 +342,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.courseOptions = null;
       this.feed = [];
       this.studentNotice = "";
+      this.selectionIssues = [];
+      this.selectionNeedsConfirmation = false;
       feedRequest += 1;
       clearTimeout(transitionTimer);
       transitionTimer = null;
@@ -800,7 +844,68 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         }
       }, 30_000);
       screenSyncCleanup.push(() => window.clearInterval(retryTimer));
+      const sendHeartbeat = () => void this.sendScreenHeartbeat();
+      const heartbeatTimer = window.setInterval(sendHeartbeat, 60_000);
+      window.addEventListener("visibilitychange", sendHeartbeat);
+      screenSyncCleanup.push(() => window.clearInterval(heartbeatTimer));
+      screenSyncCleanup.push(() => window.removeEventListener("visibilitychange", sendHeartbeat));
       updateOnline();
+      sendHeartbeat();
+    },
+
+    async sendScreenHeartbeat() {
+      if (!this.screenSession || !this.screenNetworkOnline) return;
+      try {
+        const result = await classworksV2Api.classroomScreenHeartbeat({
+          appVersion: packageInfo.version,
+          route: `${window.location.pathname}${window.location.hash}`,
+          visibility: document.visibilityState,
+          online: navigator.onLine,
+          realtimeConnected: this.screenRealtimeConnected,
+          pendingUploads: this.screenPendingUploads.length,
+          syncState: this.screenSyncState,
+          lastError: this.screenError,
+          displayMode: "screen",
+        });
+        this.screenHeartbeatAt = result.receivedAt;
+        for (const command of result.commands || []) await this.executeScreenCommand(command);
+      } catch {
+        // 心跳失败由下一次轮询重试，不覆盖作业板已有错误提示。
+      }
+    },
+
+    async executeScreenCommand(command) {
+      try {
+        if (command.type === "REFRESH_DATA") {
+          await Promise.all([this.bootstrapClassroomScreen(), this.loadScreenFeed()]);
+          await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
+            success: true,
+            result: {message: "数据已刷新"},
+          });
+          return;
+        }
+        if (command.type === "RELOAD_APP") {
+          await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
+            success: true,
+            result: {message: "页面即将重新载入"},
+          });
+          window.setTimeout(() => window.location.reload(), 300);
+          return;
+        }
+        await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
+          success: false,
+          result: {message: "当前版本不支持此指令"},
+        });
+      } catch (error) {
+        try {
+          await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
+            success: false,
+            result: {message: error.message || "执行失败"},
+          });
+        } catch {
+          // 指令会在下一次心跳再次送达。
+        }
+      }
     },
 
     stopScreenSync() {

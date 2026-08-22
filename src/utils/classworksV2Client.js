@@ -259,6 +259,12 @@ export const classworksV2Api = {
       `/api/v2/catalog/administrative-classes/${administrativeClassId}/course-options`,
     ));
   },
+  async validateStudentSelection(administrativeClassId, input) {
+    return unwrap(await client.post(
+      `/api/v2/catalog/administrative-classes/${administrativeClassId}/student-selection/validate`,
+      input,
+    ));
+  },
   async feed(workspaceIds, boardDate) {
     return unwrap(await client.get("/api/v2/publications/feed", {
       params: {workspaceIds: workspaceIds.join(","), boardDate},
@@ -309,6 +315,18 @@ export const classworksV2Api = {
     return unwrap(await client.get("/api/v2/classroom-screens/session", {
       headers: screenHeaders(),
     }));
+  },
+  async classroomScreenHeartbeat(status) {
+    return unwrap(await client.post("/api/v2/classroom-screens/heartbeat", status, {
+      headers: screenHeaders(),
+    }));
+  },
+  async acknowledgeClassroomScreenCommand(commandId, input) {
+    return unwrap(await client.post(
+      `/api/v2/classroom-screens/commands/${commandId}/ack`,
+      input,
+      {headers: screenHeaders()},
+    ));
   },
   async classroomScreenFeed(boardDate) {
     return unwrap(await client.get("/api/v2/classroom-screens/feed", {
@@ -500,6 +518,15 @@ export const classworksV2Api = {
   },
   async classroomScreens(schoolId) {
     return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/classroom-screens`));
+  },
+  async issueClassroomScreenCommand(schoolId, bindingId, type, payload = undefined) {
+    return unwrap(await client.post(
+      `/api/v2/admin/schools/${schoolId}/classroom-screens/${bindingId}/commands`,
+      {type, payload},
+    ));
+  },
+  async auditLogs(schoolId, params = {}) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/audit-logs`, {params}));
   },
   async schoolHomeworkSettings(schoolId) {
     return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/homework-settings`));

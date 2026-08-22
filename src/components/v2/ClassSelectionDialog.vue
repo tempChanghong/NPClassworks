@@ -27,7 +27,16 @@
           type="info"
           variant="tonal"
         >
-          行政班负责语数外等随班课程；只需为自己实际参加的走班科目选择教学班。选择保存在本机，可随时修改。
+          行政班负责语数外等随班课程。每个走班科目都需要选择教学班，或明确标记“我不修读该科”，避免因为漏选而看不到作业。选择保存在本机，可随时修改。
+        </v-alert>
+
+        <v-alert
+          v-if="store.selectionNeedsConfirmation"
+          class="mb-4"
+          type="warning"
+          variant="tonal"
+        >
+          学校分班配置发生变化，或旧选班信息不完整，请重新确认。
         </v-alert>
 
         <v-select
@@ -83,12 +92,12 @@
             <v-select
               v-for="item in streamedSubjects"
               :key="item.subject.id"
-              v-model="courseGroupIds[item.subject.id]"
-              :items="item.courseGroups"
-              :label="`${item.subject.name}（未选该科可留空）`"
-              clearable
-              item-title="name"
-              item-value="id"
+              v-model="courseDecisions[item.subject.id]"
+              :error-messages="issueMessages(item.subject.id)"
+              :items="decisionOptions(item)"
+              :label="`${item.subject.name}（必须确认）`"
+              item-title="title"
+              item-value="value"
               prepend-inner-icon="mdi-swap-horizontal"
               variant="outlined"
             />
@@ -105,6 +114,20 @@
         </template>
 
         <v-alert
+          v-if="generalIssues.length"
+          class="mt-4"
+          type="warning"
+          variant="tonal"
+        >
+          <div
+            v-for="item in generalIssues"
+            :key="`${item.code}-${item.subjectId || ''}`"
+          >
+            {{ item.message }}
+          </div>
+        </v-alert>
+
+        <v-alert
           v-if="error"
           class="mt-4"
           type="error"
@@ -117,7 +140,7 @@
       <v-card-actions class="pa-5 pt-2">
         <v-spacer />
         <v-btn
-          :disabled="!administrativeClassId || loadingOptions"
+          :disabled="!administrativeClassId || loadingOptions || !selectionComplete"
           :loading="saving"
           color="primary"
           prepend-icon="mdi-content-save-check"
@@ -142,7 +165,7 @@ defineEmits(["update:modelValue"]);
 const store = useClassworksV2Store();
 const schoolId = ref("");
 const administrativeClassId = ref("");
-const courseGroupIds = reactive({});
+const courseDecisions = reactive({});
 const loadingOptions = ref(false);
 const saving = ref(false);
 const error = ref("");
@@ -153,13 +176,32 @@ const fixedSubjects = computed(() =>
 const streamedSubjects = computed(() =>
   (store.courseOptions?.subjects || []).filter((item) => item.requiresCourseGroupSelection),
 );
+const generalIssues = computed(() => (store.selectionIssues || []).filter((item) => !item.subjectId));
+const selectionComplete = computed(() => streamedSubjects.value.every(
+  (item) => Boolean(courseDecisions[item.subject.id]),
+));
+
+function decisionOptions(item) {
+  const groups = (item.courseGroups || []).map((group) => ({title: group.name, value: group.id}));
+  if (!item.isCompulsory) groups.push({title: "我不修读该科", value: "__NOT_TAKING__"});
+  return groups;
+}
+
+function issueMessages(subjectId) {
+  return (store.selectionIssues || [])
+    .filter((item) => item.subjectId === subjectId && item.severity === "ERROR")
+    .map((item) => item.message);
+}
 
 watch(() => props.modelValue, async (open) => {
   if (!open) return;
   schoolId.value = store.selection.schoolId || (store.schools.length === 1 ? store.schools[0].id : "");
   administrativeClassId.value = store.selection.administrativeClassId || "";
-  Object.keys(courseGroupIds).forEach((key) => delete courseGroupIds[key]);
-  Object.assign(courseGroupIds, store.selection.courseGroupIds || {});
+  Object.keys(courseDecisions).forEach((key) => delete courseDecisions[key]);
+  Object.assign(courseDecisions, store.selection.courseGroupIds || {});
+  for (const subjectId of store.selection.declinedSubjectIds || []) {
+    courseDecisions[subjectId] = "__NOT_TAKING__";
+  }
   if (schoolId.value && store.term?.schoolId !== schoolId.value) {
     await handleSchoolChange(schoolId.value);
   }
@@ -170,8 +212,9 @@ watch(() => props.modelValue, async (open) => {
 
 async function handleSchoolChange(value) {
   error.value = "";
+  store.selectionIssues = [];
   administrativeClassId.value = "";
-  Object.keys(courseGroupIds).forEach((key) => delete courseGroupIds[key]);
+  Object.keys(courseDecisions).forEach((key) => delete courseDecisions[key]);
   try {
     await store.loadSchool(value);
   } catch (caught) {
@@ -181,7 +224,8 @@ async function handleSchoolChange(value) {
 
 async function handleAdministrativeClassChange(value) {
   error.value = "";
-  Object.keys(courseGroupIds).forEach((key) => delete courseGroupIds[key]);
+  store.selectionIssues = [];
+  Object.keys(courseDecisions).forEach((key) => delete courseDecisions[key]);
   if (!value) return;
   loadingOptions.value = true;
   try {
@@ -200,7 +244,11 @@ async function commit() {
     await store.commitStudentSelection({
       schoolId: schoolId.value,
       administrativeClassId: administrativeClassId.value,
-      courseGroupIds,
+      courseGroupIds: Object.fromEntries(Object.entries(courseDecisions)
+        .filter(([, value]) => value && value !== "__NOT_TAKING__")),
+      declinedSubjectIds: Object.entries(courseDecisions)
+        .filter(([, value]) => value === "__NOT_TAKING__")
+        .map(([subjectId]) => subjectId),
     });
   } catch (caught) {
     error.value = caught.response?.data?.message || caught.message || "保存选择失败";

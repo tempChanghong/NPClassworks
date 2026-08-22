@@ -171,7 +171,7 @@ const summaryCards = computed(() => {
     {label: "行政班", value: summary.administrativeClasses || 0, icon: "mdi-account-group-outline", color: "primary"},
     {label: "走班教学班", value: summary.courseGroups || 0, icon: "mdi-transit-connection-variant", color: "primary"},
     {label: "任课教师", value: summary.teachers || 0, icon: "mdi-human-male-board", color: "success"},
-    {label: "已激活大屏", value: `${summary.activatedScreens || 0}/${summary.screens || 0}`, icon: "mdi-monitor-dashboard", color: "info"},
+    {label: "在线大屏", value: `${summary.onlineScreens || 0}/${summary.screens || 0}`, icon: "mdi-monitor-dashboard", color: "info"},
     {label: "待处理", value: (summary.errors || 0) + (summary.warnings || 0), icon: "mdi-alert-outline", color: "warning"},
   ];
 });
