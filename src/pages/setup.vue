@@ -185,6 +185,26 @@
                   >
                     检测到已创建的首位管理员。本步骤会保留该账号，并补齐学校和学期。
                   </v-alert>
+                  <div class="setup-section mb-5">
+                    <div class="text-subtitle-1 font-weight-bold mb-3">
+                      本次初始化深度
+                    </div>
+                    <v-radio-group
+                      v-model="setupMode"
+                      hide-details
+                    >
+                      <v-radio
+                        color="primary"
+                        label="快速上线（推荐）：先创建学校、管理员和学期，分班确定后再配置教师关系与大屏"
+                        value="QUICK"
+                      />
+                      <v-radio
+                        color="primary"
+                        label="完整配置：继续导入班级、首批教师和大屏账号"
+                        value="FULL"
+                      />
+                    </v-radio-group>
+                  </div>
                   <v-row>
                     <v-col
                       cols="12"
@@ -211,7 +231,7 @@
                     <template v-if="!status?.counts?.localAccounts">
                       <v-col
                         cols="12"
-                        md="4"
+                        md="3"
                       >
                         <v-text-field
                           v-model.trim="form.administratorName"
@@ -221,7 +241,7 @@
                       </v-col>
                       <v-col
                         cols="12"
-                        md="4"
+                        md="3"
                       >
                         <v-text-field
                           v-model.trim="form.username"
@@ -231,13 +251,31 @@
                       </v-col>
                       <v-col
                         cols="12"
-                        md="4"
+                        md="3"
                       >
                         <v-text-field
                           v-model="form.pin"
+                          :append-inner-icon="showAdministratorPin ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                          append-icon="mdi-auto-fix"
+                          :error-messages="form.pin && !/^\d{4,8}$/.test(form.pin) ? ['PIN 必须是4至8位数字'] : []"
                           inputmode="numeric"
                           label="管理员 PIN（4—8位数字）"
-                          type="password"
+                          :type="showAdministratorPin ? 'text' : 'password'"
+                          variant="outlined"
+                          @click:append="generateNumericPin(form)"
+                          @click:append-inner="showAdministratorPin = !showAdministratorPin"
+                        />
+                      </v-col>
+                      <v-col
+                        cols="12"
+                        md="3"
+                      >
+                        <v-text-field
+                          v-model="form.pinConfirm"
+                          :error-messages="form.pinConfirm && form.pin !== form.pinConfirm ? ['两次输入的管理员 PIN 不一致'] : []"
+                          inputmode="numeric"
+                          label="再次输入管理员 PIN"
+                          :type="showAdministratorPin ? 'text' : 'password'"
                           variant="outlined"
                         />
                       </v-col>
@@ -262,8 +300,26 @@
                     >
                       <v-text-field
                         v-model="form.sharedPassword"
+                        :append-inner-icon="showSharedPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                        append-icon="mdi-auto-fix"
+                        :error-messages="form.sharedPassword && (form.sharedPassword.length < 8 || form.sharedPassword.length > 64) ? ['通用口令需为8至64个字符'] : []"
                         label="学校通用教师密码（8—64位）"
-                        type="password"
+                        :type="showSharedPassword ? 'text' : 'password'"
+                        variant="outlined"
+                        @click:append="generateSharedPassword"
+                        @click:append-inner="showSharedPassword = !showSharedPassword"
+                      />
+                    </v-col>
+                    <v-col
+                      v-if="form.teacherAuthMode === 'SHARED_PASSWORD'"
+                      cols="12"
+                      md="6"
+                    >
+                      <v-text-field
+                        v-model="form.sharedPasswordConfirm"
+                        :error-messages="form.sharedPasswordConfirm && form.sharedPassword !== form.sharedPasswordConfirm ? ['两次输入的通用教师密码不一致'] : []"
+                        label="再次输入学校通用教师密码"
+                        :type="showSharedPassword ? 'text' : 'password'"
                         variant="outlined"
                       />
                     </v-col>
@@ -350,6 +406,7 @@
                   <div class="d-flex flex-wrap ga-3">
                     <v-btn
                       color="primary"
+                      :disabled="!coreInputValid"
                       :loading="saving"
                       size="large"
                       @click="initializeCore"
@@ -442,14 +499,14 @@
                     当前学校选择 OAuth 邮箱登录，安装向导不创建短账号。请完成初始化后在学校后台按邮箱分配教师。
                   </v-alert>
                   <v-alert
-                    v-else-if="!workspaceOptions.length"
+                    v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL' && !workspaceOptions.length"
                     class="mb-5"
-                    type="warning"
+                    type="info"
                     variant="tonal"
                   >
-                    还没有班级或走班教学空间，暂时无法分配任课教师。可以先跳过，之后在学校后台统一处理。
+                    还没有班级或走班教学空间。现在仍可先创建教师登录账号，待分班确定后再到学校后台分配任课关系。
                   </v-alert>
-                  <template v-else>
+                  <template v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL'">
                     <div
                       v-for="(teacher, index) in teachers"
                       :key="teacher.key"
@@ -467,7 +524,7 @@
                       <v-row>
                         <v-col
                           cols="12"
-                          md="3"
+                          md="2"
                         >
                           <v-text-field
                             v-model.trim="teacher.name"
@@ -478,11 +535,11 @@
                         </v-col>
                         <v-col
                           cols="12"
-                          md="3"
+                          md="2"
                         >
                           <v-text-field
                             v-model.trim="teacher.username"
-                            hide-details
+                            :error-messages="teacherUsernameErrors(teacher)"
                             label="短账号"
                             variant="outlined"
                           />
@@ -490,20 +547,38 @@
                         <v-col
                           v-if="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN'"
                           cols="12"
-                          md="3"
+                          md="2"
                         >
                           <v-text-field
                             v-model="teacher.pin"
-                            hide-details
+                            :append-inner-icon="teacher.showPin ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                            append-icon="mdi-auto-fix"
+                            :error-messages="teacherPinErrors(teacher)"
                             inputmode="numeric"
                             label="PIN"
-                            type="password"
+                            :type="teacher.showPin ? 'text' : 'password'"
+                            variant="outlined"
+                            @click:append="generateNumericPin(teacher)"
+                            @click:append-inner="teacher.showPin = !teacher.showPin"
+                          />
+                        </v-col>
+                        <v-col
+                          v-if="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN'"
+                          cols="12"
+                          md="2"
+                        >
+                          <v-text-field
+                            v-model="teacher.pinConfirm"
+                            :error-messages="teacher.pinConfirm && teacher.pin !== teacher.pinConfirm ? ['两次 PIN 不一致'] : []"
+                            inputmode="numeric"
+                            label="确认 PIN"
+                            :type="teacher.showPin ? 'text' : 'password'"
                             variant="outlined"
                           />
                         </v-col>
                         <v-col
                           cols="12"
-                          :md="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN' ? 3 : 6"
+                          :md="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN' ? 4 : 8"
                         >
                           <v-select
                             v-model="teacher.workspaceCodes"
@@ -513,8 +588,9 @@
                             :items="workspaceOptions"
                             item-title="title"
                             item-value="value"
-                            label="任课班级/走班"
+                            label="任课班级/走班（可稍后分配）"
                             multiple
+                            no-data-text="尚未创建班级，可留空"
                             variant="outlined"
                           />
                         </v-col>
@@ -535,8 +611,9 @@
                   </template>
                   <div class="d-flex flex-wrap ga-3 mt-4">
                     <v-btn
-                      v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL' && workspaceOptions.length"
+                      v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL'"
                       color="primary"
+                      :disabled="!teacherRowsValid"
                       :loading="saving"
                       prepend-icon="mdi-account-multiple-check-outline"
                       @click="saveTeachers"
@@ -620,9 +697,27 @@
                     >
                       <v-text-field
                         v-model="screenForm.pin"
+                        :append-inner-icon="showScreenPin ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                        append-icon="mdi-auto-fix"
+                        :error-messages="screenForm.pin && !/^\d{4,8}$/.test(screenForm.pin) ? ['PIN 必须是4至8位数字'] : []"
                         inputmode="numeric"
                         label="大屏 PIN（4—8位数字）"
-                        type="password"
+                        :type="showScreenPin ? 'text' : 'password'"
+                        variant="outlined"
+                        @click:append="generateNumericPin(screenForm)"
+                        @click:append-inner="showScreenPin = !showScreenPin"
+                      />
+                    </v-col>
+                    <v-col
+                      cols="12"
+                      md="6"
+                    >
+                      <v-text-field
+                        v-model="screenForm.pinConfirm"
+                        :error-messages="screenForm.pinConfirm && screenForm.pin !== screenForm.pinConfirm ? ['两次输入的大屏 PIN 不一致'] : []"
+                        inputmode="numeric"
+                        label="再次输入大屏 PIN"
+                        :type="showScreenPin ? 'text' : 'password'"
                         variant="outlined"
                       />
                     </v-col>
@@ -639,6 +734,7 @@
                     <v-btn
                       v-if="administrativeClassOptions.length"
                       color="primary"
+                      :disabled="!screenInputValid"
                       :loading="saving"
                       prepend-icon="mdi-monitor-account"
                       @click="saveScreen"
@@ -671,6 +767,192 @@
                   >
                     核心数据已经可用。完成后将锁定安装入口，未配置的班级、教师和大屏仍可在学校管理后台继续添加。
                   </v-alert>
+                  <div class="setup-section mb-5">
+                    <div class="d-flex flex-wrap align-center justify-space-between ga-3 mb-3">
+                      <div>
+                        <div class="text-h6">
+                          一次性账号交付中心
+                        </div>
+                        <div class="text-body-2 text-medium-emphasis">
+                          明文凭据只保存在当前页面内存中。刷新、离开或完成初始化后无法再次查看，只能由管理员重置。
+                        </div>
+                      </div>
+                      <div
+                        v-if="credentialEntries.length"
+                        class="d-flex flex-wrap ga-2"
+                      >
+                        <v-btn
+                          :prepend-icon="showDeliverySecrets ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                          variant="tonal"
+                          @click="showDeliverySecrets = !showDeliverySecrets"
+                        >
+                          {{ showDeliverySecrets ? '隐藏凭据' : '显示凭据' }}
+                        </v-btn>
+                        <v-btn
+                          prepend-icon="mdi-file-download-outline"
+                          variant="tonal"
+                          @click="downloadCredentials"
+                        >
+                          下载 CSV
+                        </v-btn>
+                      </div>
+                    </div>
+                    <v-alert
+                      v-if="!credentialEntries.length"
+                      type="warning"
+                      variant="tonal"
+                    >
+                      当前浏览器没有可交付的明文凭据，可能是初始化中途刷新或重新进入。已有账号的原始 PIN 无法从服务器取回；请完成登录测试，遗忘时在管理后台重置。
+                    </v-alert>
+                    <v-alert
+                      v-if="deliveryWarning"
+                      class="mb-3"
+                      type="warning"
+                      variant="tonal"
+                    >
+                      {{ deliveryWarning }}
+                    </v-alert>
+                    <template v-else>
+                      <v-table class="credential-table rounded-lg">
+                        <thead>
+                          <tr>
+                            <th>类型 / 名称</th><th>账号</th><th>初始凭据</th><th>用途</th><th />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr
+                            v-for="item in credentialEntries"
+                            :key="item.id"
+                          >
+                            <td>
+                              <strong>{{ credentialTypes[item.kind] || item.kind }}</strong>
+                              <div class="text-caption text-medium-emphasis">
+                                {{ item.name }}
+                              </div>
+                            </td>
+                            <td>{{ item.username }}</td>
+                            <td>
+                              <span class="credential-secret">{{ showDeliverySecrets ? item.secret : '••••••••' }}</span>
+                              <div class="text-caption text-medium-emphasis">
+                                {{ item.secretLabel }}
+                              </div>
+                            </td>
+                            <td>{{ item.detail }}</td>
+                            <td class="text-no-wrap">
+                              <v-btn
+                                icon="mdi-content-copy"
+                                size="small"
+                                title="复制凭据"
+                                variant="text"
+                                @click="copyCredential(item)"
+                              />
+                              <v-btn
+                                v-if="item.kind !== 'SHARED_PASSWORD'"
+                                icon="mdi-shield-check-outline"
+                                size="small"
+                                title="验证该账号"
+                                variant="text"
+                                @click="testCredential(item)"
+                              />
+                            </td>
+                          </tr>
+                        </tbody>
+                      </v-table>
+                      <v-checkbox
+                        v-model="credentialsAcknowledged"
+                        class="mt-3"
+                        color="primary"
+                        hide-details
+                        label="我已下载、复制或打印并妥善保存本次创建的账号凭据"
+                      />
+                    </template>
+                  </div>
+
+                  <div class="setup-section mb-5">
+                    <div class="d-flex align-center ga-3 mb-2">
+                      <v-icon
+                        color="primary"
+                        icon="mdi-shield-check-outline"
+                      />
+                      <div class="text-h6">
+                        上线前登录测试
+                      </div>
+                      <v-chip
+                        :color="verifiedKinds.OWNER ? 'success' : 'warning'"
+                        size="small"
+                        variant="tonal"
+                      >
+                        {{ verifiedKinds.OWNER ? '管理员已验证' : '需验证管理员' }}
+                      </v-chip>
+                    </div>
+                    <div class="text-body-2 text-medium-emphasis mb-4">
+                      测试只校验账号与凭据，不签发登录令牌，不记录为正式登录，也不会绑定大屏设备。
+                    </div>
+                    <v-row>
+                      <v-col
+                        cols="12"
+                        md="3"
+                      >
+                        <v-select
+                          v-model="loginTest.kind"
+                          :items="loginTestKindOptions"
+                          item-title="title"
+                          item-value="value"
+                          label="账号类型"
+                          variant="outlined"
+                          @update:model-value="loginTest.message = ''; loginTest.error = ''"
+                        />
+                      </v-col>
+                      <v-col
+                        cols="12"
+                        md="4"
+                      >
+                        <v-text-field
+                          v-model.trim="loginTest.username"
+                          :label="loginTest.kind === 'SCREEN' ? '大屏登录账号' : '短账号'"
+                          variant="outlined"
+                        />
+                      </v-col>
+                      <v-col
+                        cols="12"
+                        md="5"
+                      >
+                        <v-text-field
+                          v-model="loginTest.password"
+                          :label="loginTest.kind === 'TEACHER' && setupContext?.school?.teacherAuthMode === 'SHARED_PASSWORD' ? '学校通用教师口令' : 'PIN'"
+                          type="password"
+                          variant="outlined"
+                          @keyup.enter="runLoginTest"
+                        />
+                      </v-col>
+                    </v-row>
+                    <v-alert
+                      v-if="loginTest.message"
+                      class="mb-3"
+                      type="success"
+                      variant="tonal"
+                    >
+                      {{ loginTest.message }}
+                    </v-alert>
+                    <v-alert
+                      v-if="loginTest.error"
+                      class="mb-3"
+                      type="error"
+                      variant="tonal"
+                    >
+                      {{ loginTest.error }}
+                    </v-alert>
+                    <v-btn
+                      color="primary"
+                      :disabled="!loginTest.username || !loginTest.password"
+                      :loading="loginTest.loading"
+                      prepend-icon="mdi-login-variant"
+                      variant="tonal"
+                      @click="runLoginTest"
+                    >
+                      验证登录凭据
+                    </v-btn>
+                  </div>
                   <v-row class="mb-4">
                     <v-col
                       v-for="item in countItems"
@@ -705,6 +987,7 @@
                   <div class="d-flex flex-wrap ga-3">
                     <v-btn
                       color="primary"
+                      :disabled="!canFinishSetup"
                       :loading="saving"
                       prepend-icon="mdi-lock-check-outline"
                       size="large"
@@ -718,6 +1001,12 @@
                       返回补充配置
                     </v-btn>
                   </div>
+                  <div
+                    v-if="!canFinishSetup"
+                    class="text-body-2 text-warning mt-3"
+                  >
+                    完成前必须通过管理员登录测试；若本页保存了新凭据，还需确认已经完成交付。
+                  </div>
                 </v-card-text>
               </v-card>
             </v-window-item>
@@ -729,9 +1018,9 @@
 </template>
 
 <script setup>
-import {computed, defineComponent, h, onMounted, reactive, ref} from "vue";
+import {computed, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
-import {completeInstanceSetup, createInstanceSetupScreen, createInstanceSetupSession, describeApiError, getInstanceSetupContext, getInstanceSetupOrganizationTemplate, getInstanceSetupStatus, importInstanceSetupOrganization, importInstanceSetupTeachers, initializeInstanceCore} from "@/utils/classworksV2Client";
+import {completeInstanceSetup, createInstanceSetupScreen, createInstanceSetupSession, describeApiError, getInstanceSetupContext, getInstanceSetupOrganizationTemplate, getInstanceSetupStatus, importInstanceSetupOrganization, importInstanceSetupTeachers, initializeInstanceCore, verifyInstanceSetupLogin} from "@/utils/classworksV2Client";
 
 const ValidationSummary = defineComponent({
   props: {report: {type: Object, required: true}},
@@ -750,6 +1039,7 @@ const saving = ref(false);
 const errorMessage = ref("");
 const status = ref(null);
 const setupContext = ref(null);
+const setupMode = ref("QUICK");
 const stage = ref(1);
 const unlockedStage = ref(1);
 const setupKey = ref("");
@@ -758,23 +1048,56 @@ const organizationText = ref("");
 const organizationReport = ref(null);
 const teacherReport = ref(null);
 const screenCreated = ref(false);
+const showAdministratorPin = ref(false);
+const showSharedPassword = ref(false);
+const showScreenPin = ref(false);
+const showDeliverySecrets = ref(false);
+const credentialsAcknowledged = ref(false);
+const deliveryWarning = ref("");
+const credentialEntries = reactive([]);
+const verifiedKinds = reactive({OWNER: false, TEACHER: false, SCREEN: false});
+const loginTest = reactive({kind: "OWNER", username: "", password: "", loading: false, message: "", error: ""});
 let teacherKey = 0;
 const teachers = reactive([]);
 const now = new Date();
 const schoolYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-const form = reactive({schoolName: "", schoolCode: "", administratorName: "", username: "admin", pin: "", teacherAuthMode: "LOCAL_PIN", sharedPassword: "", allowOAuthTeacherLogin: false, termName: `${schoolYear}-${schoolYear + 1}学年第一学期`, academicYear: schoolYear, semester: 1, startsAt: "", endsAt: "", createDefaultSubjects: true});
-const screenForm = reactive({administrativeClassId: "", name: "", loginCode: "", pin: ""});
+const form = reactive({schoolName: "", schoolCode: "", administratorName: "", username: "admin", pin: "", pinConfirm: "", teacherAuthMode: "LOCAL_PIN", sharedPassword: "", sharedPasswordConfirm: "", allowOAuthTeacherLogin: false, termName: `${schoolYear}-${schoolYear + 1}学年第一学期`, academicYear: schoolYear, semester: 1, startsAt: "", endsAt: "", createDefaultSubjects: true});
+const screenForm = reactive({administrativeClassId: "", name: "", loginCode: "", pin: "", pinConfirm: ""});
 const stageItems = [{value: 1, title: "服务授权"}, {value: 2, title: "核心信息"}, {value: 3, title: "班级组织"}, {value: 4, title: "教师"}, {value: 5, title: "大屏"}, {value: 6, title: "完成"}];
 const authModeOptions = [{title: "教师个人账号＋PIN（推荐）", value: "LOCAL_PIN"}, {title: "教师账号＋学校通用密码", value: "SHARED_PASSWORD"}, {title: "OAuth 邮箱登录", value: "OAUTH_EMAIL"}];
 const semesterOptions = [{title: "第一学期", value: 1}, {title: "第二学期", value: 2}];
 const countItems = computed(() => [
   {title: "行政班/走班", value: status.value?.counts?.workspaces || 0, icon: "mdi-google-classroom"},
+  {title: "教师账号", value: status.value?.counts?.teacherAccounts || 0, icon: "mdi-account-key-outline"},
   {title: "教师任课关系", value: status.value?.counts?.teacherMemberships || 0, icon: "mdi-account-school-outline"},
   {title: "大屏账号", value: status.value?.counts?.screens || 0, icon: "mdi-monitor-account"},
   {title: "科目", value: status.value?.counts?.subjects || 0, icon: "mdi-book-open-page-variant-outline"},
 ]);
 const workspaceOptions = computed(() => (setupContext.value?.workspaces || []).map(item => ({title: `${item.name}（${item.type === "ADMIN_CLASS" ? "行政班" : "走班"}）`, value: item.code})));
 const administrativeClassOptions = computed(() => (setupContext.value?.workspaces || []).filter(item => item.type === "ADMIN_CLASS").map(item => ({title: item.name, value: item.id})));
+const loginTestKindOptions = computed(() => [
+  {title: "管理员账号", value: "OWNER"},
+  ...(setupContext.value?.school?.teacherAuthMode !== "OAUTH_EMAIL" ? [{title: "教师账号", value: "TEACHER"}] : []),
+  ...(status.value?.counts?.screens ? [{title: "大屏账号", value: "SCREEN"}] : []),
+]);
+const administratorPinValid = computed(() => /^\d{4,8}$/.test(form.pin) && form.pin === form.pinConfirm);
+const sharedPasswordValid = computed(() => form.teacherAuthMode !== "SHARED_PASSWORD" || (form.sharedPassword.length >= 8 && form.sharedPassword.length <= 64 && form.sharedPassword === form.sharedPasswordConfirm));
+const coreInputValid = computed(() => Boolean(form.schoolName.trim() && form.schoolCode.trim() && form.termName.trim() && sharedPasswordValid.value && (status.value?.counts?.localAccounts || (form.administratorName.trim() && form.username.trim() && administratorPinValid.value))));
+const screenInputValid = computed(() => Boolean(screenForm.administrativeClassId && screenForm.name.trim() && /^[A-Za-z0-9._-]{3,32}$/.test(screenForm.loginCode.trim()) && /^\d{4,8}$/.test(screenForm.pin) && screenForm.pin === screenForm.pinConfirm));
+const teacherRowsValid = computed(() => {
+  const usernames = teachers.map(item => item.username.trim().toLowerCase());
+  const uniqueUsernames = new Set(usernames.filter(Boolean)).size === usernames.filter(Boolean).length;
+  const pins = teachers.map(item => item.pin).filter(Boolean);
+  const uniquePins = setupContext.value?.school?.teacherAuthMode !== "LOCAL_PIN" || new Set(pins).size === pins.length;
+  return uniqueUsernames && uniquePins && teachers.length > 0 && teachers.every(item => {
+    const validIdentity = item.name.trim() && /^[a-z0-9][a-z0-9._-]{1,31}$/.test(item.username.trim().toLowerCase());
+    const validPin = setupContext.value?.school?.teacherAuthMode !== "LOCAL_PIN" || (/^\d{4,8}$/.test(item.pin) && item.pin === item.pinConfirm);
+    return validIdentity && validPin;
+  });
+});
+const credentialTypes = {OWNER: "管理员", TEACHER: "教师", SCREEN: "大屏", SHARED_PASSWORD: "教师通用口令"};
+const mustAcknowledgeCredentials = computed(() => credentialEntries.length > 0 && !credentialsAcknowledged.value);
+const canFinishSetup = computed(() => verifiedKinds.OWNER && !mustAcknowledgeCredentials.value);
 
 function reportFromError(error) { return error?.response?.data?.data || {valid: false, errors: [{message: describeApiError(error, "校验失败")}], warnings: []}; }
 function dateOnly(value) { return value ? String(value).slice(0, 10) : undefined; }
@@ -791,7 +1114,74 @@ function adaptOrganizationTemplate(template, context) {
     courseGroups: (template.courseGroups || []).map(item => ({...item, subject: mapCode(item.subject)})),
   };
 }
-function addTeacher() { teachers.push({key: ++teacherKey, name: "", username: "", pin: "", workspaceCodes: []}); }
+function addTeacher() { teachers.push({key: ++teacherKey, name: "", username: "", pin: "", pinConfirm: "", showPin: false, workspaceCodes: []}); }
+function generateNumericPin(target, confirmationKey = "pinConfirm") {
+  const usedPins = new Set(teachers.filter(item => item !== target).map(item => item.pin).filter(Boolean));
+  let pin;
+  do {
+    const values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    pin = String(100000 + (values[0] % 900000));
+  } while (usedPins.has(pin));
+  target.pin = pin;
+  target[confirmationKey] = target.pin;
+}
+function teacherUsernameErrors(teacher) {
+  const username = teacher.username.trim().toLowerCase();
+  if (teacher.username && !/^[a-z0-9][a-z0-9._-]{1,31}$/.test(username)) return ["需为2至32位小写字母、数字、点、横线或下划线"];
+  if (username && teachers.filter(item => item.username.trim().toLowerCase() === username).length > 1) return ["该短账号在本批次中重复"];
+  return [];
+}
+function teacherPinErrors(teacher) {
+  if (teacher.pin && !/^\d{4,8}$/.test(teacher.pin)) return ["需为4至8位数字"];
+  if (teacher.pin && teachers.filter(item => item.pin === teacher.pin).length > 1) return ["该 PIN 在本批次中重复，请为教师分配不同 PIN"];
+  return [];
+}
+function generateSharedPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const values = new Uint32Array(14);
+  window.crypto.getRandomValues(values);
+  form.sharedPassword = [...values].map(value => alphabet[value % alphabet.length]).join("");
+  form.sharedPasswordConfirm = form.sharedPassword;
+}
+function rememberCredential(entry) {
+  const existing = credentialEntries.findIndex(item => item.id === entry.id);
+  if (existing >= 0) credentialEntries.splice(existing, 1, entry);
+  else credentialEntries.push(entry);
+  credentialsAcknowledged.value = false;
+}
+function clearCredentialMemory() {
+  credentialEntries.splice(0);
+  loginTest.password = "";
+}
+function csvCell(value) { return `"${String(value ?? "").replaceAll('"', '""')}"`; }
+function credentialCsv() {
+  const rows = [["类型", "名称", "学校代码", "账号", "凭据类型", "初始凭据", "说明"], ...credentialEntries.map(item => [credentialTypes[item.kind] || item.kind, item.name, item.schoolCode, item.username, item.secretLabel, item.secret, item.detail || ""])];
+  return `\uFEFF${rows.map(row => row.map(csvCell).join(",")).join("\r\n")}`;
+}
+function downloadCredentials() {
+  const blob = new window.Blob([credentialCsv()], {type: "text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${setupContext.value?.school?.code || form.schoolCode || "NPClassworks"}-首次账号凭据.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+async function copyCredential(item) {
+  await navigator.clipboard.writeText(`${item.name}\n学校代码：${item.schoolCode}\n账号：${item.username}\n${item.secretLabel}：${item.secret}`);
+}
+function useCredentialForTest(item) {
+  loginTest.kind = item.kind === "SHARED_PASSWORD" ? "TEACHER" : item.kind;
+  loginTest.username = item.username;
+  loginTest.password = item.secret;
+  loginTest.message = "";
+  loginTest.error = "";
+}
+async function testCredential(item) {
+  useCredentialForTest(item);
+  await runLoginTest();
+}
 async function loadStatus() {
   loading.value = true;
   try { status.value = await getInstanceSetupStatus(); } catch (error) { errorMessage.value = describeApiError(error, "无法读取 KV 后端初始化状态"); } finally { loading.value = false; }
@@ -810,19 +1200,31 @@ async function authorizeSetup() {
     setupKey.value = "";
     if (status.value?.counts?.owners && status.value?.counts?.activeTerms) {
       await loadSetupResources(true);
-      stage.value = status.value?.counts?.workspaces ? (status.value?.counts?.teacherMemberships ? 5 : 4) : 3;
+      stage.value = status.value?.counts?.workspaces ? (status.value?.counts?.teacherAccounts ? 5 : 4) : 3;
       unlockedStage.value = Math.max(3, stage.value);
     } else { stage.value = 2; unlockedStage.value = 2; }
   } catch (error) { errorMessage.value = describeApiError(error, "初始化密钥验证失败"); } finally { saving.value = false; }
 }
 async function initializeCore() {
+  if (!coreInputValid.value) {
+    errorMessage.value = "请先补全信息，并确认两次输入的管理员或教师登录凭据一致";
+    return;
+  }
   saving.value = true;
   errorMessage.value = "";
   try {
-    await initializeInstanceCore({...form});
-    form.pin = ""; form.sharedPassword = "";
+    const administratorPin = form.pin;
+    const sharedPassword = form.sharedPassword;
+    const result = await initializeInstanceCore({...form});
+    rememberCredential({id: `owner:${result.account.username}`, kind: "OWNER", name: result.account.name, schoolCode: result.school.code, username: result.account.username, secretLabel: "管理员 PIN", secret: administratorPin, detail: "学校首位所有者"});
+    if (form.teacherAuthMode === "SHARED_PASSWORD") {
+      rememberCredential({id: "shared-password", kind: "SHARED_PASSWORD", name: "全校教师通用口令", schoolCode: result.school.code, username: "（配合各教师短账号使用）", secretLabel: "通用教师口令", secret: sharedPassword, detail: "请仅交给教师，不要张贴在班级大屏旁"});
+    }
+    useCredentialForTest(credentialEntries.find(item => item.kind === "OWNER"));
+    form.pin = ""; form.pinConfirm = ""; form.sharedPassword = ""; form.sharedPasswordConfirm = "";
     await Promise.all([loadStatus(), loadSetupResources(true)]);
-    stage.value = 3; unlockedStage.value = 3;
+    if (setupMode.value === "QUICK") goToStage(6);
+    else goToStage(3);
   } catch (error) { errorMessage.value = describeApiError(error, "核心初始化失败"); } finally { saving.value = false; }
 }
 function parsedOrganization() {
@@ -841,30 +1243,79 @@ async function saveOrganization() {
   try { await importInstanceSetupOrganization(document, false); await Promise.all([loadStatus(), loadSetupResources()]); goToStage(4); } catch (error) { organizationReport.value = reportFromError(error); errorMessage.value = describeApiError(error, "组织配置导入失败"); } finally { saving.value = false; }
 }
 async function saveTeachers() {
+  if (!teacherRowsValid.value) {
+    errorMessage.value = "请检查教师短账号和两次输入的 PIN；同一批次不能使用重复账号或重复 PIN";
+    return;
+  }
   const assignments = teachers.map(({name, username, pin, workspaceCodes}) => ({name, username, pin, workspaceCodes, role: "TEACHER"}));
   saving.value = true; errorMessage.value = "";
   try {
     teacherReport.value = await importInstanceSetupTeachers({assignments}, true);
     if (!teacherReport.value.valid) return;
     teacherReport.value = await importInstanceSetupTeachers({assignments}, false);
-    teachers.forEach(item => { item.pin = ""; });
+    const sharedSecret = credentialEntries.find(item => item.kind === "SHARED_PASSWORD")?.secret || "";
+    assignments.forEach(item => {
+      const secret = setupContext.value.school.teacherAuthMode === "LOCAL_PIN" ? item.pin : sharedSecret;
+      if (!secret) {
+        deliveryWarning.value = "教师账号已经创建，但本次恢复的安装会话中没有学校通用教师口令明文，因此无法重新导出该口令。请使用部署时保存的口令，遗忘时在管理后台重置。";
+        return;
+      }
+      rememberCredential({
+        id: `teacher:${item.username.toLowerCase()}`,
+        kind: "TEACHER",
+        name: item.name,
+        schoolCode: setupContext.value.school.code,
+        username: item.username.toLowerCase(),
+        secretLabel: setupContext.value.school.teacherAuthMode === "LOCAL_PIN" ? "个人 PIN" : "学校通用教师口令",
+        secret,
+        detail: item.workspaceCodes.length ? item.workspaceCodes.join("、") : "尚未分配任课空间",
+      });
+    });
+    teachers.forEach(item => { item.pin = ""; item.pinConfirm = ""; });
     await Promise.all([loadStatus(), loadSetupResources()]); goToStage(5);
   } catch (error) { teacherReport.value = reportFromError(error); } finally { saving.value = false; }
 }
 async function saveScreen() {
+  if (!screenInputValid.value) {
+    errorMessage.value = "请补全大屏账号信息，并确认两次输入的 PIN 一致";
+    return;
+  }
   saving.value = true; errorMessage.value = "";
   try {
-    await createInstanceSetupScreen({...screenForm});
-    screenForm.pin = ""; screenForm.name = ""; screenForm.loginCode = ""; screenForm.administrativeClassId = ""; screenCreated.value = true;
+    const submitted = {...screenForm};
+    const created = await createInstanceSetupScreen(submitted);
+    rememberCredential({id: `screen:${created.loginCode}`, kind: "SCREEN", name: created.name, schoolCode: setupContext.value.school.code, username: created.loginCode, secretLabel: "大屏 PIN", secret: submitted.pin, detail: created.administrativeClass?.name || "班级大屏"});
+    screenForm.pin = ""; screenForm.pinConfirm = ""; screenForm.name = ""; screenForm.loginCode = ""; screenForm.administrativeClassId = ""; screenCreated.value = true;
     await Promise.all([loadStatus(), loadSetupResources()]);
   } catch (error) { errorMessage.value = describeApiError(error, "大屏账号创建失败"); } finally { saving.value = false; }
 }
 function goToStage(value) { stage.value = value; unlockedStage.value = Math.max(unlockedStage.value, value); }
+async function runLoginTest() {
+  loginTest.loading = true;
+  loginTest.message = "";
+  loginTest.error = "";
+  try {
+    const result = await verifyInstanceSetupLogin({
+      kind: loginTest.kind,
+      schoolCode: setupContext.value?.school?.code || form.schoolCode,
+      username: loginTest.username,
+      password: loginTest.password,
+    });
+    verifiedKinds[loginTest.kind] = true;
+    loginTest.message = `${result.name || result.account} 的${credentialTypes[loginTest.kind]}登录凭据验证通过；未签发登录令牌，也未绑定设备。`;
+  } catch (error) {
+    verifiedKinds[loginTest.kind] = false;
+    loginTest.error = describeApiError(error, "登录凭据验证失败");
+  } finally {
+    loginTest.loading = false;
+  }
+}
 async function finishSetup() {
   saving.value = true; errorMessage.value = "";
-  try { status.value = await completeInstanceSetup(); await router.replace("/classworks-admin"); } catch (error) { errorMessage.value = describeApiError(error, "无法完成初始化"); } finally { saving.value = false; }
+  try { status.value = await completeInstanceSetup(); clearCredentialMemory(); await router.replace("/classworks-admin"); } catch (error) { errorMessage.value = describeApiError(error, "无法完成初始化"); } finally { saving.value = false; }
 }
 onMounted(loadStatus);
+onBeforeUnmount(clearCredentialMemory);
 </script>
 
 <style scoped>
@@ -883,6 +1334,9 @@ onMounted(loadStatus);
 .count-tile strong { font-size: 1.35rem; }
 .count-tile span { color: rgba(var(--v-theme-on-surface), .62); font-size: .78rem; }
 .teacher-row, .validation-summary { border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 14px; padding: 16px; }
+.setup-section { border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 16px; padding: 18px; }
+.credential-table { border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
+.credential-secret { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 700; letter-spacing: .04em; }
 .organization-editor :deep(textarea) { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .83rem; line-height: 1.55; }
 @media (max-width: 900px) { .stage-track { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .setup-heading { align-items: flex-start; } .setup-heading h1 { font-size: 1.65rem !important; } .stage-track { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -102,6 +102,10 @@ export async function createInstanceSetupScreen(input) {
   return unwrap(await client.post("/api/v2/setup/screens", input, {headers: setupHeaders()}));
 }
 
+export async function verifyInstanceSetupLogin(input) {
+  return unwrap(await client.post("/api/v2/setup/verify-login", input, {headers: setupHeaders()}));
+}
+
 export async function completeInstanceSetup() {
   const result = unwrap(await client.post("/api/v2/setup/complete", {}, {headers: setupHeaders()}));
   clearSetupToken();
