@@ -439,6 +439,15 @@
                   >
                     已载入一份高二行政班＋走班参考方案，并自动替换为当前学校、学期和科目代码。请按实际分班修改；尚未掌握分班情况时直接跳过最稳妥。
                   </v-alert>
+                  <v-file-input
+                    accept="application/json,.json"
+                    class="mb-4"
+                    clearable
+                    label="导入组织配置 JSON 文件"
+                    prepend-icon="mdi-file-upload-outline"
+                    variant="outlined"
+                    @update:model-value="loadOrganizationFile"
+                  />
                   <v-textarea
                     v-model="organizationText"
                     auto-grow
@@ -507,111 +516,158 @@
                     还没有班级或走班教学空间。现在仍可先创建教师登录账号，待分班确定后再到学校后台分配任课关系。
                   </v-alert>
                   <template v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL'">
-                    <div
-                      v-for="(teacher, index) in teachers"
-                      :key="teacher.key"
-                      class="teacher-row mb-4"
+                    <v-btn-toggle
+                      v-model="teacherImportMode"
+                      class="mb-5"
+                      color="primary"
+                      mandatory
+                      variant="outlined"
                     >
-                      <div class="d-flex align-center justify-space-between mb-3">
-                        <strong>教师 {{ index + 1 }}</strong><v-btn
-                          v-if="teachers.length > 1"
-                          icon="mdi-close"
-                          size="small"
-                          variant="text"
-                          @click="teachers.splice(index, 1)"
-                        />
+                      <v-btn value="FORM">
+                        手动添加
+                      </v-btn>
+                      <v-btn value="JSON">
+                        导入教师配置 JSON
+                      </v-btn>
+                    </v-btn-toggle>
+                    <template v-if="teacherImportMode === 'FORM'">
+                      <div
+                        v-for="(teacher, index) in teachers"
+                        :key="teacher.key"
+                        class="teacher-row mb-4"
+                      >
+                        <div class="d-flex align-center justify-space-between mb-3">
+                          <strong>教师 {{ index + 1 }}</strong><v-btn
+                            v-if="teachers.length > 1"
+                            icon="mdi-close"
+                            size="small"
+                            variant="text"
+                            @click="teachers.splice(index, 1)"
+                          />
+                        </div>
+                        <v-row>
+                          <v-col
+                            cols="12"
+                            md="2"
+                          >
+                            <v-text-field
+                              v-model.trim="teacher.name"
+                              hide-details
+                              label="姓名"
+                              variant="outlined"
+                            />
+                          </v-col>
+                          <v-col
+                            cols="12"
+                            md="2"
+                          >
+                            <v-text-field
+                              v-model.trim="teacher.username"
+                              :error-messages="teacherUsernameErrors(teacher)"
+                              label="短账号"
+                              variant="outlined"
+                            />
+                          </v-col>
+                          <v-col
+                            v-if="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN'"
+                            cols="12"
+                            md="2"
+                          >
+                            <v-text-field
+                              v-model="teacher.pin"
+                              :append-inner-icon="teacher.showPin ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                              append-icon="mdi-auto-fix"
+                              :error-messages="teacherPinErrors(teacher)"
+                              inputmode="numeric"
+                              label="PIN"
+                              :type="teacher.showPin ? 'text' : 'password'"
+                              variant="outlined"
+                              @click:append="generateNumericPin(teacher)"
+                              @click:append-inner="teacher.showPin = !teacher.showPin"
+                            />
+                          </v-col>
+                          <v-col
+                            v-if="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN'"
+                            cols="12"
+                            md="2"
+                          >
+                            <v-text-field
+                              v-model="teacher.pinConfirm"
+                              :error-messages="teacher.pinConfirm && teacher.pin !== teacher.pinConfirm ? ['两次 PIN 不一致'] : []"
+                              inputmode="numeric"
+                              label="确认 PIN"
+                              :type="teacher.showPin ? 'text' : 'password'"
+                              variant="outlined"
+                            />
+                          </v-col>
+                          <v-col
+                            cols="12"
+                            :md="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN' ? 4 : 8"
+                          >
+                            <v-select
+                              v-model="teacher.workspaceCodes"
+                              chips
+                              closable-chips
+                              hide-details
+                              :items="workspaceOptions"
+                              item-title="title"
+                              item-value="value"
+                              label="任课班级/走班（可稍后分配）"
+                              multiple
+                              no-data-text="尚未创建班级，可留空"
+                              variant="outlined"
+                            />
+                          </v-col>
+                        </v-row>
                       </div>
-                      <v-row>
-                        <v-col
-                          cols="12"
-                          md="2"
-                        >
-                          <v-text-field
-                            v-model.trim="teacher.name"
-                            hide-details
-                            label="姓名"
-                            variant="outlined"
-                          />
-                        </v-col>
-                        <v-col
-                          cols="12"
-                          md="2"
-                        >
-                          <v-text-field
-                            v-model.trim="teacher.username"
-                            :error-messages="teacherUsernameErrors(teacher)"
-                            label="短账号"
-                            variant="outlined"
-                          />
-                        </v-col>
-                        <v-col
-                          v-if="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN'"
-                          cols="12"
-                          md="2"
-                        >
-                          <v-text-field
-                            v-model="teacher.pin"
-                            :append-inner-icon="teacher.showPin ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
-                            append-icon="mdi-auto-fix"
-                            :error-messages="teacherPinErrors(teacher)"
-                            inputmode="numeric"
-                            label="PIN"
-                            :type="teacher.showPin ? 'text' : 'password'"
-                            variant="outlined"
-                            @click:append="generateNumericPin(teacher)"
-                            @click:append-inner="teacher.showPin = !teacher.showPin"
-                          />
-                        </v-col>
-                        <v-col
-                          v-if="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN'"
-                          cols="12"
-                          md="2"
-                        >
-                          <v-text-field
-                            v-model="teacher.pinConfirm"
-                            :error-messages="teacher.pinConfirm && teacher.pin !== teacher.pinConfirm ? ['两次 PIN 不一致'] : []"
-                            inputmode="numeric"
-                            label="确认 PIN"
-                            :type="teacher.showPin ? 'text' : 'password'"
-                            variant="outlined"
-                          />
-                        </v-col>
-                        <v-col
-                          cols="12"
-                          :md="setupContext?.school?.teacherAuthMode === 'LOCAL_PIN' ? 4 : 8"
-                        >
-                          <v-select
-                            v-model="teacher.workspaceCodes"
-                            chips
-                            closable-chips
-                            hide-details
-                            :items="workspaceOptions"
-                            item-title="title"
-                            item-value="value"
-                            label="任课班级/走班（可稍后分配）"
-                            multiple
-                            no-data-text="尚未创建班级，可留空"
-                            variant="outlined"
-                          />
-                        </v-col>
-                      </v-row>
-                    </div>
-                    <v-btn
-                      class="mb-4"
-                      prepend-icon="mdi-account-plus-outline"
-                      variant="text"
-                      @click="addTeacher"
-                    >
-                      继续添加教师
-                    </v-btn>
-                    <validation-summary
-                      v-if="teacherReport"
-                      :report="teacherReport"
-                    />
+                      <v-btn
+                        class="mb-4"
+                        prepend-icon="mdi-account-plus-outline"
+                        variant="text"
+                        @click="addTeacher"
+                      >
+                        继续添加教师
+                      </v-btn>
+                      <validation-summary
+                        v-if="teacherReport"
+                        :report="teacherReport"
+                      />
+                    </template>
+                    <template v-else>
+                      <v-alert
+                        class="mb-4"
+                        type="info"
+                        variant="tonal"
+                      >
+                        教师配置可以一次创建短账号、任课关系、年级组长和班主任职责。请使用学校、学期、科目和教学空间的稳定代码，不要填写数据库 UUID。编辑器中的王老师、李老师仅用于展示格式，正式导入前请替换或删除。
+                      </v-alert>
+                      <v-file-input
+                        accept="application/json,.json"
+                        class="mb-4"
+                        clearable
+                        label="导入教师配置 JSON 文件"
+                        prepend-icon="mdi-account-arrow-up-outline"
+                        variant="outlined"
+                        @update:model-value="loadStaffConfigurationFile"
+                      />
+                      <v-textarea
+                        v-model="staffConfigurationText"
+                        auto-grow
+                        class="organization-editor"
+                        label="教师账号、任课与职责配置 JSON"
+                        rows="16"
+                        variant="outlined"
+                        @update:model-value="staffConfigurationReport = null"
+                      />
+                      <validation-summary
+                        v-if="staffConfigurationReport"
+                        :report="staffConfigurationReport"
+                      />
+                    </template>
                   </template>
                   <div class="d-flex flex-wrap ga-3 mt-4">
                     <v-btn
-                      v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL'"
+                      v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL' && teacherImportMode === 'FORM'"
                       color="primary"
                       :disabled="!teacherRowsValid"
                       :loading="saving"
@@ -620,6 +676,25 @@
                     >
                       预检并创建
                     </v-btn>
+                    <template v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL' && teacherImportMode === 'JSON'">
+                      <v-btn
+                        color="primary"
+                        :loading="saving"
+                        prepend-icon="mdi-check-decagram-outline"
+                        @click="validateStaffConfiguration"
+                      >
+                        预检配置
+                      </v-btn>
+                      <v-btn
+                        :disabled="!staffConfigurationReport?.valid"
+                        :loading="saving"
+                        prepend-icon="mdi-database-import-outline"
+                        variant="tonal"
+                        @click="saveStaffConfiguration"
+                      >
+                        确认导入
+                      </v-btn>
+                    </template>
                     <v-btn
                       variant="text"
                       @click="goToStage(5)"
@@ -1020,7 +1095,7 @@
 <script setup>
 import {computed, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
-import {completeInstanceSetup, createInstanceSetupScreen, createInstanceSetupSession, describeApiError, getInstanceSetupContext, getInstanceSetupOrganizationTemplate, getInstanceSetupStatus, importInstanceSetupOrganization, importInstanceSetupTeachers, initializeInstanceCore, verifyInstanceSetupLogin} from "@/utils/classworksV2Client";
+import {completeInstanceSetup, createInstanceSetupScreen, createInstanceSetupSession, describeApiError, getInstanceSetupContext, getInstanceSetupOrganizationTemplate, getInstanceSetupStaffConfigurationTemplate, getInstanceSetupStatus, importInstanceSetupOrganization, importInstanceSetupStaffConfiguration, importInstanceSetupTeachers, initializeInstanceCore, verifyInstanceSetupLogin} from "@/utils/classworksV2Client";
 
 const ValidationSummary = defineComponent({
   props: {report: {type: Object, required: true}},
@@ -1047,6 +1122,9 @@ const showSetupKey = ref(false);
 const organizationText = ref("");
 const organizationReport = ref(null);
 const teacherReport = ref(null);
+const teacherImportMode = ref("FORM");
+const staffConfigurationText = ref("");
+const staffConfigurationReport = ref(null);
 const screenCreated = ref(false);
 const showAdministratorPin = ref(false);
 const showSharedPassword = ref(false);
@@ -1113,6 +1191,66 @@ function adaptOrganizationTemplate(template, context) {
     administrativeClasses: (template.administrativeClasses || []).map(item => ({...item, subjectRules: Object.fromEntries(Object.entries(item.subjectRules || {}).map(([code, mode]) => [mapCode(code), mode]))})),
     courseGroups: (template.courseGroups || []).map(item => ({...item, subject: mapCode(item.subject)})),
   };
+}
+function adaptStaffConfigurationTemplate(template, context) {
+  const subjectCodeByName = new Map((context.subjects || []).map(subject => [subject.name, subject.code]));
+  const templateSubjectNameByCode = new Map([
+    ["CHN", "语文"], ["MATH", "数学"], ["ENG", "英语"], ["PHY", "物理"], ["CHE", "化学"],
+    ["BIO", "生物"], ["HIS", "历史"], ["GEO", "地理"], ["POL", "政治"],
+  ]);
+  const mapSubjectCode = code => subjectCodeByName.get(templateSubjectNameByCode.get(code)) || code;
+  const availableWorkspaceCodes = new Set((context.workspaces || []).map(workspace => workspace.code));
+  const teachers = (template.teachers || []).map(teacher => ({
+    ...teacher,
+    credential: context.school.teacherAuthMode === "SHARED_PASSWORD"
+      ? {mode: "SHARED_PASSWORD"}
+      : teacher.credential,
+    teachingAssignments: (teacher.teachingAssignments || [])
+      .filter(assignment => availableWorkspaceCodes.has(assignment.workspaceCode))
+      .map(assignment => ({...assignment, subjectCode: mapSubjectCode(assignment.subjectCode)})),
+    responsibilities: {
+      gradeLeaderships: (teacher.responsibilities?.gradeLeaderships || [])
+        .filter(item => (context.grades || []).some(grade => grade.code === item.gradeCode)),
+      classLeaderships: (teacher.responsibilities?.classLeaderships || [])
+        .filter(item => availableWorkspaceCodes.has(item.classCode)),
+    },
+  }));
+  return {
+    schemaVersion: 1,
+    schoolCode: context.school.code,
+    term: {academicYear: context.term.academicYear, semester: context.term.semester},
+    teachers,
+  };
+}
+function selectedFile(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+async function readJsonFile(value, onText, onError) {
+  const file = selectedFile(value);
+  if (!file) return;
+  try {
+    const text = await file.text();
+    JSON.parse(text);
+    onText(text);
+  } catch (error) {
+    onError(`无法读取 JSON 文件：${error.message}`);
+  }
+}
+async function loadOrganizationFile(value) {
+  await readJsonFile(value, text => {
+    organizationText.value = text;
+    organizationReport.value = null;
+  }, message => {
+    organizationReport.value = {valid: false, errors: [{message}], warnings: []};
+  });
+}
+async function loadStaffConfigurationFile(value) {
+  await readJsonFile(value, text => {
+    staffConfigurationText.value = text;
+    staffConfigurationReport.value = null;
+  }, message => {
+    staffConfigurationReport.value = {valid: false, errors: [{message}], warnings: []};
+  });
 }
 function addTeacher() { teachers.push({key: ++teacherKey, name: "", username: "", pin: "", pinConfirm: "", showPin: false, workspaceCodes: []}); }
 function generateNumericPin(target, confirmationKey = "pinConfirm") {
@@ -1186,10 +1324,11 @@ async function loadStatus() {
   loading.value = true;
   try { status.value = await getInstanceSetupStatus(); } catch (error) { errorMessage.value = describeApiError(error, "无法读取 KV 后端初始化状态"); } finally { loading.value = false; }
 }
-async function loadSetupResources(forceTemplate = false) {
-  const [context, template] = await Promise.all([getInstanceSetupContext(), getInstanceSetupOrganizationTemplate()]);
+async function loadSetupResources(forceOrganizationTemplate = false, forceStaffTemplate = false) {
+  const [context, template, staffTemplate] = await Promise.all([getInstanceSetupContext(), getInstanceSetupOrganizationTemplate(), getInstanceSetupStaffConfigurationTemplate()]);
   setupContext.value = context;
-  if (!organizationText.value || forceTemplate) organizationText.value = JSON.stringify(adaptOrganizationTemplate(template, context), null, 2);
+  if (!organizationText.value || forceOrganizationTemplate) organizationText.value = JSON.stringify(adaptOrganizationTemplate(template, context), null, 2);
+  if (!staffConfigurationText.value || forceStaffTemplate) staffConfigurationText.value = JSON.stringify(adaptStaffConfigurationTemplate(staffTemplate, context), null, 2);
   if (!teachers.length) addTeacher();
 }
 async function authorizeSetup() {
@@ -1240,7 +1379,7 @@ async function saveOrganization() {
   const document = parsedOrganization();
   if (!document) return;
   saving.value = true; errorMessage.value = "";
-  try { await importInstanceSetupOrganization(document, false); await Promise.all([loadStatus(), loadSetupResources()]); goToStage(4); } catch (error) { organizationReport.value = reportFromError(error); errorMessage.value = describeApiError(error, "组织配置导入失败"); } finally { saving.value = false; }
+  try { await importInstanceSetupOrganization(document, false); await Promise.all([loadStatus(), loadSetupResources(false, true)]); goToStage(4); } catch (error) { organizationReport.value = reportFromError(error); errorMessage.value = describeApiError(error, "组织配置导入失败"); } finally { saving.value = false; }
 }
 async function saveTeachers() {
   if (!teacherRowsValid.value) {
@@ -1274,6 +1413,78 @@ async function saveTeachers() {
     teachers.forEach(item => { item.pin = ""; item.pinConfirm = ""; });
     await Promise.all([loadStatus(), loadSetupResources()]); goToStage(5);
   } catch (error) { teacherReport.value = reportFromError(error); } finally { saving.value = false; }
+}
+function parsedStaffConfiguration() {
+  try {
+    return JSON.parse(staffConfigurationText.value);
+  } catch (error) {
+    staffConfigurationReport.value = {valid: false, errors: [{message: `JSON 格式错误：${error.message}`}], warnings: []};
+    return null;
+  }
+}
+async function validateStaffConfiguration() {
+  const document = parsedStaffConfiguration();
+  if (!document) return;
+  saving.value = true;
+  try {
+    staffConfigurationReport.value = await importInstanceSetupStaffConfiguration(document, true);
+  } catch (error) {
+    staffConfigurationReport.value = reportFromError(error);
+  } finally {
+    saving.value = false;
+  }
+}
+async function saveStaffConfiguration() {
+  const document = parsedStaffConfiguration();
+  if (!document) return;
+  saving.value = true;
+  errorMessage.value = "";
+  try {
+    const result = await importInstanceSetupStaffConfiguration(document, false);
+    staffConfigurationReport.value = result;
+    const byUsername = new Map((document.teachers || []).map(teacher => [String(teacher.username || "").trim().toLowerCase(), teacher]));
+    for (const credential of result.credentials || []) {
+      const teacher = byUsername.get(credential.username);
+      rememberCredential({
+        id: `teacher:${credential.username}`,
+        kind: "TEACHER",
+        name: credential.name,
+        schoolCode: setupContext.value.school.code,
+        username: credential.username,
+        secretLabel: "个人 PIN",
+        secret: credential.pin,
+        detail: (teacher?.teachingAssignments || []).map(item => item.workspaceCode).join("、") || "尚未分配任课空间",
+      });
+    }
+    if (setupContext.value.school.teacherAuthMode === "SHARED_PASSWORD") {
+      const sharedSecret = credentialEntries.find(item => item.kind === "SHARED_PASSWORD")?.secret || "";
+      for (const teacher of document.teachers || []) {
+        if (!sharedSecret) {
+          deliveryWarning.value = "教师账号已经创建，但当前安装会话没有学校通用教师口令明文；请使用部署时保存的口令，遗忘时在后台重置。";
+          break;
+        }
+        rememberCredential({
+          id: `teacher:${String(teacher.username).toLowerCase()}`,
+          kind: "TEACHER",
+          name: teacher.name,
+          schoolCode: setupContext.value.school.code,
+          username: String(teacher.username).toLowerCase(),
+          secretLabel: "学校通用教师口令",
+          secret: sharedSecret,
+          detail: (teacher.teachingAssignments || []).map(item => item.workspaceCode).join("、") || "尚未分配任课空间",
+        });
+      }
+    } else if ((result.credentials || []).length < (document.teachers || []).length) {
+      deliveryWarning.value = "部分教师账号已经存在且使用 GENERATE_PIN，系统保留了原 PIN；原始 PIN 无法再次导出，需要时可在学校后台重置。";
+    }
+    await Promise.all([loadStatus(), loadSetupResources()]);
+    goToStage(5);
+  } catch (error) {
+    staffConfigurationReport.value = reportFromError(error);
+    errorMessage.value = describeApiError(error, "教师配置导入失败");
+  } finally {
+    saving.value = false;
+  }
 }
 async function saveScreen() {
   if (!screenInputValid.value) {

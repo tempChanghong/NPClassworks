@@ -84,6 +84,10 @@ export async function getInstanceSetupOrganizationTemplate() {
   return unwrap(await client.get("/api/v2/setup/organization/template", {headers: setupHeaders()}));
 }
 
+export async function getInstanceSetupStaffConfigurationTemplate() {
+  return unwrap(await client.get("/api/v2/setup/staff-configuration/template", {headers: setupHeaders()}));
+}
+
 export async function importInstanceSetupOrganization(organization, dryRun = true) {
   return unwrap(await client.post("/api/v2/setup/organization/import", organization, {
     headers: setupHeaders(),
@@ -93,6 +97,13 @@ export async function importInstanceSetupOrganization(organization, dryRun = tru
 
 export async function importInstanceSetupTeachers(assignmentPlan, dryRun = true) {
   return unwrap(await client.post("/api/v2/setup/teachers/import", assignmentPlan, {
+    headers: setupHeaders(),
+    params: {dryRun},
+  }));
+}
+
+export async function importInstanceSetupStaffConfiguration(staffConfiguration, dryRun = true) {
+  return unwrap(await client.post("/api/v2/setup/staff-configuration/import", staffConfiguration, {
     headers: setupHeaders(),
     params: {dryRun},
   }));
