@@ -18,6 +18,8 @@
 
 NPClassworks 基于 [Classworks](https://github.com/Moonrend/Classworks) 深度改造，针对高中行政班、选科定班和走班教学并存的实际场景设计。前端是一套 Vue 3 + Vuetify 3 PWA，需要与 [NPClassworksKV](https://github.com/tempChanghong/NPClassworksKV) 后端配合使用。
 
+当前版本：**v1.0.0 · Nijika（伊地知虹夏）**。
+
 ## 主要能力
 
 - 学生、教师、班级大屏三种界面和首次使用引导

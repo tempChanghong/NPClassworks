@@ -82,6 +82,15 @@
               适用于班级大屏的作业板小工具
             </p>
 
+            <v-chip
+              class="mb-4"
+              color="primary"
+              prepend-icon="mdi-tag-outline"
+              variant="tonal"
+            >
+              {{ releaseLabel }}
+            </v-chip>
+
             <div class="d-flex gap-2 flex-wrap mb-6">
               <v-btn
                 color="red"
@@ -380,6 +389,7 @@ export default {
     const copyOk = ref(false);
     const qqGroupNumber = '964979747';
     const qqGroupLink = 'https://qm.qq.com/q/T6qImKJjGi';
+    const releaseLabel = `v${packageJson.version} · ${packageJson.codename}（${packageJson.codenameZh}）`;
     const router = useRouter();
 
     const loadDependencies = () => {
@@ -453,17 +463,17 @@ export default {
       const nav = navigator || {};
       const intl = (typeof Intl !== 'undefined' && Intl.DateTimeFormat) ? Intl.DateTimeFormat().resolvedOptions() : {};
       const tz = intl && intl.timeZone ? intl.timeZone : '';
-      const routePath = router.currentRoute?.value?.fullPath || location.pathname;
+      const routePath = router.currentRoute?.value?.fullPath || window.location.pathname;
       const lines = [
-        `App 版本: v${packageJson?.version || 'unknown'}`,
-        `URL: ${location.href}`,
+        `App 版本: v${packageJson?.version || 'unknown'} · ${packageJson?.codename || 'unknown'}（${packageJson?.codenameZh || 'unknown'}）`,
+        `URL: ${window.location.href}`,
         `路由: ${routePath}`,
         `UserAgent: ${nav.userAgent || ''}`,
         `语言: ${nav.language || ''}`,
         `时区: ${tz}`,
         `平台: ${nav.platform || ''}`,
         `在线: ${String(nav.onLine)}`,
-        `屏幕: ${screen?.width || '-'}x${screen?.height || '-'}`,
+        `屏幕: ${window.screen?.width || '-'}x${window.screen?.height || '-'}`,
         `视口: ${window.innerWidth || '-'}x${window.innerHeight || '-'}`,
       ];
       return lines.join('\n');
@@ -523,6 +533,7 @@ export default {
       copyOk,
       qqGroupNumber,
       qqGroupLink,
+      releaseLabel,
       goToDebug,
       reloadVisitorId,
       openReportDialog,
