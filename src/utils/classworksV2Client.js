@@ -99,6 +99,7 @@ export async function importInstanceSetupTeachers(assignmentPlan, dryRun = true)
   return unwrap(await client.post("/api/v2/setup/teachers/import", assignmentPlan, {
     headers: setupHeaders(),
     params: {dryRun},
+    timeout: 120000,
   }));
 }
 
@@ -106,6 +107,7 @@ export async function importInstanceSetupStaffConfiguration(staffConfiguration, 
   return unwrap(await client.post("/api/v2/setup/staff-configuration/import", staffConfiguration, {
     headers: setupHeaders(),
     params: {dryRun},
+    timeout: 120000,
   }));
 }
 

@@ -18,7 +18,12 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 export default defineConfig(({ mode }) => ({
   base: './',
   plugins: [
-    VueRouter(),
+    VueRouter({
+      // 调试页只参与开发构建，生产包不生成对应路由或异步代码块。
+      exclude: mode === 'development'
+        ? []
+        : ['**/debug.vue', '**/debug-*.vue', '**/socket-debugger.vue'],
+    }),
     mode === 'development' && vueDevTools(),
     Layouts(),
     Vue({
