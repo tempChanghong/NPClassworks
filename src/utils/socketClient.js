@@ -36,9 +36,11 @@ export function getServerUrl() {
     return getEffectiveServerUrl();
   }
 
-  // Prefer configured server domain; fallback to env; then current origin
+  // Production must never fall back to VITE_SERVER_URL: .env.local is a
+  // developer override and Vite loads it during production builds as well.
+  // A self-hosted image without an explicit domain uses its reverse proxy.
   const cfg = getSetting('server.domain');
-  return cfg || envUrl || window.location.origin;
+  return cfg || window.location.origin;
 }
 
 export function getSocket() {

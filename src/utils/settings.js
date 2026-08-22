@@ -73,6 +73,12 @@ const classworksCloudDefaults = {
   "server.siteKey": "",
 };
 
+const supportedServerProviders = ["kv-local", "kv-server", "classworkscloud"];
+const configuredDefaultServerProvider = import.meta.env.VITE_DEFAULT_SERVER_PROVIDER;
+const defaultServerProvider = supportedServerProviders.includes(configuredDefaultServerProvider)
+  ? configuredDefaultServerProvider
+  : "classworkscloud";
+
 /**
  * 所有配置项的定义
  * @type {Object.<string, SettingDefinition>}
@@ -218,7 +224,9 @@ const settingsDefinitions = {
   // 服务器设置（合并了数据提供者设置）
   "server.domain": {
     type: "string",
-    default: "",
+    default: defaultServerProvider === "kv-server"
+      ? (import.meta.env.VITE_DEFAULT_KV_SERVER || "")
+      : "",
     validate: (value) => {
       // 如果不是服务器模式或值为空，直接通过
       if (!value) return true;
@@ -279,9 +287,8 @@ const settingsDefinitions = {
   },
   "server.provider": {
     type: "string",
-    default: "classworkscloud",
-    validate: (value) =>
-      ["kv-local", "kv-server", "classworkscloud"].includes(value),
+    default: defaultServerProvider,
+    validate: (value) => supportedServerProviders.includes(value),
     description: "数据提供者",
     icon: "mdi-database",
     // 选择数据存储方式：使用本地存储或远程服务器
