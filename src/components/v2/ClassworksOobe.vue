@@ -11,7 +11,7 @@
           size="44"
         />
       </v-avatar>
-      <h1>欢迎使用 Classworks</h1>
+      <h1>欢迎使用 NPClassworks</h1>
       <p>请选择这台设备的使用方式。完成一次设置后，系统会自动记住。</p>
     </div>
 

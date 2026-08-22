@@ -14,7 +14,7 @@
           设置
         </div>
         <div class="text-caption text-medium-emphasis">
-          Classworks 2 设置中心
+          NPClassworks 设置中心
         </div>
       </v-app-bar-title>
       <v-chip
@@ -717,7 +717,7 @@
               <SettingsPanel
                 description="面向行政班、走班教学班和班级大屏的统一作业板。"
                 icon="mdi-information-outline"
-                title="关于 Classworks 2"
+                title="关于 NPClassworks"
               >
                 <v-alert
                   color="primary"
@@ -734,7 +734,7 @@
                     <ScopeChip type="admin" />
                   </template>
                   <v-chip variant="tonal">
-                    Classworks 2
+                    NPClassworks
                   </v-chip>
                 </SettingRow>
               </SettingsPanel>
@@ -904,7 +904,7 @@ onMounted(async () => {
     store.bootstrapTeacher(),
     store.bootstrapClassroomScreen(),
   ]);
-  if (results.every((result) => result.status === "rejected")) loadError.value = "无法连接 Classworks 服务器";
+  if (results.every((result) => result.status === "rejected")) loadError.value = "无法连接 NPClassworks 服务器";
   if (navigator.storage?.estimate) storageEstimate.value = await navigator.storage.estimate();
   noisePermissionState.value = await queryMicrophonePermission();
   loading.value = false;
@@ -955,7 +955,7 @@ async function enableSystemNotifications() {
   }
   notificationPermission.value = await Notification.requestPermission();
   notify(notificationPermission.value === "granted"
-    ? "Windows 系统通知已启用；Classworks 提示音仍会独立播放"
+    ? "Windows 系统通知已启用；NPClassworks 提示音仍会独立播放"
     : "系统通知未获授权，应用内提示音不受影响");
 }
 

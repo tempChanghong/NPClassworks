@@ -22,7 +22,7 @@
             mdi-hand-wave
           </v-icon>
           <h2 class="text-h4 mb-3">
-            欢迎使用 Classworks
+            欢迎使用 NPClassworks
           </h2>
           <p class="text-body-1 text-medium-emphasis">
             适用于班级大屏的作业板小工具
@@ -36,7 +36,7 @@
         class="step-content"
       >
         <h3 class="text-h5 mb-6 text-center">
-          Classworks 和 Classworks KV 的关系
+          NPClassworks 和 NPClassworks KV 的关系
         </h3>
 
         <v-card
@@ -60,7 +60,7 @@
                     mdi-laptop
                   </v-icon>
                   <h4 class="text-h6 text-white mt-2">
-                    Classworks
+                    NPClassworks
                   </h4>
                   <p class="text-caption text-white mt-1">
                     作业板应用
@@ -113,7 +113,7 @@
                     mdi-cloud-sync
                   </v-icon>
                   <h4 class="text-h6 text-white mt-2">
-                    Classworks KV
+                    NPClassworks KV
                   </h4>
                   <p class="text-caption text-white mt-1">
                     云端数据库
@@ -275,7 +275,7 @@
           </div>
         </v-card>
         <div class="mb-6">
-          也可以手动前往 Classworks KV 控制台获取认证信息：
+          也可以手动前往 NPClassworks KV 控制台获取认证信息：
         </div>
         <v-card
           :color=" kvserverurl=='https://kv.houlang.cloud'? 'primary' : 'error' "
@@ -291,13 +291,13 @@
           </v-icon>
 
           <h4 class="text-h6  font-weight-bold">
-            请访问 {{ kvserverurl=='https://kv.houlang.cloud'? 'Classworks KV' : '自定义的 Classworks KV 实例 ' }} 控制台
+            请访问 {{ kvserverurl=='https://kv.houlang.cloud'? 'NPClassworks KV' : '自定义的 NPClassworks KV 实例 ' }} 控制台
           </h4>
           <div class="text-h5 mb-6">
             {{ kvserverurl }}
           </div>
           <h6 class="text-subtitle-2">
-            {{ kvserverurl=='https://kv.houlang.cloud'? '此实例由 Classworks KV 官方提供' : '此链接由您的实例、预配代码或管理员管理，当前可能不是 Classworks KV 官方的实例地址。' }}
+            {{ kvserverurl=='https://kv.houlang.cloud'? '此实例由上游 Classworks KV 服务提供' : '此链接由您的实例、预配代码或管理员管理，当前可能不是 NPClassworks KV 的实例地址。' }}
           </h6>
         </v-card>
 
@@ -316,7 +316,7 @@
                 >
                   mdi-help-circle
                 </v-icon>
-                <span class="text-subtitle-1 font-weight-medium">我以前已经使用过 Classworks KV？</span>
+                <span class="text-subtitle-1 font-weight-medium">我以前已经使用过 NPClassworks KV？</span>
               </div>
             </v-expansion-panel-title>
             <v-expansion-panel-text>
@@ -326,7 +326,7 @@
                 variant="tonal"
               >
                 <div class="text-body-2 mb-2">
-                  如果您之前已经使用过 Classworks KV，可以直接使用您的 <strong>UUID（命名空间）</strong> 和
+                  如果您之前已经使用过 NPClassworks KV，可以直接使用您的 <strong>UUID（命名空间）</strong> 和
                   <strong>设置的密码</strong> 进行认证。
                 </div>
                 <div class="text-body-2">
@@ -398,7 +398,7 @@
             渐进式注册
           </h3>
           <p class="text-body-2 text-medium-emphasis">
-            您可以暂时不配置 Classworks KV
+            您可以暂时不配置 NPClassworks KV
           </p>
         </div>
 
@@ -672,7 +672,7 @@ const addLog = (message) => {
 
 
 const generateDeviceName = () => {
-  return `Classworks`
+  return `NPClassworks`
 }
 
 // 主流程

@@ -13,7 +13,7 @@
           设备认证
         </h2>
         <p class="text-body-1 text-medium-emphasis">
-          输入你在 Classworks KV 获取的认证信息
+          输入你在 NPClassworks KV 获取的认证信息
         </p>
       </div>
 

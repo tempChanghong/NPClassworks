@@ -6,7 +6,7 @@
     <div class="init-container">
       <div class="init-header">
         <div class="title">
-          欢迎使用 Classworks
+          欢迎使用 NPClassworks
         </div>
         <div class="subtitle">
           请选择你的使用方式
@@ -36,7 +36,7 @@
                   初次使用
                 </div>
                 <div class="text-body-2 text-medium-emphasis mt-1">
-                  了解 Classworks KV 并开始使用
+                  了解 NPClassworks KV 并开始使用
                 </div>
               </div>
             </div>
@@ -89,7 +89,7 @@
               </div>
               <div class="card-content">
                 <div class="text-h6 font-weight-bold">
-                  Classworks KV
+                  NPClassworks KV
                 </div>
                 <div class="text-body-2 text-medium-emphasis mt-1">
                   打开云端控制台管理数据
@@ -272,7 +272,7 @@ const handleAutoAuthorize = () => {
   const callbackUrl = encodeURIComponent(`${currentDomain}/authorize`)
   const uuid = getSetting('device.uuid') || '00000000-0000-4000-8000-000000000000'
 
-  let url = `${authDomain}/authorize?app_id=${appId}&mode=callback&callback_url=${callbackUrl}&remark=Classworks 自动授权 来自${window.location.hostname} ${new Date().toLocaleString()}`
+  let url = `${authDomain}/authorize?app_id=${appId}&mode=callback&callback_url=${callbackUrl}&remark=NPClassworks 自动授权 来自${window.location.hostname} ${new Date().toLocaleString()}`
   if (uuid !== '00000000-0000-4000-8000-000000000000') {
     url += `&uuid=${encodeURIComponent(uuid)}`
   }

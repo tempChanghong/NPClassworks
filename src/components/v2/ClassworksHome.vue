@@ -1,12 +1,13 @@
 <template>
   <v-app-bar
-    class="px-2"
+    class="classworks-app-bar px-2"
+    :class="{'classworks-app-bar--with-nav': showMainNavigation}"
     color="surface"
     flat
   >
-    <v-app-bar-title>
-      <div class="font-weight-bold">
-        Classworks 作业板
+    <v-app-bar-title class="classworks-app-bar__brand">
+      <div class="font-weight-bold classworks-app-bar__title">
+        NPClassworks 作业板
       </div>
       <div class="text-caption text-medium-emphasis">
         行政班与走班统一作业流
@@ -15,38 +16,44 @@
     <v-btn-toggle
       v-if="showMainNavigation"
       v-model="mode"
+      class="classworks-mode-nav"
       color="primary"
       mandatory
       variant="tonal"
     >
       <v-btn
+        title="看作业"
         value="student"
-        prepend-icon="mdi-book-open-variant"
       >
-        看作业
+        <v-icon icon="mdi-book-open-variant" />
+        <span class="classworks-mode-nav__label">看作业</span>
       </v-btn>
       <v-btn
+        title="教师工作台"
         value="teacher"
-        prepend-icon="mdi-account-tie-outline"
       >
         <v-badge
           color="warning"
           :content="store.teacherActionCenter.summary.total"
           :model-value="store.teacherActionCenter.summary.total > 0"
         >
-          教师
+          <span class="classworks-mode-nav__content">
+            <v-icon icon="mdi-account-tie-outline" />
+            <span class="classworks-mode-nav__label">教师</span>
+          </span>
         </v-badge>
       </v-btn>
       <v-btn
+        title="班级大屏"
         value="screen"
-        prepend-icon="mdi-monitor-dashboard"
       >
-        大屏
+        <v-icon icon="mdi-monitor-dashboard" />
+        <span class="classworks-mode-nav__label">大屏</span>
       </v-btn>
     </v-btn-toggle>
     <v-btn
       v-if="showMainNavigation"
-      class="ml-2"
+      class="classworks-app-bar__settings ml-2"
       icon="mdi-cog-outline"
       title="设置"
       @click="openSettings(mode)"
@@ -365,42 +372,45 @@
           class="mb-6 rounded-xl"
           variant="tonal"
         >
-          <v-card-text class="d-flex align-center pa-4">
-            <v-avatar
-              class="mr-3"
-              :image="store.account.avatarUrl"
-              color="primary"
-            />
-            <div>
-              <div class="font-weight-bold">
-                {{ store.account.name || store.account.username || store.account.email }}
-              </div>
-              <div class="text-caption">
-                已授权 {{ store.teacherWorkspaces.length }} 个教学空间
+          <v-card-text class="teacher-session-summary pa-4">
+            <div class="teacher-session-summary__identity">
+              <v-avatar
+                :image="store.account.avatarUrl"
+                color="primary"
+              />
+              <div class="teacher-session-summary__copy">
+                <div class="font-weight-bold">
+                  {{ store.account.name || store.account.username || store.account.email }}
+                </div>
+                <div class="text-caption">
+                  已授权 {{ store.teacherWorkspaces.length }} 个教学空间
+                </div>
               </div>
             </div>
             <v-spacer />
-            <v-btn
-              prepend-icon="mdi-school-outline"
-              variant="text"
-              @click="$router.push('/classworks-admin')"
-            >
-              学校管理
-            </v-btn>
-            <v-btn
-              v-if="store.account.provider === 'school-local'"
-              prepend-icon="mdi-lock-reset"
-              variant="text"
-              @click="changePinDialog = true"
-            >
-              修改 PIN
-            </v-btn>
-            <v-btn
-              variant="text"
-              @click="store.signOutTeacher()"
-            >
-              退出
-            </v-btn>
+            <div class="teacher-session-summary__actions">
+              <v-btn
+                prepend-icon="mdi-school-outline"
+                variant="text"
+                @click="$router.push('/classworks-admin')"
+              >
+                学校管理
+              </v-btn>
+              <v-btn
+                v-if="store.account.provider === 'school-local'"
+                prepend-icon="mdi-lock-reset"
+                variant="text"
+                @click="changePinDialog = true"
+              >
+                修改 PIN
+              </v-btn>
+              <v-btn
+                variant="text"
+                @click="store.signOutTeacher()"
+              >
+                退出
+              </v-btn>
+            </div>
           </v-card-text>
         </v-card>
 
@@ -1121,6 +1131,45 @@ async function copyScreenBoardToToday() {
 </script>
 
 <style scoped>
+.classworks-app-bar__brand {
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+
+.classworks-app-bar__title {
+  white-space: nowrap;
+}
+
+.classworks-mode-nav__content,
+.classworks-mode-nav :deep(.v-btn__content) {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.teacher-session-summary,
+.teacher-session-summary__identity,
+.teacher-session-summary__actions {
+  align-items: center;
+  display: flex;
+}
+
+.teacher-session-summary__identity {
+  gap: 12px;
+  min-width: 0;
+}
+
+.teacher-session-summary__copy {
+  min-width: 150px;
+}
+
+.teacher-session-summary__actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
 .classworks-overview {
   display: grid;
   gap: 16px;
@@ -1181,6 +1230,25 @@ async function copyScreenBoardToToday() {
 }
 
 @media (max-width: 680px) {
+  .teacher-session-summary {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .teacher-session-summary > :deep(.v-spacer) {
+    display: none;
+  }
+
+  .teacher-session-summary__copy {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-session-summary__actions {
+    justify-content: flex-start;
+  }
+
   .selection-summary__content {
     align-items: stretch;
     flex-direction: column;
@@ -1189,6 +1257,39 @@ async function copyScreenBoardToToday() {
 
   .selection-summary__actions {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .classworks-app-bar--with-nav .classworks-app-bar__brand {
+    display: none;
+  }
+
+  .classworks-mode-nav {
+    flex: 1 1 auto;
+    margin-left: 0 !important;
+    min-width: 0;
+  }
+
+  .classworks-mode-nav :deep(.v-btn) {
+    flex: 1 1 0;
+    min-width: 0 !important;
+    padding-inline: 10px;
+  }
+
+  .classworks-app-bar__settings {
+    flex: 0 0 auto;
+    margin-left: 4px !important;
+  }
+}
+
+@media (max-width: 460px) {
+  .classworks-mode-nav__label {
+    display: none;
+  }
+
+  .classworks-mode-nav :deep(.v-btn__content) {
+    gap: 0;
   }
 }
 </style>

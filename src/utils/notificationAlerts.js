@@ -74,7 +74,7 @@ function pageIsBackgrounded(documentRef) {
 
 export function showSystemNotification(notice, NotificationApi = globalThis.Notification, windowRef = globalThis.window) {
   if (!NotificationApi || NotificationApi.permission !== "granted") return null;
-  const notification = new NotificationApi(notice.title || "Classworks 紧急通知", {
+  const notification = new NotificationApi(notice.title || "NPClassworks 紧急通知", {
     body: notice.content || "收到一条新的紧急通知",
     icon: "/pwa/image/pwa-192x192.png",
     badge: "/pwa/image/pwa-64x64.png",

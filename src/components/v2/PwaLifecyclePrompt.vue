@@ -6,7 +6,7 @@
     :timeout="-1"
   >
     <div class="font-weight-bold">
-      安装 Classworks 作业板
+      安装 NPClassworks 作业板
     </div>
     <div class="text-caption">
       安装后可从桌面直接打开，并获得更稳定的全屏体验。

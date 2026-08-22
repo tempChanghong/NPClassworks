@@ -11,7 +11,7 @@
     <v-card-text>
       <div v-if="!isRegistered && !isRegistering">
         <p class="text-body-1 mb-4">
-          快速创建设备并开始使用 Classworks 云端功能
+          快速创建设备并开始使用 NPClassworks 云端功能
         </p>
 
         <v-alert

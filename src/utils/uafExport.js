@@ -302,7 +302,7 @@ export async function downloadUafAssignments(assignments, dateValue) {
   const link = document.createElement("a");
   const date = normalizeUafDate(dateValue);
   link.href = url;
-  link.download = `Classworks-作业-${date}.uaf.pdf`;
+  link.download = `NPClassworks-作业-${date}.uaf.pdf`;
   document.body.appendChild(link);
   link.click();
   link.remove();
