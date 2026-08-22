@@ -60,6 +60,14 @@ html {
   scroll-behavior: smooth;
 }
 
+// Vuetify's textarea placeholder rule only targets `input::placeholder`.
+// With a label and a textarea, the inline/floating label can therefore share
+// the same paint area with the example text during initial render or blur.
+// Show textarea examples only while the user is interacting with the field.
+.v-textarea .v-field:not(.v-field--no-label, .v-field--focused) textarea::placeholder {
+  opacity: 0;
+}
+
 .v-app-bar {
   position: fixed !important;
 }
