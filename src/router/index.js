@@ -9,7 +9,7 @@ import {createRouter, createWebHistory} from 'vue-router/auto'
 import {setupLayouts} from 'virtual:generated-layouts'
 import {routes} from 'vue-router/auto-routes'
 import {getInstanceSetupStatus} from '@/utils/classworksV2Client'
-import {isDevelopmentOnlyPath} from '@/utils/routeAccess'
+import {isDevelopmentOnlyPath, isLegacyClassworksPath} from '@/utils/routeAccess'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -19,6 +19,10 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   if (isDevelopmentOnlyPath(to.path)) {
     return import.meta.env.DEV ? true : {path: '/', replace: true}
+  }
+  if (isLegacyClassworksPath(to.path)) {
+    const legacyEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_LEGACY_CLASSWORKS === 'true'
+    return legacyEnabled ? true : {path: '/', replace: true}
   }
   if (to.path === '/setup') return true
   try {

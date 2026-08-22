@@ -31,8 +31,16 @@ export function getServerUrl() {
     return envUrl;
   }
 
-  // For classworkscloud provider, use the effective server URL from rotation
-  if (isRotationEnabled()) {
+  const legacyCloudEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_LEGACY_CLASSWORKS === "true";
+  const provider = getSetting('server.provider');
+
+  // A stale Classworks 1 localStorage setting must not move a self-hosted
+  // NPClassworks client back to the public Classworks Cloud service.
+  if (provider === 'classworkscloud' && !legacyCloudEnabled) {
+    return import.meta.env.VITE_DEFAULT_KV_SERVER || window.location.origin;
+  }
+
+  if (legacyCloudEnabled && isRotationEnabled()) {
     return getEffectiveServerUrl();
   }
 

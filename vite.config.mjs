@@ -10,19 +10,35 @@ import { VitePWA } from 'vite-plugin-pwa'
 //import { TDesignResolver } from 'unplugin-vue-components/resolvers'
 
 // Utilities
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const includeLegacyClassworks = mode === 'development' || env.VITE_ENABLE_LEGACY_CLASSWORKS === 'true'
+  const productionOnlyExcludes = [
+    '**/debug.vue',
+    '**/debug-*.vue',
+    '**/socket-debugger.vue',
+    ...includeLegacyClassworks ? [] : [
+      '**/authorize.vue',
+      '**/authorizecallback.vue',
+      '**/CacheManagement.vue',
+      '**/cses2wakeup.vue',
+      '**/list/**/*.vue',
+    ],
+  ]
+
+  return ({
   base: './',
   plugins: [
     VueRouter({
       // 调试页只参与开发构建，生产包不生成对应路由或异步代码块。
       exclude: mode === 'development'
         ? []
-        : ['**/debug.vue', '**/debug-*.vue', '**/socket-debugger.vue'],
+        : productionOnlyExcludes,
     }),
     mode === 'development' && vueDevTools(),
     Layouts(),
@@ -389,4 +405,5 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-}))
+  })
+})

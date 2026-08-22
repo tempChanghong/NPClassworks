@@ -77,7 +77,7 @@ const supportedServerProviders = ["kv-local", "kv-server", "classworkscloud"];
 const configuredDefaultServerProvider = import.meta.env.VITE_DEFAULT_SERVER_PROVIDER;
 const defaultServerProvider = supportedServerProviders.includes(configuredDefaultServerProvider)
   ? configuredDefaultServerProvider
-  : "classworkscloud";
+  : "kv-server";
 
 /**
  * 所有配置项的定义
@@ -268,7 +268,7 @@ const settingsDefinitions = {
   },
   "server.authDomain": {
     type: "string",
-    default: import.meta.env.VITE_DEFAULT_AUTH_SERVER || "https://kv.houlang.cloud",
+    default: import.meta.env.VITE_DEFAULT_AUTH_SERVER || "",
     description: "授权服务器域名",
     icon: "mdi-shield-account",
     validate: (value) => {

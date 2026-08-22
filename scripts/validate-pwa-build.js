@@ -136,6 +136,27 @@ if (!fs.existsSync(path.join(distDir, 'sw-cache-manager.js'))) {
   fail('dist/sw-cache-manager.js 不存在。');
 }
 
+if (process.env.VITE_ENABLE_LEGACY_CLASSWORKS !== 'true' && fs.existsSync(distDir)) {
+  const assetDir = path.join(distDir, 'assets');
+  const assetNames = fs.existsSync(assetDir) ? fs.readdirSync(assetDir) : [];
+  const legacyChunkPattern = /^(?:authorize(?:callback)?|CacheManagement|cses2wakeup|dataProvider)-/;
+  for (const name of assetNames.filter((entry) => legacyChunkPattern.test(entry))) {
+    fail(`生产包不应包含 Classworks 1 页面或数据层: assets/${name}`);
+  }
+
+  const forbiddenRuntimePatterns = [
+    ['Classworks 1 云端地址', /kv-service\.(?:houlang\.cloud|wuyuan\.dev)/],
+    ['Classworks 1 自动授权接口', /\/apps\/auth\/token/],
+    ['开发机后端地址', /localhost:3031/],
+  ];
+  for (const name of assetNames.filter((entry) => entry.endsWith('.js'))) {
+    const source = fs.readFileSync(path.join(assetDir, name), 'utf8');
+    for (const [label, pattern] of forbiddenRuntimePatterns) {
+      if (pattern.test(source)) fail(`生产包 assets/${name} 仍包含${label}。`);
+    }
+  }
+}
+
 if (errors.length > 0) {
   console.error('PWA 构建校验失败:');
   for (const error of errors) {
