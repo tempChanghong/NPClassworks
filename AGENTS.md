@@ -24,22 +24,18 @@ pnpm run lint         # ESLint with auto-fix
 - **Routing**: Vue Router 4 with file-based routes (`unplugin-vue-router` + `vite-plugin-vue-layouts`)
 - **Build**: Vite 5, pnpm
 - **Real-time**: Socket.IO client (singleton in `src/utils/socketClient.js`)
-- **Data**: Pluggable KV provider abstraction (`src/utils/dataProvider.js`) with IndexedDB local and HTTP server backends
+- **Data**: NPClassworks v2 HTTP API (`src/utils/classworksV2Client.js`) plus scoped local caches for offline large-screen operation
 - **PWA**: `vite-plugin-pwa` with Workbox service worker
 
 ## Architecture
 
 ### Data Layer
 
-`src/utils/dataProvider.js` abstracts data operations. It routes to either:
-- `src/utils/providers/kvLocalProvider.js` — IndexedDB via `idb`
-- `src/utils/providers/kvServerProvider.js` — HTTP API via axios
-
-Server failover is handled by `src/utils/serverRotation.js`.
+`src/utils/classworksV2Client.js` is the frontend API boundary for setup, accounts, academic structure, publications, classroom screens and administration. Offline large-screen state is isolated in `src/utils/screenOfflineCache.js` and `src/utils/screenPublicationQueue.js`.
 
 ### Real-time Layer
 
-`src/utils/socketClient.js` — Socket.IO singleton with room-based token join/leave for live updates.
+`src/utils/socketClient.js` — Socket.IO singleton with workspace-room join/leave for publication invalidation events.
 
 ### Settings Layer
 
@@ -47,20 +43,17 @@ Server failover is handled by `src/utils/serverRotation.js`.
 
 ### UI Layer
 
-File-based routing: each `.vue` in `src/pages/` becomes a route. Layouts in `src/layouts/`. The main dashboard is `src/pages/index.vue` (78KB — the core view composing homework grid, time card, noise monitor, random picker, exam schedule, etc.).
+File-based routing: each `.vue` in `src/pages/` becomes a route. Layouts are in `src/layouts/`. The root page mounts `src/components/v2/ClassworksHome.vue`, which switches between student, teacher and classroom-screen experiences.
 
 Components are organized by feature:
-- `src/components/home/` — Home page components
-- `src/components/settings/` — Settings cards
-- `src/components/auth/` — Authentication flow
-- `src/components/attendance/` — Attendance management
+- `src/components/v2/` — Main homework board, authentication, screen tools and current settings UI
+- `src/components/admin/` — School administration views
 - `src/components/common/` — Shared components
 
 ### Key Utilities
 
-- `src/axios/axios.js` — Axios instance with auth interceptors and rate limit handling
-- `src/utils/api.js` — API helpers, namespace info, server rotation
-- `src/utils/visitorId.js` — FingerprintJS device identification
+- `src/utils/classworksV2Client.js` — Axios clients, account/session handling and v2 API methods
+- `src/utils/visitorId.js` — Locally generated stable device identifier; browser fingerprint analytics are opt-in at build time
 - `src/utils/soundList.js` — Auto-generated from `public/sounds/` by `scripts/generate-sound-list.js` (runs as `prebuild`)
 
 ## Code Style

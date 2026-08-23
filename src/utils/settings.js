@@ -66,19 +66,6 @@ const SETTINGS_STORAGE_KEY = "Classworks_settings";
 const SETTINGS_CHANGED_EVENT = "classworks:settings:changed";
 
 
-// 新增: Classworks云端存储的默认设置
-const classworksCloudDefaults = {
-  "server.domain": import.meta.env.VITE_DEFAULT_KV_SERVER || "https://kv-service.houlang.cloud",
-  //"server.domain": "http://localhost:3030",
-  "server.siteKey": "",
-};
-
-const supportedServerProviders = ["kv-local", "kv-server", "classworkscloud"];
-const configuredDefaultServerProvider = import.meta.env.VITE_DEFAULT_SERVER_PROVIDER;
-const defaultServerProvider = supportedServerProviders.includes(configuredDefaultServerProvider)
-  ? configuredDefaultServerProvider
-  : "kv-server";
-
 /**
  * 所有配置项的定义
  * @type {Object.<string, SettingDefinition>}
@@ -221,79 +208,6 @@ const settingsDefinitions = {
     icon: "mdi-clock-fast",
     // 启用后，迟到的人数也会计入出勤人数
   },
-  // 服务器设置（合并了数据提供者设置）
-  "server.domain": {
-    type: "string",
-    default: defaultServerProvider === "kv-server"
-      ? (import.meta.env.VITE_DEFAULT_KV_SERVER || "")
-      : "",
-    validate: (value) => {
-      // 如果不是服务器模式或值为空，直接通过
-      if (!value) return true;
-      // 验证URL格式
-      try {
-        new URL(value);
-        return true;
-      } catch (e) {
-        console.error("域名格式无效:", e);
-        return false;
-      }
-    },
-    description: "后端服务器域名",
-    icon: "mdi-web",
-    // 设置后端服务器的域名，用于从远程服务器获取数据
-  },
-  "server.classNumber": {
-    type: "string",
-    default: "高三八班",
-    //validate: (value) => /^[A-Za-z0-9]*$/.test(value),
-    validate: (value) => /.*/.test(value),
-    description: "班级编号",
-    icon: "mdi-account-group",
-    // 设置班级标识，用于区分不同班级的数据
-  },
-  "server.siteKey": {
-    type: "string",
-    default: "",
-    description: "网站令牌",
-    icon: "mdi-key-chain",
-    // 用于后端验证请求的令牌，将作为请求头 x-site-key 发送
-  },
-  "server.kvToken": {
-    type: "string",
-    default: "",
-    description: "KV授权令牌",
-    icon: "mdi-shield-key",
-    // 用于KV服务器认证的令牌，将作为请求头 x-app-token 发送
-  },
-  "server.authDomain": {
-    type: "string",
-    default: import.meta.env.VITE_DEFAULT_AUTH_SERVER || "",
-    description: "授权服务器域名",
-    icon: "mdi-shield-account",
-    validate: (value) => {
-      // 如果值为空，直接通过
-      if (!value) return true;
-      // 验证URL格式
-      try {
-        new URL(value);
-        return true;
-      } catch (e) {
-        console.error("授权域名格式无效:", e);
-        return false;
-      }
-    },
-    // 用于CSKV授权跳转的服务器域名
-  },
-  "server.provider": {
-    type: "string",
-    default: defaultServerProvider,
-    validate: (value) => supportedServerProviders.includes(value),
-    description: "数据提供者",
-    icon: "mdi-database",
-    // 选择数据存储方式：使用本地存储或远程服务器
-  },
-
   // 刷新设置
   "refresh.auto": {
     type: "boolean",
@@ -588,13 +502,6 @@ class SettingsManagerClass {
       const devEnabled = this.settingsCache["developer.enabled"];
       if (!devEnabled) {
         return definition.default;
-      }
-    }
-
-    // 检查是否使用Classworks云端存储，并覆盖特定设置
-    if (this.settingsCache["server.provider"] === "classworkscloud") {
-      if (classworksCloudDefaults[key] !== undefined) {
-        return classworksCloudDefaults[key];
       }
     }
 

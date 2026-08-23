@@ -310,18 +310,14 @@ curl -fsS http://10.20.0.20:3000/ready
 
 ### 4.5 前端服务器
 
-前端的后端地址在构建时写入。推荐将两个地址都设置为对外统一域名：
+前端的后端地址在构建时写入。单域名部署可留空并使用当前站点；前后端分离时设置后端公开域名：
 
 ```bash
 cd /opt/npclassworks/NPClassworks
 docker build \
   --build-arg VITE_DEFAULT_KV_SERVER=https://cs.example.com \
-  --build-arg VITE_DEFAULT_AUTH_SERVER=https://cs.example.com \
-  --build-arg VITE_DEFAULT_SERVER_PROVIDER=kv-server \
   -t npclassworks-frontend:v1.0.0 .
 ```
-
-`VITE_DEFAULT_SERVER_PROVIDER=kv-server` 表示首次打开时直接使用学校自建后端；只有明确部署为 Classworks 官方云端客户端时才应改为 `classworkscloud`，以免请求被云端节点轮换逻辑带离学校服务器。
 
 生产构建还应保持 `VITE_ENABLE_ANALYTICS=false`（默认值）。这样不会加载 Clarity 和 FingerprintJS；只有学校明确同意采集访问分析数据时才应主动改为 `true`。
 
@@ -356,8 +352,16 @@ Caddy 示例：
 cs.example.com {
     encode zstd gzip
 
+    @retired {
+        path /kv /kv/* /apps /apps/* /devices /devices/* /auth /auth/* /auto-auth /auto-auth/*
+    }
+
+    handle @retired {
+        respond "Classworks 1 API has been retired" 410
+    }
+
     @backend {
-        path /api /api/* /accounts /accounts/* /kv /kv/* /apps /apps/* /devices /devices/* /auth /auth/* /auto-auth /auto-auth/* /socket.io /socket.io/* /check /ready
+        path /api /api/* /accounts /accounts/* /socket.io /socket.io/* /check /ready
     }
 
     handle @backend {
@@ -507,7 +511,7 @@ journalctl -u npclassworks-backup.service --since today
 
 ### 域名能打开，但登录或实时同步失败
 
-检查网关是否完整转发 `/accounts`、`/api`、`/kv`、`/apps`、`/devices`、`/auth`、`/auto-auth` 和 `/socket.io`。只代理 `/api` 会导致认证或旧 KV 功能异常。
+检查网关是否完整转发 `/accounts`、`/api` 和 `/socket.io`。C1 的 `/kv`、`/apps`、`/devices`、`/auth`、`/auto-auth` 已退役，网关应直接返回 HTTP 410。
 
 ### `/check` 正常而 `/ready` 失败
 

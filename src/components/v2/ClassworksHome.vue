@@ -390,6 +390,7 @@
             <v-spacer />
             <div class="teacher-session-summary__actions">
               <v-btn
+                v-if="canOpenAdmin"
                 prepend-icon="mdi-school-outline"
                 variant="text"
                 @click="$router.push('/classworks-admin')"
@@ -697,6 +698,9 @@ const loginSchool = computed(() => store.schools.find((school) => school.id === 
 const showOAuthLogin = computed(() => Boolean(
   store.oauthProviders.length &&
   (loginSchool.value?.teacherAuthMode === "OAUTH_EMAIL" || loginSchool.value?.allowOAuthTeacherLogin),
+));
+const canOpenAdmin = computed(() => store.schoolMemberships.some((membership) =>
+  ["OWNER", "ADMIN"].includes(membership.role),
 ));
 const showMainNavigation = computed(() => Boolean(
   appReady.value &&

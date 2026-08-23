@@ -17,7 +17,6 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const includeLegacyClassworks = mode === 'development' || env.VITE_ENABLE_LEGACY_CLASSWORKS === 'true'
   const analyticsModule = env.VITE_ENABLE_ANALYTICS === 'true'
     ? './src/utils/analyticsEnabled.js'
     : './src/utils/analyticsDisabled.js'
@@ -25,13 +24,6 @@ export default defineConfig(({ mode }) => {
     '**/debug.vue',
     '**/debug-*.vue',
     '**/socket-debugger.vue',
-    ...includeLegacyClassworks ? [] : [
-      '**/authorize.vue',
-      '**/authorizecallback.vue',
-      '**/CacheManagement.vue',
-      '**/cses2wakeup.vue',
-      '**/list/**/*.vue',
-    ],
   ]
 
   return ({
@@ -378,7 +370,7 @@ export default defineConfig(({ mode }) => {
           // 实时通信
           'vendor-socket': ['socket.io-client'],
           // 通用工具库
-          'vendor-utils': ['axios', 'uuid', 'js-base64'],
+          'vendor-utils': ['axios'],
         },
       },
     },
@@ -388,11 +380,6 @@ export default defineConfig(({ mode }) => {
     proxy: {
       '/api': 'http://127.0.0.1:3000',
       '/accounts': 'http://127.0.0.1:3000',
-      '/kv': 'http://127.0.0.1:3000',
-      '/apps': 'http://127.0.0.1:3000',
-      '/devices': 'http://127.0.0.1:3000',
-      '/auth': 'http://127.0.0.1:3000',
-      '/auto-auth': 'http://127.0.0.1:3000',
       '/check': 'http://127.0.0.1:3000',
       '/ready': 'http://127.0.0.1:3000',
       '/metrics': 'http://127.0.0.1:3000',

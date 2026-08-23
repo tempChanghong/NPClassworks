@@ -1,15 +1,15 @@
 const DEVELOPMENT_ONLY_PATHS = new Set([
   "/debug",
-  "/debug-init",
-  "/debug-socket",
   "/socket-debugger",
 ]);
 
-const LEGACY_CLASSWORKS_PATHS = new Set([
+const RETIRED_CLASSWORKS_PATHS = new Set([
   "/authorize",
   "/authorizecallback",
-  "/CacheManagement",
+  "/cachemanagement",
   "/cses2wakeup",
+  "/debug-init",
+  "/debug-socket",
   "/list",
 ]);
 
@@ -18,7 +18,9 @@ export function isDevelopmentOnlyPath(path) {
   return DEVELOPMENT_ONLY_PATHS.has(normalizedPath) || normalizedPath.startsWith("/debug/");
 }
 
-export function isLegacyClassworksPath(path) {
-  const normalizedPath = typeof path === "string" ? path.replace(/\/+$/, "") || "/" : "";
-  return LEGACY_CLASSWORKS_PATHS.has(normalizedPath) || normalizedPath.startsWith("/list/");
+export function isRetiredClassworksPath(path) {
+  const normalizedPath = typeof path === "string"
+    ? path.replace(/\/+$/, "").toLowerCase() || "/"
+    : "";
+  return RETIRED_CLASSWORKS_PATHS.has(normalizedPath) || normalizedPath.startsWith("/list/");
 }

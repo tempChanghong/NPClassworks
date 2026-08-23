@@ -136,7 +136,7 @@ if (!fs.existsSync(path.join(distDir, 'sw-cache-manager.js'))) {
   fail('dist/sw-cache-manager.js 不存在。');
 }
 
-if (process.env.VITE_ENABLE_LEGACY_CLASSWORKS !== 'true' && fs.existsSync(distDir)) {
+if (fs.existsSync(distDir)) {
   const assetDir = path.join(distDir, 'assets');
   const assetNames = fs.existsSync(assetDir) ? fs.readdirSync(assetDir) : [];
   const legacyChunkPattern = /^(?:authorize(?:callback)?|CacheManagement|cses2wakeup|dataProvider)-/;

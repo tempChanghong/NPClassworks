@@ -3,8 +3,6 @@
 // - Exposes join/leave helpers and event on/off wrappers
 
 import {io} from 'socket.io-client';
-import {getSetting} from '@/utils/settings';
-import {getEffectiveServerUrl, isRotationEnabled} from '@/utils/serverRotation';
 
 let socket = null;
 let connectedDomain = null;
@@ -31,24 +29,9 @@ export function getServerUrl() {
     return envUrl;
   }
 
-  const legacyCloudEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_LEGACY_CLASSWORKS === "true";
-  const provider = getSetting('server.provider');
-
-  // A stale Classworks 1 localStorage setting must not move a self-hosted
-  // NPClassworks client back to the public Classworks Cloud service.
-  if (provider === 'classworkscloud' && !legacyCloudEnabled) {
-    return import.meta.env.VITE_DEFAULT_KV_SERVER || window.location.origin;
-  }
-
-  if (legacyCloudEnabled && isRotationEnabled()) {
-    return getEffectiveServerUrl();
-  }
-
-  // Production must never fall back to VITE_SERVER_URL: .env.local is a
-  // developer override and Vite loads it during production builds as well.
-  // A self-hosted image without an explicit domain uses its reverse proxy.
-  const cfg = getSetting('server.domain');
-  return cfg || window.location.origin;
+  // Production uses the explicitly built backend URL for split deployments,
+  // otherwise the reverse proxy on the current origin.
+  return import.meta.env.VITE_DEFAULT_KV_SERVER || window.location.origin;
 }
 
 export function getSocket() {
@@ -64,10 +47,6 @@ export function getSocket() {
     }
     connectedDomain = serverUrl;
 
-    // For classworkscloud, create socket with the first server in rotation
-    // Note: Socket.IO's built-in reconnection will retry the same server URL.
-    // Server rotation is handled at the HTTP request level, not Socket.IO level.
-    // If the Socket.IO server goes down, the connection will fail until the server recovers.
     socket = io(serverUrl, {transports:  ["polling","websocket"]});
     socket.on("connect", notifyConnectionListeners);
     socket.on("disconnect", notifyConnectionListeners);
@@ -99,22 +78,6 @@ export function off(event, handler) {
   }
 }
 
-export function joinToken(token) {
-  const s = getSocket();
-  if (!token) return;
-  s.emit('join-token', {token});
-}
-
-export function leaveToken(token) {
-  if (!socket) return;
-  socket.emit('leave-token', {token});
-}
-
-export function leaveAll() {
-  if (!socket) return;
-  socket.emit('leave-all');
-}
-
 export function joinWorkspaces(workspaceIds) {
   const s = getSocket();
   if (!Array.isArray(workspaceIds) || workspaceIds.length === 0) return;
@@ -137,14 +100,6 @@ export function onConnectionState(handler) {
   connectionListeners.add(handler);
   handler(connectionSnapshot());
   return () => connectionListeners.delete(handler);
-}
-
-export function sendEvent(type, content = null) {
-  const s = getSocket();
-  s.emit('send-event', {
-    type,
-    content
-  });
 }
 
 export function disconnect() {

@@ -36,7 +36,7 @@ NPClassworks 基于 [Classworks](https://github.com/Moonrend/Classworks) 深度�
 - Vue 3、Vuetify 3、Pinia、Vue Router
 - Vite 5、PWA / Workbox
 - Socket.IO 实时同步
-- IndexedDB 本地数据与 HTTP 服务端数据提供器
+- HTTP API、PostgreSQL 服务端数据与大屏离线队列
 
 ## 本地开发
 
@@ -59,7 +59,7 @@ pnpm run lint
 
 ## 部署
 
-生产环境建议让前后端保持同源，由反向代理统一提供 HTTPS，并将 `/api`、`/accounts`、`/auth`、`/kv`、`/socket.io` 等后端路径转发至 NPClassworksKV。部署前请先阅读后端仓库的生产配置说明并执行数据库迁移。
+生产环境建议让前后端保持同源，由反向代理统一提供 HTTPS，并将 `/api`、`/accounts`、`/socket.io`、健康检查和指标路径转发至 NPClassworksKV。部署前请先阅读后端仓库的生产配置说明并执行数据库迁移。
 
 联合生产栈由同级的 NPClassworksKV 仓库统一启动，必须显式加载生产环境文件：
 
