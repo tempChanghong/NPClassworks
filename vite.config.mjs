@@ -18,6 +18,9 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const includeLegacyClassworks = mode === 'development' || env.VITE_ENABLE_LEGACY_CLASSWORKS === 'true'
+  const analyticsModule = env.VITE_ENABLE_ANALYTICS === 'true'
+    ? './src/utils/analyticsEnabled.js'
+    : './src/utils/analyticsDisabled.js'
   const productionOnlyExcludes = [
     '**/debug.vue',
     '**/debug-*.vue',
@@ -347,6 +350,7 @@ export default defineConfig(({ mode }) => {
   define: { 'process.env': {} },
   resolve: {
     alias: {
+      'virtual:npclassworks-analytics': fileURLToPath(new URL(analyticsModule, import.meta.url)),
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
     extensions: [

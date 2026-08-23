@@ -10,6 +10,11 @@ import {setupLayouts} from 'virtual:generated-layouts'
 import {routes} from 'vue-router/auto-routes'
 import {getInstanceSetupStatus} from '@/utils/classworksV2Client'
 import {isDevelopmentOnlyPath, isLegacyClassworksPath} from '@/utils/routeAccess'
+import {
+  hasCompletedSetup,
+  rememberCompletedSetup,
+  SETUP_STATUS_TIMEOUT_MS,
+} from '@/utils/setupStatusCache'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -25,8 +30,10 @@ router.beforeEach(async (to) => {
     return legacyEnabled ? true : {path: '/', replace: true}
   }
   if (to.path === '/setup') return true
+  if (hasCompletedSetup()) return true
   try {
-    const status = await getInstanceSetupStatus()
+    const status = await getInstanceSetupStatus({timeout: SETUP_STATUS_TIMEOUT_MS})
+    if (rememberCompletedSetup(status)) return true
     if (status.state !== 'COMPLETED') {
       return {path: '/setup', query: {from: to.fullPath}}
     }

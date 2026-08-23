@@ -157,6 +157,16 @@ if (process.env.VITE_ENABLE_LEGACY_CLASSWORKS !== 'true' && fs.existsSync(distDi
   }
 }
 
+if (process.env.VITE_ENABLE_ANALYTICS !== 'true' && fs.existsSync(path.join(distDir, 'assets'))) {
+  const assetDir = path.join(distDir, 'assets');
+  for (const name of fs.readdirSync(assetDir).filter((entry) => entry.endsWith('.js'))) {
+    const source = fs.readFileSync(path.join(assetDir, name), 'utf8');
+    if (/rhp8uqoc3l|clarity\.ms|FingerprintJS\.load|fp\.esm/i.test(source)) {
+      fail(`生产包 assets/${name} 仍包含默认关闭的分析或设备指纹代码。`);
+    }
+  }
+}
+
 if (errors.length > 0) {
   console.error('PWA 构建校验失败:');
   for (const error of errors) {

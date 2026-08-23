@@ -60,8 +60,10 @@ function setupHeaders() {
   return {"X-Classworks-Setup-Token": sessionStorage.getItem(SETUP_TOKEN_KEY) || ""};
 }
 
-export async function getInstanceSetupStatus() {
-  return unwrap(await client.get("/api/v2/setup/status"));
+export async function getInstanceSetupStatus({timeout} = {}) {
+  return unwrap(await client.get("/api/v2/setup/status", {
+    ...(Number.isFinite(timeout) && timeout > 0 ? {timeout} : {}),
+  }));
 }
 
 export async function createInstanceSetupSession(setupKey) {

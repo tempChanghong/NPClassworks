@@ -9,6 +9,7 @@ test("production image builds the PWA and serves only its static output", () => 
   assert.match(dockerfile, /FROM node:22-alpine AS build/);
   assert.match(dockerfile, /ARG VITE_DEFAULT_SERVER_PROVIDER=kv-server/);
   assert.match(dockerfile, /ENV VITE_DEFAULT_SERVER_PROVIDER=\$VITE_DEFAULT_SERVER_PROVIDER/);
+  assert.match(dockerfile, /ARG VITE_ENABLE_ANALYTICS=false/);
   assert.match(dockerfile, /RUN pnpm run build/);
   assert.match(dockerfile, /COPY --from=build \/app\/dist \/usr\/share\/nginx\/html/);
 });

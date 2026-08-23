@@ -8,6 +8,7 @@ import {
   hasExportableHomework,
   itemsFromBoardData,
   normalizeUafDate,
+  DEFAULT_ASSIGNMENT_STYLE,
   UafExportValidationError,
 } from "../src/utils/uafExport.js";
 
@@ -24,8 +25,20 @@ assert.equal(normalizeUafDate("20260711"), "2026-07-11");
 assert.equal(normalizeUafDate("2026-07-11T08:30:00+08:00"), "2026-07-11");
 assert.equal(hasExportableHomework(items), true);
 assert.deepEqual(createUafDocument(items, "20260711"), [
-  { subject: "数学", date: "2026-07-11", content: "完成第 1、2 题", tags: ["必做"] },
-  { subject: "班级任务", date: "2026-07-11", content: "整理讲台", tags: [] },
+  {
+    subject: "数学",
+    date: "2026-07-11",
+    content: "完成第 1、2 题",
+    tags: ["必做"],
+    style: DEFAULT_ASSIGNMENT_STYLE,
+  },
+  {
+    subject: "班级任务",
+    date: "2026-07-11",
+    content: "整理讲台",
+    tags: [],
+    style: DEFAULT_ASSIGNMENT_STYLE,
+  },
 ]);
 assert.throws(() => createUafDocument([], "20260711"), UafExportValidationError);
 assert.throws(

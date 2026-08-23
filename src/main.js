@@ -16,6 +16,7 @@ import { createApp } from 'vue'
 
 import messageService from './utils/message'
 import { captureOAuthCallback } from './utils/classworksV2Client'
+import { initializeAnalytics } from 'virtual:npclassworks-analytics'
 
 captureOAuthCallback()
 
@@ -41,26 +42,5 @@ app.mount('#app')
 //  })
 //}, 1000)
 
-// 异步加载 Clarity（在页面完全加载后）
-const loadClarity = async () => {
-  // 已绑定的一体机以长期稳定显示为主，不加载分析 SDK 和设备指纹。
-  if (localStorage.getItem('classworks-v2-screen-token')) return
-  try {
-    const { getVisitorId } = await import('./utils/visitorId')
-    const Clarity = (await import('@microsoft/clarity')).default
-    Clarity.init('rhp8uqoc3l')
-
-    const visitorId = await getVisitorId()
-    console.log('Visitor ID:', visitorId)
-    Clarity.identify(visitorId)
-    Clarity.setTag('fingerprintjs', visitorId)
-  } catch (error) {
-    console.warn('Clarity 加载或标识设置失败:', error)
-  }
-}
-
-if (document.readyState === 'complete') {
-  loadClarity()
-} else {
-  window.addEventListener('load', loadClarity, { once: true })
-}
+// 默认构建解析到空实现；只有显式开启分析的构建才包含第三方 SDK。
+initializeAnalytics()

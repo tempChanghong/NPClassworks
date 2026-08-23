@@ -323,6 +323,16 @@ docker build \
 
 `VITE_DEFAULT_SERVER_PROVIDER=kv-server` 表示首次打开时直接使用学校自建后端；只有明确部署为 Classworks 官方云端客户端时才应改为 `classworkscloud`，以免请求被云端节点轮换逻辑带离学校服务器。
 
+生产构建还应保持 `VITE_ENABLE_ANALYTICS=false`（默认值）。这样不会加载 Clarity 和 FingerprintJS；只有学校明确同意采集访问分析数据时才应主动改为 `true`。
+
+正式发布后端前，可在 `NPClassworksKV` 目录执行：
+
+```bash
+pnpm run test:release
+```
+
+该命令先运行普通测试，再启动一个隔离的临时 PostgreSQL 17，执行正式数据库迁移与集成测试，最后自动销毁测试容器和数据卷；不会连接调试库或生产库。
+
 示例 Compose 文件：
 
 ```yaml
