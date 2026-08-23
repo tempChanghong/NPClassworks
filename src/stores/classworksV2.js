@@ -150,16 +150,6 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     isTeacherSignedIn(state) {
       return Boolean(state.account && getAccountTokens().accessToken);
     },
-    canBindSelectedClassroomScreen(state) {
-      const schoolId = state.selection.schoolId;
-      return Boolean(
-        state.account &&
-        state.selection.administrativeClassId &&
-        state.schoolMemberships.some(
-          (membership) => membership.schoolId === schoolId && ["OWNER", "ADMIN"].includes(membership.role),
-        )
-      );
-    },
     screenWorkspaces(state) {
       return state.screenSession?.workspaces || [];
     },
@@ -744,30 +734,6 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       } catch (error) {
         this.classroomToolsError = describeApiError(error, "保存考勤失败");
         throw error;
-      }
-    },
-
-    async bindCurrentClassroomScreen() {
-      if (!this.canBindSelectedClassroomScreen) throw new Error("需要学校管理员权限并先选择行政班");
-      this.screenLoading = true;
-      this.screenError = "";
-      try {
-        const {getVisitorId} = await import("@/utils/visitorId");
-        const deviceFingerprint = await getVisitorId();
-        await classworksV2Api.bindClassroomScreen(this.selection.schoolId, {
-          administrativeClassId: this.selection.administrativeClassId,
-          deviceFingerprint,
-          name: `${this.selectedClassName}一体机`,
-        });
-        await this.bootstrapClassroomScreen();
-        const session = this.screenSession;
-        await this.signOutTeacher();
-        return session;
-      } catch (error) {
-        this.screenError = describeApiError(error, "绑定大屏失败");
-        throw error;
-      } finally {
-        this.screenLoading = false;
       }
     },
 

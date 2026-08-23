@@ -152,15 +152,6 @@
                 修改选班
               </v-btn>
               <v-btn
-                v-if="store.canBindSelectedClassroomScreen && !store.screenSession"
-                :loading="store.screenLoading"
-                prepend-icon="mdi-monitor-lock"
-                variant="tonal"
-                @click="bindScreen"
-              >
-                绑定为本班大屏
-              </v-btn>
-              <v-btn
                 :loading="store.feedLoading"
                 icon="mdi-refresh"
                 title="刷新"
@@ -958,16 +949,6 @@ async function changePin() {
     store.teacherError = describeApiError(error, "修改 PIN 失败");
   } finally {
     changePinBusy.value = false;
-  }
-}
-
-async function bindScreen() {
-  try {
-    await store.bindCurrentClassroomScreen();
-    mode.value = "screen";
-    showFeedback({title: "大屏绑定成功", detail: "管理员已安全退出，现在可以直接使用大屏"});
-  } catch {
-    // Store shows the server error in the page alert.
   }
 }
 

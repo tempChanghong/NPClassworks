@@ -310,14 +310,6 @@ export const classworksV2Api = {
   async mySchools() {
     return unwrap(await client.get("/api/v2/me/schools"));
   },
-  async bindClassroomScreen(schoolId, input) {
-    const result = unwrap(await client.post(
-      `/api/v2/admin/schools/${schoolId}/classroom-screens/bind`,
-      input,
-    ));
-    saveClassroomScreenToken(result.token);
-    return result;
-  },
   async loginClassroomScreen(input) {
     const result = unwrap(await client.post("/api/v2/classroom-screens/login", input));
     saveClassroomScreenToken(result.token);
