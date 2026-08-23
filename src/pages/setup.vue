@@ -136,7 +136,31 @@
                     检测到未完成的初始化。重新验证部署密钥即可从已有数据继续，不会重复创建学校。
                   </v-alert>
                   <v-alert
-                    v-if="!status?.canStart"
+                    v-if="statusLoadError"
+                    class="mb-4"
+                    type="error"
+                    variant="tonal"
+                  >
+                    <div class="font-weight-medium mb-1">
+                      无法连接 KV 后端
+                    </div>
+                    <div>{{ statusLoadError }}</div>
+                    <div class="mt-2 text-body-2">
+                      当前请求地址：{{ apiServerUrl }}
+                    </div>
+                    <v-btn
+                      class="mt-3"
+                      :loading="loading"
+                      prepend-icon="mdi-refresh"
+                      size="small"
+                      variant="tonal"
+                      @click="loadStatus"
+                    >
+                      重新检查
+                    </v-btn>
+                  </v-alert>
+                  <v-alert
+                    v-else-if="status && !status.canStart"
                     class="mb-4"
                     type="warning"
                     variant="tonal"
@@ -1096,6 +1120,7 @@
 import {computed, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
 import {completeInstanceSetup, createInstanceSetupScreen, createInstanceSetupSession, describeApiError, getInstanceSetupContext, getInstanceSetupOrganizationTemplate, getInstanceSetupStaffConfigurationTemplate, getInstanceSetupStatus, importInstanceSetupOrganization, importInstanceSetupStaffConfiguration, importInstanceSetupTeachers, initializeInstanceCore, verifyInstanceSetupLogin} from "@/utils/classworksV2Client";
+import {getServerUrl} from "@/utils/socketClient";
 
 const ValidationSummary = defineComponent({
   props: {report: {type: Object, required: true}},
@@ -1113,6 +1138,8 @@ const loading = ref(false);
 const saving = ref(false);
 const errorMessage = ref("");
 const status = ref(null);
+const statusLoadError = ref("");
+const apiServerUrl = getServerUrl();
 const setupContext = ref(null);
 const setupMode = ref("QUICK");
 const stage = ref(1);
@@ -1322,7 +1349,15 @@ async function testCredential(item) {
 }
 async function loadStatus() {
   loading.value = true;
-  try { status.value = await getInstanceSetupStatus(); } catch (error) { errorMessage.value = describeApiError(error, "无法读取 KV 后端初始化状态"); } finally { loading.value = false; }
+  statusLoadError.value = "";
+  try {
+    status.value = await getInstanceSetupStatus();
+  } catch (error) {
+    status.value = null;
+    statusLoadError.value = describeApiError(error, "请检查 API 域名、HTTPS 反向代理和 CORS 配置");
+  } finally {
+    loading.value = false;
+  }
 }
 async function loadSetupResources(forceOrganizationTemplate = false, forceStaffTemplate = false) {
   const [context, template, staffTemplate] = await Promise.all([getInstanceSetupContext(), getInstanceSetupOrganizationTemplate(), getInstanceSetupStaffConfigurationTemplate()]);
