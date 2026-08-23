@@ -206,6 +206,9 @@ curl -fsS https://cs.example.com/ready
 
 ```dotenv
 DEPLOY_MODE=shared
+CLASSWORKS_DOMAIN=newfires.top
+VITE_DEFAULT_KV_SERVER=https://api.newfires.top
+CORS_ALLOWED_ORIGINS=https://newfires.top
 SHARED_BACKEND_PORT=13000
 SHARED_FRONTEND_PORT=13080
 ```
@@ -224,7 +227,7 @@ pnpm run deploy:shared:up
 - `127.0.0.1:13080` → 前端静态站点；
 - PostgreSQL 不映射宿主机端口。
 
-将后端仓库中的 `deploy/Caddyfile.shared.example` 或 `deploy/nginx.shared.conf.example` 合并到服务器现有网关。网关把 `/api`、`/accounts`、`/socket.io`、`/check`、`/ready`、`/metrics` 转发到后端，其余路径转发到前端。修改端口时也要同步修改网关配置。
+将后端仓库中的 `deploy/Caddyfile.shared.example` 或 `deploy/nginx.shared.conf.example` 合并到服务器现有网关：`newfires.top` 整站转发到前端，`api.newfires.top` 整站转发到后端。修改域名或端口时也要同步修改网关配置。后端会使用 `CORS_ALLOWED_ORIGINS` 同时限制 HTTP API 与 Socket.IO 的浏览器来源。
 
 此模式下不要再执行普通的 `pnpm run deploy:up`。设置 `DEPLOY_MODE=shared` 后，备份、恢复、升级和回滚脚本也会持续使用共享服务器 Compose，不会在后续维护时重新启动项目内置 Caddy。
 
