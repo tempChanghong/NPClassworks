@@ -47,16 +47,19 @@
                 <v-icon :icon="item.actorType === 'CLASSROOM_SCREEN' ? 'mdi-monitor' : 'mdi-account-cog-outline'" />
               </v-avatar>
             </template>
-            <v-list-item-title>{{ actionName(item.action) }}</v-list-item-title>
+            <v-list-item-title class="font-weight-medium">
+              {{ item.summary || actionName(item.action) }}
+            </v-list-item-title>
             <v-list-item-subtitle>
               {{ actorName(item) }} · {{ new Date(item.createdAt).toLocaleString("zh-CN") }}
               <br>
-              {{ item.requestMethod }} {{ item.requestPath }} · HTTP {{ item.statusCode }}
+              {{ actionName(item.action) }}{{ entityLabel(item) }}
             </v-list-item-subtitle>
             <template #append>
               <v-chip
                 :color="item.success ? 'success' : 'error'"
                 size="small"
+                :title="`${item.requestMethod} ${item.requestPath} · HTTP ${item.statusCode}`"
                 variant="tonal"
               >
                 {{ item.success ? "成功" : "失败" }}
@@ -102,34 +105,72 @@ const actorOptions = [
 ];
 
 const actionNames = {
+  SCHOOL_PROFILE_UPDATED: "学校设置",
+  SUBJECT_CREATED: "创建学科",
+  SUBJECT_UPDATED: "修改学科",
+  GRADE_CREATED: "创建年级",
+  GRADE_UPDATED: "修改年级",
+  ADMIN_CLASS_CREATED: "创建行政班",
+  ADMIN_CLASSES_BATCH_CREATED: "批量创建行政班",
+  ADMIN_CLASS_UPDATED: "修改行政班",
   ORGANIZATION_IMPORT: "导入学校组织",
+  TERM_TRANSITION_PREVIEW: "预览学期切换",
+  TERM_ACTIVATION_PREVIEW: "检查学期启用条件",
   TERM_ACTIVATED: "切换启用学期",
   TERM_DRAFT_CREATED: "建立学期草稿",
   TERM_STATUS_CHANGED: "修改学期状态",
   SCREEN_COMMAND_ISSUED: "下发大屏值守指令",
   SCREEN_DEVICE_RESET: "重置大屏设备",
+  SCREEN_BOUND: "绑定班级大屏",
   SCREEN_ACCOUNT_CREATED: "创建大屏账号",
   SCREEN_ACCOUNT_UPDATED: "修改大屏账号",
   TEACHING_ASSIGNMENT_CHANGED: "修改任课关系",
   GRADE_LEADERSHIP_CHANGED: "修改年级组长职责",
   CLASS_LEADERSHIP_CHANGED: "修改班主任职责",
   LOCAL_ACCOUNT_CHANGED: "修改本地账号",
+  LOCAL_ACCOUNT_PROVISIONED: "批量创建本地账号",
+  WORKSPACE_MEMBERSHIP_CHANGED: "修改教学空间成员",
+  HOMEWORK_SETTINGS_CHANGED: "修改作业设置",
   SUBJECT_RULES_CHANGED: "修改授课规则",
+  COURSE_GROUP_CREATED: "创建走班教学班",
+  COURSE_GROUP_UPDATED: "修改走班教学班",
   COURSE_GROUP_CHANGED: "修改走班教学班",
   SCREEN_ROSTER_CHANGED: "大屏修改学生名单",
   SCREEN_ATTENDANCE_CHANGED: "大屏修改考勤",
   SCREEN_PUBLICATION_CREATED: "大屏录入作业",
   SCREEN_PUBLICATION_UPDATED: "大屏修改作业",
   SCREEN_PUBLICATION_RESTORED: "大屏恢复作业版本",
+  SCREEN_BOARD_COPIED: "复制大屏作业板",
 };
 
 function actionName(action) {
-  return actionNames[action] || action;
+  const genericNames = {
+    POST_ADMIN_OPERATION: "新增管理数据",
+    PUT_ADMIN_OPERATION: "保存管理数据",
+    PATCH_ADMIN_OPERATION: "修改管理数据",
+    DELETE_ADMIN_OPERATION: "删除管理数据",
+  };
+  return actionNames[action] || genericNames[action] || action;
 }
 
 function actorName(item) {
   if (item.actorScreen) return item.actorScreen.name;
   return item.actorAccount?.name || item.actorAccount?.localUsername || item.actorAccount?.email || "未知操作者";
+}
+
+function entityLabel(item) {
+  if (!item.entityType || !item.entityId) return "";
+  const names = {
+    SCHOOL: "学校",
+    SUBJECT: "学科",
+    GRADE: "年级",
+    WORKSPACE: "班级或教学班",
+    ACCOUNT: "账号",
+    SCREEN: "班级大屏",
+    TERM: "学期",
+    PUBLICATION: "作业或通知",
+  };
+  return ` · ${names[item.entityType] || item.entityType} ${item.entityId.slice(0, 8)}`;
 }
 
 async function load(reset) {

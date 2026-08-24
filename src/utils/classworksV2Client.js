@@ -434,6 +434,18 @@ export const classworksV2Api = {
       {params: {termId}},
     ));
   },
+  async managedSchoolProfile(schoolId) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/profile`));
+  },
+  async updateManagedSchoolProfile(schoolId, input) {
+    return unwrap(await client.patch(`/api/v2/admin/schools/${schoolId}/profile`, input));
+  },
+  async createManagedSubject(schoolId, input) {
+    return unwrap(await client.post(`/api/v2/admin/schools/${schoolId}/subjects`, input));
+  },
+  async updateManagedSubject(schoolId, subjectId, input) {
+    return unwrap(await client.patch(`/api/v2/admin/schools/${schoolId}/subjects/${subjectId}`, input));
+  },
   async createManagedGrade(schoolId, input) {
     return unwrap(await client.post(`/api/v2/admin/schools/${schoolId}/grades`, input));
   },
@@ -443,10 +455,21 @@ export const classworksV2Api = {
   async createManagedAdministrativeClass(schoolId, input) {
     return unwrap(await client.post(`/api/v2/admin/schools/${schoolId}/administrative-classes`, input));
   },
+  async createManagedAdministrativeClassesBatch(schoolId, input) {
+    return unwrap(await client.post(
+      `/api/v2/admin/schools/${schoolId}/administrative-classes/batch`,
+      input,
+    ));
+  },
   async updateManagedAdministrativeClass(schoolId, administrativeClassId, input) {
     return unwrap(await client.patch(
       `/api/v2/admin/schools/${schoolId}/administrative-classes/${administrativeClassId}`,
       input,
+    ));
+  },
+  async workspaceChangeImpact(schoolId, workspaceId) {
+    return unwrap(await client.get(
+      `/api/v2/admin/schools/${schoolId}/workspaces/${workspaceId}/change-impact`,
     ));
   },
   async teachingRelationships(schoolId, termId, gradeId = "") {

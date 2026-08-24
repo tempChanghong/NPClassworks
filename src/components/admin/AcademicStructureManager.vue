@@ -32,6 +32,9 @@
       class="mb-4"
       color="primary"
     >
+      <v-tab value="school">
+        学校与学科
+      </v-tab>
       <v-tab value="organization">
         年级与行政班
       </v-tab>
@@ -44,11 +47,140 @@
     </v-tabs>
 
     <v-window v-model="section">
+      <v-window-item value="school">
+        <v-row>
+          <v-col
+            cols="12"
+            lg="5"
+          >
+            <v-card class="rounded-xl">
+              <v-card-title class="pa-5 pb-2">
+                学校基础信息
+              </v-card-title>
+              <v-card-text class="px-5 pb-5">
+                <v-text-field
+                  v-model.trim="schoolForm.name"
+                  label="学校名称"
+                  variant="outlined"
+                />
+                <v-text-field
+                  :model-value="schoolProfile?.code || ''"
+                  hint="学校代码用于本地账号登录，正式部署后保持不变"
+                  label="学校代码"
+                  persistent-hint
+                  readonly
+                  variant="outlined"
+                />
+                <v-select
+                  v-model="schoolForm.teacherAuthMode"
+                  :items="teacherAuthModeOptions"
+                  item-title="title"
+                  item-value="value"
+                  label="教师登录方式"
+                  variant="outlined"
+                />
+                <v-text-field
+                  v-if="schoolForm.teacherAuthMode === 'SHARED_PASSWORD'"
+                  v-model="schoolForm.sharedPassword"
+                  :hint="schoolProfile?.hasSharedTeacherPassword ? '留空表示继续使用现有通用密码' : '首次启用时必须设置8至64位通用密码'"
+                  label="学校通用教师密码"
+                  persistent-hint
+                  type="password"
+                  variant="outlined"
+                />
+                <v-switch
+                  v-model="schoolForm.allowOAuthTeacherLogin"
+                  color="primary"
+                  label="允许 OAuth 作为备用登录方式"
+                />
+                <v-alert
+                  class="mb-4"
+                  type="warning"
+                  variant="tonal"
+                >
+                  切换教师登录方式前，请确认现有教师已经具备对应凭据。学校 OWNER/ADMIN 仍使用自己的管理员 PIN。
+                </v-alert>
+                <v-btn
+                  block
+                  color="primary"
+                  :disabled="!schoolForm.name"
+                  :loading="loading"
+                  prepend-icon="mdi-content-save-outline"
+                  @click="saveSchoolProfile"
+                >
+                  保存学校设置
+                </v-btn>
+              </v-card-text>
+            </v-card>
+          </v-col>
+          <v-col
+            cols="12"
+            lg="7"
+          >
+            <v-card class="rounded-xl">
+              <v-card-title class="d-flex align-center flex-wrap ga-2 pa-5">
+                学科目录
+                <v-spacer />
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-book-plus-outline"
+                  @click="openSubjectDialog()"
+                >
+                  新建学科
+                </v-btn>
+              </v-card-title>
+              <v-card-text class="px-5 pb-5">
+                <v-alert
+                  class="mb-4"
+                  type="info"
+                  variant="tonal"
+                >
+                  已被作业、任课关系或授课规则引用的学科不会提供删除入口；可以安全修改名称、代码、分类和显示顺序。
+                </v-alert>
+                <v-list class="pa-0 rounded-lg">
+                  <v-list-item
+                    v-for="subject in structure?.subjects || []"
+                    :key="subject.id"
+                    :subtitle="`${subject.code} · ${subjectCategoryLabel(subject.category)} · 排序 ${subject.sortOrder}`"
+                    :title="subject.name"
+                  >
+                    <template #prepend>
+                      <v-avatar
+                        color="primary"
+                        size="34"
+                        variant="tonal"
+                      >
+                        {{ subject.name.slice(0, 1) }}
+                      </v-avatar>
+                    </template>
+                    <template #append>
+                      <v-btn
+                        icon="mdi-pencil-outline"
+                        size="small"
+                        variant="text"
+                        @click="openSubjectDialog(subject)"
+                      />
+                    </template>
+                  </v-list-item>
+                </v-list>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+      </v-window-item>
+
       <v-window-item value="organization">
         <v-card class="rounded-xl">
           <v-card-title class="d-flex align-center flex-wrap ga-2 pa-5">
             年级与行政班
             <v-spacer />
+            <v-btn
+              prepend-icon="mdi-playlist-plus"
+              variant="tonal"
+              @click="openBatchClassDialog"
+            >
+              批量建班
+            </v-btn>
             <v-btn
               color="primary"
               prepend-icon="mdi-school-outline"
@@ -503,7 +635,7 @@
           <v-btn
             color="primary"
             :loading="loading"
-            @click="saveCourseGroup"
+            @click="saveCourseGroup()"
           >
             保存
           </v-btn>
@@ -613,9 +745,239 @@
             color="primary"
             :disabled="!administrativeClassForm.gradeId || !administrativeClassForm.name || !administrativeClassForm.code"
             :loading="loading"
-            @click="saveAdministrativeClass"
+            @click="saveAdministrativeClass()"
           >
             保存
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog
+      v-model="subjectDialog"
+      max-width="560"
+    >
+      <v-card class="rounded-xl">
+        <v-card-title class="pa-5 pb-2">
+          {{ editingSubjectId ? "编辑学科" : "新建学科" }}
+        </v-card-title>
+        <v-card-text class="px-5">
+          <v-text-field
+            v-model.trim="subjectForm.name"
+            label="学科名称"
+            placeholder="例如：信息技术"
+            variant="outlined"
+          />
+          <v-text-field
+            v-model.trim="subjectForm.code"
+            hint="保存后统一转为大写"
+            label="学科代码"
+            placeholder="例如：IT"
+            variant="outlined"
+          />
+          <v-select
+            v-model="subjectForm.category"
+            :items="subjectCategoryOptions"
+            item-title="title"
+            item-value="value"
+            label="学科分类"
+            variant="outlined"
+          />
+          <v-text-field
+            v-model="subjectForm.sortOrder"
+            label="显示顺序"
+            max="10000"
+            min="-10000"
+            step="1"
+            type="number"
+            variant="outlined"
+          />
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5">
+          <v-spacer />
+          <v-btn @click="subjectDialog = false">
+            取消
+          </v-btn>
+          <v-btn
+            color="primary"
+            :disabled="!subjectForm.name || !subjectForm.code"
+            :loading="loading"
+            @click="saveSubject"
+          >
+            保存
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog
+      v-model="batchClassDialog"
+      max-width="720"
+    >
+      <v-card class="rounded-xl">
+        <v-card-title class="pa-5 pb-2">
+          批量创建行政班
+        </v-card-title>
+        <v-card-text class="px-5">
+          <v-select
+            v-model="batchClassForm.gradeId"
+            :items="gradeOptions"
+            item-title="title"
+            item-value="value"
+            label="所属年级"
+            variant="outlined"
+            @update:model-value="applyBatchGradeDefaults"
+          />
+          <v-row>
+            <v-col cols="6">
+              <v-text-field
+                v-model.number="batchClassForm.startNumber"
+                label="起始班号"
+                min="1"
+                type="number"
+                variant="outlined"
+              />
+            </v-col>
+            <v-col cols="6">
+              <v-text-field
+                v-model.number="batchClassForm.endNumber"
+                label="结束班号"
+                max="100"
+                min="1"
+                type="number"
+                variant="outlined"
+              />
+            </v-col>
+          </v-row>
+          <v-row>
+            <v-col
+              cols="12"
+              md="6"
+            >
+              <v-text-field
+                v-model.trim="batchClassForm.namePrefix"
+                hint="将生成“高二1班”等名称"
+                label="名称前缀"
+                persistent-hint
+                variant="outlined"
+              />
+            </v-col>
+            <v-col
+              cols="12"
+              md="6"
+            >
+              <v-text-field
+                v-model.trim="batchClassForm.codePrefix"
+                hint="将生成 G2-C01 等代码"
+                label="代码前缀"
+                persistent-hint
+                variant="outlined"
+              />
+            </v-col>
+          </v-row>
+          <v-switch
+            v-model="batchClassForm.isStudentSelectable"
+            color="primary"
+            label="允许学生自行选择这些行政班"
+          />
+          <v-alert
+            class="mb-3"
+            type="info"
+            variant="tonal"
+          >
+            将一次性创建 {{ batchClassPreview.length }} 个班级；如果任一代码已存在，整批操作都不会写入。
+          </v-alert>
+          <div class="d-flex flex-wrap ga-2">
+            <v-chip
+              v-for="item in batchClassPreview"
+              :key="item.code"
+              size="small"
+              variant="tonal"
+            >
+              {{ item.name }} · {{ item.code }}
+            </v-chip>
+          </div>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5">
+          <v-spacer />
+          <v-btn @click="batchClassDialog = false">
+            取消
+          </v-btn>
+          <v-btn
+            color="primary"
+            :disabled="!batchClassPreview.length"
+            :loading="loading"
+            @click="saveBatchClasses"
+          >
+            确认创建
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog
+      v-model="impactDialog"
+      max-width="680"
+      persistent
+    >
+      <v-card class="rounded-xl">
+        <v-card-title class="pa-5 pb-2">
+          确认停用 {{ pendingImpact?.workspace?.name || "教学空间" }}
+        </v-card-title>
+        <v-card-text class="px-5">
+          <v-alert
+            class="mb-4"
+            type="warning"
+            variant="tonal"
+          >
+            停用不会删除历史数据，但学生、教师和大屏将不再把它作为正常可用教学空间。
+          </v-alert>
+          <v-list
+            class="mb-4 rounded-lg"
+            density="compact"
+          >
+            <v-list-item
+              v-for="warning in pendingImpact?.warnings || []"
+              :key="warning"
+              prepend-icon="mdi-alert-outline"
+              :title="warning"
+            />
+          </v-list>
+          <div class="impact-grid">
+            <v-chip variant="outlined">
+              生效内容 {{ pendingImpact?.counts?.activePublications || 0 }}
+            </v-chip>
+            <v-chip variant="outlined">
+              历史内容 {{ pendingImpact?.counts?.publicationHistory || 0 }}
+            </v-chip>
+            <v-chip variant="outlined">
+              教师访问 {{ pendingImpact?.counts?.workspaceMembers || 0 }}
+            </v-chip>
+            <v-chip variant="outlined">
+              任课关系 {{ pendingImpact?.counts?.teachingAssignments || 0 }}
+            </v-chip>
+            <v-chip variant="outlined">
+              大屏 {{ pendingImpact?.counts?.screenBindings || 0 }}
+            </v-chip>
+            <v-chip variant="outlined">
+              学生记录 {{ pendingImpact?.counts?.students || 0 }}
+            </v-chip>
+          </div>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5">
+          <v-spacer />
+          <v-btn
+            :disabled="loading"
+            @click="cancelImpactChange"
+          >
+            取消
+          </v-btn>
+          <v-btn
+            color="warning"
+            :loading="loading"
+            @click="confirmImpactChange"
+          >
+            确认停用
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -633,8 +995,10 @@ const props = defineProps({
   termId: {type: String, required: true},
 });
 
-const section = ref("organization");
+const section = ref("school");
 const structure = ref(null);
+const schoolProfile = ref(null);
+const schoolForm = ref({name: "", teacherAuthMode: "LOCAL_PIN", allowOAuthTeacherLogin: false, sharedPassword: ""});
 const loading = ref(false);
 const errorMessage = ref("");
 const successMessage = ref("");
@@ -652,6 +1016,25 @@ const gradeForm = ref(emptyGradeForm());
 const administrativeClassDialog = ref(false);
 const editingAdministrativeClassId = ref("");
 const administrativeClassForm = ref(emptyAdministrativeClassForm());
+const subjectDialog = ref(false);
+const editingSubjectId = ref("");
+const subjectForm = ref(emptySubjectForm());
+const batchClassDialog = ref(false);
+const batchClassForm = ref(emptyBatchClassForm());
+const impactDialog = ref(false);
+const pendingImpact = ref(null);
+const pendingImpactAction = ref(null);
+
+const teacherAuthModeOptions = [
+  {title: "教师个人账号 + PIN", value: "LOCAL_PIN"},
+  {title: "教师账号 + 学校通用密码", value: "SHARED_PASSWORD"},
+  {title: "OAuth 邮箱登录", value: "OAUTH_EMAIL"},
+];
+const subjectCategoryOptions = [
+  {title: "基础科目", value: "CORE"},
+  {title: "选考科目", value: "ELECTIVE"},
+  {title: "其他科目", value: "OTHER"},
+];
 
 const deliveryModeOptions = [
   {title: "随行政班", value: "ADMIN_CLASS"},
@@ -690,6 +1073,21 @@ const courseGroupSourceOptions = computed(() => (structure.value?.administrative
   .map((item) => ({title: `${item.name} · ${item.code}`, value: item.id})));
 const sortedCourseGroups = computed(() => [...(structure.value?.courseGroups || [])].sort((left, right) =>
   (left.subject?.sortOrder || 0) - (right.subject?.sortOrder || 0) || left.code.localeCompare(right.code)));
+const batchClassPreview = computed(() => {
+  const start = Number(batchClassForm.value.startNumber);
+  const end = Number(batchClassForm.value.endNumber);
+  if (!batchClassForm.value.gradeId || !batchClassForm.value.namePrefix || !batchClassForm.value.codePrefix ||
+    !Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start || end - start >= 100) return [];
+  return Array.from({length: end - start + 1}, (_, index) => {
+    const number = start + index;
+    return {
+      gradeId: batchClassForm.value.gradeId,
+      name: `${batchClassForm.value.namePrefix}${number}班`,
+      code: `${batchClassForm.value.codePrefix}${String(number).padStart(2, "0")}`,
+      isStudentSelectable: batchClassForm.value.isStudentSelectable,
+    };
+  });
+});
 
 function emptyCourseGroupForm() {
   return {
@@ -709,6 +1107,14 @@ function emptyGradeForm() {
 
 function emptyAdministrativeClassForm() {
   return {name: "", code: "", gradeId: "", isStudentSelectable: true, isActive: true};
+}
+
+function emptySubjectForm() {
+  return {name: "", code: "", category: "OTHER", sortOrder: (structure.value?.subjects?.length || 0) * 10};
+}
+
+function emptyBatchClassForm() {
+  return {gradeId: "", startNumber: 1, endNumber: 8, namePrefix: "", codePrefix: "", isStudentSelectable: true};
 }
 
 function administrativeClassesForGrade(gradeId) {
@@ -739,7 +1145,16 @@ async function loadStructure() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    structure.value = await classworksV2Api.managedAcademicStructure(props.schoolId, props.termId);
+    [structure.value, schoolProfile.value] = await Promise.all([
+      classworksV2Api.managedAcademicStructure(props.schoolId, props.termId),
+      classworksV2Api.managedSchoolProfile(props.schoolId),
+    ]);
+    schoolForm.value = {
+      name: schoolProfile.value.name,
+      teacherAuthMode: schoolProfile.value.teacherAuthMode,
+      allowOAuthTeacherLogin: schoolProfile.value.allowOAuthTeacherLogin,
+      sharedPassword: "",
+    };
     if (!structure.value.administrativeClasses.some((item) => item.id === selectedClassId.value)) {
       selectedClassId.value = structure.value.administrativeClasses[0]?.id || "";
     } else {
@@ -748,6 +1163,73 @@ async function loadStructure() {
   } catch (error) {
     structure.value = null;
     errorMessage.value = describeApiError(error, "加载授课结构失败");
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function handleOrganizationConflict(error) {
+  if (error.response?.data?.code !== "ORGANIZATION_VERSION_CONFLICT") return false;
+  subjectDialog.value = false;
+  gradeDialog.value = false;
+  administrativeClassDialog.value = false;
+  courseGroupDialog.value = false;
+  cancelImpactChange();
+  await loadStructure();
+  errorMessage.value = "保存未执行：该数据刚刚被其他管理员修改。页面已载入最新版本，请核对后重新操作。";
+  return true;
+}
+
+async function saveSchoolProfile() {
+  loading.value = true;
+  errorMessage.value = "";
+  try {
+    schoolProfile.value = await classworksV2Api.updateManagedSchoolProfile(props.schoolId, {
+      ...schoolForm.value,
+      expectedUpdatedAt: schoolProfile.value?.updatedAt,
+    });
+    schoolForm.value.sharedPassword = "";
+    successMessage.value = "学校基础设置已保存。";
+  } catch (error) {
+    if (!await handleOrganizationConflict(error)) {
+      errorMessage.value = describeApiError(error, "保存学校基础设置失败");
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+function openSubjectDialog(subject = null) {
+  editingSubjectId.value = subject?.id || "";
+  subjectForm.value = subject ? {
+    name: subject.name,
+    code: subject.code,
+    category: subject.category,
+    sortOrder: subject.sortOrder,
+  } : emptySubjectForm();
+  subjectDialog.value = true;
+}
+
+async function saveSubject() {
+  loading.value = true;
+  errorMessage.value = "";
+  try {
+    if (editingSubjectId.value) {
+      const existing = (structure.value?.subjects || []).find((item) => item.id === editingSubjectId.value);
+      await classworksV2Api.updateManagedSubject(props.schoolId, editingSubjectId.value, {
+        ...subjectForm.value,
+        expectedUpdatedAt: existing?.updatedAt,
+      });
+    } else {
+      await classworksV2Api.createManagedSubject(props.schoolId, subjectForm.value);
+    }
+    subjectDialog.value = false;
+    successMessage.value = editingSubjectId.value ? "学科已更新。" : "学科已创建。";
+    await loadStructure();
+  } catch (error) {
+    if (!await handleOrganizationConflict(error)) {
+      errorMessage.value = describeApiError(error, "保存学科失败");
+    }
   } finally {
     loading.value = false;
   }
@@ -782,7 +1264,11 @@ async function saveSubjectRules(removeConflictingSources) {
     await classworksV2Api.replaceAdministrativeClassSubjectRules(
       props.schoolId,
       selectedClassId.value,
-      {subjectRules, removeConflictingSources},
+      {
+        subjectRules,
+        removeConflictingSources,
+        expectedUpdatedAt: selectedAdministrativeClass.value?.updatedAt,
+      },
     );
     successMessage.value = removeConflictingSources
       ? "授课规则已保存，冲突的走班来源关系已解除。"
@@ -792,7 +1278,7 @@ async function saveSubjectRules(removeConflictingSources) {
     if (error.response?.data?.code === "SUBJECT_RULE_SOURCE_CONFLICT") {
       conflictingCourseGroups.value = error.response.data.details?.courseGroups || [];
       errorMessage.value = "请确认是否解除冲突的走班来源关系。";
-    } else {
+    } else if (!await handleOrganizationConflict(error)) {
       errorMessage.value = describeApiError(error, "保存授课规则失败");
     }
   } finally {
@@ -824,23 +1310,56 @@ function openCourseGroupDialog(group = null) {
   courseGroupDialog.value = true;
 }
 
-async function saveCourseGroup() {
+async function loadDeactivationImpact(workspaceId, action) {
+  const impact = await classworksV2Api.workspaceChangeImpact(props.schoolId, workspaceId);
+  if (!impact.requiresConfirmation) return false;
+  pendingImpact.value = impact;
+  pendingImpactAction.value = action;
+  impactDialog.value = true;
+  return true;
+}
+
+function cancelImpactChange() {
+  impactDialog.value = false;
+  pendingImpact.value = null;
+  pendingImpactAction.value = null;
+}
+
+async function confirmImpactChange() {
+  const action = pendingImpactAction.value;
+  if (action === "administrative-class") await saveAdministrativeClass(true);
+  if (action === "course-group") await saveCourseGroup(true);
+}
+
+async function saveCourseGroup(confirmImpact = false) {
   loading.value = true;
   errorMessage.value = "";
   try {
     const input = {...courseGroupForm.value};
     if (editingCourseGroupId.value) {
       delete input.gradeId;
+      const existing = (structure.value?.courseGroups || []).find((item) => item.id === editingCourseGroupId.value);
+      if (!confirmImpact && existing?.isActive && input.isActive === false &&
+        await loadDeactivationImpact(editingCourseGroupId.value, "course-group")) return;
+      input.confirmImpact = confirmImpact;
+      input.expectedUpdatedAt = existing?.updatedAt;
       await classworksV2Api.updateManagedCourseGroup(props.schoolId, editingCourseGroupId.value, input);
     } else {
       input.termId = props.termId;
       await classworksV2Api.createManagedCourseGroup(props.schoolId, input);
     }
+    cancelImpactChange();
     courseGroupDialog.value = false;
     successMessage.value = editingCourseGroupId.value ? "走班教学班已更新。" : "走班教学班已创建。";
     await loadStructure();
   } catch (error) {
-    errorMessage.value = describeApiError(error, "保存走班教学班失败");
+    if (error.response?.data?.code === "ORGANIZATION_CHANGE_CONFIRMATION_REQUIRED") {
+      pendingImpact.value = error.response.data.details;
+      pendingImpactAction.value = "course-group";
+      impactDialog.value = true;
+    } else if (!await handleOrganizationConflict(error)) {
+      errorMessage.value = describeApiError(error, "保存走班教学班失败");
+    }
   } finally {
     loading.value = false;
   }
@@ -859,7 +1378,11 @@ async function saveGrade() {
   errorMessage.value = "";
   try {
     if (editingGradeId.value) {
-      await classworksV2Api.updateManagedGrade(props.schoolId, editingGradeId.value, gradeForm.value);
+      const existing = (structure.value?.grades || []).find((item) => item.id === editingGradeId.value);
+      await classworksV2Api.updateManagedGrade(props.schoolId, editingGradeId.value, {
+        ...gradeForm.value,
+        expectedUpdatedAt: existing?.updatedAt,
+      });
     } else {
       await classworksV2Api.createManagedGrade(props.schoolId, {...gradeForm.value, termId: props.termId});
     }
@@ -867,7 +1390,9 @@ async function saveGrade() {
     successMessage.value = editingGradeId.value ? "年级已更新。" : "年级已创建。";
     await loadStructure();
   } catch (error) {
-    errorMessage.value = describeApiError(error, "保存年级失败");
+    if (!await handleOrganizationConflict(error)) {
+      errorMessage.value = describeApiError(error, "保存年级失败");
+    }
   } finally {
     loading.value = false;
   }
@@ -885,13 +1410,19 @@ function openAdministrativeClassDialog(gradeId, administrativeClass = null) {
   administrativeClassDialog.value = true;
 }
 
-async function saveAdministrativeClass() {
+async function saveAdministrativeClass(confirmImpact = false) {
   loading.value = true;
   errorMessage.value = "";
   try {
     if (editingAdministrativeClassId.value) {
       const input = {...administrativeClassForm.value};
       delete input.gradeId;
+      const existing = (structure.value?.administrativeClasses || [])
+        .find((item) => item.id === editingAdministrativeClassId.value);
+      if (!confirmImpact && existing?.isActive && input.isActive === false &&
+        await loadDeactivationImpact(editingAdministrativeClassId.value, "administrative-class")) return;
+      input.confirmImpact = confirmImpact;
+      input.expectedUpdatedAt = existing?.updatedAt;
       await classworksV2Api.updateManagedAdministrativeClass(
         props.schoolId,
         editingAdministrativeClassId.value,
@@ -903,11 +1434,53 @@ async function saveAdministrativeClass() {
         {...administrativeClassForm.value, termId: props.termId},
       );
     }
+    cancelImpactChange();
     administrativeClassDialog.value = false;
     successMessage.value = editingAdministrativeClassId.value ? "行政班已更新。" : "行政班已创建。请继续配置授课规则。";
     await loadStructure();
   } catch (error) {
-    errorMessage.value = describeApiError(error, "保存行政班失败");
+    if (error.response?.data?.code === "ORGANIZATION_CHANGE_CONFIRMATION_REQUIRED") {
+      pendingImpact.value = error.response.data.details;
+      pendingImpactAction.value = "administrative-class";
+      impactDialog.value = true;
+    } else if (!await handleOrganizationConflict(error)) {
+      errorMessage.value = describeApiError(error, "保存行政班失败");
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+function applyBatchGradeDefaults() {
+  const grade = (structure.value?.grades || []).find((item) => item.id === batchClassForm.value.gradeId);
+  if (!grade) return;
+  batchClassForm.value.namePrefix = grade.name;
+  batchClassForm.value.codePrefix = `${grade.code}-C`;
+}
+
+function openBatchClassDialog() {
+  batchClassForm.value = {
+    ...emptyBatchClassForm(),
+    gradeId: structure.value?.grades?.[0]?.id || "",
+  };
+  applyBatchGradeDefaults();
+  batchClassDialog.value = true;
+}
+
+async function saveBatchClasses() {
+  if (!batchClassPreview.value.length) return;
+  loading.value = true;
+  errorMessage.value = "";
+  try {
+    const result = await classworksV2Api.createManagedAdministrativeClassesBatch(props.schoolId, {
+      termId: props.termId,
+      classes: batchClassPreview.value,
+    });
+    batchClassDialog.value = false;
+    successMessage.value = `已创建 ${result.count} 个行政班，请继续配置授课规则。`;
+    await loadStructure();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "批量创建行政班失败");
   } finally {
     loading.value = false;
   }
@@ -941,5 +1514,11 @@ watch(section, () => {
 .grade-card,
 .min-width-0 {
   min-width: 0;
+}
+
+.impact-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 </style>
