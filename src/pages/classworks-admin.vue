@@ -246,11 +246,11 @@
         <v-tab value="overview">
           管理总览
         </v-tab>
-        <v-tab value="organization">
+        <v-tab value="structure">
           组织与班级
         </v-tab>
-        <v-tab value="structure">
-          授课结构
+        <v-tab value="organization">
+          高级批量导入
         </v-tab>
         <v-tab value="teachers">
           教师分配
@@ -322,7 +322,7 @@
         <v-window-item value="organization">
           <v-card class="rounded-xl">
             <v-card-title class="d-flex align-center flex-wrap ga-2 pa-5">
-              学校组织配置
+              高级组织批量导入
               <v-spacer />
               <v-btn
                 prepend-icon="mdi-file-document-outline"
@@ -338,7 +338,7 @@
                 type="info"
                 variant="tonal"
               >
-                模板保证一、二班物化生全部随行政班；三至八班的固定科目目前按“历史、物理、化学、生物、地理、政治”示例排列，正式导入前请按学校实际情况修改。
+                日常新增或修改年级、行政班、走班教学班，请使用“组织与班级”页面。这里仅用于新校批量建档或大规模结构调整；同代码数据会被更新，文件中未出现的数据不会被删除，但被导入班级的授课规则和走班来源会按文件替换。
               </v-alert>
               <v-row>
                 <v-col
@@ -470,13 +470,14 @@
                 </v-row>
               </v-card-text>
             </v-card>
-            <TeachingRelationshipOverview
+            <AcademicStructureManager
               v-if="selectedSchoolId && selectedTermId"
               :school-id="selectedSchoolId"
               :term-id="selectedTermId"
             />
-            <AcademicStructureManager
+            <TeachingRelationshipOverview
               v-if="selectedSchoolId && selectedTermId"
+              class="mt-5"
               :school-id="selectedSchoolId"
               :term-id="selectedTermId"
             />
@@ -489,7 +490,7 @@
             type="warning"
             variant="tonal"
           >
-            如果这是全新实例，请先在“组织与班级”中导入首个学校；如果学校已经存在，请联系现有 OWNER 或 ADMIN 授权。
+            请先完成实例首次配置或联系现有 OWNER/ADMIN 授权；教师分配不要求再次导入学校 JSON。
           </v-alert>
           <template v-else>
             <v-card class="mb-5 rounded-xl">

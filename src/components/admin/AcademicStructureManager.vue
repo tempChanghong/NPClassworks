@@ -32,6 +32,9 @@
       class="mb-4"
       color="primary"
     >
+      <v-tab value="organization">
+        年级与行政班
+      </v-tab>
       <v-tab value="classes">
         行政班授课规则
       </v-tab>
@@ -41,6 +44,108 @@
     </v-tabs>
 
     <v-window v-model="section">
+      <v-window-item value="organization">
+        <v-card class="rounded-xl">
+          <v-card-title class="d-flex align-center flex-wrap ga-2 pa-5">
+            年级与行政班
+            <v-spacer />
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-school-outline"
+              @click="openGradeDialog()"
+            >
+              新建年级
+            </v-btn>
+          </v-card-title>
+          <v-card-text class="px-5 pb-5">
+            <v-alert
+              class="mb-4"
+              type="info"
+              variant="tonal"
+            >
+              这里维护当前学期的年级和行政班。学校名称、学校代码和登录方式已经由首次配置保存，无需重复导入 JSON。
+            </v-alert>
+            <div class="grade-grid">
+              <v-card
+                v-for="grade in structure?.grades || []"
+                :key="grade.id"
+                class="grade-card"
+                variant="outlined"
+              >
+                <v-card-title class="d-flex align-center ga-2 px-4 pt-4">
+                  <div class="min-width-0">
+                    <div class="text-h6 text-truncate">
+                      {{ grade.name }}
+                    </div>
+                    <div class="text-caption text-medium-emphasis">
+                      {{ grade.code }} · 排序 {{ grade.sortOrder }}
+                    </div>
+                  </div>
+                  <v-spacer />
+                  <v-btn
+                    icon="mdi-pencil-outline"
+                    size="small"
+                    variant="text"
+                    @click="openGradeDialog(grade)"
+                  />
+                </v-card-title>
+                <v-card-text class="px-4 pb-4">
+                  <div class="d-flex align-center mb-3">
+                    <span class="text-subtitle-2">行政班</span>
+                    <v-spacer />
+                    <v-btn
+                      prepend-icon="mdi-account-multiple-plus-outline"
+                      size="small"
+                      variant="tonal"
+                      @click="openAdministrativeClassDialog(grade.id)"
+                    >
+                      新建班级
+                    </v-btn>
+                  </div>
+                  <v-list
+                    v-if="administrativeClassesForGrade(grade.id).length"
+                    class="pa-0 rounded-lg"
+                    density="compact"
+                  >
+                    <v-list-item
+                      v-for="item in administrativeClassesForGrade(grade.id)"
+                      :key="item.id"
+                      :subtitle="`${item.code} · ${item.isActive ? '启用' : '停用'}`"
+                      :title="item.name"
+                    >
+                      <template #prepend>
+                        <v-icon :color="item.isActive ? 'primary' : 'grey'">
+                          mdi-account-group-outline
+                        </v-icon>
+                      </template>
+                      <template #append>
+                        <v-btn
+                          icon="mdi-pencil-outline"
+                          size="small"
+                          variant="text"
+                          @click="openAdministrativeClassDialog(grade.id, item)"
+                        />
+                      </template>
+                    </v-list-item>
+                  </v-list>
+                  <div
+                    v-else
+                    class="text-body-2 text-medium-emphasis py-3"
+                  >
+                    尚未创建行政班
+                  </div>
+                </v-card-text>
+              </v-card>
+            </div>
+            <v-empty-state
+              v-if="!structure?.grades?.length && !loading"
+              icon="mdi-school-outline"
+              text="当前学期还没有年级，请先新建年级"
+            />
+          </v-card-text>
+        </v-card>
+      </v-window-item>
+
       <v-window-item value="classes">
         <v-row>
           <v-col
@@ -405,6 +510,116 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-dialog
+      v-model="gradeDialog"
+      max-width="560"
+    >
+      <v-card class="rounded-xl">
+        <v-card-title class="pa-5 pb-2">
+          {{ editingGradeId ? "编辑年级" : "新建年级" }}
+        </v-card-title>
+        <v-card-text class="px-5">
+          <v-text-field
+            v-model.trim="gradeForm.name"
+            label="年级名称"
+            placeholder="例如：高二"
+            variant="outlined"
+          />
+          <v-text-field
+            v-model.trim="gradeForm.code"
+            hint="2—64位字母、数字、点、横线或下划线；保存后统一转为大写"
+            label="年级代码"
+            persistent-hint
+            placeholder="例如：G2"
+            variant="outlined"
+          />
+          <v-text-field
+            v-model="gradeForm.sortOrder"
+            label="显示顺序"
+            max="10000"
+            min="-10000"
+            step="1"
+            type="number"
+            variant="outlined"
+          />
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5">
+          <v-spacer />
+          <v-btn @click="gradeDialog = false">
+            取消
+          </v-btn>
+          <v-btn
+            color="primary"
+            :disabled="!gradeForm.name || !gradeForm.code"
+            :loading="loading"
+            @click="saveGrade"
+          >
+            保存
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog
+      v-model="administrativeClassDialog"
+      max-width="600"
+    >
+      <v-card class="rounded-xl">
+        <v-card-title class="pa-5 pb-2">
+          {{ editingAdministrativeClassId ? "编辑行政班" : "新建行政班" }}
+        </v-card-title>
+        <v-card-text class="px-5">
+          <v-select
+            v-model="administrativeClassForm.gradeId"
+            :disabled="Boolean(editingAdministrativeClassId)"
+            :items="gradeOptions"
+            item-title="title"
+            item-value="value"
+            label="所属年级"
+            variant="outlined"
+          />
+          <v-text-field
+            v-model.trim="administrativeClassForm.name"
+            label="班级名称"
+            placeholder="例如：高二1班"
+            variant="outlined"
+          />
+          <v-text-field
+            v-model.trim="administrativeClassForm.code"
+            hint="建议包含年级和班号，例如 G2-C01"
+            label="班级代码"
+            persistent-hint
+            variant="outlined"
+          />
+          <v-switch
+            v-model="administrativeClassForm.isStudentSelectable"
+            color="primary"
+            label="允许学生自行选择此行政班"
+          />
+          <v-switch
+            v-if="editingAdministrativeClassId"
+            v-model="administrativeClassForm.isActive"
+            color="primary"
+            label="启用此行政班"
+          />
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5">
+          <v-spacer />
+          <v-btn @click="administrativeClassDialog = false">
+            取消
+          </v-btn>
+          <v-btn
+            color="primary"
+            :disabled="!administrativeClassForm.gradeId || !administrativeClassForm.name || !administrativeClassForm.code"
+            :loading="loading"
+            @click="saveAdministrativeClass"
+          >
+            保存
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -418,7 +633,7 @@ const props = defineProps({
   termId: {type: String, required: true},
 });
 
-const section = ref("classes");
+const section = ref("organization");
 const structure = ref(null);
 const loading = ref(false);
 const errorMessage = ref("");
@@ -431,6 +646,12 @@ const conflictingCourseGroups = ref([]);
 const courseGroupDialog = ref(false);
 const editingCourseGroupId = ref("");
 const courseGroupForm = ref(emptyCourseGroupForm());
+const gradeDialog = ref(false);
+const editingGradeId = ref("");
+const gradeForm = ref(emptyGradeForm());
+const administrativeClassDialog = ref(false);
+const editingAdministrativeClassId = ref("");
+const administrativeClassForm = ref(emptyAdministrativeClassForm());
 
 const deliveryModeOptions = [
   {title: "随行政班", value: "ADMIN_CLASS"},
@@ -480,6 +701,20 @@ function emptyCourseGroupForm() {
     isStudentSelectable: true,
     isActive: true,
   };
+}
+
+function emptyGradeForm() {
+  return {name: "", code: "", sortOrder: (structure.value?.grades?.length || 0) * 10};
+}
+
+function emptyAdministrativeClassForm() {
+  return {name: "", code: "", gradeId: "", isStudentSelectable: true, isActive: true};
+}
+
+function administrativeClassesForGrade(gradeId) {
+  return (structure.value?.administrativeClasses || [])
+    .filter((item) => item.gradeId === gradeId)
+    .sort((left, right) => left.code.localeCompare(right.code));
 }
 
 function subjectCategoryLabel(category) {
@@ -611,6 +846,73 @@ async function saveCourseGroup() {
   }
 }
 
+function openGradeDialog(grade = null) {
+  editingGradeId.value = grade?.id || "";
+  gradeForm.value = grade
+    ? {name: grade.name, code: grade.code, sortOrder: grade.sortOrder}
+    : emptyGradeForm();
+  gradeDialog.value = true;
+}
+
+async function saveGrade() {
+  loading.value = true;
+  errorMessage.value = "";
+  try {
+    if (editingGradeId.value) {
+      await classworksV2Api.updateManagedGrade(props.schoolId, editingGradeId.value, gradeForm.value);
+    } else {
+      await classworksV2Api.createManagedGrade(props.schoolId, {...gradeForm.value, termId: props.termId});
+    }
+    gradeDialog.value = false;
+    successMessage.value = editingGradeId.value ? "年级已更新。" : "年级已创建。";
+    await loadStructure();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "保存年级失败");
+  } finally {
+    loading.value = false;
+  }
+}
+
+function openAdministrativeClassDialog(gradeId, administrativeClass = null) {
+  editingAdministrativeClassId.value = administrativeClass?.id || "";
+  administrativeClassForm.value = administrativeClass ? {
+    name: administrativeClass.name,
+    code: administrativeClass.code,
+    gradeId: administrativeClass.gradeId,
+    isStudentSelectable: administrativeClass.isStudentSelectable,
+    isActive: administrativeClass.isActive,
+  } : {...emptyAdministrativeClassForm(), gradeId};
+  administrativeClassDialog.value = true;
+}
+
+async function saveAdministrativeClass() {
+  loading.value = true;
+  errorMessage.value = "";
+  try {
+    if (editingAdministrativeClassId.value) {
+      const input = {...administrativeClassForm.value};
+      delete input.gradeId;
+      await classworksV2Api.updateManagedAdministrativeClass(
+        props.schoolId,
+        editingAdministrativeClassId.value,
+        input,
+      );
+    } else {
+      await classworksV2Api.createManagedAdministrativeClass(
+        props.schoolId,
+        {...administrativeClassForm.value, termId: props.termId},
+      );
+    }
+    administrativeClassDialog.value = false;
+    successMessage.value = editingAdministrativeClassId.value ? "行政班已更新。" : "行政班已创建。请继续配置授课规则。";
+    await loadStructure();
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "保存行政班失败");
+  } finally {
+    loading.value = false;
+  }
+}
+
 watch(() => [props.schoolId, props.termId], loadStructure, {immediate: true});
 watch(selectedClassId, hydrateRules);
 watch(section, () => {
@@ -627,6 +929,17 @@ watch(section, () => {
 }
 
 .subject-rule-card {
+  min-width: 0;
+}
+
+.grade-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.grade-card,
+.min-width-0 {
   min-width: 0;
 }
 </style>

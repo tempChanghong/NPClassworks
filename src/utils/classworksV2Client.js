@@ -434,6 +434,21 @@ export const classworksV2Api = {
       {params: {termId}},
     ));
   },
+  async createManagedGrade(schoolId, input) {
+    return unwrap(await client.post(`/api/v2/admin/schools/${schoolId}/grades`, input));
+  },
+  async updateManagedGrade(schoolId, gradeId, input) {
+    return unwrap(await client.patch(`/api/v2/admin/schools/${schoolId}/grades/${gradeId}`, input));
+  },
+  async createManagedAdministrativeClass(schoolId, input) {
+    return unwrap(await client.post(`/api/v2/admin/schools/${schoolId}/administrative-classes`, input));
+  },
+  async updateManagedAdministrativeClass(schoolId, administrativeClassId, input) {
+    return unwrap(await client.patch(
+      `/api/v2/admin/schools/${schoolId}/administrative-classes/${administrativeClassId}`,
+      input,
+    ));
+  },
   async teachingRelationships(schoolId, termId, gradeId = "") {
     return unwrap(await client.get(
       `/api/v2/admin/schools/${schoolId}/teaching-relationships`,
