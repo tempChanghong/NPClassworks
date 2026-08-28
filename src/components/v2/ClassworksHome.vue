@@ -473,6 +473,11 @@
     v-model="notificationDeliveryDialog"
     :publication="deliveryPublication"
   />
+  <PublicationResultDialog
+    v-model="publicationResultDialog"
+    :publication="publicationResult"
+    @inspect-delivery="inspectResultDelivery"
+  />
   <v-dialog
     v-model="changePinDialog"
     max-width="480"
@@ -601,6 +606,7 @@ import PublicationComposer from "@/components/v2/PublicationComposer.vue";
 import ScreenHomeworkDialog from "@/components/v2/ScreenHomeworkDialog.vue";
 import PublicationHistoryDialog from "@/components/v2/PublicationHistoryDialog.vue";
 import NotificationDeliveryDialog from "@/components/v2/NotificationDeliveryDialog.vue";
+import PublicationResultDialog from "@/components/v2/PublicationResultDialog.vue";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
@@ -659,6 +665,8 @@ const historyMode = ref("teacher");
 const classroomToolsDialog = ref(false);
 const notificationDeliveryDialog = ref(false);
 const deliveryPublication = ref(null);
+const publicationResultDialog = ref(false);
+const publicationResult = ref({});
 const screenExitDialog = ref(false);
 const screenExitPin = ref("");
 const screenExitError = ref("");
@@ -1064,6 +1072,15 @@ async function restoreActionItem(item) {
 function showPublishedMessage(publication, context = {}) {
   editingPublication.value = null;
   showFeedback(teacherPublicationSaveFeedback(publication, context));
+  if (publication.status === "PUBLISHED") {
+    publicationResult.value = publication;
+    publicationResultDialog.value = true;
+  }
+}
+
+function inspectResultDelivery(publication) {
+  publicationResultDialog.value = false;
+  openNotificationDelivery(publication);
 }
 
 async function withdrawPublication(publication) {
@@ -1093,7 +1110,7 @@ async function clonePublication(publication) {
   await store.clone(publication);
   showFeedback({
     title: publication.type === "ASSIGNMENT" ? "已复制为今天的新作业草稿" : "已复制为新通知草稿",
-    detail: "当前状态：尚未发布",
+    detail: "当前状态：草稿",
     color: "info",
     icon: "mdi-content-copy",
   });

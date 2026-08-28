@@ -44,7 +44,7 @@
           <v-timeline-item
             v-for="item in revisions"
             :key="item.id"
-            :dot-color="item.isCertified ? 'success' : 'warning'"
+            :dot-color="revisionState(item).color"
             size="small"
           >
             <v-card
@@ -55,11 +55,11 @@
                 <div class="d-flex align-center flex-wrap ga-2 mb-2">
                   <strong>版本 {{ item.revision }}</strong>
                   <v-chip
-                    :color="item.isCertified ? 'success' : 'warning'"
+                    :color="revisionState(item).color"
                     size="small"
                     variant="tonal"
                   >
-                    {{ item.isCertified ? "教师已确认" : "待教师确认" }}
+                    {{ revisionState(item).label }}
                   </v-chip>
                   <v-chip
                     v-if="item.action === 'RESTORED'"
@@ -120,6 +120,7 @@
 import {ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {isPublicationRevisionConflict} from "@/utils/publicationConflict";
+import {publicationDisplayState} from "@/utils/publicationStatus";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -134,6 +135,10 @@ const loading = ref(false);
 const certifying = ref(false);
 const restoringRevision = ref(null);
 const error = ref("");
+
+function revisionState(item) {
+  return publicationDisplayState({...item.snapshot, isCertified: item.isCertified});
+}
 
 watch(() => props.modelValue, (open) => {
   if (open && props.publication) {

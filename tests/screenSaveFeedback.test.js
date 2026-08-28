@@ -29,8 +29,8 @@ test("teacher feedback distinguishes assignment drafts from published notices", 
     targets: [{workspace: {name: "高二1班"}}],
   }), {
     title: "普通作业草稿已保存",
-    detail: "当前状态：尚未发布 · 版本 1 · 高二1班",
-    color: "info",
+    detail: "当前状态：草稿 · 版本 1 · 高二1班",
+    color: "grey",
     icon: "mdi-file-edit-outline",
   });
   assert.equal(teacherPublicationSaveFeedback({
@@ -52,7 +52,7 @@ test("scheduled teacher publications report the display time explicitly", () => 
     publishAt: "2026-08-19T00:00:00.000Z",
   }, {now: new Date("2026-08-18T00:00:00.000Z")});
   assert.equal(feedback.title, "重要作业已安排发布");
-  assert.match(feedback.detail, /教师已确认/);
+  assert.match(feedback.detail, /定时发布/);
   assert.match(feedback.detail, /自动显示/);
 });
 

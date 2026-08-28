@@ -209,6 +209,7 @@
 
 <script setup>
 import {computed, ref} from "vue";
+import {PUBLICATION_STATUS} from "@/utils/publicationStatus";
 
 const props = defineProps({
   center: {type: Object, required: true},
@@ -233,9 +234,9 @@ const filteredItems = computed(() => (props.center?.items || []).filter(
 ));
 
 const REASON_META = {
-  CHANGED_AFTER_CERTIFICATION: {label: "确认后被修改", color: "warning", icon: "mdi-alert-decagram-outline"},
-  CREATED_BY_SCREEN: {label: "大屏新录入", color: "info", icon: "mdi-monitor-edit"},
-  OTHER_UNCERTIFIED: {label: "待教师确认", color: "grey", icon: "mdi-help-circle-outline"},
+  CHANGED_AFTER_CERTIFICATION: PUBLICATION_STATUS.CHANGED_AFTER_CERTIFICATION,
+  CREATED_BY_SCREEN: {...PUBLICATION_STATUS.PENDING_CERTIFICATION, label: "大屏新录入"},
+  OTHER_UNCERTIFIED: PUBLICATION_STATUS.PENDING_CERTIFICATION,
 };
 
 function reasonMeta(item) {

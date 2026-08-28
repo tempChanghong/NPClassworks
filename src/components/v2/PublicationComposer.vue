@@ -310,6 +310,30 @@
         variant="tonal"
       >
         <div>{{ conflictMessage }}</div>
+        <div
+          v-if="publicationConflictRows.length"
+          class="conflict-comparison mt-3"
+        >
+          <div class="conflict-comparison__header">
+            <strong>发生差异的字段</strong>
+            <span>服务器最新版 / 我的输入</span>
+          </div>
+          <div
+            v-for="row in publicationConflictRows"
+            :key="row.key"
+            class="conflict-comparison__row"
+          >
+            <div class="font-weight-bold">
+              {{ row.label }}
+            </div>
+            <div class="conflict-comparison__server">
+              服务器：{{ conflictValue(row, "currentValue") }}
+            </div>
+            <div class="conflict-comparison__local">
+              我的：{{ conflictValue(row, "localValue") }}
+            </div>
+          </div>
+        </div>
         <div class="d-flex flex-wrap ga-2 mt-3">
           <v-btn
             :loading="conflictReloading"
@@ -319,6 +343,16 @@
             @click="reloadLatest"
           >
             放弃本机输入并载入最新版
+          </v-btn>
+          <v-btn
+            v-if="conflict.latestPublication"
+            :loading="conflictApplying"
+            prepend-icon="mdi-source-merge"
+            size="small"
+            variant="tonal"
+            @click="applyLocalOnLatest"
+          >
+            以我的输入生成新版本
           </v-btn>
           <v-btn
             :loading="conflictCopying"
@@ -383,6 +417,8 @@ import {
   teacherTargetCombinationId,
 } from "@/utils/teacherTargetPreferences";
 import {insertHomeworkQuickInput, sanitizeHomeworkQuickInputs} from "@/utils/homeworkQuickInputs";
+import {buildConflictComparison, PUBLICATION_CONFLICT_FIELDS} from "@/utils/conflictComparison";
+import {publicationPriorityMeta} from "@/utils/publicationStatus";
 import {
   publicationConflictMessage,
   publicationConflictState,
@@ -407,6 +443,7 @@ const conflict = ref(null);
 const conflictInput = ref(null);
 const conflictReloading = ref(false);
 const conflictCopying = ref(false);
+const conflictApplying = ref(false);
 const duplicateWarning = ref(null);
 const duplicateStatus = ref("PUBLISHED");
 const contentInput = ref(null);
@@ -453,11 +490,7 @@ const selectedTargets = computed(() => {
   return form.targetWorkspaceIds.map((id) => byId.get(id)).filter(Boolean);
 });
 const selectedSubject = computed(() => store.teacherSubjects.find((item) => item.id === form.subjectId));
-const priorityPreview = computed(() => ({
-  NORMAL: {label: "普通", color: "primary"},
-  IMPORTANT: {label: "重要", color: "warning"},
-  URGENT: {label: "紧急", color: "error"},
-}[form.priority] || {label: "普通", color: "primary"}));
+const priorityPreview = computed(() => publicationPriorityMeta(form.priority));
 const publishTimePreview = computed(() => {
   const time = new Date(form.publishAt);
   if (Number.isNaN(time.getTime())) return "发布时间未填写";
@@ -482,6 +515,11 @@ const lifecyclePreview = computed(() => {
 });
 const isEditing = computed(() => Boolean(props.editingPublication));
 const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
+const publicationConflictRows = computed(() => buildConflictComparison(
+  conflictInput.value,
+  conflict.value?.latestPublication,
+  PUBLICATION_CONFLICT_FIELDS,
+));
 const targetPreferences = computed(() => store.teacherTargetPreferences);
 const quickInputs = computed(() => {
   const subject = store.teacherSubjects.find((item) => item.id === form.subjectId);
@@ -639,14 +677,59 @@ async function submit(status, allowDuplicate = false) {
     }
     const nextConflict = publicationConflictState(error, props.editingPublication?.revision);
     if (nextConflict) {
-      conflict.value = nextConflict;
       conflictInput.value = submittedInput;
       localError.value = "";
+      try {
+        const latestPublication = await store.latestPublication(props.editingPublication.id, "teacher");
+        conflict.value = {...nextConflict, latestPublication};
+        store.teacherError = "";
+      } catch {
+        conflict.value = nextConflict;
+      }
     } else {
       localError.value = store.teacherError;
     }
   } finally {
     flag.value = false;
+  }
+}
+
+function conflictValue(row, key) {
+  const value = row[key];
+  if (row.key === "subjectId") {
+    return store.teacherSubjects.find((item) => item.id === value)?.name || value;
+  }
+  if (row.key === "targetWorkspaceIds") {
+    const names = String(value).split("、").map((id) =>
+      store.teacherWorkspaces.find((item) => item.id === id)?.name || id);
+    return names.join("、");
+  }
+  if (row.key === "priority") return publicationPriorityMeta(value).label;
+  return value;
+}
+
+async function applyLocalOnLatest() {
+  if (!conflict.value?.latestPublication || !conflictInput.value) return;
+  if (!window.confirm("系统会保留服务器当前版本，并把你的输入保存为下一个新版本。确认继续吗？")) return;
+  conflictApplying.value = true;
+  localError.value = "";
+  try {
+    const updated = await store.updatePublication(conflict.value.latestPublication, conflictInput.value);
+    reset();
+    conflict.value = null;
+    conflictInput.value = null;
+    emit("published", updated, {operation: "updated", conflictResolved: true});
+  } catch (error) {
+    const nextConflict = publicationConflictState(error, conflict.value.latestPublication.revision);
+    if (nextConflict) {
+      const latestPublication = await store.latestPublication(props.editingPublication.id, "teacher");
+      conflict.value = {...nextConflict, latestPublication};
+      localError.value = "保存期间内容再次发生变化，已更新对比，请重新确认。";
+    } else {
+      localError.value = store.teacherError;
+    }
+  } finally {
+    conflictApplying.value = false;
   }
 }
 
@@ -681,3 +764,32 @@ async function saveConflictCopy() {
   }
 }
 </script>
+
+<style scoped>
+.conflict-comparison {
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-theme-warning), 0.35);
+  border-radius: 12px;
+}
+.conflict-comparison__header,
+.conflict-comparison__row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(100px, 0.55fr) minmax(0, 1fr) minmax(0, 1fr);
+  padding: 10px 12px;
+}
+.conflict-comparison__header {
+  background: rgba(var(--v-theme-warning), 0.12);
+}
+.conflict-comparison__header span { grid-column: 2 / 4; }
+.conflict-comparison__row + .conflict-comparison__row { border-top: 1px solid rgba(var(--v-border-color), 0.2); }
+.conflict-comparison__server,
+.conflict-comparison__local { overflow-wrap: anywhere; white-space: pre-wrap; }
+.conflict-comparison__server { color: rgb(var(--v-theme-info)); }
+.conflict-comparison__local { color: rgb(var(--v-theme-success)); }
+@media (max-width: 600px) {
+  .conflict-comparison__header,
+  .conflict-comparison__row { grid-template-columns: 1fr; }
+  .conflict-comparison__header span { grid-column: auto; }
+}
+</style>

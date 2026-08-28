@@ -17,6 +17,12 @@
       </v-chip>
       <v-spacer />
       <v-btn
+        icon="mdi-information-outline"
+        title="查看统一状态说明"
+        variant="text"
+        @click="statusLegendDialog = true"
+      />
+      <v-btn
         :loading="loading"
         icon="mdi-refresh"
         title="刷新发布记录"
@@ -241,6 +247,43 @@
         </v-btn>
       </template>
     </v-empty-state>
+    <v-dialog
+      v-model="statusLegendDialog"
+      max-width="620"
+    >
+      <v-card class="rounded-xl">
+        <v-card-title class="pa-5 pb-2">
+          发布与同步状态说明
+        </v-card-title>
+        <v-card-text class="px-5">
+          <v-list lines="two">
+            <v-list-item
+              v-for="item in statusTable"
+              :key="item.key"
+              :prepend-icon="item.icon"
+              :subtitle="item.description"
+              :title="item.label"
+            >
+              <template #append>
+                <v-chip
+                  :color="item.color"
+                  size="small"
+                  variant="tonal"
+                >
+                  {{ item.label }}
+                </v-chip>
+              </template>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5">
+          <v-spacer />
+          <v-btn @click="statusLegendDialog = false">
+            关闭
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-card>
 </template>
 
@@ -252,6 +295,7 @@ import {
   teacherPublicationState,
   teacherPublicationStats,
 } from "@/utils/teacherPublications";
+import {PUBLICATION_STATUS, PUBLICATION_STATUS_TABLE} from "@/utils/publicationStatus";
 
 const props = defineProps({
   publications: {type: Array, default: () => []},
@@ -265,16 +309,21 @@ const typeFilter = ref("");
 const subjectFilter = ref("");
 const workspaceFilter = ref("");
 const boardDateFilter = ref("");
+const statusLegendDialog = ref(false);
+const statusTable = PUBLICATION_STATUS_TABLE;
 const typeOptions = [
   {title: "作业", value: "ASSIGNMENT"},
   {title: "通知", value: "NOTICE"},
 ];
 const stateOptions = [
   {title: "全部", value: "", color: "primary", icon: "mdi-format-list-bulleted"},
-  {title: "待教师确认", value: "pending", color: "warning", icon: "mdi-alert-circle-outline"},
-  {title: "草稿", value: "draft", color: "warning", icon: "mdi-file-edit-outline"},
-  {title: "已发布", value: "published", color: "success", icon: "mdi-check-decagram-outline"},
-  {title: "已撤回", value: "withdrawn", color: "grey", icon: "mdi-undo-variant"},
+  ...[
+    PUBLICATION_STATUS.PENDING_CERTIFICATION,
+    PUBLICATION_STATUS.DRAFT,
+    PUBLICATION_STATUS.SCHEDULED,
+    PUBLICATION_STATUS.PUBLISHED,
+    PUBLICATION_STATUS.WITHDRAWN,
+  ].map((item) => ({title: item.label, value: item.key, color: item.color, icon: item.icon})),
 ];
 
 const stats = computed(() => teacherPublicationStats(props.publications));

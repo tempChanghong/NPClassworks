@@ -58,16 +58,16 @@
             完成后有更新
           </v-chip>
           <v-chip
-            :color="publication.isCertified ? 'success' : 'warning'"
+            :color="publicationState(publication).color"
             :size="screenMode ? 'x-small' : 'small'"
             variant="tonal"
           >
             <v-icon
               class="mr-1"
-              :icon="publication.isCertified ? 'mdi-check-decagram' : 'mdi-alert-circle-outline'"
+              :icon="publicationState(publication).icon"
               :size="screenMode ? 'x-small' : 'small'"
             />
-            {{ publication.isCertified ? "教师已确认" : "待教师确认" }}
+            {{ publicationState(publication).label }}
           </v-chip>
           <v-chip
             :color="priorityColor(publication.priority)"
@@ -173,6 +173,7 @@ import {
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 import {assignmentDueState} from "@/utils/publicationFeed";
+import {publicationDisplayState} from "@/utils/publicationStatus";
 import {
   isStudentHomeworkCompleted,
   isStudentHomeworkUpdatedAfterCompletion,
@@ -188,6 +189,10 @@ const props = defineProps({
   completionRecords: {type: Object, default: () => ({})},
 });
 defineEmits(["edit", "history", "toggle-complete"]);
+
+function publicationState(publication) {
+  return publicationDisplayState(publication, {now: props.currentTime});
+}
 
 const gridContainer = ref(null);
 const gridItems = ref([]);

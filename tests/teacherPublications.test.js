@@ -37,7 +37,7 @@ test("teacher publication stats count each lifecycle state", () => {
     publication({id: "published"}),
     publication({id: "withdrawn", status: "WITHDRAWN"}),
   ]);
-  assert.deepEqual(stats, {all: 4, pending: 1, draft: 1, published: 1, withdrawn: 1});
+  assert.deepEqual(stats, {all: 4, pending: 1, draft: 1, scheduled: 0, published: 1, withdrawn: 1});
 });
 
 test("teacher filters combine state, workspace, date and search text", () => {

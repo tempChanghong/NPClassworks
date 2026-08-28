@@ -274,6 +274,20 @@
           variant="tonal"
         >
           <div>{{ conflictMessage }}</div>
+          <div
+            v-if="screenConflictRows.length"
+            class="screen-conflict-comparison mt-3"
+          >
+            <div
+              v-for="row in screenConflictRows"
+              :key="row.key"
+              class="screen-conflict-comparison__row"
+            >
+              <strong>{{ row.label }}</strong>
+              <span>服务器：{{ row.currentValue }}</span>
+              <span>本机：{{ row.localValue }}</span>
+            </div>
+          </div>
           <div class="d-flex flex-wrap ga-2 mt-3">
             <v-btn
               :loading="conflictReloading"
@@ -282,6 +296,15 @@
               @click="reloadLatest"
             >
               放弃本机输入并载入最新版
+            </v-btn>
+            <v-btn
+              v-if="conflict.latestPublication"
+              :loading="conflictApplying"
+              prepend-icon="mdi-source-merge"
+              variant="tonal"
+              @click="applyLocalOnLatest"
+            >
+              以本机输入生成新版本
             </v-btn>
             <v-btn
               :loading="conflictCopying"
@@ -350,6 +373,7 @@ import {
   publicationConflictMessage,
   publicationConflictState,
 } from "@/utils/publicationConflict";
+import {buildConflictComparison, PUBLICATION_CONFLICT_FIELDS} from "@/utils/conflictComparison";
 import {
   duplicateAssignmentDescription,
   publicationDuplicateState,
@@ -370,6 +394,7 @@ const basePublication = ref(props.publication);
 const conflict = ref(null);
 const conflictReloading = ref(false);
 const conflictCopying = ref(false);
+const conflictApplying = ref(false);
 const duplicateWarning = ref(null);
 const contentFocused = ref(false);
 const contentInput = ref(null);
@@ -407,6 +432,22 @@ const canSave = computed(() => Boolean(
   (form.title.trim() || form.content.trim()),
 ));
 const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
+const screenConflictInput = computed(() => ({
+  subjectId: form.subjectId,
+  targetWorkspaceIds: [form.targetWorkspaceId],
+  title: form.title,
+  content: form.content,
+  boardDate: form.boardDate,
+  dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
+  priority: form.priority,
+  publishAt: basePublication.value?.publishAt,
+  status: "PUBLISHED",
+}));
+const screenConflictRows = computed(() => buildConflictComparison(
+  screenConflictInput.value,
+  conflict.value?.latestPublication,
+  PUBLICATION_CONFLICT_FIELDS,
+));
 const dueAtLabel = computed(() => form.dueAt
   ? new Intl.DateTimeFormat("zh-CN", {
       month: "numeric",
@@ -562,12 +603,48 @@ async function save(allowDuplicate = false) {
     }
     const nextConflict = publicationConflictState(error, basePublication.value?.revision);
     if (nextConflict) {
-      conflict.value = nextConflict;
       localError.value = "";
       store.screenError = "";
+      try {
+        const latestPublication = await store.latestPublication(basePublication.value.id, "screen");
+        conflict.value = {...nextConflict, latestPublication};
+      } catch {
+        conflict.value = nextConflict;
+      }
     }
   } finally {
     saving.value = false;
+  }
+}
+
+async function applyLocalOnLatest() {
+  const latest = conflict.value?.latestPublication;
+  if (!latest) return;
+  if (!window.confirm("服务器当前版本会保留在历史中，本机输入将成为下一个待教师确认版本。确认继续吗？")) return;
+  conflictApplying.value = true;
+  localError.value = "";
+  try {
+    const context = {
+      subjectName: eligibleSubjects.value.find((subject) => subject.id === form.subjectId)?.name || "作业",
+      targetName: eligibleTargets.value.find((workspace) => workspace.id === form.targetWorkspaceId)?.name || "目标班级",
+      operation: "updated",
+    };
+    const saved = await store.saveScreenPublication(screenConflictInput.value, latest, context);
+    clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new");
+    conflict.value = null;
+    emit("saved", saved, context);
+    emit("update:modelValue", false);
+  } catch (error) {
+    const nextConflict = publicationConflictState(error, latest.revision);
+    if (nextConflict) {
+      const latestPublication = await store.latestPublication(basePublication.value.id, "screen");
+      conflict.value = {...nextConflict, latestPublication};
+      localError.value = "保存期间内容再次变化，已更新对比，请重新确认。";
+    } else {
+      localError.value = store.screenError;
+    }
+  } finally {
+    conflictApplying.value = false;
   }
 }
 
@@ -686,8 +763,28 @@ async function saveConflictCopy() {
   line-height: 1.6;
 }
 
+.screen-conflict-comparison {
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-theme-warning), 0.35);
+  border-radius: 12px;
+}
+
+.screen-conflict-comparison__row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(100px, 0.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  padding: 10px 12px;
+}
+
+.screen-conflict-comparison__row + .screen-conflict-comparison__row {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.screen-conflict-comparison__row span { overflow-wrap: anywhere; white-space: pre-wrap; }
+
 @media (max-width: 700px) {
   .screen-composer__actions > div:first-child { display: none; }
   .subject-choice-grid { grid-template-columns: repeat(3, 1fr); }
+  .screen-conflict-comparison__row { grid-template-columns: 1fr; }
 }
 </style>

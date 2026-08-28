@@ -1,20 +1,13 @@
-const STATE_ORDER = Object.freeze({pending: 0, draft: 1, published: 2, withdrawn: 3});
+import {publicationDisplayState} from "./publicationStatus.js";
+
+const STATE_ORDER = Object.freeze({pending: 0, changed: 0, draft: 1, scheduled: 2, published: 3, withdrawn: 4});
 
 export function teacherPublicationState(publication) {
-  if (publication.status === "WITHDRAWN") {
-    return {key: "withdrawn", label: "已撤回", color: "grey", icon: "mdi-undo-variant"};
-  }
-  if (publication.status === "DRAFT") {
-    return {key: "draft", label: "草稿", color: "warning", icon: "mdi-file-edit-outline"};
-  }
-  if (!publication.isCertified) {
-    return {key: "pending", label: "待教师确认", color: "warning", icon: "mdi-alert-circle-outline"};
-  }
-  return {key: "published", label: "已发布", color: "success", icon: "mdi-check-decagram-outline"};
+  return publicationDisplayState(publication);
 }
 
 export function teacherPublicationStats(publications = []) {
-  const stats = {all: publications.length, pending: 0, draft: 0, published: 0, withdrawn: 0};
+  const stats = {all: publications.length, pending: 0, draft: 0, scheduled: 0, published: 0, withdrawn: 0};
   for (const publication of publications) stats[teacherPublicationState(publication).key] += 1;
   return stats;
 }

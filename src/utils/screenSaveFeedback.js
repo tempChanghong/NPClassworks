@@ -1,21 +1,17 @@
-const PRIORITY_LABELS = Object.freeze({NORMAL: "普通", IMPORTANT: "重要", URGENT: "紧急"});
+import {publicationDisplayState, publicationPriorityMeta} from "./publicationStatus.js";
 
 function publicationKind(publication) {
   return publication.type === "NOTICE" ? "通知" : "作业";
 }
 
 function priorityLabel(publication) {
-  return PRIORITY_LABELS[publication.priority] || "普通";
+  return publicationPriorityMeta(publication.priority).label;
 }
 
 function targetLabel(publication, context) {
   const explicit = [context.subjectName, context.targetName].filter(Boolean).join(" · ");
   if (explicit) return explicit;
   return publication.targets?.map((target) => target.workspace?.name).filter(Boolean).join("、") || "发布目标";
-}
-
-function isScheduled(publication, now = new Date()) {
-  return publication.publishAt && new Date(publication.publishAt).getTime() > now.getTime() + 30_000;
 }
 
 function formattedDateTime(value) {
@@ -29,11 +25,12 @@ function formattedDateTime(value) {
 
 export function screenHomeworkSaveFeedback(publication = {}, context = {}) {
   if (publication.offlineQueued) {
+    const state = publicationDisplayState(publication);
     return {
       title: "作业已保存在本机",
-      detail: `${targetLabel(publication, context)} · 网络恢复后将自动提交，提交前不会出现在其他设备上`,
-      color: "info",
-      icon: "mdi-cloud-upload-outline",
+      detail: `当前状态：${state.label} · ${targetLabel(publication, context)} · 网络恢复后将自动提交，提交前不会出现在其他设备上`,
+      color: state.color,
+      icon: state.icon,
     };
   }
   const operation = context.operation === "updated" ? "修改已保存" : "已新增";
@@ -58,26 +55,27 @@ export function teacherPublicationSaveFeedback(publication = {}, context = {}) {
   const kind = publicationKind(publication);
   const priority = priorityLabel(publication);
   const target = targetLabel(publication, context);
+  const state = publicationDisplayState(publication, {now: context.now});
   if (publication.status === "DRAFT") {
     return {
       title: `${priority}${kind}草稿已保存`,
-      detail: `当前状态：尚未发布 · 版本 ${publication.revision || "—"} · ${target}`,
-      color: "info",
-      icon: "mdi-file-edit-outline",
+      detail: `当前状态：${state.label} · 版本 ${publication.revision || "—"} · ${target}`,
+      color: state.color,
+      icon: state.icon,
     };
   }
-  if (isScheduled(publication, context.now)) {
+  if (state.key === "scheduled") {
     return {
       title: `${priority}${kind}已安排发布`,
-      detail: `当前状态：教师已确认 · 将于 ${formattedDateTime(publication.publishAt)} 自动显示 · 版本 ${publication.revision || "—"}`,
-      color: "success",
-      icon: "mdi-calendar-clock-outline",
+      detail: `当前状态：${state.label} · 将于 ${formattedDateTime(publication.publishAt)} 自动显示 · 版本 ${publication.revision || "—"}`,
+      color: state.color,
+      icon: state.icon,
     };
   }
   return {
     title: context.operation === "updated" ? `${priority}${kind}修改已保存` : `${priority}${kind}已发布`,
-    detail: `当前状态：教师已确认 · 版本 ${publication.revision || "—"} · 已同步至 ${target}`,
-    color: "success",
+    detail: `当前状态：${state.label} · 版本 ${publication.revision || "—"} · 已写入 ${target}`,
+    color: state.color,
     icon: kind === "通知" ? "mdi-bullhorn-check-outline" : "mdi-check-decagram-outline",
   };
 }

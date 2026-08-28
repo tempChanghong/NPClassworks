@@ -982,6 +982,73 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-dialog
+      v-model="conflictDialog"
+      max-width="860"
+      persistent
+    >
+      <v-card class="rounded-xl">
+        <v-card-title class="pa-5 pb-2">
+          {{ organizationConflict?.title || "处理并发修改" }}
+        </v-card-title>
+        <v-card-text class="px-5">
+          <v-alert
+            class="mb-4"
+            type="warning"
+            variant="tonal"
+          >
+            服务器内容已被其他管理员更新。你的输入仍被完整保留，请比较后选择处理方式。
+          </v-alert>
+          <div class="organization-conflict-table">
+            <div class="organization-conflict-table__header">
+              <strong>字段</strong>
+              <strong>服务器最新版</strong>
+              <strong>我的输入</strong>
+            </div>
+            <div
+              v-for="row in organizationConflictRows"
+              :key="row.key"
+              class="organization-conflict-table__row"
+            >
+              <strong>{{ row.label }}</strong>
+              <div class="organization-conflict-table__server">
+                {{ row.currentValue }}
+              </div>
+              <div class="organization-conflict-table__local">
+                {{ row.localValue }}
+              </div>
+            </div>
+          </div>
+          <v-alert
+            v-if="!organizationConflictRows.length"
+            class="mt-4"
+            type="info"
+            variant="tonal"
+          >
+            可见字段目前相同，可能是其他管理员修改后又恢复了内容。仍建议采用服务器最新版。
+          </v-alert>
+        </v-card-text>
+        <v-card-actions class="px-5 pb-5 flex-wrap ga-2">
+          <v-btn
+            prepend-icon="mdi-cloud-download-outline"
+            variant="tonal"
+            @click="acceptOrganizationServerVersion"
+          >
+            采用服务器最新版
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            color="primary"
+            prepend-icon="mdi-pencil-outline"
+            variant="flat"
+            @click="keepOrganizationLocalDraft"
+          >
+            保留我的输入并继续编辑
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -989,6 +1056,7 @@
 import {computed, ref, watch} from "vue";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
 import {buildSubjectRulePreset} from "@/utils/academicStructure";
+import {buildConflictComparison} from "@/utils/conflictComparison";
 
 const props = defineProps({
   schoolId: {type: String, required: true},
@@ -1024,6 +1092,20 @@ const batchClassForm = ref(emptyBatchClassForm());
 const impactDialog = ref(false);
 const pendingImpact = ref(null);
 const pendingImpactAction = ref(null);
+const conflictDialog = ref(false);
+const organizationConflict = ref(null);
+const organizationConflictRows = computed(() => organizationConflict.value
+  ? buildConflictComparison(
+    organizationConflict.value.local,
+    organizationConflict.value.current,
+    organizationConflict.value.fields,
+  )
+  : []);
+
+const COMMON_NAME_FIELDS = [
+  {key: "name", label: "名称"},
+  {key: "code", label: "代码"},
+];
 
 const teacherAuthModeOptions = [
   {title: "教师个人账号 + PIN", value: "LOCAL_PIN"},
@@ -1127,6 +1209,52 @@ function subjectCategoryLabel(category) {
   return {CORE: "基础科目", ELECTIVE: "选考科目", OTHER: "其他科目"}[category] || "其他科目";
 }
 
+function teacherAuthModeLabel(mode) {
+  return teacherAuthModeOptions.find((item) => item.value === mode)?.title || String(mode || "（空）");
+}
+
+function subjectName(value) {
+  return (structure.value?.subjects || []).find((item) => item.id === value)?.name || String(value || "（空）");
+}
+
+function administrativeClassNames(value) {
+  const ids = Array.isArray(value) ? value : [value];
+  return ids.map((id) => (structure.value?.administrativeClasses || [])
+    .find((item) => item.id === id)?.name || id).join("、");
+}
+
+function subjectRuleSummary(modes = {}) {
+  return (structure.value?.subjects || []).map((subject) => {
+    const mode = modes[subject.id] || "NOT_OFFERED";
+    const label = deliveryModeOptions.find((item) => item.value === mode)?.title || mode;
+    return `${subject.name}：${label}`;
+  });
+}
+
+function courseGroupSnapshot(group) {
+  if (!group) return {};
+  return {
+    name: group.name,
+    code: group.code,
+    gradeId: group.gradeId,
+    subjectId: group.subjectId,
+    sourceClassIds: group.sourceClasses?.map((item) => item.administrativeClassId) || [],
+    isStudentSelectable: group.isStudentSelectable,
+    isActive: group.isActive,
+  };
+}
+
+function administrativeClassSnapshot(administrativeClass) {
+  if (!administrativeClass) return {};
+  return {
+    name: administrativeClass.name,
+    code: administrativeClass.code,
+    gradeId: administrativeClass.gradeId,
+    isStudentSelectable: administrativeClass.isStudentSelectable,
+    isActive: administrativeClass.isActive,
+  };
+}
+
 function hydrateRules() {
   const rules = new Map((selectedAdministrativeClass.value?.subjectRules || [])
     .map((rule) => [rule.subjectId, rule.deliveryMode]));
@@ -1168,16 +1296,42 @@ async function loadStructure() {
   }
 }
 
-async function handleOrganizationConflict(error) {
+function cloneDraft(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+async function handleOrganizationConflict(error, descriptor) {
   if (error.response?.data?.code !== "ORGANIZATION_VERSION_CONFLICT") return false;
+  const local = cloneDraft(descriptor.local);
   subjectDialog.value = false;
   gradeDialog.value = false;
   administrativeClassDialog.value = false;
   courseGroupDialog.value = false;
   cancelImpactChange();
   await loadStructure();
-  errorMessage.value = "保存未执行：该数据刚刚被其他管理员修改。页面已载入最新版本，请核对后重新操作。";
+  organizationConflict.value = {
+    ...descriptor,
+    local,
+    current: descriptor.current(),
+  };
+  conflictDialog.value = true;
+  errorMessage.value = "";
   return true;
+}
+
+function acceptOrganizationServerVersion() {
+  conflictDialog.value = false;
+  organizationConflict.value = null;
+  successMessage.value = "已采用服务器最新版，本次本地修改没有写入。";
+}
+
+function keepOrganizationLocalDraft() {
+  const conflict = organizationConflict.value;
+  if (!conflict) return;
+  conflict.restore(cloneDraft(conflict.local));
+  conflictDialog.value = false;
+  organizationConflict.value = null;
+  errorMessage.value = "本地输入已恢复。再次保存会以服务器最新版为基础生成新版本。";
 }
 
 async function saveSchoolProfile() {
@@ -1191,7 +1345,17 @@ async function saveSchoolProfile() {
     schoolForm.value.sharedPassword = "";
     successMessage.value = "学校基础设置已保存。";
   } catch (error) {
-    if (!await handleOrganizationConflict(error)) {
+    if (!await handleOrganizationConflict(error, {
+      title: "比较学校基础设置",
+      local: schoolForm.value,
+      current: () => schoolProfile.value,
+      fields: [
+        {key: "name", label: "学校名称"},
+        {key: "teacherAuthMode", label: "教师登录方式", format: teacherAuthModeLabel},
+        {key: "allowOAuthTeacherLogin", label: "允许 OAuth 登录"},
+      ],
+      restore: (draft) => { schoolForm.value = draft; section.value = "school"; },
+    })) {
       errorMessage.value = describeApiError(error, "保存学校基础设置失败");
     }
   } finally {
@@ -1227,7 +1391,19 @@ async function saveSubject() {
     successMessage.value = editingSubjectId.value ? "学科已更新。" : "学科已创建。";
     await loadStructure();
   } catch (error) {
-    if (!await handleOrganizationConflict(error)) {
+    const subjectId = editingSubjectId.value;
+    if (!await handleOrganizationConflict(error, {
+      title: "比较学科设置",
+      local: subjectForm.value,
+      current: () => (structure.value?.subjects || []).find((item) => item.id === subjectId) || {},
+      fields: [...COMMON_NAME_FIELDS, {key: "category", label: "分类", format: subjectCategoryLabel},
+        {key: "sortOrder", label: "排序"}],
+      restore: (draft) => {
+        editingSubjectId.value = subjectId;
+        subjectForm.value = draft;
+        subjectDialog.value = true;
+      },
+    })) {
       errorMessage.value = describeApiError(error, "保存学科失败");
     }
   } finally {
@@ -1278,7 +1454,22 @@ async function saveSubjectRules(removeConflictingSources) {
     if (error.response?.data?.code === "SUBJECT_RULE_SOURCE_CONFLICT") {
       conflictingCourseGroups.value = error.response.data.details?.courseGroups || [];
       errorMessage.value = "请确认是否解除冲突的走班来源关系。";
-    } else if (!await handleOrganizationConflict(error)) {
+    } else if (!await handleOrganizationConflict(error, {
+      title: `比较 ${selectedAdministrativeClass.value?.name || "行政班"} 授课规则`,
+      local: {rules: subjectRuleSummary(ruleModes.value)},
+      current: () => ({rules: subjectRuleSummary(Object.fromEntries(
+        (selectedAdministrativeClass.value?.subjectRules || []).map((rule) => [rule.subjectId, rule.deliveryMode]),
+      ))}),
+      fields: [{key: "rules", label: "授课规则", format: (value) => Array.isArray(value) ? value.join("；") : String(value)}],
+      restore: (draft) => {
+        ruleModes.value = Object.fromEntries((draft.rules || []).map((entry) => entry.split("：")).map(([name, mode]) => {
+          const subject = (structure.value?.subjects || []).find((item) => item.name === name);
+          const value = deliveryModeOptions.find((item) => item.title === mode)?.value || "NOT_OFFERED";
+          return [subject?.id, value];
+        }).filter(([id]) => id));
+        section.value = "classes";
+      },
+    })) {
       errorMessage.value = describeApiError(error, "保存授课规则失败");
     }
   } finally {
@@ -1357,7 +1548,17 @@ async function saveCourseGroup(confirmImpact = false) {
       pendingImpact.value = error.response.data.details;
       pendingImpactAction.value = "course-group";
       impactDialog.value = true;
-    } else if (!await handleOrganizationConflict(error)) {
+    } else if (!await handleOrganizationConflict(error, {
+      title: "比较走班教学班设置",
+      local: courseGroupForm.value,
+      current: () => courseGroupSnapshot((structure.value?.courseGroups || [])
+        .find((item) => item.id === editingCourseGroupId.value)),
+      fields: [...COMMON_NAME_FIELDS, {key: "subjectId", label: "科目", format: subjectName},
+        {key: "sourceClassIds", label: "来源行政班", format: administrativeClassNames},
+        {key: "isStudentSelectable", label: "学生可选择"},
+        {key: "isActive", label: "启用状态"}],
+      restore: (draft) => { courseGroupForm.value = draft; courseGroupDialog.value = true; },
+    })) {
       errorMessage.value = describeApiError(error, "保存走班教学班失败");
     }
   } finally {
@@ -1390,7 +1591,14 @@ async function saveGrade() {
     successMessage.value = editingGradeId.value ? "年级已更新。" : "年级已创建。";
     await loadStructure();
   } catch (error) {
-    if (!await handleOrganizationConflict(error)) {
+    const gradeId = editingGradeId.value;
+    if (!await handleOrganizationConflict(error, {
+      title: "比较年级设置",
+      local: gradeForm.value,
+      current: () => (structure.value?.grades || []).find((item) => item.id === gradeId) || {},
+      fields: [...COMMON_NAME_FIELDS, {key: "sortOrder", label: "排序"}],
+      restore: (draft) => { gradeForm.value = draft; gradeDialog.value = true; },
+    })) {
       errorMessage.value = describeApiError(error, "保存年级失败");
     }
   } finally {
@@ -1443,7 +1651,15 @@ async function saveAdministrativeClass(confirmImpact = false) {
       pendingImpact.value = error.response.data.details;
       pendingImpactAction.value = "administrative-class";
       impactDialog.value = true;
-    } else if (!await handleOrganizationConflict(error)) {
+    } else if (!await handleOrganizationConflict(error, {
+      title: "比较行政班设置",
+      local: administrativeClassForm.value,
+      current: () => administrativeClassSnapshot((structure.value?.administrativeClasses || [])
+        .find((item) => item.id === editingAdministrativeClassId.value)),
+      fields: [...COMMON_NAME_FIELDS, {key: "isStudentSelectable", label: "学生可选择"},
+        {key: "isActive", label: "启用状态"}],
+      restore: (draft) => { administrativeClassForm.value = draft; administrativeClassDialog.value = true; },
+    })) {
       errorMessage.value = describeApiError(error, "保存行政班失败");
     }
   } finally {
@@ -1520,5 +1736,41 @@ watch(section, () => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.organization-conflict-table {
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 12px;
+}
+
+.organization-conflict-table__header,
+.organization-conflict-table__row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(110px, 0.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  padding: 12px 14px;
+}
+
+.organization-conflict-table__header {
+  background: rgba(var(--v-theme-warning), 0.1);
+}
+
+.organization-conflict-table__row + .organization-conflict-table__row {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.organization-conflict-table__server,
+.organization-conflict-table__local {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.organization-conflict-table__server { color: rgb(var(--v-theme-info)); }
+.organization-conflict-table__local { color: rgb(var(--v-theme-success)); }
+
+@media (max-width: 600px) {
+  .organization-conflict-table__header,
+  .organization-conflict-table__row { grid-template-columns: 1fr; }
 }
 </style>
