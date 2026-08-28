@@ -1049,11 +1049,20 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <AdminUndoSnackbar
+      :busy="undoBusy"
+      :offer="undoOffer"
+      :remaining-seconds="remainingSeconds"
+      @dismiss="clearUndo"
+      @undo="undoLastDeactivation"
+    />
   </div>
 </template>
 
 <script setup>
 import {computed, ref, watch} from "vue";
+import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
+import {useTimedUndo} from "@/composables/useTimedUndo";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
 import {buildSubjectRulePreset} from "@/utils/academicStructure";
 import {buildConflictComparison} from "@/utils/conflictComparison";
@@ -1062,6 +1071,7 @@ const props = defineProps({
   schoolId: {type: String, required: true},
   termId: {type: String, required: true},
 });
+const {undoOffer, undoBusy, remainingSeconds, offerUndo, executeUndo, clearUndo} = useTimedUndo();
 
 const section = ref("school");
 const structure = ref(null);
@@ -1525,6 +1535,7 @@ async function confirmImpactChange() {
 async function saveCourseGroup(confirmImpact = false) {
   loading.value = true;
   errorMessage.value = "";
+  let deactivation = null;
   try {
     const input = {...courseGroupForm.value};
     if (editingCourseGroupId.value) {
@@ -1532,6 +1543,9 @@ async function saveCourseGroup(confirmImpact = false) {
       const existing = (structure.value?.courseGroups || []).find((item) => item.id === editingCourseGroupId.value);
       if (!confirmImpact && existing?.isActive && input.isActive === false &&
         await loadDeactivationImpact(editingCourseGroupId.value, "course-group")) return;
+      if (existing?.isActive && input.isActive === false) {
+        deactivation = {type: "course-group", id: existing.id, name: existing.name};
+      }
       input.confirmImpact = confirmImpact;
       input.expectedUpdatedAt = existing?.updatedAt;
       await classworksV2Api.updateManagedCourseGroup(props.schoolId, editingCourseGroupId.value, input);
@@ -1543,6 +1557,7 @@ async function saveCourseGroup(confirmImpact = false) {
     courseGroupDialog.value = false;
     successMessage.value = editingCourseGroupId.value ? "走班教学班已更新。" : "走班教学班已创建。";
     await loadStructure();
+    if (deactivation) offerWorkspaceReactivation(deactivation);
   } catch (error) {
     if (error.response?.data?.code === "ORGANIZATION_CHANGE_CONFIRMATION_REQUIRED") {
       pendingImpact.value = error.response.data.details;
@@ -1621,6 +1636,7 @@ function openAdministrativeClassDialog(gradeId, administrativeClass = null) {
 async function saveAdministrativeClass(confirmImpact = false) {
   loading.value = true;
   errorMessage.value = "";
+  let deactivation = null;
   try {
     if (editingAdministrativeClassId.value) {
       const input = {...administrativeClassForm.value};
@@ -1629,6 +1645,9 @@ async function saveAdministrativeClass(confirmImpact = false) {
         .find((item) => item.id === editingAdministrativeClassId.value);
       if (!confirmImpact && existing?.isActive && input.isActive === false &&
         await loadDeactivationImpact(editingAdministrativeClassId.value, "administrative-class")) return;
+      if (existing?.isActive && input.isActive === false) {
+        deactivation = {type: "administrative-class", id: existing.id, name: existing.name};
+      }
       input.confirmImpact = confirmImpact;
       input.expectedUpdatedAt = existing?.updatedAt;
       await classworksV2Api.updateManagedAdministrativeClass(
@@ -1646,6 +1665,7 @@ async function saveAdministrativeClass(confirmImpact = false) {
     administrativeClassDialog.value = false;
     successMessage.value = editingAdministrativeClassId.value ? "行政班已更新。" : "行政班已创建。请继续配置授课规则。";
     await loadStructure();
+    if (deactivation) offerWorkspaceReactivation(deactivation);
   } catch (error) {
     if (error.response?.data?.code === "ORGANIZATION_CHANGE_CONFIRMATION_REQUIRED") {
       pendingImpact.value = error.response.data.details;
@@ -1664,6 +1684,38 @@ async function saveAdministrativeClass(confirmImpact = false) {
     }
   } finally {
     loading.value = false;
+  }
+}
+
+function offerWorkspaceReactivation(descriptor) {
+  const typeLabel = descriptor.type === "course-group" ? "走班教学班" : "行政班";
+  successMessage.value = `${descriptor.name}已停用，可在下方短时撤销。`;
+  offerUndo({
+    message: `已停用${typeLabel}“${descriptor.name}”`,
+    undo: async () => {
+      const collection = descriptor.type === "course-group"
+        ? structure.value?.courseGroups
+        : structure.value?.administrativeClasses;
+      const current = (collection || []).find((item) => item.id === descriptor.id);
+      const input = {isActive: true, expectedUpdatedAt: current?.updatedAt};
+      if (descriptor.type === "course-group") {
+        await classworksV2Api.updateManagedCourseGroup(props.schoolId, descriptor.id, input);
+      } else {
+        await classworksV2Api.updateManagedAdministrativeClass(props.schoolId, descriptor.id, input);
+      }
+      successMessage.value = `${descriptor.name}已重新启用。`;
+      await loadStructure();
+    },
+  });
+}
+
+async function undoLastDeactivation() {
+  errorMessage.value = "";
+  try {
+    await executeUndo();
+  } catch (error) {
+    clearUndo();
+    errorMessage.value = describeApiError(error, "撤销停用失败，组织数据可能已被其他管理员修改");
   }
 }
 

@@ -195,7 +195,7 @@
       </v-alert>
 
       <v-skeleton-loader
-        v-if="store.studentLoading"
+        v-if="store.studentLoading || (store.feedLoading && !store.feed.length)"
         type="article, article"
       />
 
@@ -205,14 +205,33 @@
           :date="store.boardDate"
           @change="store.setBoardDate"
         />
+        <v-empty-state
+          v-if="store.feedLoadError && !store.feed.length"
+          class="rounded-xl"
+          headline="作业加载失败"
+          icon="mdi-cloud-alert-outline"
+          :text="store.feedLoadError"
+        >
+          <template #actions>
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-refresh"
+              variant="tonal"
+              @click="store.loadStudentFeed()"
+            >
+              重新加载
+            </v-btn>
+          </template>
+        </v-empty-state>
+
         <OrganizedHomeworkFeed
-          v-if="store.feed.length"
+          v-else-if="store.feed.length"
           completion-enabled
           :publications="store.feed"
         />
 
         <v-empty-state
-          v-else
+          v-else-if="!store.feedLoading && !store.studentError"
           :headline="`${boardDateLabel}没有作业`"
           icon="mdi-check-circle-outline"
           text="可以切换到前一天、后一天或选择其他日期查看"

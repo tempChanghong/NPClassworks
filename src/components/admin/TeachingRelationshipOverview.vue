@@ -513,10 +513,19 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+  <AdminUndoSnackbar
+    :busy="undoBusy"
+    :offer="undoOffer"
+    :remaining-seconds="remainingSeconds"
+    @dismiss="clearUndo"
+    @undo="undoLastRemoval"
+  />
 </template>
 
 <script setup>
 import {computed, onMounted, ref, watch} from "vue";
+import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
+import {useTimedUndo} from "@/composables/useTimedUndo";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
 
 const props = defineProps({
@@ -536,6 +545,7 @@ const assignmentDialog = ref(false);
 const editingTarget = ref({workspaceId: "", workspaceName: "", subjectId: "", subjectName: "", assignments: []});
 const singleForm = ref({accountId: "", position: "PRIMARY"});
 const batchForm = ref({accountId: "", subjectId: "", workspaceIds: [], position: "PRIMARY"});
+const {undoOffer, undoBusy, remainingSeconds, offerUndo, executeUndo, clearUndo} = useTimedUndo();
 
 const positionOptions = [
   {title: "主讲教师", value: "PRIMARY"},
@@ -689,15 +699,39 @@ async function removeAssignment(assignment, workspaceName) {
   if (!window.confirm(`移除${teacherName}在${workspaceName}的任课关系？教师账号不会被删除。`)) return;
   removingAssignmentId.value = assignment.id;
   errorMessage.value = "";
+  const restoreInput = {
+    workspaceId: assignment.workspaceId,
+    subjectId: assignment.subjectId,
+    accountId: assignment.accountId,
+    position: assignment.position,
+  };
   try {
     await classworksV2Api.removeTeachingAssignment(props.schoolId, assignment.id);
-    successMessage.value = `已移除${teacherName}在${workspaceName}的任课关系。`;
+    successMessage.value = `已移除${teacherName}在${workspaceName}的任课关系，可在下方短时撤销。`;
     assignmentDialog.value = false;
     await loadOverview({preserveMessages: true});
+    offerUndo({
+      message: `已移除${teacherName}在${workspaceName}的任课关系`,
+      undo: async () => {
+        await classworksV2Api.saveTeachingAssignment(props.schoolId, restoreInput);
+        successMessage.value = `已恢复${teacherName}在${workspaceName}的任课关系。`;
+        await loadOverview({preserveMessages: true});
+      },
+    });
   } catch (error) {
     errorMessage.value = describeApiError(error, "移除任课关系失败");
   } finally {
     removingAssignmentId.value = "";
+  }
+}
+
+async function undoLastRemoval() {
+  errorMessage.value = "";
+  try {
+    await executeUndo();
+  } catch (error) {
+    clearUndo();
+    errorMessage.value = describeApiError(error, "撤销移除任课关系失败，数据可能已被其他管理员修改");
   }
 }
 

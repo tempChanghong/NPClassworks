@@ -85,6 +85,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     feedAudience: "student",
     studentLoading: false,
     feedLoading: false,
+    feedLoadError: "",
+    feedUsingCache: false,
     studentError: "",
     studentNotice: "",
     selectionIssues: [],
@@ -331,6 +333,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.selection = {};
       this.courseOptions = null;
       this.feed = [];
+      this.feedLoadError = "";
+      this.feedUsingCache = false;
       this.studentNotice = "";
       this.selectionIssues = [];
       this.selectionNeedsConfirmation = false;
@@ -347,10 +351,14 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         if (this.feedAudience === "student") {
           this.feed = [];
           this.feedGeneratedAt = null;
+          this.feedLoadError = "";
+          this.feedUsingCache = false;
         }
         return;
       }
       this.feedLoading = true;
+      this.feedLoadError = "";
+      this.feedUsingCache = false;
       this.studentError = "";
       try {
         const result = await classworksV2Api.feed(this.selectedWorkspaceIds, this.boardDate);
@@ -360,7 +368,9 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         this.scheduleFeedTransition(result.nextTransitionAt);
       } catch (error) {
         if (requestId === feedRequest && this.feedAudience === "student") {
-          this.studentError = describeApiError(error, "加载作业失败");
+          this.feed = [];
+          this.feedGeneratedAt = null;
+          this.feedLoadError = describeApiError(error, "加载作业失败");
         }
       } finally {
         if (requestId === feedRequest) this.feedLoading = false;
@@ -371,7 +381,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       if (!this.screenSession) return;
       const requestId = ++feedRequest;
       this.feedLoading = true;
-      this.screenError = "";
+      this.feedLoadError = "";
+      this.feedUsingCache = false;
       try {
         const result = await classworksV2Api.classroomScreenFeed(this.boardDate);
         if (requestId !== feedRequest || this.feedAudience !== "screen") return;
@@ -387,10 +398,13 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         if (cached) {
           this.feed = cached.items || [];
           this.feedGeneratedAt = cached.generatedAt;
-          this.screenError = "当前处于离线模式，正在显示这台大屏上次同步的作业";
+          this.feedUsingCache = true;
+          this.feedLoadError = "当前无法连接服务器，正在显示这台大屏上次同步的内容";
           return;
         }
-        this.screenError = describeApiError(error, "加载大屏作业失败");
+        this.feed = [];
+        this.feedGeneratedAt = null;
+        this.feedLoadError = describeApiError(error, "加载大屏作业失败");
         if ([401, 409].includes(error.response?.status)) {
           const oldWorkspaceIds = this.activeWorkspaceIds;
           leaveWorkspaces(oldWorkspaceIds);
@@ -399,6 +413,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
           this.screenSession = null;
           this.feedAudience = "student";
           this.feed = [];
+          this.feedLoadError = "";
+          this.feedUsingCache = false;
           joinWorkspaces(this.realtimeWorkspaceIds);
         }
       } finally {
@@ -440,6 +456,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       leaveWorkspaces(oldWorkspaceIds);
       this.feedAudience = nextAudience;
       this.feed = [];
+      this.feedLoadError = "";
+      this.feedUsingCache = false;
       joinWorkspaces(this.realtimeWorkspaceIds);
       return this.loadActiveFeed();
     },

@@ -29,6 +29,19 @@
         </div>
         <ClassroomTimeCard inline />
         <div class="screen-toolbar-actions">
+          <v-badge
+            color="error"
+            :content="pendingNoticeCount"
+            :model-value="pendingNoticeCount > 0"
+          >
+            <v-btn
+              prepend-icon="mdi-bell-outline"
+              variant="tonal"
+              @click="notificationCenterOpen = true"
+            >
+              通知
+            </v-btn>
+          </v-badge>
           <v-btn
             prepend-icon="mdi-monitor-eye"
             variant="tonal"
@@ -90,12 +103,41 @@
       {{ store.screenError }}
     </v-alert>
 
+    <v-alert
+      v-if="store.feedLoadError && store.feed.length"
+      class="mt-3"
+      color="warning"
+      icon="mdi-cloud-alert-outline"
+      variant="tonal"
+    >
+      {{ store.feedLoadError }}
+      <template #append>
+        <v-btn
+          :loading="store.feedLoading"
+          prepend-icon="mdi-refresh"
+          variant="text"
+          @click="store.loadScreenFeed()"
+        >
+          重试同步
+        </v-btn>
+      </template>
+    </v-alert>
+
     <UrgentNoticeBanner
+      :key="`${bindingId}:${acknowledgementRevision}`"
       :binding-id="bindingId"
       :notices="urgentNotices"
       :sound-enabled="settings.urgentNoticeSound"
       :system-notification-enabled="settings.backgroundSystemNotification"
       @acknowledge="acknowledgeNotice"
+    />
+
+    <ScreenNotificationCenter
+      v-model="notificationCenterOpen"
+      :binding-id="bindingId"
+      :notices="activeNotices"
+      @acknowledge="acknowledgeNotice"
+      @acknowledge-all="acknowledgeNotices"
     />
 
     <BoardDateNavigator
@@ -150,6 +192,26 @@
     </div>
 
     <v-empty-state
+      v-else-if="store.feedLoadError"
+      class="mt-6 rounded-xl"
+      headline="内容加载失败"
+      icon="mdi-cloud-alert-outline"
+      :text="store.feedLoadError"
+    >
+      <template #actions>
+        <v-btn
+          color="primary"
+          :loading="store.feedLoading"
+          prepend-icon="mdi-refresh"
+          variant="tonal"
+          @click="store.loadScreenFeed()"
+        >
+          重新加载
+        </v-btn>
+      </template>
+    </v-empty-state>
+
+    <v-empty-state
       v-else
       class="mt-6"
       :headline="`${boardDateLabel}没有作业`"
@@ -161,17 +223,75 @@
       class="screen-action-dock"
       :class="`screen-action-dock--${settings.actionPosition}`"
     >
-      <v-btn
-        class="screen-action-dock__button"
-        color="primary"
-        elevation="8"
-        prepend-icon="mdi-plus-circle-outline"
-        rounded="xl"
-        size="x-large"
-        @click="$emit('create')"
-      >
-        录入作业
-      </v-btn>
+      <div class="screen-action-dock__surface">
+        <v-btn
+          class="screen-action-dock__compact"
+          icon="mdi-chevron-left"
+          title="前一天"
+          variant="text"
+          @click="changeBoardDate(-1)"
+        />
+        <v-btn
+          class="screen-action-dock__today"
+          prepend-icon="mdi-calendar-today-outline"
+          variant="text"
+          @click="goToToday"
+        >
+          今天
+        </v-btn>
+        <v-btn
+          class="screen-action-dock__compact"
+          icon="mdi-chevron-right"
+          title="后一天"
+          variant="text"
+          @click="changeBoardDate(1)"
+        />
+        <span class="screen-action-dock__divider" />
+        <v-badge
+          color="error"
+          :content="pendingNoticeCount"
+          :model-value="pendingNoticeCount > 0"
+        >
+          <v-btn
+            class="screen-action-dock__compact"
+            icon="mdi-bell-outline"
+            title="通知中心"
+            variant="text"
+            @click="notificationCenterOpen = true"
+          />
+        </v-badge>
+        <v-btn
+          class="screen-action-dock__compact"
+          icon="mdi-toolbox-outline"
+          title="课堂工具"
+          variant="text"
+          @click="$emit('tools')"
+        />
+        <v-btn
+          class="screen-action-dock__compact"
+          icon="mdi-monitor-eye"
+          title="显示设置"
+          variant="text"
+          @click="$emit('settings')"
+        />
+        <v-btn
+          class="screen-action-dock__compact"
+          :loading="store.feedLoading"
+          icon="mdi-refresh"
+          title="刷新"
+          variant="text"
+          @click="store.loadActiveFeed()"
+        />
+        <v-btn
+          class="screen-action-dock__button"
+          color="primary"
+          prepend-icon="mdi-plus-circle-outline"
+          variant="flat"
+          @click="$emit('create')"
+        >
+          录入作业
+        </v-btn>
+      </div>
     </div>
   </section>
 </template>
@@ -184,10 +304,15 @@ import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import ScreenSyncStatus from "@/components/v2/ScreenSyncStatus.vue";
-import {boardDateRelativeLabel} from "@/utils/boardDate";
+import ScreenNotificationCenter from "@/components/v2/ScreenNotificationCenter.vue";
+import {boardDateRelativeLabel, shiftBoardDate, todayBoardDate} from "@/utils/boardDate";
 import {classworksV2Api} from "@/utils/classworksV2Client";
 import {createNotificationDeliveryQueue} from "@/utils/notificationDeliveryQueue";
-import {notificationAlertKey, readAcknowledgedNotificationKeys} from "@/utils/notificationAlerts";
+import {
+  notificationAlertKey,
+  readAcknowledgedNotificationKeys,
+  rememberAcknowledgedNotification,
+} from "@/utils/notificationAlerts";
 import {
   loadScreenDisplaySettings,
   saveScreenDisplaySettings,
@@ -197,6 +322,9 @@ import {
 defineEmits(["create", "edit", "history", "tools", "copy-board", "settings", "exit"]);
 const store = useClassworksV2Store();
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
+const notificationCenterOpen = ref(false);
+const acknowledgementRevision = ref(0);
+const acknowledgedNoticeKeys = ref(readAcknowledgedNotificationKeys(store.screenSession?.binding?.id));
 const burnInStep = ref(0);
 let burnInTimer = null;
 const notificationDeliveryQueue = createNotificationDeliveryQueue({
@@ -204,9 +332,12 @@ const notificationDeliveryQueue = createNotificationDeliveryQueue({
 });
 
 const bindingId = computed(() => store.screenSession?.binding?.id || "");
-const urgentNotices = computed(() => store.feed.filter((publication) =>
+const activeNotices = computed(() => store.feed.filter((publication) => publication.type === "NOTICE"));
+const urgentNotices = computed(() => activeNotices.value.filter((publication) =>
   publication.type === "NOTICE" && publication.priority === "URGENT",
 ));
+const pendingNoticeCount = computed(() => activeNotices.value.filter((notice) =>
+  !acknowledgedNoticeKeys.value.has(notificationAlertKey(notice))).length);
 const className = computed(() => store.screenSession?.binding?.administrativeClass?.name || "班级大屏");
 const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate));
 const workspaceSummary = computed(() => {
@@ -232,6 +363,8 @@ function updatePerformanceClass() {
 
 watch(bindingId, (id) => {
   settings.value = loadScreenDisplaySettings(id);
+  acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(id);
+  notificationCenterOpen.value = false;
 }, {immediate: true});
 
 watch(() => settings.value.performanceMode, updatePerformanceClass);
@@ -251,16 +384,34 @@ watch(() => store.feed.filter((publication) => publication.type === "NOTICE")
 
 function acknowledgeNotice(publication) {
   if (!publication?.id || !store.screenSession) return;
-  notificationDeliveryQueue.enqueue([{
+  acknowledgeNotices([publication]);
+}
+
+function acknowledgeNotices(publications) {
+  const valid = (publications || []).filter((publication) => publication?.id);
+  if (!valid.length || !store.screenSession) return;
+  for (const publication of valid) {
+    acknowledgedNoticeKeys.value = rememberAcknowledgedNotification(publication, bindingId.value);
+  }
+  acknowledgementRevision.value += 1;
+  notificationDeliveryQueue.enqueue(valid.map((publication) => ({
     publicationId: publication.id,
     revision: publication.revision,
     displayed: true,
     acknowledged: true,
-  }]);
+  })));
 }
 
 function applySettings(value) {
   settings.value = saveScreenDisplaySettings(bindingId.value, value);
+}
+
+function changeBoardDate(days) {
+  void store.setBoardDate(shiftBoardDate(store.boardDate, days));
+}
+
+function goToToday() {
+  void store.setBoardDate(todayBoardDate());
 }
 
 function handleShortcut(event) {
@@ -303,20 +454,47 @@ onUnmounted(() => {
   transition: transform 1.2s ease;
 }
 .screen-action-dock {
-  bottom: 24px;
+  bottom: max(18px, env(safe-area-inset-bottom));
   display: flex;
   pointer-events: none;
   position: fixed;
-  z-index: 20;
+  z-index: 24;
 }
 .screen-action-dock--left { left: clamp(20px, 3vw, 64px); }
 .screen-action-dock--center { left: 50%; transform: translateX(-50%); }
 .screen-action-dock--right { right: clamp(20px, 3vw, 64px); }
 .screen-action-dock__button {
-  font-size: clamp(1.05rem, 0.35vw + 0.9rem, 1.35rem);
-  min-height: 68px;
-  min-width: 210px;
+  border-radius: 16px !important;
+  font-size: clamp(1rem, 0.22vw + 0.9rem, 1.2rem);
+  min-height: 58px;
+  min-width: 168px;
   pointer-events: auto;
+}
+.screen-action-dock__surface {
+  align-items: center;
+  backdrop-filter: blur(14px);
+  background: rgba(var(--v-theme-surface), 0.94);
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 22px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.28);
+  display: flex;
+  gap: 4px;
+  padding: 7px;
+  pointer-events: auto;
+}
+.screen-action-dock__compact {
+  min-height: 56px;
+  min-width: 56px;
+}
+.screen-action-dock__today {
+  min-height: 56px;
+  padding-inline: 14px;
+}
+.screen-action-dock__divider {
+  align-self: stretch;
+  background: rgba(var(--v-border-color), var(--v-border-opacity));
+  margin: 6px 4px;
+  width: 1px;
 }
 .screen-toolbar { position: relative; z-index: 1; }
 .screen-toolbar-content {
@@ -362,6 +540,21 @@ onUnmounted(() => {
     grid-column: 1 / -1;
     justify-content: flex-end;
   }
+}
+
+@media (max-width: 900px) {
+  .classroom-screen-view { padding-bottom: 92px; }
+  .screen-action-dock--left,
+  .screen-action-dock--center,
+  .screen-action-dock--right {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+  .screen-action-dock__surface { padding: 5px; }
+  .screen-action-dock__compact { min-height: 52px; min-width: 52px; }
+  .screen-action-dock__today { display: none; }
+  .screen-action-dock__button { min-height: 54px; min-width: 146px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

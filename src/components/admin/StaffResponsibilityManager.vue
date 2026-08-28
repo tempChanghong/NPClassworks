@@ -497,10 +497,19 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+  <AdminUndoSnackbar
+    :busy="undoBusy"
+    :offer="undoOffer"
+    :remaining-seconds="remainingSeconds"
+    @dismiss="clearUndo"
+    @undo="undoLastRemoval"
+  />
 </template>
 
 <script setup>
 import {computed, onMounted, ref, watch} from "vue";
+import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
+import {useTimedUndo} from "@/composables/useTimedUndo";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
 
 const props = defineProps({
@@ -520,6 +529,7 @@ const classDialog = ref(false);
 const gradeForm = ref({accountId: "", gradeId: "", position: "PRIMARY"});
 const classForm = ref({accountId: "", administrativeClassId: "", position: "HEAD_TEACHER"});
 const policyForm = ref({gradeLeaderMustBeHomeroom: true, gradeLeaderMustTeach: true, homeroomMustTeach: true});
+const {undoOffer, undoBusy, remainingSeconds, offerUndo, executeUndo, clearUndo} = useTimedUndo();
 
 const gradePositionOptions = [
   {title: "主要年级组长", value: "PRIMARY"},
@@ -644,18 +654,54 @@ async function saveClassRole() {
 
 async function removeGradeRole(leadership, gradeName) {
   if (!window.confirm(`移除${accountName(leadership.account)}在${gradeName}的${gradePositionName(leadership.position)}职责？`)) return;
-  await runMutation(
+  const teacherName = accountName(leadership.account);
+  const removed = await runMutation(
     () => classworksV2Api.removeGradeLeadership(props.schoolId, leadership.id),
-    "年级职责已移除。",
+    "年级职责已移除，可在下方短时撤销。",
   );
+  if (removed) offerUndo({
+    message: `已移除${teacherName}在${gradeName}的${gradePositionName(leadership.position)}职责`,
+    undo: async () => {
+      await classworksV2Api.saveGradeLeadership(props.schoolId, {
+        accountId: leadership.accountId,
+        gradeId: leadership.gradeId,
+        position: leadership.position,
+      });
+      successMessage.value = "年级职责已恢复。";
+      await loadOverview({preserveMessages: true});
+    },
+  });
 }
 
 async function removeClassRole(leadership, className) {
   if (!window.confirm(`移除${accountName(leadership.account)}在${className}的${classPositionName(leadership.position)}职责？`)) return;
-  await runMutation(
+  const teacherName = accountName(leadership.account);
+  const removed = await runMutation(
     () => classworksV2Api.removeClassLeadership(props.schoolId, leadership.id),
-    "班主任职责已移除。",
+    "班主任职责已移除，可在下方短时撤销。",
   );
+  if (removed) offerUndo({
+    message: `已移除${teacherName}在${className}的${classPositionName(leadership.position)}职责`,
+    undo: async () => {
+      await classworksV2Api.saveClassLeadership(props.schoolId, {
+        accountId: leadership.accountId,
+        administrativeClassId: leadership.administrativeClassId,
+        position: leadership.position,
+      });
+      successMessage.value = "班主任职责已恢复。";
+      await loadOverview({preserveMessages: true});
+    },
+  });
+}
+
+async function undoLastRemoval() {
+  errorMessage.value = "";
+  try {
+    await executeUndo();
+  } catch (error) {
+    clearUndo();
+    errorMessage.value = describeApiError(error, "撤销职责移除失败，数据可能已被其他管理员修改");
+  }
 }
 
 async function savePolicy() {
