@@ -311,7 +311,7 @@
                 variant="tonal"
                 @click="loadTemplate"
               >
-                载入八班制模板
+                载入七班制模板
               </v-btn>
             </v-card-title>
             <v-card-text class="px-5 pb-5">
@@ -321,6 +321,13 @@
                 variant="tonal"
               >
                 日常新增或修改年级、行政班、走班教学班，请使用“组织与班级”页面。这里仅用于新校批量建档或大规模结构调整；同代码数据会被更新，文件中未出现的数据不会被删除，但被导入班级的授课规则和走班来源会按文件替换。
+              </v-alert>
+              <v-alert
+                class="mb-4"
+                type="warning"
+                variant="tonal"
+              >
+                七班制模板暂用“五班化学、六班生物、七班地理”表达每班各定一科且合计二理一文；这三个班的具体对应仍可能变化，正式导入前请按最终名单核对。
               </v-alert>
               <v-row>
                 <v-col
