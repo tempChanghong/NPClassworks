@@ -238,38 +238,20 @@
         </v-card-text>
       </v-card>
 
-      <v-tabs
-        v-model="tab"
-        class="mb-5"
-        color="primary"
-      >
-        <v-tab value="overview">
-          管理总览
-        </v-tab>
-        <v-tab value="structure">
-          组织与班级
-        </v-tab>
-        <v-tab value="organization">
-          高级批量导入
-        </v-tab>
-        <v-tab value="teachers">
-          教师分配
-        </v-tab>
-        <v-tab value="accounts">
-          账号与管理员
-        </v-tab>
-        <v-tab value="screens">
-          大屏设备
-        </v-tab>
-        <v-tab value="audit">
-          审计记录
-        </v-tab>
-        <v-tab value="terms">
-          学期运维
-        </v-tab>
-      </v-tabs>
+      <AdminNavigationPanel
+        v-model="guardedTab"
+        v-model:school-id="guardedSchoolId"
+        v-model:term-id="guardedTermId"
+        class="admin-navigation-panel"
+        :groups="adminNavigationGroups"
+        :school-options="schoolOptions"
+        :term-options="termOptions"
+      />
 
-      <v-window v-model="tab">
+      <v-window
+        v-model="guardedTab"
+        class="admin-content-with-navigation"
+      >
         <v-window-item value="overview">
           <v-alert
             v-if="!managerMemberships.length"
@@ -287,7 +269,7 @@
                     md="6"
                   >
                     <v-select
-                      v-model="selectedSchoolId"
+                      v-model="guardedSchoolId"
                       :items="schoolOptions"
                       item-title="title"
                       item-value="value"
@@ -300,7 +282,7 @@
                     md="6"
                   >
                     <v-select
-                      v-model="selectedTermId"
+                      v-model="guardedTermId"
                       :items="termOptions"
                       item-title="title"
                       item-value="value"
@@ -315,7 +297,7 @@
               v-if="selectedSchoolId && selectedTermId"
               :school-id="selectedSchoolId"
               :term-id="selectedTermId"
-              @navigate="tab = $event"
+              @navigate="navigateAdminTab"
             />
           </template>
         </v-window-item>
@@ -446,7 +428,7 @@
                     md="6"
                   >
                     <v-select
-                      v-model="selectedSchoolId"
+                      v-model="guardedSchoolId"
                       :items="schoolOptions"
                       item-title="title"
                       item-value="value"
@@ -459,7 +441,7 @@
                     md="6"
                   >
                     <v-select
-                      v-model="selectedTermId"
+                      v-model="guardedTermId"
                       :items="termOptions"
                       item-title="title"
                       item-value="value"
@@ -501,7 +483,7 @@
                     md="6"
                   >
                     <v-select
-                      v-model="selectedSchoolId"
+                      v-model="guardedSchoolId"
                       :items="schoolOptions"
                       item-title="title"
                       item-value="value"
@@ -514,7 +496,7 @@
                     md="6"
                   >
                     <v-select
-                      v-model="selectedTermId"
+                      v-model="guardedTermId"
                       :items="termOptions"
                       item-title="title"
                       item-value="value"
@@ -820,9 +802,19 @@
                       @click="loadRoster"
                     />
                   </v-card-title>
+                  <v-card-text class="px-5 pb-2 pt-0">
+                    <v-text-field
+                      v-model.trim="rosterSearch"
+                      clearable
+                      hide-details
+                      label="搜索班级、科目或教师"
+                      prepend-inner-icon="mdi-magnify"
+                      variant="outlined"
+                    />
+                  </v-card-text>
                   <v-list lines="three">
                     <template
-                      v-for="workspace in roster?.workspaces || []"
+                      v-for="workspace in filteredRosterWorkspaces"
                       :key="workspace.id"
                     >
                       <v-list-item
@@ -861,6 +853,11 @@
                       <v-divider />
                     </template>
                   </v-list>
+                  <v-empty-state
+                    v-if="!filteredRosterWorkspaces.length && !rosterBusy"
+                    icon="mdi-account-search-outline"
+                    :text="rosterSearch ? '没有符合搜索条件的教学空间或教师' : '当前学期还没有教师名册数据'"
+                  />
                 </v-card>
               </v-col>
             </v-row>
@@ -879,7 +876,7 @@
             <v-card class="mb-5 rounded-xl">
               <v-card-text class="pa-5 d-flex align-center flex-wrap ga-3">
                 <v-select
-                  v-model="selectedSchoolId"
+                  v-model="guardedSchoolId"
                   :items="schoolOptions"
                   class="flex-grow-1"
                   item-title="title"
@@ -975,9 +972,28 @@
                       @click="loadLocalAccounts"
                     />
                   </v-card-title>
+                  <v-card-text class="account-filter-bar px-5 pb-2 pt-0">
+                    <v-text-field
+                      v-model.trim="accountSearch"
+                      clearable
+                      hide-details
+                      label="搜索姓名或账号"
+                      prepend-inner-icon="mdi-magnify"
+                      variant="outlined"
+                    />
+                    <v-select
+                      v-model="accountStatusFilter"
+                      hide-details
+                      :items="accountStatusOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="账号状态"
+                      variant="outlined"
+                    />
+                  </v-card-text>
                   <v-list lines="three">
                     <template
-                      v-for="account in localAccounts"
+                      v-for="account in filteredLocalAccounts"
                       :key="account.id"
                     >
                       <v-list-item
@@ -1033,9 +1049,9 @@
                     </template>
                   </v-list>
                   <v-empty-state
-                    v-if="!localAccounts.length && !accountBusy"
+                    v-if="!filteredLocalAccounts.length && !accountBusy"
                     icon="mdi-account-off-outline"
-                    text="当前没有本地账号"
+                    :text="accountSearch || accountStatusFilter !== 'ALL' ? '没有符合筛选条件的账号' : '当前没有本地账号'"
                   />
                 </v-card>
               </v-col>
@@ -1060,7 +1076,7 @@
                     md="6"
                   >
                     <v-select
-                      v-model="selectedSchoolId"
+                      v-model="guardedSchoolId"
                       :items="schoolOptions"
                       item-title="title"
                       item-value="value"
@@ -1073,7 +1089,7 @@
                     md="6"
                   >
                     <v-select
-                      v-model="selectedTermId"
+                      v-model="guardedTermId"
                       :items="termOptions"
                       item-title="title"
                       item-value="value"
@@ -1260,9 +1276,28 @@
                       @click="loadScreenAccounts"
                     />
                   </v-card-title>
+                  <v-card-text class="account-filter-bar px-5 pb-2 pt-0">
+                    <v-text-field
+                      v-model.trim="screenSearch"
+                      clearable
+                      hide-details
+                      label="搜索设备、账号或班级"
+                      prepend-inner-icon="mdi-magnify"
+                      variant="outlined"
+                    />
+                    <v-select
+                      v-model="screenStatusFilter"
+                      hide-details
+                      :items="screenStatusOptions"
+                      item-title="title"
+                      item-value="value"
+                      label="值守状态"
+                      variant="outlined"
+                    />
+                  </v-card-text>
                   <v-list lines="three">
                     <template
-                      v-for="screen in screenAccounts"
+                      v-for="screen in filteredScreenAccounts"
                       :key="screen.id"
                     >
                       <v-list-item
@@ -1329,9 +1364,9 @@
                     </template>
                   </v-list>
                   <v-empty-state
-                    v-if="!screenAccounts.length && !screenBusy"
+                    v-if="!filteredScreenAccounts.length && !screenBusy"
                     icon="mdi-monitor-off"
-                    text="当前学校还没有大屏账号"
+                    :text="screenSearch || screenStatusFilter !== 'ALL' ? '没有符合筛选条件的大屏' : '当前学校还没有大屏账号'"
                   />
                 </v-card>
               </v-col>
@@ -1396,7 +1431,7 @@
             <v-card class="mb-5 rounded-xl">
               <v-card-text class="pa-5">
                 <v-select
-                  v-model="selectedSchoolId"
+                  v-model="guardedSchoolId"
                   :items="schoolOptions"
                   item-title="title"
                   item-value="value"
@@ -1417,7 +1452,7 @@
             <v-card class="mb-5 rounded-xl">
               <v-card-text class="pa-5">
                 <v-select
-                  v-model="selectedSchoolId"
+                  v-model="guardedSchoolId"
                   :items="schoolOptions"
                   item-title="title"
                   item-value="value"
@@ -1697,17 +1732,28 @@
         </v-window-item>
       </v-window>
     </template>
+    <AdminUndoSnackbar
+      :busy="undoBusy"
+      :offer="undoOffer"
+      :remaining-seconds="remainingSeconds"
+      @dismiss="clearUndo"
+      @undo="undoAdminOperation"
+    />
   </v-container>
 </template>
 
 <script setup>
 import {computed, onMounted, onUnmounted, ref, watch} from "vue";
+import {onBeforeRouteLeave, useRoute, useRouter} from "vue-router";
 import ValidationReport from "@/components/v2/ValidationReport.vue";
+import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
+import AdminNavigationPanel from "@/components/admin/AdminNavigationPanel.vue";
 import AcademicStructureManager from "@/components/admin/AcademicStructureManager.vue";
 import TeachingRelationshipOverview from "@/components/admin/TeachingRelationshipOverview.vue";
 import StaffResponsibilityManager from "@/components/admin/StaffResponsibilityManager.vue";
 import SchoolManagementOverview from "@/components/admin/SchoolManagementOverview.vue";
 import AuditLogViewer from "@/components/admin/AuditLogViewer.vue";
+import {useTimedUndo} from "@/composables/useTimedUndo";
 import {
   bootstrapSchoolAdministrator,
   classworksV2Api,
@@ -1728,13 +1774,32 @@ import {
   sanitizeHomeworkQuickInputs,
 } from "@/utils/homeworkQuickInputs";
 
+const ADMIN_CONTEXT_KEY = "npclassworks-admin-context:v1";
+const ADMIN_TABS = new Set(["overview", "structure", "organization", "teachers", "accounts", "screens", "audit", "terms"]);
+
+function loadAdminContext() {
+  try {
+    return JSON.parse(localStorage.getItem(ADMIN_CONTEXT_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+const route = useRoute();
+const router = useRouter();
+const savedAdminContext = loadAdminContext();
+const requestedSchoolId = String(route.query.school || savedAdminContext.schoolId || "");
+let requestedTermId = String(route.query.term || savedAdminContext.termId || "");
+
 const signedIn = ref(Boolean(getAccountTokens().accessToken));
 const providers = ref([]);
 const publicSchools = ref([]);
 const localAuthStatus = ref({bootstrapRequired: false, bootstrapAvailable: false});
 const profile = ref(null);
 const schoolMemberships = ref([]);
-const tab = ref("overview");
+const tab = ref(ADMIN_TABS.has(String(route.query.section || savedAdminContext.tab))
+  ? String(route.query.section || savedAdminContext.tab)
+  : "overview");
 const errorMessage = ref("");
 const successMessage = ref("");
 const loginBusy = ref(false);
@@ -1751,6 +1816,7 @@ const recoveryPin = ref("");
 const recoveryKey = ref("");
 
 const organizationText = ref("");
+const organizationTextSnapshot = ref("");
 const organizationReport = ref(null);
 const organizationBusy = ref(false);
 const organizationAuthMode = ref("LOCAL_PIN");
@@ -1761,6 +1827,7 @@ const selectedSchoolId = ref("");
 const selectedTermId = ref("");
 const roster = ref(null);
 const rosterBusy = ref(false);
+const rosterSearch = ref("");
 const teacherEmail = ref("");
 const teacherUsername = ref("");
 const teacherName = ref("");
@@ -1775,12 +1842,16 @@ const recentCredentials = ref([]);
 
 const localAccounts = ref([]);
 const accountBusy = ref(false);
+const accountSearch = ref("");
+const accountStatusFilter = ref("ALL");
 const newAdminUsername = ref("");
 const newAdminName = ref("");
 const newAdminPin = ref("");
 const newAdminRole = ref("ADMIN");
 const screenAccounts = ref([]);
 const screenBusy = ref(false);
+const screenSearch = ref("");
+const screenStatusFilter = ref("ALL");
 const homeworkSettingsBusy = ref(false);
 const homeworkQuickDeadlines = ref(DEFAULT_HOMEWORK_QUICK_DEADLINES.map((item) => ({...item})));
 const homeworkQuickInputs = ref(DEFAULT_HOMEWORK_QUICK_INPUTS.map((item) => ({...item, subjectIds: []})));
@@ -1792,7 +1863,51 @@ const newScreenAdministrativeClassId = ref("");
 const screenEditDialog = ref(false);
 const editingScreenId = ref("");
 const screenEdit = ref({name: "", loginCode: "", pin: "", administrativeClassId: ""});
+const screenEditSnapshot = ref("");
+const homeworkSettingsSnapshot = ref("");
 let screenDutyTimer = null;
+const {undoOffer, undoBusy, remainingSeconds, offerUndo, executeUndo, clearUndo} = useTimedUndo();
+
+const adminNavigationGroups = [
+  {
+    label: "日常管理",
+    items: [
+      {title: "管理总览", value: "overview", icon: "mdi-view-dashboard-outline"},
+      {title: "组织与班级", value: "structure", icon: "mdi-school-outline"},
+      {title: "教师分配", value: "teachers", icon: "mdi-human-male-board"},
+      {title: "大屏设备", value: "screens", icon: "mdi-monitor-dashboard"},
+    ],
+  },
+  {
+    label: "学校配置",
+    items: [
+      {title: "账号与管理员", value: "accounts", icon: "mdi-account-key-outline"},
+      {title: "高级批量导入", value: "organization", icon: "mdi-file-import-outline"},
+    ],
+  },
+  {
+    label: "运维与安全",
+    items: [
+      {title: "审计记录", value: "audit", icon: "mdi-text-box-search-outline"},
+      {title: "学期运维", value: "terms", icon: "mdi-calendar-sync-outline"},
+    ],
+  },
+];
+const accountStatusOptions = [
+  {title: "全部状态", value: "ALL"},
+  {title: "正常使用", value: "ACTIVE"},
+  {title: "已停用", value: "DISABLED"},
+  {title: "管理员", value: "ADMIN"},
+  {title: "教师", value: "TEACHER"},
+];
+const screenStatusOptions = [
+  {title: "全部状态", value: "ALL"},
+  {title: "在线", value: "ONLINE"},
+  {title: "需关注", value: "DEGRADED"},
+  {title: "离线", value: "OFFLINE"},
+  {title: "未激活", value: "NOT_ACTIVATED"},
+  {title: "已停用", value: "DISABLED"},
+];
 
 const termBusy = ref(false);
 const cloneSourceTermId = ref("");
@@ -1880,6 +1995,103 @@ const workspaceOptions = computed(() => (roster.value?.workspaces || []).map((wo
 const administrativeClassOptions = computed(() => (roster.value?.workspaces || [])
   .filter((workspace) => workspace.type === "ADMIN_CLASS")
   .map((workspace) => ({title: `${workspace.name} · ${workspace.code}`, value: workspace.id})));
+const filteredRosterWorkspaces = computed(() => {
+  const keyword = rosterSearch.value.toLowerCase();
+  return (roster.value?.workspaces || []).filter((workspace) => !keyword || [
+    workspace.name,
+    workspace.code,
+    workspace.subject?.name,
+    ...workspace.members.flatMap((member) => [
+      member.account?.name,
+      member.account?.localUsername,
+      member.account?.email,
+    ]),
+    ...workspace.pendingInvitations.map((invitation) => invitation.email),
+  ].filter(Boolean).some((value) => String(value).toLowerCase().includes(keyword)));
+});
+const filteredLocalAccounts = computed(() => {
+  const keyword = accountSearch.value.toLowerCase();
+  return localAccounts.value.filter((account) => {
+    const matchesText = !keyword || [account.name, account.username, account.schoolRole]
+      .filter(Boolean).some((value) => String(value).toLowerCase().includes(keyword));
+    const matchesStatus = accountStatusFilter.value === "ALL" ||
+      (accountStatusFilter.value === "ACTIVE" && !account.disabled) ||
+      (accountStatusFilter.value === "DISABLED" && account.disabled) ||
+      (accountStatusFilter.value === "ADMIN" && Boolean(account.schoolRole)) ||
+      (accountStatusFilter.value === "TEACHER" && !account.schoolRole);
+    return matchesText && matchesStatus;
+  });
+});
+
+function homeworkSettingsValue() {
+  return JSON.stringify({
+    quickDeadlines: homeworkQuickDeadlines.value,
+    quickInputs: homeworkQuickInputs.value,
+  });
+}
+
+const currentSectionHasUnsavedChanges = computed(() => {
+  if (tab.value === "organization") return organizationText.value !== organizationTextSnapshot.value;
+  if (tab.value === "teachers") {
+    return Boolean(
+      teacherEmail.value || teacherUsername.value || teacherName.value || teacherPin.value ||
+      selectedWorkspaceCodes.value.length || assignmentBatchText.value.trim() ||
+      homeworkSettingsSnapshot.value && homeworkSettingsValue() !== homeworkSettingsSnapshot.value
+    );
+  }
+  if (tab.value === "accounts") {
+    return Boolean(newAdminUsername.value || newAdminName.value || newAdminPin.value);
+  }
+  if (tab.value === "screens") {
+    return Boolean(
+      newScreenName.value || newScreenLoginCode.value || newScreenPin.value || newScreenAdministrativeClassId.value ||
+      screenEditDialog.value && JSON.stringify(screenEdit.value) !== screenEditSnapshot.value
+    );
+  }
+  return false;
+});
+
+function confirmDiscardCurrentSection() {
+  return !currentSectionHasUnsavedChanges.value || window.confirm("当前页面有尚未保存的内容，确定离开并放弃这些修改吗？");
+}
+
+function navigateAdminTab(value) {
+  if (!ADMIN_TABS.has(String(value)) || value === tab.value) return true;
+  if (!confirmDiscardCurrentSection()) return false;
+  tab.value = value;
+  return true;
+}
+
+const guardedTab = computed({
+  get: () => tab.value,
+  set: navigateAdminTab,
+});
+const guardedSchoolId = computed({
+  get: () => selectedSchoolId.value,
+  set: (value) => {
+    if (value === selectedSchoolId.value || !confirmDiscardCurrentSection()) return;
+    selectedSchoolId.value = value;
+  },
+});
+const guardedTermId = computed({
+  get: () => selectedTermId.value,
+  set: (value) => {
+    if (value === selectedTermId.value || !confirmDiscardCurrentSection()) return;
+    selectedTermId.value = value;
+  },
+});
+const filteredScreenAccounts = computed(() => {
+  const keyword = screenSearch.value.toLowerCase();
+  return screenAccounts.value.filter((screen) => {
+    const matchesText = !keyword || [
+      screen.name,
+      screen.loginCode,
+      screen.administrativeClass?.name,
+      screen.administrativeClass?.code,
+    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(keyword));
+    return matchesText && (screenStatusFilter.value === "ALL" || screen.dutyState === screenStatusFilter.value);
+  });
+});
 
 function roleName(role) {
   return {OWNER: "所有者", ADMIN: "管理员", MANAGER: "管理", TEACHER: "教师", ASSISTANT: "助教", VIEWER: "只读"}[role] || role;
@@ -1930,7 +2142,9 @@ async function bootstrap() {
       classworksV2Api.mySchools(),
     ]);
     if (!selectedSchoolId.value && managerMemberships.value.length) {
-      selectedSchoolId.value = managerMemberships.value[0].school.id;
+      selectedSchoolId.value = managerMemberships.value.some(
+        (membership) => membership.school.id === requestedSchoolId,
+      ) ? requestedSchoolId : managerMemberships.value[0].school.id;
     }
   } catch (error) {
     errorMessage.value = describeApiError(error, "加载学校管理信息失败");
@@ -2055,6 +2269,7 @@ async function commitOrganization() {
   organizationBusy.value = true;
   try {
     organizationReport.value = await classworksV2Api.importOrganization(parseOrganization(), false);
+    organizationTextSnapshot.value = organizationText.value;
     organizationSharedPassword.value = "";
     successMessage.value = "学校组织配置导入成功";
     await bootstrap();
@@ -2280,6 +2495,7 @@ async function loadSchoolHomeworkSettings() {
     resetHomeworkQuickDeadlines();
     resetHomeworkQuickInputs();
     homeworkQuickInputSubjects.value = [];
+    homeworkSettingsSnapshot.value = homeworkSettingsValue();
     return;
   }
   homeworkSettingsBusy.value = true;
@@ -2291,6 +2507,7 @@ async function loadSchoolHomeworkSettings() {
     homeworkQuickDeadlines.value = sanitizeHomeworkQuickDeadlines(settings.quickDeadlines);
     homeworkQuickInputs.value = sanitizeHomeworkQuickInputs(settings.quickInputs);
     homeworkQuickInputSubjects.value = subjects;
+    homeworkSettingsSnapshot.value = homeworkSettingsValue();
   } catch (error) {
     errorMessage.value = describeApiError(error, "加载作业快捷时间失败");
   } finally {
@@ -2368,6 +2585,7 @@ async function saveSchoolHomeworkSettings() {
     });
     homeworkQuickDeadlines.value = sanitizeHomeworkQuickDeadlines(settings.quickDeadlines);
     homeworkQuickInputs.value = sanitizeHomeworkQuickInputs(settings.quickInputs);
+    homeworkSettingsSnapshot.value = homeworkSettingsValue();
     successMessage.value = "全校作业快捷时间和快捷词已保存；教师端和大屏刷新后生效。";
   } catch (error) {
     errorMessage.value = describeApiError(error, "保存作业快捷时间失败");
@@ -2407,6 +2625,7 @@ function openScreenEdit(screen) {
     pin: "",
     administrativeClassId: screen.administrativeClassId,
   };
+  screenEditSnapshot.value = JSON.stringify(screenEdit.value);
   screenEditDialog.value = true;
 }
 
@@ -2437,7 +2656,7 @@ async function saveScreenAccount() {
 }
 
 async function resetScreenDevice(screen) {
-  if (!window.confirm(`重置 ${screen.name} 的设备绑定？原浏览器会立即退出，之后可用同一账号和 PIN 在新设备登录。`)) return;
+  if (!window.confirm(`重置 ${screen.name} 的设备绑定？此操作不可撤销，原浏览器会立即退出，之后需用同一账号和 PIN 在新设备重新登录。`)) return;
   screenBusy.value = true;
   try {
     await classworksV2Api.resetClassroomScreenDevice(selectedSchoolId.value, screen.id);
@@ -2453,11 +2672,20 @@ async function resetScreenDevice(screen) {
 async function setScreenActive(screen, isActive) {
   const action = isActive ? "启用" : "停用";
   if (!window.confirm(`${action} ${screen.name}？${isActive ? "" : "停用后该设备将无法读取或修改作业。"}`)) return;
+  const schoolId = selectedSchoolId.value;
   screenBusy.value = true;
   try {
-    await classworksV2Api.updateClassroomScreenAccount(selectedSchoolId.value, screen.id, {isActive});
-    successMessage.value = `大屏账号已${action}。`;
+    await classworksV2Api.updateClassroomScreenAccount(schoolId, screen.id, {isActive});
+    successMessage.value = `大屏账号已${action}，可在下方短时撤销。`;
     await loadScreenAccounts();
+    offerUndo({
+      message: `已${action}大屏“${screen.name}”`,
+      undo: async () => {
+        await classworksV2Api.updateClassroomScreenAccount(schoolId, screen.id, {isActive: !isActive});
+        successMessage.value = `已撤销“大屏${action}”。`;
+        await loadScreenAccounts();
+      },
+    });
   } catch (error) {
     errorMessage.value = describeApiError(error, `${action}大屏账号失败`);
   } finally {
@@ -2558,23 +2786,42 @@ async function resetAccountPin(account) {
 async function setAccountDisabled(account, disabled) {
   const action = disabled ? "停用" : "启用";
   if (!window.confirm(`${action} ${account.name || account.username}？${disabled ? "其当前会话将被撤销，但班级分配会保留。" : ""}`)) return;
+  const schoolId = selectedSchoolId.value;
   try {
-    await classworksV2Api.updateLocalAccount(selectedSchoolId.value, account.id, {disabled});
-    successMessage.value = `账号已${action}`;
+    await classworksV2Api.updateLocalAccount(schoolId, account.id, {disabled});
+    successMessage.value = `账号已${action}，可在下方短时撤销。`;
     await loadLocalAccounts();
+    offerUndo({
+      message: `已${action}账号“${account.name || account.username}”`,
+      undo: async () => {
+        await classworksV2Api.updateLocalAccount(schoolId, account.id, {disabled: !disabled});
+        successMessage.value = `已撤销“账号${action}”。`;
+        await loadLocalAccounts();
+      },
+    });
   } catch (error) {
     errorMessage.value = describeApiError(error, `${action}账号失败`);
   }
 }
 
 async function deactivateAccount(account) {
-  if (!window.confirm(`注销 ${account.name || account.username} 在本校的全部管理和教学权限？发布历史会保留。`)) return;
+  if (!window.confirm(`注销 ${account.name || account.username} 在本校的全部管理和教学权限？此操作不可撤销，发布历史会保留。`)) return;
   try {
     await classworksV2Api.deactivateLocalAccount(selectedSchoolId.value, account.id);
     successMessage.value = "账号已停用，学校与教学空间权限已移除。";
     await Promise.all([bootstrap(), loadLocalAccounts(), loadRoster()]);
   } catch (error) {
     errorMessage.value = describeApiError(error, "注销账号权限失败");
+  }
+}
+
+async function undoAdminOperation() {
+  errorMessage.value = "";
+  try {
+    await executeUndo();
+  } catch (error) {
+    clearUndo();
+    errorMessage.value = describeApiError(error, "撤销失败，数据可能已被其他管理员修改");
   }
 }
 
@@ -2733,7 +2980,9 @@ async function activateTerm() {
 
 watch(selectedSchoolId, () => {
   const activeTerm = selectedSchoolTerms.value.find((term) => term.status === "ACTIVE");
-  selectedTermId.value = activeTerm?.id || termOptions.value[0]?.value || "";
+  const preferredTerm = selectedSchoolTerms.value.find((term) => term.id === requestedTermId);
+  selectedTermId.value = preferredTerm?.id || activeTerm?.id || termOptions.value[0]?.value || "";
+  requestedTermId = "";
   cloneSourceTermId.value = activeTerm?.id || termOptions.value[0]?.value || "";
   recentCredentials.value = [];
   loadLocalAccounts();
@@ -2776,6 +3025,27 @@ watch(tab, (value) => {
     screenDutyTimer = null;
   }
 });
+watch([tab, selectedSchoolId, selectedTermId], ([section, schoolId, termId]) => {
+  if (!signedIn.value || !schoolId) return;
+  try {
+    localStorage.setItem(ADMIN_CONTEXT_KEY, JSON.stringify({tab: section, schoolId, termId}));
+  } catch {
+    // URL state remains available when local storage is restricted.
+  }
+  const nextQuery = {...route.query, section, school: schoolId};
+  if (termId) nextQuery.term = termId;
+  else delete nextQuery.term;
+  const unchanged = String(route.query.section || "") === section &&
+    String(route.query.school || "") === schoolId &&
+    String(route.query.term || "") === termId;
+  if (!unchanged) void router.replace({query: nextQuery});
+});
+watch(() => route.query.section, (section) => {
+  const value = String(section || "");
+  if (ADMIN_TABS.has(value) && value !== tab.value && !navigateAdminTab(value)) {
+    void router.replace({query: {...route.query, section: tab.value}});
+  }
+});
 watch(cloneSourceTermId, (termId) => {
   const source = selectedSchoolTerms.value.find((term) => term.id === termId);
   if (!source) return;
@@ -2805,12 +3075,51 @@ watch(adminRoleOptions, (options) => {
   }
 });
 
-onMounted(bootstrap);
-onUnmounted(() => window.clearInterval(screenDutyTimer));
+function warnBeforeUnload(event) {
+  if (!currentSectionHasUnsavedChanges.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+onBeforeRouteLeave(() => confirmDiscardCurrentSection());
+onMounted(() => {
+  window.addEventListener("beforeunload", warnBeforeUnload);
+  bootstrap();
+});
+onUnmounted(() => {
+  window.clearInterval(screenDutyTimer);
+  window.removeEventListener("beforeunload", warnBeforeUnload);
+});
 </script>
 
 <style scoped>
 .admin-page {
   max-width: 1500px;
+}
+.admin-navigation-panel {
+  float: left;
+  width: 260px;
+}
+.admin-content-with-navigation {
+  margin-left: 280px;
+  min-width: 0;
+}
+.account-filter-bar {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+}
+
+@media (max-width: 959px) {
+  .admin-navigation-panel {
+    float: none;
+    margin-bottom: 20px;
+    width: 100%;
+  }
+  .admin-content-with-navigation { margin-left: 0; }
+}
+
+@media (max-width: 600px) {
+  .account-filter-bar { grid-template-columns: 1fr; }
 }
 </style>

@@ -68,6 +68,75 @@
       </v-card-text>
     </v-card>
 
+    <v-card class="mb-5 rounded-xl">
+      <v-card-title class="d-flex align-center flex-wrap ga-2 pa-5 pb-2">
+        <v-icon
+          color="primary"
+          icon="mdi-clipboard-check-outline"
+        />
+        管理待办
+        <v-chip
+          v-if="overview"
+          :color="priorityTasks.length ? 'warning' : 'success'"
+          size="small"
+          variant="tonal"
+        >
+          {{ priorityTasks.length ? `${overview.diagnostics.length} 项待处理` : "已完成" }}
+        </v-chip>
+      </v-card-title>
+      <v-card-text class="px-5 pb-5">
+        <v-alert
+          v-if="overview && !priorityTasks.length"
+          type="success"
+          variant="tonal"
+        >
+          当前没有需要管理员处理的配置或运行问题。
+        </v-alert>
+        <v-list
+          v-else
+          class="task-list"
+          lines="two"
+        >
+          <v-list-item
+            v-for="(item, index) in priorityTasks"
+            :key="`${item.code}-${index}`"
+            :subtitle="`${diagnosticSourceName(item.source)} · ${item.code}`"
+            :title="item.message"
+          >
+            <template #prepend>
+              <v-avatar
+                :color="item.severity === 'ERROR' ? 'error' : 'warning'"
+                size="38"
+                variant="tonal"
+              >
+                <v-icon :icon="item.severity === 'ERROR' ? 'mdi-alert-circle' : 'mdi-alert-outline'" />
+              </v-avatar>
+            </template>
+            <template
+              v-if="item.targetTab"
+              #append
+            >
+              <v-btn
+                color="primary"
+                prepend-icon="mdi-arrow-right"
+                size="small"
+                variant="tonal"
+                @click="$emit('navigate', item.targetTab)"
+              >
+                去处理
+              </v-btn>
+            </template>
+          </v-list-item>
+        </v-list>
+        <div
+          v-if="overview?.diagnostics.length > priorityTasks.length"
+          class="text-caption text-medium-emphasis mt-3"
+        >
+          优先展示 {{ priorityTasks.length }} 项，其余问题可在下方按类别展开查看。
+        </div>
+      </v-card-text>
+    </v-card>
+
     <v-card class="rounded-xl">
       <v-card-title class="d-flex align-center pa-5 pb-2">
         <v-icon
@@ -188,6 +257,11 @@ const diagnosticGroups = computed(() => Object.entries(groupDefinitions).map(([s
   ...definition,
   items: (overview.value?.diagnostics || []).filter((item) => item.source === source),
 })).filter((group) => group.items.length));
+const priorityTasks = computed(() => (overview.value?.diagnostics || []).slice(0, 6));
+
+function diagnosticSourceName(source) {
+  return groupDefinitions[source]?.label || "学校配置";
+}
 
 async function load() {
   if (!props.schoolId || !props.termId) return;
@@ -208,5 +282,9 @@ watch(() => [props.schoolId, props.termId], load, {immediate: true});
 <style scoped>
 .summary-card {
   height: 100%;
+}
+.task-list {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 16px;
 }
 </style>

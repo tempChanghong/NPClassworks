@@ -113,6 +113,9 @@
         <v-tab value="people">
           人员视角
         </v-tab>
+        <v-tab value="permissions">
+          权限检查
+        </v-tab>
         <v-tab value="diagnostics">
           岗位诊断
           <v-badge
@@ -308,6 +311,86 @@
               </v-card>
             </v-col>
           </v-row>
+        </v-window-item>
+
+        <v-window-item value="permissions">
+          <v-card
+            class="rounded-lg"
+            variant="outlined"
+          >
+            <v-card-text class="pa-5">
+              <v-autocomplete
+                v-model="permissionAccountId"
+                clearable
+                :items="permissionPersonOptions"
+                item-title="title"
+                item-value="value"
+                label="选择教师，检查其当前有效权限"
+                prepend-inner-icon="mdi-account-search-outline"
+                variant="outlined"
+              />
+              <v-empty-state
+                v-if="!selectedPermissionPerson"
+                icon="mdi-shield-search-outline"
+                text="选择教师后，将按年级组长、班主任和明确任课关系汇总展示权限来源。"
+                title="有效权限检查器"
+              />
+              <template v-else>
+                <div class="d-flex align-center flex-wrap ga-3 mb-4">
+                  <v-avatar
+                    color="primary"
+                    variant="tonal"
+                  >
+                    {{ accountName(selectedPermissionPerson.account).slice(0, 1) }}
+                  </v-avatar>
+                  <div>
+                    <div class="text-h6 font-weight-bold">
+                      {{ accountName(selectedPermissionPerson.account) }}
+                    </div>
+                    <div class="text-body-2 text-medium-emphasis">
+                      {{ selectedPermissionPerson.account.localUsername || selectedPermissionPerson.account.email || '学校账号' }}
+                    </div>
+                  </div>
+                  <v-chip
+                    v-if="selectedPermissionPerson.account.localDisabled"
+                    color="error"
+                    variant="tonal"
+                  >
+                    账号已停用，当前无法登录
+                  </v-chip>
+                </div>
+                <v-alert
+                  class="mb-4"
+                  type="info"
+                  variant="tonal"
+                >
+                  权限来自下列职责的叠加；这里展示的是当前学期实际配置，不会自动把班主任扩大为全年级权限。
+                </v-alert>
+                <v-list
+                  class="permission-source-list rounded-lg"
+                  lines="two"
+                >
+                  <v-list-item
+                    v-for="(line, index) in permissionDetails(selectedPermissionPerson)"
+                    :key="`${line.title}-${index}`"
+                    :prepend-icon="line.icon"
+                    :subtitle="line.subtitle"
+                    :title="line.title"
+                  >
+                    <template #append>
+                      <v-chip
+                        :color="line.color"
+                        size="small"
+                        variant="tonal"
+                      >
+                        {{ line.source }}
+                      </v-chip>
+                    </template>
+                  </v-list-item>
+                </v-list>
+              </template>
+            </v-card-text>
+          </v-card>
         </v-window-item>
 
         <v-window-item value="diagnostics">
@@ -524,6 +607,7 @@ const successMessage = ref("");
 const overview = ref(null);
 const section = ref("organization");
 const peopleSearch = ref("");
+const permissionAccountId = ref("");
 const gradeDialog = ref(false);
 const classDialog = ref(false);
 const gradeForm = ref({accountId: "", gradeId: "", position: "PRIMARY"});
@@ -566,6 +650,12 @@ const filteredPeople = computed(() => {
     [person.account.name, person.account.localUsername, person.account.email]
       .filter(Boolean).some((item) => item.toLowerCase().includes(keyword)));
 });
+const permissionPersonOptions = computed(() => (overview.value?.people || []).map((person) => ({
+  title: `${accountName(person.account)}${person.account.localUsername ? ` · ${person.account.localUsername}` : ""}`,
+  value: person.account.id,
+})));
+const selectedPermissionPerson = computed(() => (overview.value?.people || [])
+  .find((person) => person.account.id === permissionAccountId.value) || null);
 
 function accountName(account) {
   return account?.name || account?.localUsername || account?.email || "未命名教师";
@@ -599,6 +689,44 @@ function permissionPreview(person) {
     lines.push(`在 ${person.teachingAssignments.length} 个明确任课单元发布和确认作业`);
   }
   return lines.length ? lines : ["当前只有登录身份，尚无教学业务权限"];
+}
+
+function permissionDetails(person) {
+  const details = [];
+  for (const role of person.gradeLeaderships) {
+    details.push({
+      title: `${role.grade.name}全部作业、通知与认证管理`,
+      subtitle: "可查看本年级教学空间，并处理本年级范围内的教学事务。",
+      source: gradePositionName(role.position),
+      icon: "mdi-account-tie-hat-outline",
+      color: "primary",
+    });
+  }
+  for (const role of person.classLeaderships) {
+    details.push({
+      title: `${role.administrativeClass.name}行政班管理`,
+      subtitle: "可管理本班事务，并只读查看与本班学生相关的走班作业。",
+      source: classPositionName(role.position),
+      icon: "mdi-home-account",
+      color: "secondary",
+    });
+  }
+  for (const assignment of person.teachingAssignments) {
+    details.push({
+      title: `${assignment.workspace?.name || "教学空间"}${assignment.subject?.name ? ` · ${assignment.subject.name}` : ""}`,
+      subtitle: "可在这个明确任课单元发布、修改和确认作业。",
+      source: "任课教师",
+      icon: "mdi-human-male-board",
+      color: "success",
+    });
+  }
+  return details.length ? details : [{
+    title: "没有教学业务权限",
+    subtitle: "该账号目前只有登录身份，需分配职责或任课关系后才能管理教学内容。",
+    source: "未授权",
+    icon: "mdi-shield-off-outline",
+    color: "warning",
+  }];
 }
 
 function diagnosticScope(item) {
@@ -718,6 +846,9 @@ async function loadOverview(options = {}) {
   if (!options.preserveMessages) successMessage.value = "";
   try {
     overview.value = await classworksV2Api.staffResponsibilities(props.schoolId, props.termId);
+    if (permissionAccountId.value && !overview.value.people.some((person) => person.account.id === permissionAccountId.value)) {
+      permissionAccountId.value = "";
+    }
     policyForm.value = {
       gradeLeaderMustBeHomeroom: overview.value.school.gradeLeaderMustBeHomeroom,
       gradeLeaderMustTeach: overview.value.school.gradeLeaderMustTeach,

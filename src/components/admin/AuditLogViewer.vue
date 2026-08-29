@@ -25,6 +25,45 @@
       />
     </v-card-title>
     <v-card-text class="px-5 pb-5">
+      <div class="audit-filter-bar mb-4">
+        <v-select
+          v-model="action"
+          clearable
+          hide-details
+          :items="actionOptions"
+          item-title="title"
+          item-value="value"
+          label="操作类型"
+          variant="outlined"
+          @update:model-value="load(true)"
+        />
+        <v-select
+          v-model="result"
+          hide-details
+          :items="resultOptions"
+          item-title="title"
+          item-value="value"
+          label="执行结果"
+          variant="outlined"
+          @update:model-value="load(true)"
+        />
+        <v-text-field
+          v-model="fromDate"
+          hide-details
+          label="开始日期"
+          type="date"
+          variant="outlined"
+          @update:model-value="load(true)"
+        />
+        <v-text-field
+          v-model="toDate"
+          hide-details
+          label="结束日期"
+          type="date"
+          variant="outlined"
+          @update:model-value="load(true)"
+        />
+      </div>
       <v-alert
         v-if="error"
         class="mb-4"
@@ -56,14 +95,23 @@
               {{ actionName(item.action) }}{{ entityLabel(item) }}
             </v-list-item-subtitle>
             <template #append>
-              <v-chip
-                :color="item.success ? 'success' : 'error'"
-                size="small"
-                :title="`${item.requestMethod} ${item.requestPath} · HTTP ${item.statusCode}`"
-                variant="tonal"
-              >
-                {{ item.success ? "成功" : "失败" }}
-              </v-chip>
+              <div class="d-flex align-center ga-2">
+                <v-chip
+                  :color="item.success ? 'success' : 'error'"
+                  size="small"
+                  :title="`${item.requestMethod} ${item.requestPath} · HTTP ${item.statusCode}`"
+                  variant="tonal"
+                >
+                  {{ item.success ? "成功" : "失败" }}
+                </v-chip>
+                <v-btn
+                  icon="mdi-chevron-right"
+                  size="small"
+                  title="查看详情"
+                  variant="text"
+                  @click="openDetails(item)"
+                />
+              </div>
             </template>
           </v-list-item>
           <v-divider />
@@ -86,22 +134,77 @@
       </v-btn>
     </v-card-text>
   </v-card>
+
+  <v-dialog
+    v-model="detailsDialog"
+    max-width="720"
+  >
+    <v-card class="rounded-xl">
+      <v-card-title class="d-flex align-center pa-5 pb-2">
+        审计详情
+        <v-spacer />
+        <v-btn
+          icon="mdi-close"
+          variant="text"
+          @click="detailsDialog = false"
+        />
+      </v-card-title>
+      <v-card-text
+        v-if="selectedItem"
+        class="px-5 pb-5"
+      >
+        <v-alert
+          class="mb-4"
+          :type="selectedItem.success ? 'success' : 'error'"
+          variant="tonal"
+        >
+          {{ selectedItem.summary || actionName(selectedItem.action) }}
+        </v-alert>
+        <dl class="audit-details-grid">
+          <dt>操作者</dt><dd>{{ actorName(selectedItem) }}</dd>
+          <dt>时间</dt><dd>{{ new Date(selectedItem.createdAt).toLocaleString('zh-CN') }}</dd>
+          <dt>操作</dt><dd>{{ actionName(selectedItem.action) }}</dd>
+          <dt>对象</dt><dd>{{ entityLabel(selectedItem).replace(/^ · /, '') || '未记录具体对象' }}</dd>
+          <dt>请求</dt><dd>{{ selectedItem.requestMethod || '-' }} {{ selectedItem.requestPath || '-' }}</dd>
+          <dt>结果</dt><dd>HTTP {{ selectedItem.statusCode ?? '-' }} · {{ selectedItem.success ? '成功' : '失败' }}</dd>
+          <dt>来源 IP</dt><dd>{{ selectedItem.clientIp || '未记录' }}</dd>
+        </dl>
+        <template v-if="selectedItem.metadata">
+          <div class="text-subtitle-2 mt-5 mb-2">
+            脱敏后的操作参数
+          </div>
+          <pre class="audit-metadata">{{ formatMetadata(selectedItem.metadata) }}</pre>
+        </template>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
-import {ref, watch} from "vue";
+import {computed, ref, watch} from "vue";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client.js";
 
 const props = defineProps({schoolId: {type: String, required: true}});
 const actorType = ref("");
+const action = ref("");
+const result = ref("ALL");
+const fromDate = ref("");
+const toDate = ref("");
 const items = ref([]);
 const nextCursor = ref(null);
 const loading = ref(false);
 const error = ref("");
+const detailsDialog = ref(false);
+const selectedItem = ref(null);
 const actorOptions = [
   {title: "全部来源", value: ""},
   {title: "管理员与教师", value: "ACCOUNT"},
   {title: "班级大屏", value: "CLASSROOM_SCREEN"},
+];
+const resultOptions = [
+  {title: "全部结果", value: "ALL"},
+  {title: "成功", value: "SUCCESS"},
+  {title: "失败", value: "FAILED"},
 ];
 
 const actionNames = {
@@ -142,6 +245,9 @@ const actionNames = {
   SCREEN_PUBLICATION_RESTORED: "大屏恢复作业版本",
   SCREEN_BOARD_COPIED: "复制大屏作业板",
 };
+const actionOptions = computed(() => Object.entries(actionNames)
+  .map(([value, title]) => ({title, value}))
+  .sort((left, right) => left.title.localeCompare(right.title, "zh-CN")));
 
 function actionName(action) {
   const genericNames = {
@@ -173,6 +279,21 @@ function entityLabel(item) {
   return ` · ${names[item.entityType] || item.entityType} ${item.entityId.slice(0, 8)}`;
 }
 
+function openDetails(item) {
+  selectedItem.value = item;
+  detailsDialog.value = true;
+}
+
+function formatMetadata(metadata) {
+  return JSON.stringify(metadata, null, 2);
+}
+
+function localDateBoundary(value, endOfDay = false) {
+  if (!value) return undefined;
+  const suffix = endOfDay ? "T23:59:59.999" : "T00:00:00.000";
+  return new Date(`${value}${suffix}`).toISOString();
+}
+
 async function load(reset) {
   if (!props.schoolId || loading.value) return;
   loading.value = true;
@@ -180,6 +301,10 @@ async function load(reset) {
   try {
     const result = await classworksV2Api.auditLogs(props.schoolId, {
       actorType: actorType.value || undefined,
+      action: action.value || undefined,
+      success: result.value === "ALL" ? undefined : result.value === "SUCCESS",
+      from: localDateBoundary(fromDate.value),
+      to: localDateBoundary(toDate.value, true),
       cursor: reset ? undefined : nextCursor.value,
       limit: 50,
     });
@@ -194,3 +319,33 @@ async function load(reset) {
 
 watch(() => props.schoolId, () => load(true), {immediate: true});
 </script>
+
+<style scoped>
+.audit-filter-bar {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(140px, 0.8fr) minmax(150px, 1fr) minmax(150px, 1fr);
+}
+.audit-details-grid {
+  display: grid;
+  gap: 10px 16px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin: 0;
+}
+.audit-details-grid dt { color: rgb(var(--v-theme-on-surface-variant)); }
+.audit-details-grid dd { margin: 0; overflow-wrap: anywhere; }
+.audit-metadata {
+  background: rgba(var(--v-theme-surface-variant), 0.45);
+  border-radius: 12px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 14px;
+  white-space: pre-wrap;
+}
+@media (max-width: 800px) {
+  .audit-filter-bar { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 520px) {
+  .audit-filter-bar { grid-template-columns: 1fr; }
+}
+</style>
