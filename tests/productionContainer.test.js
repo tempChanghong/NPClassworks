@@ -4,6 +4,8 @@ import test from "node:test";
 
 const dockerfile = fs.readFileSync(new URL("../Dockerfile", import.meta.url), "utf8");
 const nginx = fs.readFileSync(new URL("../deploy/nginx.conf", import.meta.url), "utf8");
+const productionDeploy = fs.readFileSync(new URL("../.github/workflows/production-deploy.yml", import.meta.url), "utf8");
+const pagesDeploy = fs.readFileSync(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
 
 test("production image builds the PWA and serves only its static output", () => {
   assert.match(dockerfile, /FROM node:22-alpine AS build/);
@@ -26,4 +28,15 @@ test("nginx preserves SPA routing and never long-caches the service worker", () 
   assert.match(nginx, /try_files \$uri \$uri\/ \/index\.html/);
   assert.match(nginx, /location = \/sw\.js[\s\S]*no-cache, no-store/);
   assert.match(nginx, /location \/assets\/[\s\S]*immutable/);
+});
+
+test("production deployment verifies the frontend before invoking the locked server upgrade", () => {
+  assert.match(productionDeploy, /push:[\s\S]*branches: \["main"\]/);
+  assert.match(productionDeploy, /pnpm test/);
+  assert.match(productionDeploy, /pnpm run build/);
+  assert.match(productionDeploy, /needs: verify/);
+  assert.match(productionDeploy, /StrictHostKeyChecking=yes/);
+  assert.match(productionDeploy, /bash deploy\/ci-deploy\.sh/);
+  assert.doesNotMatch(pagesDeploy, /push:/);
+  assert.doesNotMatch(pagesDeploy, /houlang\.cloud|VITE_DEFAULT_AUTH_SERVER/);
 });
