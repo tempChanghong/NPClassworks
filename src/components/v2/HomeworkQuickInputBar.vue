@@ -22,7 +22,7 @@
     >
       <span
         v-if="groups.length > 1"
-        class="homework-quick-input__group-name"
+        class="homework-quick-input__group-name text-medium-emphasis"
       >{{ group.name }}</span>
       <div class="homework-quick-input__buttons">
         <v-btn
@@ -73,7 +73,7 @@ const groups = computed(() => {
 .homework-quick-input { margin: -4px 0 20px; }
 .homework-quick-input__label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: .82rem; font-weight: 600; }
 .homework-quick-input__group { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; }
-.homework-quick-input__group-name { flex: 0 0 3em; padding-top: 7px; color: rgb(var(--v-theme-on-surface-variant)); font-size: .75rem; }
+.homework-quick-input__group-name { flex: 0 0 3em; padding-top: 7px; font-size: .75rem; }
 .homework-quick-input__buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .homework-quick-input--screen { margin-top: 12px; }
 .homework-quick-input--screen .homework-quick-input__label { font-size: 1rem; }

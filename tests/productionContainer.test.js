@@ -30,13 +30,15 @@ test("nginx preserves SPA routing and never long-caches the service worker", () 
   assert.match(nginx, /location \/assets\/[\s\S]*immutable/);
 });
 
-test("production deployment verifies the frontend before invoking the locked server upgrade", () => {
+test("production deployment verifies the frontend before requesting the signed server upgrade", () => {
   assert.match(productionDeploy, /push:[\s\S]*branches: \["main"\]/);
   assert.match(productionDeploy, /pnpm test/);
   assert.match(productionDeploy, /pnpm run build/);
   assert.match(productionDeploy, /needs: verify/);
-  assert.match(productionDeploy, /StrictHostKeyChecking=yes/);
-  assert.match(productionDeploy, /bash deploy\/ci-deploy\.sh/);
+  assert.match(productionDeploy, /DEPLOY_AGENT_URL/);
+  assert.match(productionDeploy, /X-NP-Deploy-Signature/);
+  assert.match(productionDeploy, /createHmac\("sha256"/);
+  assert.doesNotMatch(productionDeploy, /DEPLOY_SSH_KEY|StrictHostKeyChecking|\bssh\s/);
   assert.doesNotMatch(pagesDeploy, /push:/);
   assert.doesNotMatch(pagesDeploy, /houlang\.cloud|VITE_DEFAULT_AUTH_SERVER/);
 });
