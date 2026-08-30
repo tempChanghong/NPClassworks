@@ -127,6 +127,28 @@ export async function completeInstanceSetup() {
   return result;
 }
 
+export async function previewInstanceMigration(file, passphrase) {
+  return unwrap(await client.post("/api/v2/setup/migration/preview", file, {
+    headers: {
+      ...setupHeaders(),
+      "Content-Type": "application/vnd.npclassworks.transfer+json",
+      "X-NPClassworks-Migration-Passphrase": passphrase,
+    },
+    timeout: 180000,
+  }));
+}
+
+export async function importInstanceMigration(file, passphrase) {
+  return unwrap(await client.post("/api/v2/setup/migration/import", file, {
+    headers: {
+      ...setupHeaders(),
+      "Content-Type": "application/vnd.npclassworks.transfer+json",
+      "X-NPClassworks-Migration-Passphrase": passphrase,
+    },
+    timeout: 180000,
+  }));
+}
+
 function screenHeaders(extra = {}) {
   return {
     ...extra,
@@ -576,6 +598,34 @@ export const classworksV2Api = {
   },
   async auditLogs(schoolId, params = {}) {
     return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/audit-logs`, {params}));
+  },
+  async schoolMigrationReadiness(schoolId) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/migration/readiness`, {
+      timeout: 120000,
+    }));
+  },
+  async exportSchoolMigration(schoolId, input) {
+    try {
+      const response = await client.post(`/api/v2/admin/schools/${schoolId}/migration/export`, input, {
+        responseType: "blob",
+        timeout: 180000,
+      });
+      const disposition = response.headers["content-disposition"] || "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `NPClassworks-${Date.now()}.npcw-transfer`;
+      return {blob: response.data, filename};
+    } catch (error) {
+      const BlobConstructor = globalThis.Blob;
+      if (BlobConstructor
+        && error.response?.data instanceof BlobConstructor
+        && error.response.data.type.includes("json")) {
+        try {
+          error.response.data = JSON.parse(await error.response.data.text());
+        } catch {
+          // Keep the original network error when a proxy returned malformed JSON.
+        }
+      }
+      throw error;
+    }
   },
   async schoolHomeworkSettings(schoolId) {
     return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/homework-settings`));

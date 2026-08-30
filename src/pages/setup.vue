@@ -201,6 +201,96 @@
                   管理员、学校与学期
                 </v-card-title>
                 <v-card-text class="pa-6 pt-3">
+                  <v-expansion-panels
+                    v-if="status?.state === 'NEW'"
+                    class="mb-5"
+                  >
+                    <v-expansion-panel>
+                      <v-expansion-panel-title>
+                        <div class="d-flex align-center ga-3">
+                          <v-icon
+                            color="primary"
+                            icon="mdi-server-network"
+                          />
+                          <div>
+                            <div class="font-weight-bold">
+                              从旧服务器迁入整校数据
+                            </div>
+                            <div class="text-caption text-medium-emphasis">
+                              仅支持学校管理员导出的加密 .npcw-transfer 文件
+                            </div>
+                          </div>
+                        </div>
+                      </v-expansion-panel-title>
+                      <v-expansion-panel-text>
+                        <v-alert
+                          class="mb-4"
+                          type="warning"
+                          variant="tonal"
+                        >
+                          目标必须是空白实例。导入会恢复学校、账号、班级、作业通知和审计记录；网页登录会话失效，大屏需要使用原账号和 PIN 重新绑定。
+                        </v-alert>
+                        <v-file-input
+                          v-model="migrationFile"
+                          accept=".npcw-transfer,application/vnd.npclassworks.transfer+json"
+                          label="迁移包"
+                          prepend-icon="mdi-package-down"
+                          show-size
+                          variant="outlined"
+                          @update:model-value="migrationPreview = null; migrationResult = null"
+                        />
+                        <v-text-field
+                          v-model="migrationPassphrase"
+                          :append-inner-icon="showMigrationPassphrase ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                          label="迁移密码"
+                          :type="showMigrationPassphrase ? 'text' : 'password'"
+                          variant="outlined"
+                          @click:append-inner="showMigrationPassphrase = !showMigrationPassphrase"
+                        />
+                        <v-alert
+                          v-if="migrationPreview"
+                          class="mb-4"
+                          type="success"
+                          variant="tonal"
+                        >
+                          <div class="font-weight-bold mb-1">
+                            {{ migrationPreview.manifest.school.name }}（{{ migrationPreview.manifest.school.code }}）
+                          </div>
+                          <div>
+                            {{ migrationPreview.counts.accounts }} 个账号、{{ migrationPreview.counts.workspaces }} 个教学空间、
+                            {{ migrationPreview.counts.publications }} 条作业或通知、{{ migrationPreview.counts.screens }} 台大屏。
+                          </div>
+                          <div
+                            v-for="warning in migrationPreview.warnings || []"
+                            :key="warning"
+                            class="text-body-2 mt-1"
+                          >
+                            • {{ warning }}
+                          </div>
+                        </v-alert>
+                        <div class="d-flex flex-wrap ga-3">
+                          <v-btn
+                            :disabled="!selectedMigrationFile || migrationPassphrase.length < 12"
+                            :loading="saving"
+                            prepend-icon="mdi-file-search-outline"
+                            variant="tonal"
+                            @click="previewMigration"
+                          >
+                            预检迁移包
+                          </v-btn>
+                          <v-btn
+                            color="primary"
+                            :disabled="!migrationPreview"
+                            :loading="saving"
+                            prepend-icon="mdi-database-import-outline"
+                            @click="importMigration"
+                          >
+                            确认导入
+                          </v-btn>
+                        </div>
+                      </v-expansion-panel-text>
+                    </v-expansion-panel>
+                  </v-expansion-panels>
                   <v-alert
                     v-if="status?.counts?.localAccounts"
                     class="mb-5"
@@ -1119,7 +1209,7 @@
 <script setup>
 import {computed, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref} from "vue";
 import {useRouter} from "vue-router";
-import {completeInstanceSetup, createInstanceSetupScreen, createInstanceSetupSession, describeApiError, getInstanceSetupContext, getInstanceSetupOrganizationTemplate, getInstanceSetupStaffConfigurationTemplate, getInstanceSetupStatus, importInstanceSetupOrganization, importInstanceSetupStaffConfiguration, importInstanceSetupTeachers, initializeInstanceCore, verifyInstanceSetupLogin} from "@/utils/classworksV2Client";
+import {completeInstanceSetup, createInstanceSetupScreen, createInstanceSetupSession, describeApiError, getInstanceSetupContext, getInstanceSetupOrganizationTemplate, getInstanceSetupStaffConfigurationTemplate, getInstanceSetupStatus, importInstanceMigration, importInstanceSetupOrganization, importInstanceSetupStaffConfiguration, importInstanceSetupTeachers, initializeInstanceCore, previewInstanceMigration, verifyInstanceSetupLogin} from "@/utils/classworksV2Client";
 import {getServerUrl} from "@/utils/socketClient";
 
 const ValidationSummary = defineComponent({
@@ -1146,6 +1236,11 @@ const stage = ref(1);
 const unlockedStage = ref(1);
 const setupKey = ref("");
 const showSetupKey = ref(false);
+const migrationFile = ref(null);
+const migrationPassphrase = ref("");
+const showMigrationPassphrase = ref(false);
+const migrationPreview = ref(null);
+const migrationResult = ref(null);
 const organizationText = ref("");
 const organizationReport = ref(null);
 const teacherReport = ref(null);
@@ -1203,6 +1298,7 @@ const teacherRowsValid = computed(() => {
 const credentialTypes = {OWNER: "管理员", TEACHER: "教师", SCREEN: "大屏", SHARED_PASSWORD: "教师通用口令"};
 const mustAcknowledgeCredentials = computed(() => credentialEntries.length > 0 && !credentialsAcknowledged.value);
 const canFinishSetup = computed(() => verifiedKinds.OWNER && !mustAcknowledgeCredentials.value);
+const selectedMigrationFile = computed(() => selectedFile(migrationFile.value));
 
 function reportFromError(error) { return error?.response?.data?.data || {valid: false, errors: [{message: describeApiError(error, "校验失败")}], warnings: []}; }
 function dateOnly(value) { return value ? String(value).slice(0, 10) : undefined; }
@@ -1378,6 +1474,40 @@ async function authorizeSetup() {
       unlockedStage.value = Math.max(3, stage.value);
     } else { stage.value = 2; unlockedStage.value = 2; }
   } catch (error) { errorMessage.value = describeApiError(error, "初始化密钥验证失败"); } finally { saving.value = false; }
+}
+async function previewMigration() {
+  if (!selectedMigrationFile.value) return;
+  saving.value = true;
+  errorMessage.value = "";
+  migrationPreview.value = null;
+  try {
+    migrationPreview.value = await previewInstanceMigration(selectedMigrationFile.value, migrationPassphrase.value);
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "迁移包预检失败");
+  } finally {
+    saving.value = false;
+  }
+}
+async function importMigration() {
+  if (!selectedMigrationFile.value || !migrationPreview.value) return;
+  saving.value = true;
+  errorMessage.value = "";
+  try {
+    migrationResult.value = await importInstanceMigration(selectedMigrationFile.value, migrationPassphrase.value);
+    migrationPassphrase.value = "";
+    migrationFile.value = null;
+    migrationPreview.value = null;
+    deliveryWarning.value = `已导入 ${migrationResult.value.school.name}。原账号 PIN 保持不变；所有用户需要重新登录，${migrationResult.value.screensRequireRebind} 台大屏需要重新绑定。`;
+    await Promise.all([loadStatus(), loadSetupResources()]);
+    loginTest.kind = "OWNER";
+    loginTest.username = "";
+    loginTest.password = "";
+    goToStage(6);
+  } catch (error) {
+    errorMessage.value = describeApiError(error, "学校数据导入失败");
+  } finally {
+    saving.value = false;
+  }
 }
 async function initializeCore() {
   if (!coreInputValid.value) {

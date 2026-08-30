@@ -1433,6 +1433,27 @@
           </v-dialog>
         </v-window-item>
 
+        <v-window-item value="migration">
+          <template v-if="managerMemberships.length">
+            <v-card class="mb-5 rounded-xl">
+              <v-card-text class="pa-5">
+                <v-select
+                  v-model="guardedSchoolId"
+                  :items="schoolOptions"
+                  item-title="title"
+                  item-value="value"
+                  label="需要迁出的学校"
+                  variant="outlined"
+                />
+              </v-card-text>
+            </v-card>
+            <SchoolMigrationPanel
+              v-if="selectedSchoolId"
+              :school-id="selectedSchoolId"
+            />
+          </template>
+        </v-window-item>
+
         <v-window-item value="audit">
           <template v-if="managerMemberships.length">
             <v-card class="mb-5 rounded-xl">
@@ -1760,6 +1781,7 @@ import TeachingRelationshipOverview from "@/components/admin/TeachingRelationshi
 import StaffResponsibilityManager from "@/components/admin/StaffResponsibilityManager.vue";
 import SchoolManagementOverview from "@/components/admin/SchoolManagementOverview.vue";
 import AuditLogViewer from "@/components/admin/AuditLogViewer.vue";
+import SchoolMigrationPanel from "@/components/admin/SchoolMigrationPanel.vue";
 import {useTimedUndo} from "@/composables/useTimedUndo";
 import {
   bootstrapSchoolAdministrator,
@@ -1782,7 +1804,7 @@ import {
 } from "@/utils/homeworkQuickInputs";
 
 const ADMIN_CONTEXT_KEY = "npclassworks-admin-context:v1";
-const ADMIN_TABS = new Set(["overview", "structure", "organization", "teachers", "accounts", "screens", "audit", "terms"]);
+const ADMIN_TABS = new Set(["overview", "structure", "organization", "teachers", "accounts", "screens", "migration", "audit", "terms"]);
 
 function loadAdminContext() {
   try {
@@ -1895,6 +1917,7 @@ const adminNavigationGroups = [
   {
     label: "运维与安全",
     items: [
+      {title: "服务器迁移", value: "migration", icon: "mdi-server-network"},
       {title: "审计记录", value: "audit", icon: "mdi-text-box-search-outline"},
       {title: "学期运维", value: "terms", icon: "mdi-calendar-sync-outline"},
     ],
