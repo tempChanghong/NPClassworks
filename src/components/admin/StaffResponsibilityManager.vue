@@ -265,6 +265,14 @@
                 <v-card-text>
                   <div class="d-flex flex-wrap ga-2 mb-3">
                     <v-chip
+                      v-if="isSchoolManager(person)"
+                      color="primary"
+                      size="small"
+                      variant="flat"
+                    >
+                      {{ schoolManagerRoleName(person.schoolRole) }} · 全校教学权限
+                    </v-chip>
+                    <v-chip
                       v-for="role in person.gradeLeaderships"
                       :key="role.id"
                       color="primary"
@@ -291,7 +299,7 @@
                       任课 {{ person.teachingAssignments.length }} 项
                     </v-chip>
                     <span
-                      v-if="!person.gradeLeaderships.length && !person.classLeaderships.length && !person.teachingAssignments.length"
+                      v-if="!isSchoolManager(person) && !person.gradeLeaderships.length && !person.classLeaderships.length && !person.teachingAssignments.length"
                       class="text-caption text-medium-emphasis"
                     >尚未分配教学职责</span>
                   </div>
@@ -332,7 +340,7 @@
               <v-empty-state
                 v-if="!selectedPermissionPerson"
                 icon="mdi-shield-search-outline"
-                text="选择教师后，将按年级组长、班主任和明确任课关系汇总展示权限来源。"
+                text="选择账号后，将按学校管理员、年级组长、班主任和明确任课关系汇总展示权限来源。"
                 title="有效权限检查器"
               />
               <template v-else>
@@ -364,7 +372,9 @@
                   type="info"
                   variant="tonal"
                 >
-                  权限来自下列职责的叠加；这里展示的是当前学期实际配置，不会自动把班主任扩大为全年级权限。
+                  {{ isSchoolManager(selectedPermissionPerson)
+                    ? '该账号具有学校管理员授权，可管理全校全部年级、行政班和走班教学空间；下列岗位职责仅作为额外业务身份展示。'
+                    : '权限来自下列职责的叠加；这里展示的是当前学期实际配置，不会自动把班主任扩大为全年级权限。' }}
                 </v-alert>
                 <v-list
                   class="permission-source-list rounded-lg"
@@ -669,6 +679,14 @@ function classPositionName(position) {
   return position === "CO_HEAD_TEACHER" ? "协同班主任" : "班主任";
 }
 
+function isSchoolManager(person) {
+  return ["OWNER", "ADMIN"].includes(String(person?.schoolRole || "").toUpperCase());
+}
+
+function schoolManagerRoleName(role) {
+  return String(role || "").toUpperCase() === "OWNER" ? "学校所有者" : "学校管理员";
+}
+
 function classesForGrade(gradeId) {
   return (overview.value?.administrativeClasses || []).filter((item) => item.gradeId === gradeId);
 }
@@ -679,6 +697,9 @@ function teachingCountForClass(classId) {
 
 function permissionPreview(person) {
   const lines = [];
+  if (isSchoolManager(person)) {
+    lines.push("管理全校全部年级、行政班与走班教学空间的作业、通知和认证");
+  }
   for (const role of person.gradeLeaderships) {
     lines.push(`管理${role.grade.name}全部作业、通知与认证；可查看本年级教学空间`);
   }
@@ -693,6 +714,15 @@ function permissionPreview(person) {
 
 function permissionDetails(person) {
   const details = [];
+  if (isSchoolManager(person)) {
+    details.push({
+      title: "全校教学业务管理",
+      subtitle: "可管理学校全部年级、行政班和走班教学空间，并发布、修改、确认作业及处理通知。",
+      source: schoolManagerRoleName(person.schoolRole),
+      icon: "mdi-shield-account-outline",
+      color: "primary",
+    });
+  }
   for (const role of person.gradeLeaderships) {
     details.push({
       title: `${role.grade.name}全部作业、通知与认证管理`,
