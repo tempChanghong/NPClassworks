@@ -37,6 +37,8 @@ test("production deployment verifies the frontend before requesting the signed s
   assert.match(productionDeploy, /needs: verify/);
   assert.match(productionDeploy, /DEPLOY_AGENT_URL/);
   assert.match(productionDeploy, /X-NP-Deploy-Signature/);
+  assert.match(productionDeploy, /X-NP-Deploy-Async:\s*1/);
+  assert.match(productionDeploy, /X-NP-Deploy-Status-Token/);
   assert.match(productionDeploy, /createHmac\("sha256"/);
   assert.doesNotMatch(productionDeploy, /DEPLOY_SSH_KEY|StrictHostKeyChecking|\bssh\s/);
   assert.doesNotMatch(pagesDeploy, /push:/);
