@@ -38,7 +38,7 @@
           @update:model-value="load(true)"
         />
         <v-select
-          v-model="result"
+          v-model="resultFilter"
           hide-details
           :items="resultOptions"
           item-title="title"
@@ -187,7 +187,7 @@ import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client.js";
 const props = defineProps({schoolId: {type: String, required: true}});
 const actorType = ref("");
 const action = ref("");
-const result = ref("ALL");
+const resultFilter = ref("ALL");
 const fromDate = ref("");
 const toDate = ref("");
 const items = ref([]);
@@ -301,17 +301,17 @@ async function load(reset) {
   loading.value = true;
   error.value = "";
   try {
-    const result = await classworksV2Api.auditLogs(props.schoolId, {
+    const response = await classworksV2Api.auditLogs(props.schoolId, {
       actorType: actorType.value || undefined,
       action: action.value || undefined,
-      success: result.value === "ALL" ? undefined : result.value === "SUCCESS",
+      success: resultFilter.value === "ALL" ? undefined : resultFilter.value === "SUCCESS",
       from: localDateBoundary(fromDate.value),
       to: localDateBoundary(toDate.value, true),
       cursor: reset ? undefined : nextCursor.value,
       limit: 50,
     });
-    items.value = reset ? result.items : [...items.value, ...result.items];
-    nextCursor.value = result.nextCursor;
+    items.value = reset ? response.items : [...items.value, ...response.items];
+    nextCursor.value = response.nextCursor;
   } catch (requestError) {
     error.value = describeApiError(requestError, "读取审计记录失败");
   } finally {
