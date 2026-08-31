@@ -330,7 +330,11 @@ export const classworksV2Api = {
     return unwrap(await client.get("/api/v2/me/workspaces"));
   },
   async mySchools() {
-    return unwrap(await client.get("/api/v2/me/schools"));
+    // 权限上下文不能复用浏览器、代理或旧版 Service Worker 的缓存。
+    // 时间戳也保证首次升级到新缓存策略前，旧 SW 不会命中历史响应。
+    return unwrap(await client.get("/api/v2/me/schools", {
+      params: {_permissionsAt: Date.now()},
+    }));
   },
   async loginClassroomScreen(input) {
     const result = unwrap(await client.post("/api/v2/classroom-screens/login", input));

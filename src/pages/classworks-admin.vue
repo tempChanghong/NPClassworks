@@ -224,7 +224,7 @@
               {{ profile?.name || profile?.email }}
             </div>
             <div class="text-caption text-medium-emphasis">
-              {{ managerMemberships.length ? `管理 ${managerMemberships.length} 所学校` : '尚无学校管理员权限' }}
+              {{ adminAccessSummary }}
             </div>
           </div>
           <v-spacer />
@@ -254,7 +254,7 @@
       >
         <v-window-item value="overview">
           <v-alert
-            v-if="!managerMemberships.length"
+            v-if="adminMembershipsStatus === 'loaded' && !managerMemberships.length"
             type="warning"
             variant="tonal"
           >
@@ -420,7 +420,7 @@
 
         <v-window-item value="structure">
           <v-alert
-            v-if="!managerMemberships.length"
+            v-if="adminMembershipsStatus === 'loaded' && !managerMemberships.length"
             type="warning"
             variant="tonal"
           >
@@ -475,7 +475,7 @@
 
         <v-window-item value="teachers">
           <v-alert
-            v-if="!managerMemberships.length"
+            v-if="adminMembershipsStatus === 'loaded' && !managerMemberships.length"
             type="warning"
             variant="tonal"
           >
@@ -873,7 +873,7 @@
 
         <v-window-item value="accounts">
           <v-alert
-            v-if="!managerMemberships.length"
+            v-if="adminMembershipsStatus === 'loaded' && !managerMemberships.length"
             type="warning"
             variant="tonal"
           >
@@ -1068,7 +1068,7 @@
 
         <v-window-item value="screens">
           <v-alert
-            v-if="!managerMemberships.length"
+            v-if="adminMembershipsStatus === 'loaded' && !managerMemberships.length"
             type="warning"
             variant="tonal"
           >
@@ -1826,6 +1826,7 @@ const publicSchools = ref([]);
 const localAuthStatus = ref({bootstrapRequired: false, bootstrapAvailable: false});
 const profile = ref(null);
 const schoolMemberships = ref([]);
+const adminMembershipsStatus = ref("idle");
 const tab = ref(ADMIN_TABS.has(String(route.query.section || savedAdminContext.tab))
   ? String(route.query.section || savedAdminContext.tab)
   : "overview");
@@ -1987,8 +1988,15 @@ const publicSchoolOptions = computed(() => publicSchools.value.map((school) => (
 })));
 
 const managerMemberships = computed(() => schoolMemberships.value.filter(
-  (membership) => ["OWNER", "ADMIN"].includes(membership.role),
+  (membership) => ["OWNER", "ADMIN"].includes(String(membership.role || "").toUpperCase()),
 ));
+const adminAccessSummary = computed(() => {
+  if (adminMembershipsStatus.value === "loading") return "正在核验学校管理权限";
+  if (adminMembershipsStatus.value === "error") return "管理权限核验失败，请重试";
+  return managerMemberships.value.length
+    ? `管理 ${managerMemberships.value.length} 所学校`
+    : "尚无学校管理员权限";
+});
 const schoolOptions = computed(() => managerMemberships.value.map((membership) => ({
   title: `${membership.school.name} · ${roleName(membership.role)}`,
   value: membership.school.id,
@@ -2167,16 +2175,19 @@ async function bootstrap() {
       loginSchoolCode.value = publicSchools.value[0].code;
     }
     if (!signedIn.value) return;
+    adminMembershipsStatus.value = "loading";
     [profile.value, schoolMemberships.value] = await Promise.all([
       classworksV2Api.profile(),
       classworksV2Api.mySchools(),
     ]);
+    adminMembershipsStatus.value = "loaded";
     if (!selectedSchoolId.value && managerMemberships.value.length) {
       selectedSchoolId.value = managerMemberships.value.some(
         (membership) => membership.school.id === requestedSchoolId,
       ) ? requestedSchoolId : managerMemberships.value[0].school.id;
     }
   } catch (error) {
+    if (signedIn.value) adminMembershipsStatus.value = "error";
     errorMessage.value = describeApiError(error, "加载学校管理信息失败");
   }
 }

@@ -79,10 +79,11 @@ export default defineConfig(({ mode }) => {
         ],
         runtimeCaching: [
           {
-            // 后端接口和 Socket.IO 必须始终走网络。尤其不能把带有
-            // Authorization 的教师接口放入所有账号共享的 Cache Storage。
-            urlPattern: ({ url, sameOrigin }) => {
-              if (!sameOrigin) return false;
+            // 后端接口和 Socket.IO 必须始终走网络。此规则不能限制为
+            // sameOrigin：生产环境允许把前端和 API 分别部署到不同域名。
+            // 否则跨域 API 会落入下方 external-resources 缓存，造成权限
+            // 响应陈旧，甚至在同一浏览器切换账号时串用认证数据。
+            urlPattern: ({ url }) => {
               return [
                 '/api/',
                 '/accounts/',

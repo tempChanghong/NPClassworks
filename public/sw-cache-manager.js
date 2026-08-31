@@ -1,3 +1,10 @@
+// 旧版本曾把跨域部署的后端响应误存入 external-resources。该缓存的
+// key 不包含 Authorization，升级 Service Worker 时必须完整清除，避免
+// 管理员/教师切换账号后读到其他会话的权限响应。
+self.addEventListener('activate', (event) => {
+  event.waitUntil(caches.delete('external-resources'));
+});
+
 // 添加缓存管理消息处理
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CACHE_KEYS') {

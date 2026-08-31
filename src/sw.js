@@ -1,12 +1,31 @@
 import {precacheAndRoute, cleanupOutdatedCaches} from 'workbox-precaching'
-import {registerRoute, setCatchHandler} from 'workbox-routing'
-import {CacheFirst, NetworkFirst, StaleWhileRevalidate} from 'workbox-strategies'
+import {registerRoute} from 'workbox-routing'
+import {NetworkFirst, NetworkOnly, StaleWhileRevalidate} from 'workbox-strategies'
 import {ExpirationPlugin} from 'workbox-expiration'
 import {CacheableResponsePlugin} from 'workbox-cacheable-response'
 
 // 使用 self.__WB_MANIFEST 是 workbox 的一个特殊变量，会被实际的预缓存清单替换
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
+
+const isBackendRequest = (url) => [
+  '/api/',
+  '/accounts/',
+  '/kv/',
+  '/apps/',
+  '/devices/',
+  '/auth/',
+  '/auto-auth/',
+  '/socket.io/',
+].some((prefix) => url.pathname.startsWith(prefix)) ||
+  ['/metrics', '/check', '/ready'].includes(url.pathname)
+
+// API 可以与前端同源，也可以部署在独立域名。无论哪种方式，带认证
+// 信息的请求都不得进入 Cache Storage。
+registerRoute(
+  ({url}) => isBackendRequest(url),
+  new NetworkOnly()
+)
 
 // JS 文件缓存
 registerRoute(
@@ -81,7 +100,7 @@ registerRoute(
 
 // 外部资源缓存
 registerRoute(
-  ({url}) => url.origin !== self.location.origin,
+  ({url}) => url.origin !== self.location.origin && !isBackendRequest(url),
   new NetworkFirst({
     cacheName: 'external-resources',
     plugins: [
