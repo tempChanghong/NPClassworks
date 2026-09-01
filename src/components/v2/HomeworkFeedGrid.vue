@@ -58,6 +58,7 @@
             完成后有更新
           </v-chip>
           <v-chip
+            v-if="indicatorVisibility(publication).showState"
             :color="publicationState(publication).color"
             :size="screenMode ? 'x-small' : 'small'"
             variant="tonal"
@@ -70,6 +71,7 @@
             {{ publicationState(publication).label }}
           </v-chip>
           <v-chip
+            v-if="indicatorVisibility(publication).showPriority"
             :color="priorityColor(publication.priority)"
             :size="screenMode ? 'x-small' : 'small'"
             variant="tonal"
@@ -173,7 +175,7 @@ import {
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 import {assignmentDueState} from "@/utils/publicationFeed";
-import {publicationDisplayState} from "@/utils/publicationStatus";
+import {publicationDisplayState, publicationIndicatorVisibility} from "@/utils/publicationStatus";
 import {
   isStudentHomeworkCompleted,
   isStudentHomeworkUpdatedAfterCompletion,
@@ -192,6 +194,13 @@ defineEmits(["edit", "history", "toggle-complete"]);
 
 function publicationState(publication) {
   return publicationDisplayState(publication, {now: props.currentTime});
+}
+
+function indicatorVisibility(publication) {
+  return publicationIndicatorVisibility(publication, {
+    now: props.currentTime,
+    screenMode: props.screenMode,
+  });
 }
 
 const gridContainer = ref(null);
@@ -405,6 +414,31 @@ function targetNames(publication) {
 .screen-feed .publication-body { padding: 12px 18px 18px; }
 .screen-feed .publication-content { font-size: calc(1rem * var(--screen-font-scale)); line-height: 1.65; }
 .screen-feed .publication-metadata { font-size: 0.75rem; }
+.screen-feed .publication-body {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+}
+.screen-feed .publication-content,
+.screen-feed .publication-divider {
+  flex: 1 0 100%;
+}
+.screen-feed .publication-metadata {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.screen-feed .publication-actions {
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-top: 0;
+}
+.screen-feed .publication-card--today,
+.screen-feed .publication-card--soon {
+  border-left-color: rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.8));
+  border-left-width: 1px;
+}
 .screen-feed .publication-card {
   box-shadow: none !important;
 }

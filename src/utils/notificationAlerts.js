@@ -1,4 +1,5 @@
-import {playSound} from "./soundList.js";
+import {defaultUrgentSound} from "./soundList.js";
+import {playProminentNotificationSound} from "./prominentNotificationSound.js";
 
 const MAX_SEEN_ALERTS = 100;
 const CLAIM_TTL_MS = 30_000;
@@ -105,11 +106,11 @@ export function createNotificationAlertController({
   windowRef = globalThis.window,
   navigatorRef = globalThis.navigator,
   NotificationApi = globalThis.Notification,
-  play = (filename) => playSound(filename),
+  play = (filename) => playProminentNotificationSound(filename),
 } = {}) {
   async function alert(notices, {
     soundEnabled = true,
-    soundFile = "Teams 默认通话铃.mp3",
+    soundFile = defaultUrgentSound,
     systemNotificationEnabled = true,
   } = {}) {
     if (!storage || !Array.isArray(notices) || !notices.length) return false;

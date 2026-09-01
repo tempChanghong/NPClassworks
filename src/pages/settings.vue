@@ -768,7 +768,7 @@ import SettingsPanel from "@/components/v2/settings/SettingsPanel.vue";
 import SettingRow from "@/components/v2/settings/SettingRow.vue";
 import ScopeChip from "@/components/v2/settings/ScopeChip.vue";
 import {getSetting, setSetting} from "@/utils/settings";
-import {playSoundAsync} from "@/utils/soundList";
+import {playProminentNotificationSound} from "@/utils/prominentNotificationSound";
 import {
   loadScreenDisplaySettings,
   saveScreenDisplaySettings,
@@ -940,7 +940,8 @@ function saveScreenSetting(field, value) {
 
 async function testNotificationSound() {
   try {
-    await playSoundAsync(getSetting("notification.urgentSound"));
+    const playback = await playProminentNotificationSound(getSetting("notification.urgentSound"));
+    if (!playback) throw new Error("提示音未能播放");
     notify("测试音已播放；页面失焦后仍会使用此声音");
   } catch {
     notify("浏览器阻止了声音播放，请检查站点声音权限");

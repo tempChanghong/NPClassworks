@@ -87,7 +87,7 @@
 <script setup>
 import {computed, ref, watch} from "vue";
 import {getSetting} from "@/utils/settings";
-import {playSound} from "@/utils/soundList";
+import {playProminentNotificationSound} from "@/utils/prominentNotificationSound";
 import {
   createNotificationAlertController,
   readAcknowledgedNotificationKeys,
@@ -116,7 +116,7 @@ function rememberAcknowledgedKey(notice) {
 }
 
 function playAlertSound() {
-  playSound(getSetting("notification.urgentSound"));
+  playProminentNotificationSound(getSetting("notification.urgentSound"));
 }
 
 watch(() => props.bindingId, (bindingId) => {

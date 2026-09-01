@@ -215,6 +215,8 @@ import MicrophoneDevicePicker from "@/components/v2/MicrophoneDevicePicker.vue";
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 import {microphonePermissionLabel, queryMicrophonePermission} from "@/utils/microphonePermission";
 import {loadScreenDisplaySettings, saveScreenDisplaySettings} from "@/utils/screenDisplaySettings";
+import {getSetting} from "@/utils/settings";
+import {playProminentNotificationSound} from "@/utils/prominentNotificationSound";
 
 const props = defineProps({
   bindingId: {type: String, required: true},
@@ -244,20 +246,10 @@ onMounted(async () => {
 
 async function testAudio() {
   try {
-    const AudioContextApi = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextApi) throw new Error("当前浏览器不支持音频测试");
-    const context = new AudioContextApi();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.frequency.value = 660;
-    gain.gain.setValueAtTime(0.08, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.16);
-    oscillator.connect(gain).connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.16);
-    oscillator.addEventListener("ended", () => context.close(), {once: true});
+    const playback = await playProminentNotificationSound(getSetting("notification.urgentSound"));
+    if (!playback) throw new Error("当前浏览器未能播放提示音");
     audioReady.value = true;
-    message.value = "提示音测试完成。";
+    message.value = "实际通知提示音测试完成。";
   } catch (error) {
     message.value = error.message || "提示音测试失败";
   }

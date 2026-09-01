@@ -46,8 +46,8 @@ export const soundFiles = [
 // 默认的单次通知铃声
 export const defaultSingleSound = 'Teams 默认.mp3';
 
-// 默认的持续通知铃声
-export const defaultUrgentSound = 'Teams 默认通话铃.mp3';
+// 默认的紧急通知警报声
+export const defaultUrgentSound = 'Teams 警报.mp3';
 
 // 获取音频文件的完整路径
 export function getSoundPath(filename) {

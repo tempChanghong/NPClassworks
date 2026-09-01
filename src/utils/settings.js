@@ -65,6 +65,9 @@ const SETTINGS_STORAGE_KEY = "Classworks_settings";
 // 同标签页设置变化事件名
 const SETTINGS_CHANGED_EVENT = "classworks:settings:changed";
 
+const DEFAULT_URGENT_NOTIFICATION_SOUND = "Teams 警报.mp3";
+const LEGACY_URGENT_NOTIFICATION_SOUND = "Teams 默认通话铃.mp3";
+
 
 /**
  * 所有配置项的定义
@@ -401,10 +404,10 @@ const settingsDefinitions = {
   },
   "notification.urgentSound": {
     type: "string",
-    default: "Teams 默认通话铃.mp3",
-    description: "持续通知铃声",
+    default: DEFAULT_URGENT_NOTIFICATION_SOUND,
+    description: "紧急通知警报声",
     icon: "mdi-bell-alert",
-    // 设置紧急通知时循环播放的音频文件
+    // 设置紧急通知时播放的音频文件
   },
 
   // PWA 设置
@@ -453,6 +456,11 @@ class SettingsManagerClass {
     } catch (error) {
       console.error("加载设置失败:", error);
       // settingsCache is already an empty object, no need to reinitialize
+    }
+
+    // 旧版默认铃声偏柔和。仅迁移旧默认值，保留用户明确选择的其他声音。
+    if (this.settingsCache["notification.urgentSound"] === LEGACY_URGENT_NOTIFICATION_SOUND) {
+      this.settingsCache["notification.urgentSound"] = DEFAULT_URGENT_NOTIFICATION_SOUND;
     }
 
     // 确保所有设置项都有值（使用默认值填充）

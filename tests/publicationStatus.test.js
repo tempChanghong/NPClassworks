@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {buildConflictComparison, PUBLICATION_CONFLICT_FIELDS} from "../src/utils/conflictComparison.js";
 import {buildPublicationReceipt} from "../src/utils/publicationReceipt.js";
-import {publicationDisplayState} from "../src/utils/publicationStatus.js";
+import {publicationDisplayState, publicationIndicatorVisibility} from "../src/utils/publicationStatus.js";
 
 test("publication status uses the same language for drafts, schedules and certification", () => {
   assert.equal(publicationDisplayState({status: "DRAFT"}).key, "draft");
@@ -12,6 +12,28 @@ test("publication status uses the same language for drafts, schedules and certif
     isCertified: true,
     publishAt: "2026-08-28T12:00:00.000Z",
   }, {now: new Date("2026-08-28T10:00:00.000Z")}).key, "scheduled");
+});
+
+test("large screens hide ordinary confirmed indicators but retain actionable states", () => {
+  assert.deepEqual(publicationIndicatorVisibility({
+    status: "PUBLISHED",
+    isCertified: true,
+    priority: "NORMAL",
+  }, {screenMode: true}), {
+    state: publicationDisplayState({status: "PUBLISHED", isCertified: true, priority: "NORMAL"}),
+    showState: false,
+    showPriority: false,
+  });
+  assert.equal(publicationIndicatorVisibility({
+    status: "PUBLISHED",
+    isCertified: false,
+    priority: "NORMAL",
+  }, {screenMode: true}).showState, true);
+  assert.equal(publicationIndicatorVisibility({
+    status: "PUBLISHED",
+    isCertified: true,
+    priority: "URGENT",
+  }, {screenMode: true}).showPriority, true);
 });
 
 test("publication conflict comparison keeps only fields changed between local and server", () => {

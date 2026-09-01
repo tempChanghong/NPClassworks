@@ -51,3 +51,13 @@ export function publicationDisplayState(publication = {}, options = {}) {
   }
   return PUBLICATION_STATUS.PUBLISHED;
 }
+
+export function publicationIndicatorVisibility(publication = {}, options = {}) {
+  const state = publicationDisplayState(publication, options);
+  const screenMode = options.screenMode === true;
+  return {
+    state,
+    showState: !screenMode || state.key !== PUBLICATION_STATUS.PUBLISHED.key,
+    showPriority: !screenMode || (publication.priority || "NORMAL") !== "NORMAL",
+  };
+}
