@@ -36,33 +36,37 @@
           >
             <v-btn
               prepend-icon="mdi-bell-outline"
+              title="通知"
               variant="tonal"
               @click="notificationCenterOpen = true"
             >
-              通知
+              <span class="screen-toolbar-action-label">通知</span>
             </v-btn>
           </v-badge>
           <v-btn
             prepend-icon="mdi-monitor-eye"
+            title="显示设置"
             variant="tonal"
             @click="$emit('settings')"
           >
-            设置
+            <span class="screen-toolbar-action-label">设置</span>
           </v-btn>
           <v-btn
             prepend-icon="mdi-toolbox-outline"
+            title="课堂工具"
             variant="tonal"
             @click="$emit('tools')"
           >
-            课堂工具
+            <span class="screen-toolbar-action-label">课堂工具</span>
           </v-btn>
           <v-btn
             color="primary"
             prepend-icon="mdi-monitor-edit"
+            title="录入作业"
             variant="elevated"
             @click="$emit('create')"
           >
-            录入作业
+            <span class="screen-toolbar-action-label">录入作业</span>
           </v-btn>
           <v-btn
             :loading="store.feedLoading"
@@ -501,7 +505,7 @@ onUnmounted(() => {
   align-items: center;
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(420px, 1fr);
+  grid-template-columns: minmax(220px, 1fr) max-content max-content;
   min-height: 82px;
   padding: 10px 16px;
 }
@@ -511,7 +515,11 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
 }
-.screen-toolbar-actions { justify-content: flex-end; }
+.screen-class-block { min-width: 0; }
+.screen-toolbar-actions {
+  justify-content: flex-end;
+  min-width: max-content;
+}
 .screen-identity { min-width: 150px; }
 .screen-class-name { font-size: clamp(1.05rem, 0.25vw + 0.85rem, 1.35rem); }
 .screen-toolbar :deep(.classroom-time-inline) {
@@ -521,6 +529,7 @@ onUnmounted(() => {
   border-radius: 0;
   border-right: 1px solid rgba(var(--v-theme-primary), 0.2);
   min-height: 54px;
+  min-width: max-content;
   padding: 4px 22px;
 }
 
@@ -528,17 +537,35 @@ onUnmounted(() => {
   .screen-toolbar-content { padding: 12px 18px; }
 }
 
-@media (max-width: 1250px) {
+@media (max-width: 1600px) {
   .screen-toolbar-content {
-    grid-template-columns: 1fr auto;
+    gap: 12px;
+    grid-template-columns: minmax(200px, 1fr) max-content max-content;
+  }
+  .screen-toolbar-actions {
+    gap: 8px;
+  }
+  .screen-toolbar-action-label {
+    display: none;
+  }
+  .screen-toolbar-actions :deep(.v-btn__prepend) {
+    margin-inline: 0;
+  }
+}
+
+@media (max-width: 1000px) {
+  .screen-toolbar-content {
+    grid-template-columns: minmax(0, 1fr) max-content;
   }
   .screen-toolbar :deep(.classroom-time-inline) {
     border-right: 0;
     padding-right: 0;
   }
   .screen-toolbar-actions {
+    flex-wrap: wrap;
     grid-column: 1 / -1;
     justify-content: flex-end;
+    min-width: 0;
   }
 }
 
