@@ -10,7 +10,7 @@
         NPClassworks 作业板
       </div>
       <div class="text-caption text-medium-emphasis">
-        行政班与走班统一作业流
+        热爱创造奇迹。
       </div>
     </v-app-bar-title>
     <v-btn-toggle
@@ -336,7 +336,7 @@
               登录
             </v-btn>
             <div class="text-caption text-medium-emphasis text-center mt-3">
-              登录状态会在本设备保留 30 天；输错 5 次后该账号会暂时锁定。
+              登录状态默认在本设备保留 180 天；输错只会限制本设备对该账号的继续尝试，不会锁死教师账号。
             </div>
           </template>
           <v-alert

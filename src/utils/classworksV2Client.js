@@ -243,11 +243,13 @@ export async function getLocalAuthStatus() {
 }
 
 export async function loginWithSchoolAccount({schoolCode, username, password}) {
+  const {getVisitorId} = await import("@/utils/visitorId");
+  const deviceId = await getVisitorId();
   const result = unwrap(await client.post("/accounts/local/login", {
     schoolCode,
     username,
     password,
-  }));
+  }, {headers: {"X-Classworks-Device-ID": deviceId}}));
   saveAccountTokens({
     accessToken: result.access_token,
     refreshToken: result.refresh_token,

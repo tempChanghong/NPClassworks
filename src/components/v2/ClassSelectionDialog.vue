@@ -109,7 +109,7 @@
             icon="mdi-check-decagram-outline"
             variant="tonal"
           >
-            该班所有已配置课程都随行政班，无需额外选择走班。高二1班、2班通常会看到此状态。
+            该班所有已配置课程都随行政班，无需额外选择走班。高二1班、4班通常会看到此状态。
           </v-alert>
         </template>
 

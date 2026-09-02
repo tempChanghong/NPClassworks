@@ -2021,7 +2021,7 @@ const teacherAssignmentHelp = computed(() => selectedTeacherAuthMode.value === "
   ? "教师尚未登录也可以分配；其首次使用相同邮箱 OAuth 登录后会自动获得这些班级。"
   : selectedTeacherAuthMode.value === "SHARED_PASSWORD"
     ? "系统会立即创建教师短账号；教师使用学校通用口令登录。"
-    : "系统会立即创建教师短账号；教师使用各自 PIN 登录，登录一次后可保持30天。");
+    : "系统会立即创建教师短账号；教师使用各自 PIN 登录，登录一次后默认可保持180天。");
 const termOptions = computed(() => (selectedSchool.value?.school.terms || []).map((term) => ({
   title: `${term.name} · ${termStatusName(term.status)}`,
   value: term.id,
@@ -2870,9 +2870,7 @@ function accountSummary(account) {
   const role = account.schoolRole ? roleName(account.schoolRole) : "教师";
   const status = account.disabled
     ? "已停用"
-    : account.lockedUntil && new Date(account.lockedUntil) > new Date()
-      ? `锁定至 ${new Date(account.lockedUntil).toLocaleString("zh-CN")}`
-      : "可登录";
+    : "可登录";
   const activeWorkspaces = account.workspaces.filter((workspace) => workspace.term.status === "ACTIVE");
   const lastLogin = account.lastLoginAt
     ? new Date(account.lastLoginAt).toLocaleString("zh-CN")
