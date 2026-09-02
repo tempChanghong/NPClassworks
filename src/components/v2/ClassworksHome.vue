@@ -430,7 +430,7 @@
           :center="store.teacherActionCenter"
           :loading="store.teacherActionCenterLoading"
           @certify="certifyActionItem"
-          @edit="editingPublication = $event"
+          @edit="openTeacherEditor($event, {certifyAfterSave: true})"
           @history="openHistory($event, 'teacher')"
           @refresh="store.refreshTeacherActionCenter()"
           @restore="restoreActionItem"
@@ -442,8 +442,10 @@
             lg="7"
           >
             <publication-composer
+              ref="teacherComposer"
+              :confirm-after-save="certifyAfterEditPublicationId === editingPublication?.id"
               :editing-publication="editingPublication"
-              @cancel="editingPublication = null"
+              @cancel="cancelTeacherEditor"
               @published="showPublishedMessage"
               @reload-latest="editingPublication = $event"
             />
@@ -457,7 +459,7 @@
               :publications="store.teacherPublications"
               @certify="certifyPublication"
               @clone="clonePublication"
-              @edit="editingPublication = $event"
+              @edit="openTeacherEditor"
               @history="openHistory($event, 'teacher')"
               @delivery="openNotificationDelivery"
               @refresh="store.refreshTeacherPublications()"
@@ -610,7 +612,7 @@
 </template>
 
 <script setup>
-import {computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch} from "vue";
+import {computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {
@@ -667,6 +669,8 @@ const snackbarDetail = ref("");
 const snackbarColor = ref("success");
 const snackbarIcon = ref("mdi-check-circle-outline");
 const editingPublication = ref(null);
+const certifyAfterEditPublicationId = ref("");
+const teacherComposer = ref(null);
 const teacherActionBusyId = ref("");
 const loginSchoolId = ref("");
 const loginUsername = ref("");
@@ -1000,6 +1004,26 @@ function openNotificationDelivery(publication) {
   notificationDeliveryDialog.value = true;
 }
 
+async function openTeacherEditor(publication, {certifyAfterSave = false} = {}) {
+  editingPublication.value = publication;
+  certifyAfterEditPublicationId.value = certifyAfterSave ? publication.id : "";
+  await nextTick();
+  teacherComposer.value?.$el?.scrollIntoView({behavior: "smooth", block: "start"});
+  if (certifyAfterSave) {
+    showFeedback({
+      title: "已进入修改并确认流程",
+      detail: "内容已载入下方编辑区；保存后系统会继续确认刚保存的新版本",
+      color: "info",
+      icon: "mdi-pencil-check-outline",
+    });
+  }
+}
+
+function cancelTeacherEditor() {
+  editingPublication.value = null;
+  certifyAfterEditPublicationId.value = "";
+}
+
 function handleHistoryChanged(publication) {
   const restored = publication.revision !== historyPublication.value?.revision;
   historyPublication.value = publication;
@@ -1088,8 +1112,43 @@ async function restoreActionItem(item) {
   }
 }
 
-function showPublishedMessage(publication, context = {}) {
+async function showPublishedMessage(publication, context = {}) {
+  const shouldCertify = context.operation === "updated"
+    && certifyAfterEditPublicationId.value === publication.id;
   editingPublication.value = null;
+  certifyAfterEditPublicationId.value = "";
+
+  if (shouldCertify) {
+    try {
+      const certified = await store.certify(publication);
+      showFeedback({
+        title: "修改已保存并通过教师确认",
+        detail: `版本 ${certified.revision || publication.revision} · 待处理事项已完成`,
+        icon: "mdi-pencil-check-outline",
+      });
+      publicationResult.value = certified;
+      publicationResultDialog.value = true;
+    } catch (error) {
+      if (isPublicationRevisionConflict(error)) {
+        await Promise.all([store.refreshTeacherPublications(), store.refreshTeacherActionCenter()]);
+        showFeedback({
+          title: "修改已保存，但未完成确认",
+          detail: "保存后内容又被其他设备修改，请在待处理中心检查最新版本",
+          color: "warning",
+          icon: "mdi-alert-outline",
+        });
+      } else {
+        showFeedback({
+          title: "修改已保存，但确认失败",
+          detail: store.teacherError || "请刷新待处理中心后重试确认",
+          color: "warning",
+          icon: "mdi-alert-outline",
+        });
+      }
+    }
+    return;
+  }
+
   showFeedback(teacherPublicationSaveFeedback(publication, context));
   if (publication.status === "PUBLISHED") {
     publicationResult.value = publication;

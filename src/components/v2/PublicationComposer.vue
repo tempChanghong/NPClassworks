@@ -12,6 +12,15 @@
       {{ isEditing ? "编辑发布" : "新建发布" }}
     </v-card-title>
     <v-card-text class="px-5">
+      <v-alert
+        v-if="isEditing && confirmAfterSave"
+        class="mb-5"
+        color="success"
+        icon="mdi-pencil-check-outline"
+        variant="tonal"
+      >
+        保存修改后，系统将立即确认刚保存的新版本。
+      </v-alert>
       <v-btn-toggle
         v-model="form.type"
         class="mb-5"
@@ -402,7 +411,7 @@
         variant="elevated"
         @click="submit('PUBLISHED')"
       >
-        {{ isEditing && editingPublication.status === "PUBLISHED" ? "保存修改" : "正式发布" }}
+        {{ publishButtonLabel }}
       </v-btn>
     </v-card-actions>
   </v-card>
@@ -433,6 +442,7 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  confirmAfterSave: Boolean,
 });
 const emit = defineEmits(["published", "cancel", "reload-latest"]);
 const store = useClassworksV2Store();
@@ -514,6 +524,11 @@ const lifecyclePreview = computed(() => {
   return `未指定失效时间，将在 ${formatPreviewDateTime(defaultExpiry)} 自动停止显示`;
 });
 const isEditing = computed(() => Boolean(props.editingPublication));
+const publishButtonLabel = computed(() => {
+  if (isEditing.value && props.confirmAfterSave) return "保存修改并确认";
+  if (isEditing.value && props.editingPublication.status === "PUBLISHED") return "保存修改";
+  return "正式发布";
+});
 const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
 const publicationConflictRows = computed(() => buildConflictComparison(
   conflictInput.value,
