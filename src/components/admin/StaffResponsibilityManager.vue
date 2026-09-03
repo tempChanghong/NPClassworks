@@ -104,7 +104,7 @@
 
       <v-tabs
         v-model="section"
-        class="mb-4"
+        class="section-tabs--desktop mb-4"
         color="primary"
       >
         <v-tab value="organization">
@@ -130,8 +130,23 @@
           联动规则
         </v-tab>
       </v-tabs>
+      <v-select
+        v-model="section"
+        class="section-tabs--mobile mb-4"
+        density="comfortable"
+        hide-details
+        :items="sectionOptions"
+        item-title="title"
+        item-value="value"
+        label="人员与职责页面"
+        prepend-inner-icon="mdi-account-supervisor-outline"
+        variant="outlined"
+      />
 
-      <v-window v-model="section">
+      <v-window
+        v-model="section"
+        :touch="false"
+      >
         <v-window-item value="organization">
           <v-expansion-panels
             v-if="overview?.grades?.length"
@@ -616,6 +631,18 @@ const errorMessage = ref("");
 const successMessage = ref("");
 const overview = ref(null);
 const section = ref("organization");
+const sectionOptions = computed(() => [
+  {title: "组织视角", value: "organization"},
+  {title: "人员视角", value: "people"},
+  {title: "权限检查", value: "permissions"},
+  {
+    title: overview.value?.diagnostics?.length
+      ? `岗位诊断（${overview.value.diagnostics.length}）`
+      : "岗位诊断",
+    value: "diagnostics",
+  },
+  {title: "联动规则", value: "policy"},
+]);
 const peopleSearch = ref("");
 const permissionAccountId = ref("");
 const gradeDialog = ref(false);
@@ -906,6 +933,7 @@ onMounted(loadOverview);
   min-height: 72px;
   padding: 12px 14px;
 }
+.section-tabs--mobile { display: none; }
 
 .person-card {
   min-height: 210px;
@@ -920,5 +948,10 @@ onMounted(loadOverview);
 
 .diagnostic-list {
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+@media (max-width: 600px) {
+  .section-tabs--desktop { display: none; }
+  .section-tabs--mobile { display: block; }
 }
 </style>

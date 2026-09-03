@@ -29,7 +29,7 @@
 
     <v-tabs
       v-model="section"
-      class="mb-4"
+      class="section-tabs section-tabs--desktop mb-4"
       color="primary"
     >
       <v-tab value="school">
@@ -45,8 +45,23 @@
         走班教学班与来源
       </v-tab>
     </v-tabs>
+    <v-select
+      v-model="section"
+      class="section-tabs--mobile mb-4"
+      density="comfortable"
+      hide-details
+      :items="sectionOptions"
+      item-title="title"
+      item-value="value"
+      label="组织配置页面"
+      prepend-inner-icon="mdi-shape-outline"
+      variant="outlined"
+    />
 
-    <v-window v-model="section">
+    <v-window
+      v-model="section"
+      :touch="false"
+    >
       <v-window-item value="school">
         <v-row>
           <v-col
@@ -1074,6 +1089,12 @@ const props = defineProps({
 const {undoOffer, undoBusy, remainingSeconds, offerUndo, executeUndo, clearUndo} = useTimedUndo();
 
 const section = ref("school");
+const sectionOptions = [
+  {title: "学校与学科", value: "school"},
+  {title: "年级与行政班", value: "organization"},
+  {title: "行政班授课规则", value: "classes"},
+  {title: "走班教学班与来源", value: "groups"},
+];
 const structure = ref(null);
 const schoolProfile = ref(null);
 const schoolForm = ref({name: "", teacherAuthMode: "LOCAL_PIN", allowOAuthTeacherLogin: false, sharedPassword: ""});
@@ -1768,6 +1789,7 @@ watch(section, () => {
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
+.section-tabs--mobile { display: none; }
 
 .subject-rule-card {
   min-width: 0;
@@ -1822,6 +1844,8 @@ watch(section, () => {
 .organization-conflict-table__local { color: rgb(var(--v-theme-success)); }
 
 @media (max-width: 600px) {
+  .section-tabs--desktop { display: none; }
+  .section-tabs--mobile { display: block; }
   .organization-conflict-table__header,
   .organization-conflict-table__row { grid-template-columns: 1fr; }
 }

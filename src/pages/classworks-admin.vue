@@ -248,9 +248,24 @@
         :term-options="termOptions"
       />
 
+      <v-card class="admin-mobile-page-switcher mb-5 rounded-xl">
+        <v-select
+          v-model="guardedTab"
+          density="comfortable"
+          hide-details
+          :items="adminNavigationItems"
+          item-title="title"
+          item-value="value"
+          label="管理页面"
+          prepend-inner-icon="mdi-view-dashboard-outline"
+          variant="outlined"
+        />
+      </v-card>
+
       <v-window
         v-model="guardedTab"
         class="admin-content-with-navigation"
+        :touch="false"
       >
         <v-window-item value="overview">
           <v-alert
@@ -998,7 +1013,10 @@
                       variant="outlined"
                     />
                   </v-card-text>
-                  <v-list lines="three">
+                  <v-list
+                    class="admin-entity-list"
+                    lines="three"
+                  >
                     <template
                       v-for="account in filteredLocalAccounts"
                       :key="account.id"
@@ -1013,7 +1031,7 @@
                           </v-avatar>
                         </template>
                         <template #append>
-                          <div class="d-flex flex-wrap ga-1 justify-end">
+                          <div class="admin-row-actions admin-row-actions--desktop">
                             <v-btn
                               v-if="account.id !== profile?.id"
                               size="small"
@@ -1050,6 +1068,46 @@
                               注销权限
                             </v-btn>
                           </div>
+                          <v-menu v-if="account.id !== profile?.id || account.disabled">
+                            <template #activator="{ props: menuProps }">
+                              <v-btn
+                                v-bind="menuProps"
+                                class="admin-row-actions--mobile"
+                                icon="mdi-dots-vertical"
+                                title="账号操作"
+                                variant="text"
+                              />
+                            </template>
+                            <v-list density="comfortable">
+                              <v-list-item
+                                v-if="account.id !== profile?.id"
+                                prepend-icon="mdi-lock-reset"
+                                title="重置 PIN"
+                                @click="resetAccountPin(account)"
+                              />
+                              <v-list-item
+                                v-if="account.disabled"
+                                class="text-success"
+                                prepend-icon="mdi-account-check-outline"
+                                title="启用账号"
+                                @click="setAccountDisabled(account, false)"
+                              />
+                              <v-list-item
+                                v-else-if="account.id !== profile?.id"
+                                class="text-warning"
+                                prepend-icon="mdi-account-off-outline"
+                                title="停用账号"
+                                @click="setAccountDisabled(account, true)"
+                              />
+                              <v-list-item
+                                v-if="account.id !== profile?.id"
+                                class="text-error"
+                                prepend-icon="mdi-account-remove-outline"
+                                title="注销全部权限"
+                                @click="deactivateAccount(account)"
+                              />
+                            </v-list>
+                          </v-menu>
                         </template>
                       </v-list-item>
                       <v-divider />
@@ -1127,67 +1185,50 @@
                 <p class="text-body-2 text-medium-emphasis mb-4">
                   全校班级大屏共用；支持按操作当天向后计算，也支持自动选择下一个指定星期。
                 </p>
-                <v-row
+                <div
                   v-for="(preset, index) in homeworkQuickDeadlines"
                   :key="index"
-                  align="center"
-                  dense
+                  class="quick-deadline-row"
                 >
-                  <v-col
-                    cols="12"
-                    md="5"
-                  >
-                    <v-text-field
-                      v-model.trim="preset.label"
-                      density="comfortable"
-                      hide-details="auto"
-                      label="按钮名称"
-                      maxlength="16"
-                      variant="outlined"
-                    />
-                  </v-col>
-                  <v-col
-                    cols="7"
-                    md="3"
-                  >
-                    <v-select
-                      :model-value="quickDeadlineDateValue(preset)"
-                      density="comfortable"
-                      hide-details="auto"
-                      :items="quickDeadlineDayOptions"
-                      item-title="title"
-                      item-value="value"
-                      label="截止日期"
-                      variant="outlined"
-                      @update:model-value="updateQuickDeadlineDateRule(preset, $event)"
-                    />
-                  </v-col>
-                  <v-col
-                    cols="4"
-                    md="3"
-                  >
-                    <v-text-field
-                      v-model="preset.time"
-                      density="comfortable"
-                      hide-details="auto"
-                      label="时间"
-                      type="time"
-                      variant="outlined"
-                    />
-                  </v-col>
-                  <v-col
-                    class="d-flex justify-end"
-                    cols="1"
-                  >
-                    <v-btn
-                      :disabled="homeworkQuickDeadlines.length <= 1"
-                      icon="mdi-delete-outline"
-                      title="删除此快捷时间"
-                      variant="text"
-                      @click="homeworkQuickDeadlines.splice(index, 1)"
-                    />
-                  </v-col>
-                </v-row>
+                  <v-text-field
+                    v-model.trim="preset.label"
+                    class="quick-deadline-row__label"
+                    density="comfortable"
+                    hide-details="auto"
+                    label="按钮名称"
+                    maxlength="16"
+                    variant="outlined"
+                  />
+                  <v-select
+                    :model-value="quickDeadlineDateValue(preset)"
+                    class="quick-deadline-row__date"
+                    density="comfortable"
+                    hide-details="auto"
+                    :items="quickDeadlineDayOptions"
+                    item-title="title"
+                    item-value="value"
+                    label="截止日期"
+                    variant="outlined"
+                    @update:model-value="updateQuickDeadlineDateRule(preset, $event)"
+                  />
+                  <v-text-field
+                    v-model="preset.time"
+                    class="quick-deadline-row__time"
+                    density="comfortable"
+                    hide-details="auto"
+                    label="时间"
+                    type="time"
+                    variant="outlined"
+                  />
+                  <v-btn
+                    class="quick-deadline-row__delete"
+                    :disabled="homeworkQuickDeadlines.length <= 1"
+                    icon="mdi-delete-outline"
+                    title="删除此快捷时间"
+                    variant="text"
+                    @click="homeworkQuickDeadlines.splice(index, 1)"
+                  />
+                </div>
                 <div class="d-flex flex-wrap ga-2 mt-4">
                   <v-btn
                     :disabled="homeworkQuickDeadlines.length >= 8"
@@ -1302,7 +1343,10 @@
                       variant="outlined"
                     />
                   </v-card-text>
-                  <v-list lines="three">
+                  <v-list
+                    class="admin-entity-list"
+                    lines="three"
+                  >
                     <template
                       v-for="screen in filteredScreenAccounts"
                       :key="screen.id"
@@ -1317,7 +1361,7 @@
                           </v-avatar>
                         </template>
                         <template #append>
-                          <div class="d-flex flex-wrap ga-1 justify-end">
+                          <div class="admin-row-actions admin-row-actions--desktop">
                             <v-chip
                               :color="screenDutyColor(screen.dutyState)"
                               size="small"
@@ -1364,6 +1408,56 @@
                             >
                               {{ screen.isActive ? "停用" : "启用" }}
                             </v-btn>
+                          </div>
+                          <div class="admin-row-actions admin-row-actions--mobile">
+                            <v-chip
+                              :color="screenDutyColor(screen.dutyState)"
+                              size="small"
+                              variant="tonal"
+                            >
+                              {{ screenDutyName(screen.dutyState) }}
+                            </v-chip>
+                            <v-menu>
+                              <template #activator="{ props: menuProps }">
+                                <v-btn
+                                  v-bind="menuProps"
+                                  icon="mdi-dots-vertical"
+                                  title="大屏操作"
+                                  variant="text"
+                                />
+                              </template>
+                              <v-list density="comfortable">
+                                <v-list-item
+                                  :disabled="!['ONLINE', 'DEGRADED'].includes(screen.dutyState)"
+                                  prepend-icon="mdi-refresh"
+                                  title="刷新数据"
+                                  @click="issueScreenCommand(screen, 'REFRESH_DATA')"
+                                />
+                                <v-list-item
+                                  :disabled="!['ONLINE', 'DEGRADED'].includes(screen.dutyState)"
+                                  prepend-icon="mdi-reload"
+                                  title="重载页面"
+                                  @click="issueScreenCommand(screen, 'RELOAD_APP')"
+                                />
+                                <v-list-item
+                                  prepend-icon="mdi-pencil-outline"
+                                  title="编辑账号"
+                                  @click="openScreenEdit(screen)"
+                                />
+                                <v-list-item
+                                  class="text-warning"
+                                  prepend-icon="mdi-monitor-off"
+                                  title="重置设备绑定"
+                                  @click="resetScreenDevice(screen)"
+                                />
+                                <v-list-item
+                                  :class="screen.isActive ? 'text-error' : 'text-success'"
+                                  :prepend-icon="screen.isActive ? 'mdi-cancel' : 'mdi-check-circle-outline'"
+                                  :title="screen.isActive ? '停用账号' : '启用账号'"
+                                  @click="setScreenActive(screen, !screen.isActive)"
+                                />
+                              </v-list>
+                            </v-menu>
                           </div>
                         </template>
                       </v-list-item>
@@ -1924,6 +2018,10 @@ const adminNavigationGroups = [
     ],
   },
 ];
+const adminNavigationItems = adminNavigationGroups.flatMap((group) => group.items.map((item) => ({
+  ...item,
+  title: `${group.label} · ${item.title}`,
+})));
 const accountStatusOptions = [
   {title: "全部状态", value: "ALL"},
   {title: "正常使用", value: "ACTIVE"},
@@ -3139,15 +3237,32 @@ onUnmounted(() => {
   float: left;
   width: 260px;
 }
+.admin-mobile-page-switcher { display: none; }
 .admin-content-with-navigation {
   margin-left: 280px;
   min-width: 0;
 }
+.quick-deadline-row {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 5fr) minmax(170px, 3fr) minmax(130px, 3fr) 48px;
+  margin-bottom: 12px;
+}
+.quick-deadline-row__delete { justify-self: end; }
 .account-filter-bar {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
 }
+.admin-row-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.admin-row-actions--mobile { display: none; }
 
 @media (max-width: 959px) {
   .admin-navigation-panel {
@@ -3155,10 +3270,42 @@ onUnmounted(() => {
     margin-bottom: 20px;
     width: 100%;
   }
+  .admin-mobile-page-switcher {
+    background: rgba(var(--v-theme-surface), 0.96);
+    display: block;
+    padding: 8px;
+    position: sticky;
+    top: 72px;
+    z-index: 5;
+  }
   .admin-content-with-navigation { margin-left: 0; }
+  .admin-row-actions--desktop { display: none; }
+  .admin-row-actions--mobile {
+    align-items: center;
+    display: inline-flex;
+    flex-wrap: nowrap;
+  }
 }
 
 @media (max-width: 600px) {
   .account-filter-bar { grid-template-columns: 1fr; }
+  .quick-deadline-row {
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: relative;
+  }
+  .quick-deadline-row__label {
+    grid-column: 1 / -1;
+    margin-right: 52px;
+  }
+  .quick-deadline-row__delete {
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+  .admin-entity-list :deep(.v-list-item) {
+    align-items: flex-start;
+    padding-inline: 12px;
+  }
 }
 </style>

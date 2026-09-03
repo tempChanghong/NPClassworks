@@ -26,7 +26,7 @@
       />
     </v-card-text>
 
-    <v-divider />
+    <v-divider class="admin-navigation__desktop" />
 
     <v-list
       class="admin-navigation__desktop pa-2"
@@ -49,26 +49,11 @@
         />
       </template>
     </v-list>
-
-    <v-card-text class="admin-navigation__mobile pt-0">
-      <v-select
-        hide-details
-        :items="flatItems"
-        item-title="title"
-        item-value="value"
-        label="管理页面"
-        :model-value="modelValue"
-        variant="outlined"
-        @update:model-value="$emit('update:modelValue', $event)"
-      />
-    </v-card-text>
   </v-card>
 </template>
 
 <script setup>
-import {computed} from "vue";
-
-const props = defineProps({
+defineProps({
   modelValue: {type: String, required: true},
   schoolId: {type: String, default: ""},
   termId: {type: String, default: ""},
@@ -77,11 +62,6 @@ const props = defineProps({
   groups: {type: Array, default: () => []},
 });
 defineEmits(["update:modelValue", "update:schoolId", "update:termId"]);
-
-const flatItems = computed(() => props.groups.flatMap((group) => group.items.map((item) => ({
-  ...item,
-  title: `${group.label} · ${item.title}`,
-}))));
 </script>
 
 <style scoped>
@@ -89,11 +69,8 @@ const flatItems = computed(() => props.groups.flatMap((group) => group.items.map
   position: sticky;
   top: 82px;
 }
-.admin-navigation__mobile { display: none; }
-
 @media (max-width: 959px) {
   .admin-navigation { position: static; }
   .admin-navigation__desktop { display: none; }
-  .admin-navigation__mobile { display: block; }
 }
 </style>

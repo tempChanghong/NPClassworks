@@ -134,7 +134,10 @@
         </v-tab>
       </v-tabs>
 
-      <v-window v-model="section">
+      <v-window
+        v-model="section"
+        :touch="false"
+      >
         <v-window-item value="matrix">
           <div
             v-if="visibleAdministrativeClasses.length"
@@ -900,6 +903,13 @@ onMounted(loadOverview);
 
   .grade-select {
     flex-basis: 100%;
+  }
+
+  .matrix-scroll {
+    max-height: none;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 }
 </style>

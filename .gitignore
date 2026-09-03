@@ -180,3 +180,7 @@ typed-router.d.ts
 # Package lock files (using pnpm)
 package-lock.json
 /.trae
+
+# pnpm SQLite sidecar files created while the local store is open
+.pnpm-store/**/*.db-shm
+.pnpm-store/**/*.db-wal
