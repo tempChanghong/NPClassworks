@@ -1,6 +1,7 @@
 import {getSoundPath, playSound} from "./soundList.js";
 
-export const PROMINENT_NOTIFICATION_GAIN = 2;
+// Teams 警报本身动态较强；保留一定增强以适应教室环境，但避免 2 倍增益过于刺耳。
+export const PROMINENT_NOTIFICATION_GAIN = 1.5;
 
 let audioContext = null;
 const decodedBuffers = new Map();

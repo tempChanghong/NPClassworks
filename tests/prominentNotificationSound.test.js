@@ -20,6 +20,7 @@ test("prominent notification sound falls back when Web Audio is unavailable", as
 });
 
 test("prominent notification sound boosts gain and limits peaks", async () => {
+  assert.equal(PROMINENT_NOTIFICATION_GAIN, 1.5);
   let createdContext;
   let started = false;
 
