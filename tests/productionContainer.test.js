@@ -6,6 +6,8 @@ const dockerfile = fs.readFileSync(new URL("../Dockerfile", import.meta.url), "u
 const nginx = fs.readFileSync(new URL("../deploy/nginx.conf", import.meta.url), "utf8");
 const productionDeploy = fs.readFileSync(new URL("../.github/workflows/production-deploy.yml", import.meta.url), "utf8");
 const pagesDeploy = fs.readFileSync(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
+const storeDeploy = fs.readFileSync(new URL("../.github/workflows/store-pwa.yml", import.meta.url), "utf8");
+const sentryConfig = fs.readFileSync(new URL("../src/utils/sentry.js", import.meta.url), "utf8");
 
 test("production image builds the PWA and serves only its static output", () => {
   assert.match(dockerfile, /FROM node:22-alpine AS build/);
@@ -41,4 +43,22 @@ test("production deployment verifies the frontend before requesting the signed s
   assert.doesNotMatch(productionDeploy, /DEPLOY_SSH_KEY|StrictHostKeyChecking|\bssh\s/);
   assert.doesNotMatch(pagesDeploy, /push:/);
   assert.doesNotMatch(pagesDeploy, /houlang\.cloud|VITE_DEFAULT_AUTH_SERVER/);
+});
+
+test("optional deployment workflows use the supported toolchain and current production domains", () => {
+  for (const workflow of [pagesDeploy, storeDeploy]) {
+    assert.match(workflow, /pnpm\/action-setup@v4/);
+    assert.match(workflow, /version: 10\.33\.0/);
+    assert.match(workflow, /node-version: "22\.x"/);
+    assert.match(workflow, /pnpm install --frozen-lockfile/);
+    assert.doesNotMatch(workflow, /houlang\.cloud|VITE_DEFAULT_AUTH_SERVER|(^|\s)npm install/m);
+  }
+  assert.match(storeDeploy, /https:\/\/newfires\.top\//);
+  assert.match(storeDeploy, /https:\/\/api\.newfires\.top/);
+  assert.doesNotMatch(sentryConfig, /houlang\.cloud/);
+  assert.match(sentryConfig, /VITE_SENTRY_DSN/);
+  assert.equal(
+    fs.existsSync(new URL("../.github/workflows/azure-static-web-apps-icy-river-041d8ab00.yml", import.meta.url)),
+    false,
+  );
 });

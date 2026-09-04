@@ -16,9 +16,15 @@ let feedbackIntegration = null
  * @param {import('vue-router').Router} router - Vue Router 实例
  */
 export function initSentry(app, router) {
+  const dsn = import.meta.env.VITE_SENTRY_DSN
+  if (!dsn) {
+    console.info('Sentry 未配置，跳过初始化')
+    return
+  }
+
   Sentry.init({
     app,
-    dsn: 'https://dc34ab47426f49c0925445f0d87b7007@report.houlang.cloud/6',
+    dsn,
     sendDefaultPii: true,
     integrations: [
       Sentry.browserTracingIntegration({ router }),
@@ -51,7 +57,7 @@ export function initSentry(app, router) {
     tracesSampleRate: 1.0,
     tracePropagationTargets: [
       'localhost',
-      /^https?:\/\/cs\.(houlang\.cloud|houlangs\.com)/,
+      /^https:\/\/(api\.)?newfires\.top/,
     ],
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
