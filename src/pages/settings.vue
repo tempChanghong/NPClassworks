@@ -787,6 +787,8 @@ import {
 } from "@/utils/noiseScheduleSettings";
 import {microphonePermissionLabel, queryMicrophonePermission, requestMicrophonePermission} from "@/utils/microphonePermission";
 import {resetScreenOobe} from "@/utils/classworksOobe";
+import {confirmAction} from "@/utils/actionDialog";
+import {clearApplicationResourceCaches} from "@/utils/appRecovery";
 
 const route = useRoute();
 const router = useRouter();
@@ -1018,11 +1020,13 @@ function restartOobe() {
 }
 
 async function clearResourceCaches() {
-  if (!window.confirm("清理页面资源缓存？选班、登录和大屏绑定将保留。")) return;
-  if ("caches" in window) {
-    const keys = await window.caches.keys();
-    await Promise.all(keys.map((key) => window.caches.delete(key)));
-  }
+  if (!await confirmAction({
+    title: "清理页面资源缓存",
+    message: "下次访问时会重新下载页面所需文件。选班、登录、草稿和大屏绑定都会保留。",
+    confirmText: "清理缓存",
+    color: "warning",
+  })) return;
+  await clearApplicationResourceCaches();
   notify("资源缓存已清理，下次访问会重新下载必要文件");
   if (navigator.storage?.estimate) storageEstimate.value = await navigator.storage.estimate();
 }

@@ -436,6 +436,7 @@ import {
   duplicateAssignmentDescription,
   publicationDuplicateState,
 } from "@/utils/publicationDuplicate";
+import {confirmAction} from "@/utils/actionDialog";
 
 const props = defineProps({
   editingPublication: {
@@ -725,7 +726,12 @@ function conflictValue(row, key) {
 
 async function applyLocalOnLatest() {
   if (!conflict.value?.latestPublication || !conflictInput.value) return;
-  if (!window.confirm("系统会保留服务器当前版本，并把你的输入保存为下一个新版本。确认继续吗？")) return;
+  if (!await confirmAction({
+    title: "用当前输入生成新版本",
+    message: "服务器当前版本会保留，你的输入将保存为下一个新版本。",
+    confirmText: "保存新版本",
+    color: "warning",
+  })) return;
   conflictApplying.value = true;
   localError.value = "";
   try {
@@ -750,7 +756,12 @@ async function applyLocalOnLatest() {
 
 async function reloadLatest() {
   if (!props.editingPublication || !conflict.value) return;
-  if (!window.confirm("载入服务器最新版会放弃当前表单输入。若需要保留，请先另存为草稿。")) return;
+  if (!await confirmAction({
+    title: "载入服务器最新版",
+    message: "当前表单输入会被替换。需要保留时，请先将其另存为草稿。",
+    confirmText: "载入最新版",
+    color: "warning",
+  })) return;
   conflictReloading.value = true;
   try {
     const latest = await store.latestPublication(props.editingPublication.id, "teacher");

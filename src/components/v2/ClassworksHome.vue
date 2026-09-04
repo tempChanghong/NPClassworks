@@ -648,6 +648,7 @@ import {isPublicationRevisionConflict} from "@/utils/publicationConflict";
 import packageInfo from "../../../package.json";
 import {createDiagnosticBundle, downloadDiagnosticBundle} from "@/utils/localDiagnostics";
 import {getServerUrl} from "@/utils/socketClient";
+import {confirmAction} from "@/utils/actionDialog";
 import {
   CLASSWORKS_OOBE_VERSION,
   completeClassworksOobe,
@@ -1150,7 +1151,12 @@ async function certifyActionItem(item) {
 async function restoreActionItem(item) {
   const revision = item.lastCertifiedRevision?.revision;
   if (!revision) return;
-  if (!window.confirm(`恢复教师确认的版本 #${revision} 吗？当前内容仍会保留在版本历史中。`)) return;
+  if (!await confirmAction({
+    title: "恢复教师确认版本",
+    message: `将版本 #${revision} 恢复为当前内容。现有内容仍会保留在版本历史中。`,
+    confirmText: "确认恢复",
+    color: "warning",
+  })) return;
   teacherActionBusyId.value = item.id;
   try {
     await store.restoreRevision(item.publication, revision, "teacher");
@@ -1224,7 +1230,12 @@ function inspectResultDelivery(publication) {
 }
 
 async function withdrawPublication(publication) {
-  if (!window.confirm(`确定撤回“${publication.title || publication.content.slice(0, 20)}”吗？`)) return;
+  if (!await confirmAction({
+    title: "撤回发布内容",
+    message: `确定撤回“${publication.title || publication.content.slice(0, 20)}”吗？`,
+    confirmText: "确认撤回",
+    color: "warning",
+  })) return;
   try {
     await store.withdraw(publication);
     showFeedback({
@@ -1257,7 +1268,11 @@ async function clonePublication(publication) {
 }
 
 async function copyScreenBoardToToday() {
-  if (!window.confirm(`将${boardDateLabel.value}的作业复制到今天吗？当天已有的相同作业会自动跳过。`)) return;
+  if (!await confirmAction({
+    title: "复制到今天",
+    message: `将${boardDateLabel.value}的作业复制到今天。当天已有的相同作业会自动跳过。`,
+    confirmText: "开始复制",
+  })) return;
   try {
     const result = await store.copyScreenBoardToToday();
     showFeedback({

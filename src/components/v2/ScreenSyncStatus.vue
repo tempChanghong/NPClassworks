@@ -112,6 +112,7 @@
 <script setup>
 import {computed, onMounted, onUnmounted, ref} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
+import {confirmAction} from "@/utils/actionDialog";
 
 const store = useClassworksV2Store();
 const dialog = ref(false);
@@ -152,8 +153,13 @@ async function retry(item, allowDuplicate = false) {
   await store.retryScreenQueuedPublication(item.id, {allowDuplicate});
 }
 
-function remove(item) {
-  if (!window.confirm("确定移除这项仅保存在本机、尚未提交的作业吗？移除后无法恢复。")) return;
+async function remove(item) {
+  if (!await confirmAction({
+    title: "移除本机待提交作业",
+    message: "这项作业尚未提交到服务器，移除后无法恢复。",
+    confirmText: "确认移除",
+    color: "error",
+  })) return;
   store.removeScreenQueuedPublication(item.id);
 }
 

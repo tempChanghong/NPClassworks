@@ -378,6 +378,7 @@ import {
   duplicateAssignmentDescription,
   publicationDuplicateState,
 } from "@/utils/publicationDuplicate";
+import {confirmAction} from "@/utils/actionDialog";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -622,7 +623,12 @@ async function save(allowDuplicate = false) {
 async function applyLocalOnLatest() {
   const latest = conflict.value?.latestPublication;
   if (!latest) return;
-  if (!window.confirm("服务器当前版本会保留在历史中，本机输入将成为下一个待教师确认版本。确认继续吗？")) return;
+  if (!await confirmAction({
+    title: "用本机输入生成新版本",
+    message: "服务器当前版本会保留在历史中，本机输入将成为下一个待教师确认版本。",
+    confirmText: "保存新版本",
+    color: "warning",
+  })) return;
   conflictApplying.value = true;
   localError.value = "";
   try {
@@ -652,7 +658,12 @@ async function applyLocalOnLatest() {
 
 async function reloadLatest() {
   if (!basePublication.value || !conflict.value) return;
-  if (!window.confirm("载入服务器最新版会放弃当前输入。也可以先将当前输入另存为一项新作业。")) return;
+  if (!await confirmAction({
+    title: "载入服务器最新版",
+    message: "当前输入会被替换。需要保留时，可以先将其另存为一项新作业。",
+    confirmText: "载入最新版",
+    color: "warning",
+  })) return;
   conflictReloading.value = true;
   localError.value = "";
   try {

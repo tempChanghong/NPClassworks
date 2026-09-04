@@ -32,12 +32,17 @@ test("promptAction returns entered text and resets prior options", async () => {
   assert.equal(await cancelled, false);
 });
 
-test("school administration avoids native blocking dialogs", () => {
+test("interactive application views avoid native blocking dialogs", () => {
   const files = [
     "src/pages/classworks-admin.vue",
     "src/pages/setup.vue",
+    "src/pages/settings.vue",
     "src/components/admin/StaffResponsibilityManager.vue",
     "src/components/admin/TeachingRelationshipOverview.vue",
+    "src/components/v2/ClassworksHome.vue",
+    "src/components/v2/PublicationComposer.vue",
+    "src/components/v2/ScreenHomeworkDialog.vue",
+    "src/components/v2/ScreenSyncStatus.vue",
   ];
   for (const file of files) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
