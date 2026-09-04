@@ -3,11 +3,13 @@
 // - Exposes join/leave helpers and event on/off wrappers
 
 import {io} from 'socket.io-client';
+import {recordDiagnosticEvent, recordDiagnosticSnapshot} from '@/utils/localDiagnostics';
 
 let socket = null;
 let connectedDomain = null;
 const listeners = new Set();
 const connectionListeners = new Set();
+let connectionIssueActive = false;
 
 function connectionSnapshot() {
   return {
@@ -48,9 +50,39 @@ export function getSocket() {
     connectedDomain = serverUrl;
 
     socket = io(serverUrl, {transports:  ["polling","websocket"]});
-    socket.on("connect", notifyConnectionListeners);
-    socket.on("disconnect", notifyConnectionListeners);
-    socket.on("connect_error", notifyConnectionListeners);
+    socket.on("connect", () => {
+      notifyConnectionListeners();
+      recordDiagnosticSnapshot("realtime", {connected: true, transport: socket.io.engine?.transport?.name || "unknown"});
+      if (connectionIssueActive) {
+        recordDiagnosticEvent({category: "REALTIME", severity: "INFO", code: "SOCKET_RECOVERED", message: "实时连接已经恢复"});
+        connectionIssueActive = false;
+      }
+    });
+    socket.on("disconnect", (reason) => {
+      notifyConnectionListeners();
+      recordDiagnosticSnapshot("realtime", {connected: false, reason});
+      if (reason === "io client disconnect") return;
+      connectionIssueActive = true;
+      recordDiagnosticEvent({
+        category: "REALTIME",
+        severity: "WARNING",
+        code: "SOCKET_DISCONNECTED",
+        message: "实时连接已中断，客户端将自动重连",
+        context: {reason},
+      });
+    });
+    socket.on("connect_error", (error) => {
+      notifyConnectionListeners();
+      connectionIssueActive = true;
+      recordDiagnosticSnapshot("realtime", {connected: false, error: error?.message || "连接失败"});
+      recordDiagnosticEvent({
+        category: "REALTIME",
+        severity: "ERROR",
+        code: "SOCKET_CONNECT_ERROR",
+        message: error?.message || "实时连接失败",
+        context: {serverOrigin: (() => { try { return new URL(serverUrl).origin; } catch { return ""; } })()},
+      });
+    });
 
     // Re-attach previously registered event handlers on new socket instance
     listeners.forEach(({event, handler}) => {
@@ -111,6 +143,7 @@ export function disconnect() {
   }
   socket = null;
   connectedDomain = null;
+  connectionIssueActive = false;
   listeners.clear();
   notifyConnectionListeners();
 }

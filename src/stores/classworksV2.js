@@ -44,6 +44,7 @@ import {
   saveCachedScreenFeed,
   saveCachedScreenSession,
 } from "@/utils/screenOfflineCache";
+import {recordDiagnosticEvent, recordDiagnosticSnapshot} from "@/utils/localDiagnostics";
 
 const SELECTION_KEY = "classworks-v2-student-selection";
 let realtimeCleanup = [];
@@ -812,8 +813,26 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       screenSyncCleanup = [];
       const bindingId = this.screenSession?.binding?.id;
       this.screenPendingUploads = bindingId ? loadScreenPublicationQueue(bindingId) : [];
+      let previousOnline = this.screenNetworkOnline;
       const updateOnline = () => {
         this.screenNetworkOnline = navigator.onLine;
+        recordDiagnosticSnapshot("screenSync", {
+          state: this.screenSyncState,
+          online: this.screenNetworkOnline,
+          realtimeConnected: this.screenRealtimeConnected,
+          pendingUploads: this.screenPendingUploads.length,
+          lastSyncedAt: this.screenLastSyncedAt,
+          lastHeartbeatAt: this.screenHeartbeatAt,
+        });
+        if (previousOnline !== this.screenNetworkOnline) {
+          recordDiagnosticEvent({
+            category: "SCREEN_SYNC",
+            severity: this.screenNetworkOnline ? "INFO" : "WARNING",
+            code: this.screenNetworkOnline ? "NETWORK_RECOVERED" : "NETWORK_OFFLINE",
+            message: this.screenNetworkOnline ? "大屏网络连接已经恢复" : "大屏已进入离线状态",
+          });
+          previousOnline = this.screenNetworkOnline;
+        }
         if (this.screenNetworkOnline) void this.flushScreenPublicationQueue();
       };
       window.addEventListener("online", updateOnline);
@@ -821,7 +840,24 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       screenSyncCleanup.push(() => window.removeEventListener("online", updateOnline));
       screenSyncCleanup.push(() => window.removeEventListener("offline", updateOnline));
       screenSyncCleanup.push(onConnectionState(({connected}) => {
+        const changed = this.screenRealtimeConnected !== connected;
         this.screenRealtimeConnected = connected;
+        recordDiagnosticSnapshot("screenSync", {
+          state: this.screenSyncState,
+          online: this.screenNetworkOnline,
+          realtimeConnected: connected,
+          pendingUploads: this.screenPendingUploads.length,
+          lastSyncedAt: this.screenLastSyncedAt,
+          lastHeartbeatAt: this.screenHeartbeatAt,
+        });
+        if (changed && !connected) {
+          recordDiagnosticEvent({
+            category: "SCREEN_SYNC",
+            severity: "WARNING",
+            code: "SCREEN_REALTIME_DISCONNECTED",
+            message: "大屏实时同步连接已中断，客户端将自动重连",
+          });
+        }
         if (connected) void this.flushScreenPublicationQueue();
       }));
       const retryTimer = window.setInterval(() => {
@@ -854,9 +890,23 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
           displayMode: "screen",
         });
         this.screenHeartbeatAt = result.receivedAt;
+        recordDiagnosticSnapshot("screenSync", {
+          state: this.screenSyncState,
+          online: this.screenNetworkOnline,
+          realtimeConnected: this.screenRealtimeConnected,
+          pendingUploads: this.screenPendingUploads.length,
+          lastSyncedAt: this.screenLastSyncedAt,
+          lastHeartbeatAt: this.screenHeartbeatAt,
+        });
         for (const command of result.commands || []) await this.executeScreenCommand(command);
-      } catch {
-        // 心跳失败由下一次轮询重试，不覆盖作业板已有错误提示。
+      } catch (error) {
+        recordDiagnosticEvent({
+          category: "SCREEN_HEARTBEAT",
+          severity: "WARNING",
+          code: error.response?.data?.code || "SCREEN_HEARTBEAT_FAILED",
+          message: describeApiError(error, "大屏心跳上报失败"),
+          context: {lastHeartbeatAt: this.screenHeartbeatAt, syncState: this.screenSyncState},
+        });
       }
     },
 
@@ -903,6 +953,13 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       const bindingId = this.screenSession?.binding?.id;
       if (!bindingId) throw new Error("大屏尚未绑定，无法保存离线作业");
       this.screenPendingUploads = enqueueScreenPublication(bindingId, input, context);
+      recordDiagnosticEvent({
+        category: "SCREEN_SYNC",
+        severity: "WARNING",
+        code: "PUBLICATION_QUEUED_OFFLINE",
+        message: "作业已保存到本机队列，等待联网同步",
+        context: {pendingUploads: this.screenPendingUploads.length},
+      });
       return {
         offlineQueued: true,
         id: this.screenPendingUploads.at(-1)?.id,
@@ -940,6 +997,13 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
                 details: error.response?.data?.details || null,
               },
             });
+            recordDiagnosticEvent({
+              category: "SCREEN_SYNC",
+              severity: "ERROR",
+              code: error.response?.data?.code || "SCREEN_UPLOAD_NEEDS_REVIEW",
+              message: describeApiError(error, "离线作业同步失败，需要人工处理"),
+              context: {attempts: item.attempts + 1, pendingUploads: this.screenPendingUploads.length},
+            });
           }
         }
         if (savedAny) {
@@ -975,6 +1039,13 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
             message: error.response?.data?.message || error.message || "提交失败",
             details: error.response?.data?.details || null,
           },
+        });
+        recordDiagnosticEvent({
+          category: "SCREEN_SYNC",
+          severity: isTransientScreenRequestError(error) ? "WARNING" : "ERROR",
+          code: error.response?.data?.code || "SCREEN_UPLOAD_RETRY_FAILED",
+          message: describeApiError(error, "重试同步失败"),
+          context: {attempts: item.attempts + 1, pendingUploads: this.screenPendingUploads.length},
         });
         return false;
       } finally {

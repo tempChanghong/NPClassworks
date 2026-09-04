@@ -137,7 +137,7 @@
       </v-card-text>
     </v-card>
 
-    <v-card class="rounded-xl">
+    <v-card class="mb-5 rounded-xl">
       <v-card-title class="d-flex align-center pa-5 pb-2">
         <v-icon
           class="mr-2"
@@ -216,12 +216,14 @@
         </div>
       </v-card-text>
     </v-card>
+    <LocalDiagnosticPanel :management-overview="overview" />
   </div>
 </template>
 
 <script setup>
 import {computed, ref, watch} from "vue";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client.js";
+import LocalDiagnosticPanel from "@/components/admin/LocalDiagnosticPanel.vue";
 
 const props = defineProps({
   schoolId: {type: String, required: true},

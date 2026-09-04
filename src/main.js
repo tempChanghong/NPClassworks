@@ -17,6 +17,7 @@ import { createApp } from 'vue'
 import messageService from './utils/message'
 import { captureOAuthCallback } from './utils/classworksV2Client'
 import { initializeAnalytics } from 'virtual:npclassworks-analytics'
+import { installLocalDiagnostics } from './utils/localDiagnostics'
 
 captureOAuthCallback()
 
@@ -24,6 +25,7 @@ const app = createApp(App)
 
 registerPlugins(app)
 app.use(messageService)
+installLocalDiagnostics(app)
 
 app.component('GlobalMessage', GlobalMessage)
 

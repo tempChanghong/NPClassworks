@@ -1,5 +1,6 @@
 import axios from "axios";
 import {getServerUrl} from "@/utils/socketClient";
+import {recordDiagnosticEvent, sanitizeDiagnosticEndpoint} from "@/utils/localDiagnostics";
 
 const ACCESS_TOKEN_KEY = "classworks-v2-access-token";
 const REFRESH_TOKEN_KEY = "classworks-v2-refresh-token";
@@ -204,6 +205,7 @@ async function refreshAccountToken() {
 
 client.interceptors.request.use((config) => {
   config.baseURL = baseUrl();
+  config._diagnosticStartedAt = Date.now();
   const {accessToken} = getAccountTokens();
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   return config;
@@ -223,6 +225,27 @@ client.interceptors.response.use((response) => {
       return client(original);
     } catch {
       clearAccountTokens();
+    }
+  }
+  if (error.code !== "ERR_CANCELED" && !original?._diagnosticRecorded) {
+    if (original) original._diagnosticRecorded = true;
+    const status = Number(error.response?.status) || null;
+    const endpoint = sanitizeDiagnosticEndpoint(original?.url);
+    // 心跳包含更有用的大屏同步上下文，由 store 单独记录，避免同一故障重复两次。
+    if (endpoint !== "/api/v2/classroom-screens/heartbeat") {
+      recordDiagnosticEvent({
+        category: "API",
+        severity: !status || status >= 500 ? "ERROR" : "WARNING",
+        code: error.response?.data?.code || error.code || (status ? `HTTP_${status}` : "NETWORK_ERROR"),
+        message: describeApiError(error, "接口请求失败"),
+        context: {
+          method: String(original?.method || "GET").toUpperCase(),
+          endpoint,
+          status,
+          durationMs: original?._diagnosticStartedAt ? Date.now() - original._diagnosticStartedAt : null,
+          online: typeof navigator === "undefined" ? null : navigator.onLine,
+        },
+      });
     }
   }
   return Promise.reject(error);
