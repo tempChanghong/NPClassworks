@@ -619,6 +619,7 @@ import {computed, onMounted, ref, watch} from "vue";
 import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
 import {useTimedUndo} from "@/composables/useTimedUndo";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
+import {confirmAction} from "@/utils/actionDialog";
 
 const props = defineProps({
   schoolId: {type: String, required: true},
@@ -838,7 +839,12 @@ async function saveClassRole() {
 }
 
 async function removeGradeRole(leadership, gradeName) {
-  if (!window.confirm(`移除${accountName(leadership.account)}在${gradeName}的${gradePositionName(leadership.position)}职责？`)) return;
+  if (!await confirmAction({
+    title: "移除年级职责？",
+    message: `将移除${accountName(leadership.account)}在${gradeName}的${gradePositionName(leadership.position)}职责。`,
+    confirmText: "确认移除",
+    color: "warning",
+  })) return;
   const teacherName = accountName(leadership.account);
   const removed = await runMutation(
     () => classworksV2Api.removeGradeLeadership(props.schoolId, leadership.id),
@@ -859,7 +865,12 @@ async function removeGradeRole(leadership, gradeName) {
 }
 
 async function removeClassRole(leadership, className) {
-  if (!window.confirm(`移除${accountName(leadership.account)}在${className}的${classPositionName(leadership.position)}职责？`)) return;
+  if (!await confirmAction({
+    title: "移除班级职责？",
+    message: `将移除${accountName(leadership.account)}在${className}的${classPositionName(leadership.position)}职责。`,
+    confirmText: "确认移除",
+    color: "warning",
+  })) return;
   const teacherName = accountName(leadership.account);
   const removed = await runMutation(
     () => classworksV2Api.removeClassLeadership(props.schoolId, leadership.id),

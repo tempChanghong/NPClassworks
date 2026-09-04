@@ -887,241 +887,32 @@
         </v-window-item>
 
         <v-window-item value="accounts">
-          <v-alert
-            v-if="adminMembershipsStatus === 'loaded' && !managerMemberships.length"
-            type="warning"
-            variant="tonal"
-          >
-            请先完成学校初始化或取得 OWNER/ADMIN 权限。
-          </v-alert>
-          <template v-else>
-            <v-card class="mb-5 rounded-xl">
-              <v-card-text class="pa-5 d-flex align-center flex-wrap ga-3">
-                <v-select
-                  v-model="guardedSchoolId"
-                  :items="schoolOptions"
-                  class="flex-grow-1"
-                  item-title="title"
-                  item-value="value"
-                  label="学校"
-                  max-width="520"
-                  variant="outlined"
-                />
-                <v-btn
-                  prepend-icon="mdi-download-outline"
-                  variant="tonal"
-                  @click="downloadAccountRoster"
-                >
-                  导出账号名册
-                </v-btn>
-                <v-btn
-                  v-if="recentCredentials.length"
-                  prepend-icon="mdi-key-outline"
-                  variant="tonal"
-                  @click="downloadRecentCredentials"
-                >
-                  下载本次初始凭据
-                </v-btn>
-              </v-card-text>
-            </v-card>
-
-            <v-row>
-              <v-col
-                cols="12"
-                lg="4"
-              >
-                <v-card class="rounded-xl">
-                  <v-card-title class="pa-5 pb-2">
-                    创建第二管理员
-                  </v-card-title>
-                  <v-card-text class="px-5 pb-5">
-                    <v-text-field
-                      v-model.trim="newAdminUsername"
-                      label="管理员短账号"
-                      variant="outlined"
-                    />
-                    <v-text-field
-                      v-model.trim="newAdminName"
-                      label="管理员姓名"
-                      variant="outlined"
-                    />
-                    <v-text-field
-                      v-model="newAdminPin"
-                      hint="4～8位数字"
-                      label="初始 PIN"
-                      persistent-hint
-                      type="password"
-                      variant="outlined"
-                    />
-                    <v-select
-                      v-model="newAdminRole"
-                      :items="adminRoleOptions"
-                      item-title="title"
-                      item-value="value"
-                      label="学校角色"
-                      variant="outlined"
-                    />
-                    <v-btn
-                      block
-                      color="primary"
-                      :loading="accountBusy"
-                      @click="createAdministrator"
-                    >
-                      创建管理员
-                    </v-btn>
-                    <v-alert
-                      class="mt-4"
-                      type="info"
-                      variant="tonal"
-                    >
-                      建议至少保留两个 OWNER/ADMIN，并将 PIN 分别交由不同负责人保管。
-                    </v-alert>
-                  </v-card-text>
-                </v-card>
-              </v-col>
-              <v-col
-                cols="12"
-                lg="8"
-              >
-                <v-card class="rounded-xl">
-                  <v-card-title class="d-flex align-center pa-5">
-                    本地账号
-                    <v-spacer />
-                    <v-btn
-                      :loading="accountBusy"
-                      icon="mdi-refresh"
-                      variant="text"
-                      @click="loadLocalAccounts"
-                    />
-                  </v-card-title>
-                  <v-card-text class="account-filter-bar px-5 pb-2 pt-0">
-                    <v-text-field
-                      v-model.trim="accountSearch"
-                      clearable
-                      hide-details
-                      label="搜索姓名或账号"
-                      prepend-inner-icon="mdi-magnify"
-                      variant="outlined"
-                    />
-                    <v-select
-                      v-model="accountStatusFilter"
-                      hide-details
-                      :items="accountStatusOptions"
-                      item-title="title"
-                      item-value="value"
-                      label="账号状态"
-                      variant="outlined"
-                    />
-                  </v-card-text>
-                  <v-list
-                    class="admin-entity-list"
-                    lines="three"
-                  >
-                    <template
-                      v-for="account in filteredLocalAccounts"
-                      :key="account.id"
-                    >
-                      <v-list-item
-                        :subtitle="accountSummary(account)"
-                        :title="`${account.name || '未命名'} · @${account.username}`"
-                      >
-                        <template #prepend>
-                          <v-avatar :color="account.disabled ? 'grey' : account.schoolRole ? 'primary' : 'success'">
-                            <v-icon :icon="account.schoolRole ? 'mdi-shield-account-outline' : 'mdi-human-male-board'" />
-                          </v-avatar>
-                        </template>
-                        <template #append>
-                          <div class="admin-row-actions admin-row-actions--desktop">
-                            <v-btn
-                              v-if="account.id !== profile?.id"
-                              size="small"
-                              variant="text"
-                              @click="resetAccountPin(account)"
-                            >
-                              重置 PIN
-                            </v-btn>
-                            <v-btn
-                              v-if="account.disabled"
-                              color="success"
-                              size="small"
-                              variant="text"
-                              @click="setAccountDisabled(account, false)"
-                            >
-                              启用
-                            </v-btn>
-                            <v-btn
-                              v-else-if="account.id !== profile?.id"
-                              color="warning"
-                              size="small"
-                              variant="text"
-                              @click="setAccountDisabled(account, true)"
-                            >
-                              停用
-                            </v-btn>
-                            <v-btn
-                              v-if="account.id !== profile?.id"
-                              color="error"
-                              size="small"
-                              variant="text"
-                              @click="deactivateAccount(account)"
-                            >
-                              注销权限
-                            </v-btn>
-                          </div>
-                          <v-menu v-if="account.id !== profile?.id || account.disabled">
-                            <template #activator="{ props: menuProps }">
-                              <v-btn
-                                v-bind="menuProps"
-                                class="admin-row-actions--mobile"
-                                icon="mdi-dots-vertical"
-                                title="账号操作"
-                                variant="text"
-                              />
-                            </template>
-                            <v-list density="comfortable">
-                              <v-list-item
-                                v-if="account.id !== profile?.id"
-                                prepend-icon="mdi-lock-reset"
-                                title="重置 PIN"
-                                @click="resetAccountPin(account)"
-                              />
-                              <v-list-item
-                                v-if="account.disabled"
-                                class="text-success"
-                                prepend-icon="mdi-account-check-outline"
-                                title="启用账号"
-                                @click="setAccountDisabled(account, false)"
-                              />
-                              <v-list-item
-                                v-else-if="account.id !== profile?.id"
-                                class="text-warning"
-                                prepend-icon="mdi-account-off-outline"
-                                title="停用账号"
-                                @click="setAccountDisabled(account, true)"
-                              />
-                              <v-list-item
-                                v-if="account.id !== profile?.id"
-                                class="text-error"
-                                prepend-icon="mdi-account-remove-outline"
-                                title="注销全部权限"
-                                @click="deactivateAccount(account)"
-                              />
-                            </v-list>
-                          </v-menu>
-                        </template>
-                      </v-list-item>
-                      <v-divider />
-                    </template>
-                  </v-list>
-                  <v-empty-state
-                    v-if="!filteredLocalAccounts.length && !accountBusy"
-                    icon="mdi-account-off-outline"
-                    :text="accountSearch || accountStatusFilter !== 'ALL' ? '没有符合筛选条件的账号' : '当前没有本地账号'"
-                  />
-                </v-card>
-              </v-col>
-            </v-row>
-          </template>
+          <AdminAccountPanel
+            v-model:admin-name="newAdminName"
+            v-model:admin-pin="newAdminPin"
+            v-model:admin-role="newAdminRole"
+            v-model:admin-username="newAdminUsername"
+            v-model:school-id="guardedSchoolId"
+            v-model:search="accountSearch"
+            v-model:status-filter="accountStatusFilter"
+            :accounts="filteredLocalAccounts"
+            :account-summary="accountSummary"
+            :admin-memberships-status="adminMembershipsStatus"
+            :admin-role-options="adminRoleOptions"
+            :busy="accountBusy"
+            :has-manager-membership="Boolean(managerMemberships.length)"
+            :has-recent-credentials="Boolean(recentCredentials.length)"
+            :profile-id="profile?.id"
+            :school-options="schoolOptions"
+            :status-options="accountStatusOptions"
+            @create-administrator="createAdministrator"
+            @deactivate="deactivateAccount"
+            @download-credentials="downloadRecentCredentials"
+            @download-roster="downloadAccountRoster"
+            @refresh="loadLocalAccounts"
+            @reset-pin="resetAccountPin"
+            @set-disabled="setAccountDisabled"
+          />
         </v-window-item>
 
         <v-window-item value="screens">
@@ -1870,6 +1661,7 @@ import {onBeforeRouteLeave, useRoute, useRouter} from "vue-router";
 import ValidationReport from "@/components/v2/ValidationReport.vue";
 import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
 import AdminNavigationPanel from "@/components/admin/AdminNavigationPanel.vue";
+import AdminAccountPanel from "@/components/admin/AdminAccountPanel.vue";
 import AcademicStructureManager from "@/components/admin/AcademicStructureManager.vue";
 import TeachingRelationshipOverview from "@/components/admin/TeachingRelationshipOverview.vue";
 import StaffResponsibilityManager from "@/components/admin/StaffResponsibilityManager.vue";
@@ -1877,6 +1669,7 @@ import SchoolManagementOverview from "@/components/admin/SchoolManagementOvervie
 import AuditLogViewer from "@/components/admin/AuditLogViewer.vue";
 import SchoolMigrationPanel from "@/components/admin/SchoolMigrationPanel.vue";
 import {useTimedUndo} from "@/composables/useTimedUndo";
+import {confirmAction, promptAction} from "@/utils/actionDialog";
 import {
   bootstrapSchoolAdministrator,
   classworksV2Api,
@@ -2187,32 +1980,37 @@ const currentSectionHasUnsavedChanges = computed(() => {
   return false;
 });
 
-function confirmDiscardCurrentSection() {
-  return !currentSectionHasUnsavedChanges.value || window.confirm("当前页面有尚未保存的内容，确定离开并放弃这些修改吗？");
+async function confirmDiscardCurrentSection() {
+  return !currentSectionHasUnsavedChanges.value || await confirmAction({
+    title: "放弃未保存的修改？",
+    message: "当前页面有尚未保存的内容。离开后，这些修改不会保留。",
+    confirmText: "放弃并离开",
+    color: "warning",
+  });
 }
 
-function navigateAdminTab(value) {
+async function navigateAdminTab(value) {
   if (!ADMIN_TABS.has(String(value)) || value === tab.value) return true;
-  if (!confirmDiscardCurrentSection()) return false;
+  if (!await confirmDiscardCurrentSection()) return false;
   tab.value = value;
   return true;
 }
 
 const guardedTab = computed({
   get: () => tab.value,
-  set: navigateAdminTab,
+  set: (value) => void navigateAdminTab(value),
 });
 const guardedSchoolId = computed({
   get: () => selectedSchoolId.value,
-  set: (value) => {
-    if (value === selectedSchoolId.value || !confirmDiscardCurrentSection()) return;
+  set: async (value) => {
+    if (value === selectedSchoolId.value || !await confirmDiscardCurrentSection()) return;
     selectedSchoolId.value = value;
   },
 });
 const guardedTermId = computed({
   get: () => selectedTermId.value,
-  set: (value) => {
-    if (value === selectedTermId.value || !confirmDiscardCurrentSection()) return;
+  set: async (value) => {
+    if (value === selectedTermId.value || !await confirmDiscardCurrentSection()) return;
     selectedTermId.value = value;
   },
 });
@@ -2404,7 +2202,13 @@ async function validateOrganization() {
 }
 
 async function commitOrganization() {
-  if (!window.confirm("正式导入会更新同代码学校、学期和班级配置，确定继续吗？")) return;
+  if (!await confirmAction({
+    title: "导入组织配置？",
+    message: "正式导入会更新代码相同的学校、学期和班级配置。",
+    details: ["建议先查看预检结果", "现有同代码项目会按导入内容更新"],
+    confirmText: "确认导入",
+    color: "warning",
+  })) return;
   organizationBusy.value = true;
   try {
     organizationReport.value = await classworksV2Api.importOrganization(parseOrganization(), false);
@@ -2576,7 +2380,12 @@ async function loadRoster() {
 }
 
 async function removeMember(workspace, member) {
-  if (!window.confirm(`从 ${workspace.name} 移除 ${teacherAccountLabel(member.account)}？`)) return;
+  if (!await confirmAction({
+    title: "移除任课关系？",
+    message: `将 ${teacherAccountLabel(member.account)} 从 ${workspace.name} 移除。`,
+    confirmText: "确认移除",
+    color: "warning",
+  })) return;
   try {
     await classworksV2Api.removeWorkspaceMember(workspace.id, member.accountId);
     successMessage.value = "教师教学空间已移除";
@@ -2587,7 +2396,12 @@ async function removeMember(workspace, member) {
 }
 
 async function removeInvitation(workspace, invitation) {
-  if (!window.confirm(`取消 ${invitation.email} 对 ${workspace.name} 的待认领分配？`)) return;
+  if (!await confirmAction({
+    title: "取消待认领分配？",
+    message: `${invitation.email} 将不再能认领 ${workspace.name}。`,
+    confirmText: "确认取消",
+    color: "warning",
+  })) return;
   try {
     await classworksV2Api.removeWorkspaceInvitation(workspace.id, invitation.id);
     successMessage.value = "待认领分配已取消";
@@ -2795,7 +2609,13 @@ async function saveScreenAccount() {
 }
 
 async function resetScreenDevice(screen) {
-  if (!window.confirm(`重置 ${screen.name} 的设备绑定？此操作不可撤销，原浏览器会立即退出，之后需用同一账号和 PIN 在新设备重新登录。`)) return;
+  if (!await confirmAction({
+    title: "重置大屏设备绑定？",
+    message: `将重置“${screen.name}”的设备绑定。`,
+    details: ["原浏览器会立即退出", "需要使用原账号和 PIN 在设备上重新登录"],
+    confirmText: "重置绑定",
+    color: "error",
+  })) return;
   screenBusy.value = true;
   try {
     await classworksV2Api.resetClassroomScreenDevice(selectedSchoolId.value, screen.id);
@@ -2810,7 +2630,13 @@ async function resetScreenDevice(screen) {
 
 async function setScreenActive(screen, isActive) {
   const action = isActive ? "启用" : "停用";
-  if (!window.confirm(`${action} ${screen.name}？${isActive ? "" : "停用后该设备将无法读取或修改作业。"}`)) return;
+  if (!await confirmAction({
+    title: `${action}大屏账号？`,
+    message: `将${action}“${screen.name}”。`,
+    details: isActive ? [] : ["设备将无法读取或修改作业", "班级和账号配置仍会保留"],
+    confirmText: action,
+    color: isActive ? "success" : "warning",
+  })) return;
   const schoolId = selectedSchoolId.value;
   screenBusy.value = true;
   try {
@@ -2861,7 +2687,11 @@ function screenDutyColor(state) {
 
 async function issueScreenCommand(screen, type) {
   const action = type === "RELOAD_APP" ? "重新载入页面" : "立即刷新数据";
-  if (!window.confirm(`要求 ${screen.name} ${action}？指令将在下一次心跳时执行。`)) return;
+  if (!await confirmAction({
+    title: `向大屏下发“${action}”？`,
+    message: `指令将在“${screen.name}”下一次心跳时执行。`,
+    confirmText: "下发指令",
+  })) return;
   screenBusy.value = true;
   try {
     await classworksV2Api.issueClassroomScreenCommand(selectedSchoolId.value, screen.id, type);
@@ -2904,7 +2734,15 @@ async function createAdministrator() {
 }
 
 async function resetAccountPin(account) {
-  const pin = window.prompt(`为 ${account.name || account.username} 设置新的4～8位数字 PIN：`);
+  const pin = await promptAction({
+    title: "重置账号 PIN",
+    message: `为 ${account.name || account.username} 设置新 PIN。保存后，该账号的其他设备将退出。`,
+    label: "新 PIN（4～8位数字）",
+    secret: true,
+    confirmText: "重置 PIN",
+    color: "warning",
+    rules: [(value) => /^\d{4,8}$/.test(value) || "请输入4～8位数字"],
+  });
   if (pin === null) return;
   try {
     await classworksV2Api.updateLocalAccount(selectedSchoolId.value, account.id, {pin});
@@ -2924,7 +2762,13 @@ async function resetAccountPin(account) {
 
 async function setAccountDisabled(account, disabled) {
   const action = disabled ? "停用" : "启用";
-  if (!window.confirm(`${action} ${account.name || account.username}？${disabled ? "其当前会话将被撤销，但班级分配会保留。" : ""}`)) return;
+  if (!await confirmAction({
+    title: `${action}账号？`,
+    message: `将${action}“${account.name || account.username}”。`,
+    details: disabled ? ["当前会话将被撤销", "班级分配会保留"] : [],
+    confirmText: action,
+    color: disabled ? "warning" : "success",
+  })) return;
   const schoolId = selectedSchoolId.value;
   try {
     await classworksV2Api.updateLocalAccount(schoolId, account.id, {disabled});
@@ -2944,7 +2788,13 @@ async function setAccountDisabled(account, disabled) {
 }
 
 async function deactivateAccount(account) {
-  if (!window.confirm(`注销 ${account.name || account.username} 在本校的全部管理和教学权限？此操作不可撤销，发布历史会保留。`)) return;
+  if (!await confirmAction({
+    title: "注销账号全部权限？",
+    message: `将移除“${account.name || account.username}”在本校的管理和教学权限。`,
+    details: ["账号将停用", "发布历史会保留", "此操作无法从页面撤销"],
+    confirmText: "注销权限",
+    color: "error",
+  })) return;
   try {
     await classworksV2Api.deactivateLocalAccount(selectedSchoolId.value, account.id);
     successMessage.value = "账号已停用，学校与教学空间权限已移除。";
@@ -3008,7 +2858,13 @@ async function changeTermStatus(term, status) {
     : status === "ARCHIVED"
       ? "归档后学生端不再显示该学期。"
       : "转为草稿后学生端不再显示该学期。";
-  if (!window.confirm(`${warning}\n\n确定将“${term.name}”设为${termStatusName(status)}吗？`)) return;
+  if (!await confirmAction({
+    title: `将学期设为${termStatusName(status)}？`,
+    message: `将“${term.name}”设为${termStatusName(status)}。`,
+    details: [warning],
+    confirmText: `设为${termStatusName(status)}`,
+    color: status === "ACTIVE" ? "success" : "warning",
+  })) return;
   termBusy.value = true;
   try {
     await classworksV2Api.setTermStatus(term.id, status);
@@ -3064,7 +2920,11 @@ async function cloneTerm() {
     await previewTermTransition();
     if (!termTransitionPreview.value) return;
   }
-  if (!window.confirm("将按当前选项建立新学期草稿。创建后可继续调整，确定继续吗？")) return;
+  if (!await confirmAction({
+    title: "建立新学期草稿？",
+    message: "将按照当前迁移选项创建新学期草稿，创建后仍可继续调整。",
+    confirmText: "创建草稿",
+  })) return;
   termBusy.value = true;
   try {
     const result = await classworksV2Api.createTermTransition(cloneSourceTermId.value, termTransitionInput());
@@ -3179,9 +3039,10 @@ watch([tab, selectedSchoolId, selectedTermId], ([section, schoolId, termId]) => 
 });
 watch(() => route.query.section, (section) => {
   const value = String(section || "");
-  if (ADMIN_TABS.has(value) && value !== tab.value && !navigateAdminTab(value)) {
-    void router.replace({query: {...route.query, section: tab.value}});
-  }
+  if (!ADMIN_TABS.has(value) || value === tab.value) return;
+  void navigateAdminTab(value).then((changed) => {
+    if (!changed) void router.replace({query: {...route.query, section: tab.value}});
+  });
 });
 watch(cloneSourceTermId, (termId) => {
   const source = selectedSchoolTerms.value.find((term) => term.id === termId);

@@ -530,6 +530,7 @@ import {computed, onMounted, ref, watch} from "vue";
 import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
 import {useTimedUndo} from "@/composables/useTimedUndo";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
+import {confirmAction} from "@/utils/actionDialog";
 
 const props = defineProps({
   schoolId: {type: String, required: true},
@@ -699,7 +700,12 @@ async function saveBatchAssignments() {
 
 async function removeAssignment(assignment, workspaceName) {
   const teacherName = accountName(assignment.account);
-  if (!window.confirm(`移除${teacherName}在${workspaceName}的任课关系？`)) return;
+  if (!await confirmAction({
+    title: "移除任课关系？",
+    message: `将移除${teacherName}在${workspaceName}的任课关系。`,
+    confirmText: "确认移除",
+    color: "warning",
+  })) return;
   removingAssignmentId.value = assignment.id;
   errorMessage.value = "";
   const restoreInput = {
