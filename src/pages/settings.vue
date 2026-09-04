@@ -713,32 +713,7 @@
               </SettingsPanel>
             </template>
 
-            <template v-else>
-              <SettingsPanel
-                description="面向行政班、走班教学班和班级大屏的统一作业板。"
-                icon="mdi-information-outline"
-                title="关于 NPClassworks"
-              >
-                <v-alert
-                  color="primary"
-                  icon="mdi-source-fork"
-                  variant="tonal"
-                >
-                  NPClassworks 基于 Classworks 改造，保留熟悉的作业板体验，并增加教师工作台、走班模型、教师确认与版本记录、大屏绑定。
-                </v-alert>
-                <SettingRow
-                  description="学校结构和账号配置由管理员后台统一维护。"
-                  title="系统架构"
-                >
-                  <template #scope>
-                    <ScopeChip type="admin" />
-                  </template>
-                  <v-chip variant="tonal">
-                    NPClassworks
-                  </v-chip>
-                </SettingRow>
-              </SettingsPanel>
-            </template>
+            <AboutNpClassworks v-else />
           </main>
         </div>
       </template>
@@ -767,6 +742,7 @@ import MicrophoneDevicePicker from "@/components/v2/MicrophoneDevicePicker.vue";
 import SettingsPanel from "@/components/v2/settings/SettingsPanel.vue";
 import SettingRow from "@/components/v2/settings/SettingRow.vue";
 import ScopeChip from "@/components/v2/settings/ScopeChip.vue";
+import AboutNpClassworks from "@/components/v2/settings/AboutNpClassworks.vue";
 import {getSetting, setSetting} from "@/utils/settings";
 import {playProminentNotificationSound} from "@/utils/prominentNotificationSound";
 import {screenNotificationSoundProfile} from "@/utils/notificationAlerts";
