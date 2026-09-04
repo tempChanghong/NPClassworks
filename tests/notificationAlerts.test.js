@@ -10,6 +10,8 @@ import {
   notificationSeenStorageKey,
   readAcknowledgedNotificationKeys,
   rememberAcknowledgedNotification,
+  screenNotificationSoundProfile,
+  selectNotificationForAlert,
 } from "../src/utils/notificationAlerts.js";
 
 function memoryStorage() {
@@ -35,6 +37,37 @@ test("all screen notices can alert regardless of priority", () => {
     alertableScreenNotifications(publications).map((item) => item.id),
     ["normal", "important", "urgent"],
   );
+});
+
+test("only urgent notices use the alarm sound profile", () => {
+  const sounds = {singleSound: "gentle.mp3", urgentSound: "alarm.mp3"};
+  assert.deepEqual(screenNotificationSoundProfile({priority: "NORMAL"}, sounds), {
+    filename: "gentle.mp3",
+    gainValue: 1.2,
+  });
+  assert.deepEqual(screenNotificationSoundProfile({priority: "IMPORTANT"}, sounds), {
+    filename: "gentle.mp3",
+    gainValue: 1.2,
+  });
+  assert.deepEqual(screenNotificationSoundProfile({priority: "URGENT"}, sounds), {
+    filename: "alarm.mp3",
+    gainValue: 1.5,
+  });
+});
+
+test("the default ordinary notification uses the louder bubble sound", () => {
+  assert.equal(
+    screenNotificationSoundProfile({priority: "NORMAL"}).filename,
+    "Teams 气泡(大声).mp3",
+  );
+});
+
+test("a simultaneous urgent notice takes precedence over ordinary notices", () => {
+  assert.equal(selectNotificationForAlert([
+    {id: "normal", priority: "NORMAL"},
+    {id: "urgent", priority: "URGENT"},
+    {id: "important", priority: "IMPORTANT"},
+  ]).id, "urgent");
 });
 
 test("seen notifications are remembered per screen and revised notices alert again", () => {

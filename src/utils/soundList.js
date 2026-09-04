@@ -44,7 +44,7 @@ export const soundFiles = [
 ];
 
 // 默认的单次通知铃声
-export const defaultSingleSound = 'Teams 默认.mp3';
+export const defaultSingleSound = 'Teams 气泡(大声).mp3';
 
 // 默认的紧急通知警报声
 export const defaultUrgentSound = 'Teams 警报.mp3';

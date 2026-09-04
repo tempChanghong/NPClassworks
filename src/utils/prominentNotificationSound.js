@@ -2,6 +2,7 @@ import {getSoundPath, playSound} from "./soundList.js";
 
 // Teams 警报本身动态较强；保留一定增强以适应教室环境，但避免 2 倍增益过于刺耳。
 export const PROMINENT_NOTIFICATION_GAIN = 1.5;
+export const GENTLE_NOTIFICATION_GAIN = 1.2;
 
 let audioContext = null;
 const decodedBuffers = new Map();
@@ -38,6 +39,7 @@ export async function playProminentNotificationSound(filename, {
   AudioContextApi = resolveAudioContextApi(),
   fetchImpl = globalThis.fetch,
   fallback = playSound,
+  gainValue = PROMINENT_NOTIFICATION_GAIN,
 } = {}) {
   const path = getSoundPath(filename);
   if (!path) return null;
@@ -47,7 +49,11 @@ export async function playProminentNotificationSound(filename, {
   }
 
   try {
-    if (!audioContext || audioContext.state === "closed") {
+    if (
+      !audioContext
+      || audioContext.state === "closed"
+      || (AudioContextApi && !(audioContext instanceof AudioContextApi))
+    ) {
       audioContext = new AudioContextApi();
     }
     if (audioContext.state === "suspended") await audioContext.resume();
@@ -57,7 +63,7 @@ export async function playProminentNotificationSound(filename, {
     source.buffer = await loadDecodedBuffer(audioContext, path, fetchImpl);
 
     const gain = audioContext.createGain();
-    gain.gain.value = PROMINENT_NOTIFICATION_GAIN;
+    gain.gain.value = Math.min(2, Math.max(0.5, Number(gainValue) || 1));
 
     const limiter = audioContext.createDynamicsCompressor();
     limiter.threshold.value = -2;

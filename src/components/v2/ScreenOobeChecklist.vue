@@ -217,6 +217,7 @@ import {microphonePermissionLabel, queryMicrophonePermission} from "@/utils/micr
 import {loadScreenDisplaySettings, saveScreenDisplaySettings} from "@/utils/screenDisplaySettings";
 import {getSetting} from "@/utils/settings";
 import {playProminentNotificationSound} from "@/utils/prominentNotificationSound";
+import {screenNotificationSoundProfile} from "@/utils/notificationAlerts";
 
 const props = defineProps({
   bindingId: {type: String, required: true},
@@ -246,7 +247,13 @@ onMounted(async () => {
 
 async function testAudio() {
   try {
-    const playback = await playProminentNotificationSound(getSetting("notification.urgentSound"));
+    const profile = screenNotificationSoundProfile({priority: "NORMAL"}, {
+      singleSound: getSetting("notification.singleSound"),
+      urgentSound: getSetting("notification.urgentSound"),
+    });
+    const playback = await playProminentNotificationSound(profile.filename, {
+      gainValue: profile.gainValue,
+    });
     if (!playback) throw new Error("当前浏览器未能播放提示音");
     audioReady.value = true;
     message.value = "实际通知提示音测试完成。";

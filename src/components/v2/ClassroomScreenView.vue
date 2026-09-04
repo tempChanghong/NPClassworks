@@ -317,6 +317,7 @@ import {
   notificationAlertKey,
   readAcknowledgedNotificationKeys,
   rememberAcknowledgedNotification,
+  screenNotificationSoundProfile,
 } from "@/utils/notificationAlerts";
 import {getSetting} from "@/utils/settings";
 import {
@@ -395,7 +396,10 @@ watch(() => `${bindingId.value}:${activeNotices.value
   .join(",")}`, () => {
   void notificationAlertController.alert(alertableScreenNotifications(activeNotices.value), {
     soundEnabled: settings.value.urgentNoticeSound,
-    soundFile: getSetting("notification.urgentSound"),
+    soundProfile: (notice) => screenNotificationSoundProfile(notice, {
+      singleSound: getSetting("notification.singleSound"),
+      urgentSound: getSetting("notification.urgentSound"),
+    }),
     systemNotificationEnabled: settings.value.backgroundSystemNotification,
   });
 }, {immediate: true});

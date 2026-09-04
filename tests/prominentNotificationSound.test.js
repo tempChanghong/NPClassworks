@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  GENTLE_NOTIFICATION_GAIN,
   playProminentNotificationSound,
   PROMINENT_NOTIFICATION_GAIN,
 } from "../src/utils/prominentNotificationSound.js";
@@ -17,6 +18,36 @@ test("prominent notification sound falls back when Web Audio is unavailable", as
 
   assert.deepEqual(calls, ["notice.mp3"]);
   assert.deepEqual(playback, {filename: "notice.mp3"});
+});
+
+test("notification playback accepts a gentler explicit gain", async () => {
+  let gainNode;
+  class FakeAudioContext {
+    constructor() {
+      this.state = "running";
+      this.destination = {};
+    }
+    async decodeAudioData() { return {}; }
+    createBufferSource() {
+      return {connect: (target) => target, start() {}};
+    }
+    createGain() {
+      gainNode = {gain: {value: 1}, connect: (target) => target};
+      return gainNode;
+    }
+    createDynamicsCompressor() {
+      return {
+        threshold: {value: 0}, knee: {value: 0}, ratio: {value: 0},
+        attack: {value: 0}, release: {value: 0}, connect: (target) => target,
+      };
+    }
+  }
+  await playProminentNotificationSound("gentle.mp3", {
+    AudioContextApi: FakeAudioContext,
+    fetchImpl: async () => ({ok: true, arrayBuffer: async () => new ArrayBuffer(1)}),
+    gainValue: GENTLE_NOTIFICATION_GAIN,
+  });
+  assert.equal(gainNode.gain.value, 1.2);
 });
 
 test("prominent notification sound boosts gain and limits peaks", async () => {

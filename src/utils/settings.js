@@ -65,6 +65,8 @@ const SETTINGS_STORAGE_KEY = "Classworks_settings";
 // 同标签页设置变化事件名
 const SETTINGS_CHANGED_EVENT = "classworks:settings:changed";
 
+const DEFAULT_SINGLE_NOTIFICATION_SOUND = "Teams 气泡(大声).mp3";
+const LEGACY_SINGLE_NOTIFICATION_SOUND = "Teams 默认.mp3";
 const DEFAULT_URGENT_NOTIFICATION_SOUND = "Teams 警报.mp3";
 const LEGACY_URGENT_NOTIFICATION_SOUND = "Teams 默认通话铃.mp3";
 
@@ -397,7 +399,7 @@ const settingsDefinitions = {
   // 通知铃声设置
   "notification.singleSound": {
     type: "string",
-    default: "Teams 默认.mp3",
+    default: DEFAULT_SINGLE_NOTIFICATION_SOUND,
     description: "单次通知铃声",
     icon: "mdi-bell-ring",
     // 设置单次通知时播放的音频文件
@@ -461,6 +463,9 @@ class SettingsManagerClass {
     // 旧版默认铃声偏柔和。仅迁移旧默认值，保留用户明确选择的其他声音。
     if (this.settingsCache["notification.urgentSound"] === LEGACY_URGENT_NOTIFICATION_SOUND) {
       this.settingsCache["notification.urgentSound"] = DEFAULT_URGENT_NOTIFICATION_SOUND;
+    }
+    if (this.settingsCache["notification.singleSound"] === LEGACY_SINGLE_NOTIFICATION_SOUND) {
+      this.settingsCache["notification.singleSound"] = DEFAULT_SINGLE_NOTIFICATION_SOUND;
     }
 
     // 确保所有设置项都有值（使用默认值填充）

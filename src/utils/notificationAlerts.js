@@ -1,5 +1,9 @@
-import {defaultUrgentSound} from "./soundList.js";
-import {playProminentNotificationSound} from "./prominentNotificationSound.js";
+import {defaultSingleSound, defaultUrgentSound} from "./soundList.js";
+import {
+  GENTLE_NOTIFICATION_GAIN,
+  playProminentNotificationSound,
+  PROMINENT_NOTIFICATION_GAIN,
+} from "./prominentNotificationSound.js";
 
 const MAX_SEEN_ALERTS = 100;
 const CLAIM_TTL_MS = 30_000;
@@ -10,6 +14,24 @@ export function notificationAlertKey(notice) {
 
 export function alertableScreenNotifications(publications = []) {
   return publications.filter((publication) => publication?.type === "NOTICE");
+}
+
+export function screenNotificationSoundProfile(notice, {
+  singleSound = defaultSingleSound,
+  urgentSound = defaultUrgentSound,
+} = {}) {
+  return notice?.priority === "URGENT"
+    ? {filename: urgentSound, gainValue: PROMINENT_NOTIFICATION_GAIN}
+    : {filename: singleSound, gainValue: GENTLE_NOTIFICATION_GAIN};
+}
+
+export function selectNotificationForAlert(notices = []) {
+  const rank = {URGENT: 3, IMPORTANT: 2, NORMAL: 1};
+  return notices.reduce((selected, notice) => (
+    !selected || (rank[notice?.priority] || 0) > (rank[selected?.priority] || 0)
+      ? notice
+      : selected
+  ), null);
 }
 
 export function notificationSeenStorageKey(scopeId) {
@@ -110,11 +132,12 @@ export function createNotificationAlertController({
   windowRef = globalThis.window,
   navigatorRef = globalThis.navigator,
   NotificationApi = globalThis.Notification,
-  play = (filename) => playProminentNotificationSound(filename),
+  play = (filename, options) => playProminentNotificationSound(filename, options),
 } = {}) {
   async function alert(notices, {
     soundEnabled = true,
     soundFile = defaultUrgentSound,
+    soundProfile = null,
     systemNotificationEnabled = true,
   } = {}) {
     if (!storage || !Array.isArray(notices) || !notices.length) return false;
@@ -123,11 +146,16 @@ export function createNotificationAlertController({
 
     // A feed refresh can introduce several notices together. Alert once and show
     // the newest/current notice instead of producing a burst of overlapping audio.
-    const notice = unseen[0];
+    const notice = selectNotificationForAlert(unseen);
     const key = notificationAlertKey(notice);
     return withBrowserAlertLock(scopeId, key, () => {
       if (!claimNotificationAlert(scopeId, key, storage)) return false;
-      if (soundEnabled) play(soundFile);
+      if (soundEnabled) {
+        const profile = typeof soundProfile === "function"
+          ? soundProfile(notice)
+          : {filename: soundFile};
+        play(profile?.filename || soundFile, {gainValue: profile?.gainValue});
+      }
       if (systemNotificationEnabled && pageIsBackgrounded(documentRef)) {
         showSystemNotification(notice, NotificationApi, windowRef);
       }

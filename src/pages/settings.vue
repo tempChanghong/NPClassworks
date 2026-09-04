@@ -414,13 +414,13 @@
 
             <template v-else-if="activeSection === 'screen-notifications'">
               <SettingsPanel
-                description="控制当前班级大屏收到新通知时的提示方式；紧急通知还会显示醒目横幅。"
+                description="普通和重要通知使用温和提示音；只有紧急通知使用警报并显示醒目横幅。"
                 icon="mdi-bell-outline"
                 title="通知与声音"
               >
                 <SettingRow
-                  description="页面失焦或 PWA 最小化后仍会播放；首次使用请点击测试按钮解锁浏览器音频。"
-                  title="新通知提示音"
+                  description="页面失焦或 PWA 最小化后仍会播放；普通提示音会适度增强，但不会使用 Teams 警报。"
+                  title="新通知声音"
                 >
                   <template #scope>
                     <ScopeChip type="screen" />
@@ -433,7 +433,7 @@
                   />
                 </SettingRow>
                 <SettingRow
-                  description="立即播放当前通知铃声，同时完成浏览器要求的首次用户交互。"
+                  description="播放普通通知使用的温和提示音，同时完成浏览器要求的首次用户交互。"
                   title="测试并启用声音"
                 >
                   <template #scope>
@@ -769,6 +769,7 @@ import SettingRow from "@/components/v2/settings/SettingRow.vue";
 import ScopeChip from "@/components/v2/settings/ScopeChip.vue";
 import {getSetting, setSetting} from "@/utils/settings";
 import {playProminentNotificationSound} from "@/utils/prominentNotificationSound";
+import {screenNotificationSoundProfile} from "@/utils/notificationAlerts";
 import {
   loadScreenDisplaySettings,
   saveScreenDisplaySettings,
@@ -940,7 +941,13 @@ function saveScreenSetting(field, value) {
 
 async function testNotificationSound() {
   try {
-    const playback = await playProminentNotificationSound(getSetting("notification.urgentSound"));
+    const profile = screenNotificationSoundProfile({priority: "NORMAL"}, {
+      singleSound: getSetting("notification.singleSound"),
+      urgentSound: getSetting("notification.urgentSound"),
+    });
+    const playback = await playProminentNotificationSound(profile.filename, {
+      gainValue: profile.gainValue,
+    });
     if (!playback) throw new Error("提示音未能播放");
     notify("测试音已播放；页面失焦后仍会使用此声音");
   } catch {
