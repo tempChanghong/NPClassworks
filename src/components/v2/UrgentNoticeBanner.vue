@@ -89,7 +89,6 @@ import {computed, ref, watch} from "vue";
 import {getSetting} from "@/utils/settings";
 import {playProminentNotificationSound} from "@/utils/prominentNotificationSound";
 import {
-  createNotificationAlertController,
   readAcknowledgedNotificationKeys,
   rememberAcknowledgedNotification,
 } from "@/utils/notificationAlerts";
@@ -97,7 +96,6 @@ import {
 const props = defineProps({
   notices: {type: Array, default: () => []},
   soundEnabled: Boolean,
-  systemNotificationEnabled: Boolean,
   bindingId: {type: String, default: "unbound"},
 });
 const emit = defineEmits(["acknowledge"]);
@@ -108,8 +106,6 @@ const visibleNotices = computed(() => props.notices.filter((notice) =>
   !acknowledgedKeys.value.has(`${notice.id}:${notice.revision}`),
 ));
 const currentNotice = computed(() => visibleNotices.value[currentIndex.value] || null);
-const alertKeys = computed(() => props.notices.map((notice) => `${notice.id}:${notice.revision}`));
-let alertController = createNotificationAlertController({scopeId: props.bindingId});
 
 function rememberAcknowledgedKey(notice) {
   acknowledgedKeys.value = rememberAcknowledgedNotification(notice, props.bindingId);
@@ -120,7 +116,6 @@ function playAlertSound() {
 }
 
 watch(() => props.bindingId, (bindingId) => {
-  alertController = createNotificationAlertController({scopeId: bindingId});
   acknowledgedKeys.value = readAcknowledgedNotificationKeys(bindingId);
   currentIndex.value = 0;
 });
@@ -128,14 +123,6 @@ watch(() => props.bindingId, (bindingId) => {
 watch(() => visibleNotices.value.length, (length) => {
   currentIndex.value = Math.max(0, Math.min(currentIndex.value, length - 1));
 });
-
-watch(alertKeys, () => {
-  alertController.alert(props.notices, {
-    soundEnabled: props.soundEnabled,
-    soundFile: getSetting("notification.urgentSound"),
-    systemNotificationEnabled: props.systemNotificationEnabled,
-  });
-}, {immediate: true});
 
 function acknowledgeCurrent() {
   if (!currentNotice.value) return;

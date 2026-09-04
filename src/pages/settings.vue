@@ -414,13 +414,13 @@
 
             <template v-else-if="activeSection === 'screen-notifications'">
               <SettingsPanel
-                description="控制当前班级大屏收到紧急通知时的提示方式。"
+                description="控制当前班级大屏收到新通知时的提示方式；紧急通知还会显示醒目横幅。"
                 icon="mdi-bell-outline"
                 title="通知与声音"
               >
                 <SettingRow
                   description="页面失焦或 PWA 最小化后仍会播放；首次使用请点击测试按钮解锁浏览器音频。"
-                  title="紧急通知提示音"
+                  title="新通知提示音"
                 >
                   <template #scope>
                     <ScopeChip type="screen" />
@@ -433,7 +433,7 @@
                   />
                 </SettingRow>
                 <SettingRow
-                  description="立即播放当前紧急铃声，同时完成浏览器要求的首次用户交互。"
+                  description="立即播放当前通知铃声，同时完成浏览器要求的首次用户交互。"
                   title="测试并启用声音"
                 >
                   <template #scope>

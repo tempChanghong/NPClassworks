@@ -8,6 +8,10 @@ export function notificationAlertKey(notice) {
   return `${notice?.id || "unknown"}:${notice?.revision || 0}`;
 }
 
+export function alertableScreenNotifications(publications = []) {
+  return publications.filter((publication) => publication?.type === "NOTICE");
+}
+
 export function notificationSeenStorageKey(scopeId) {
   return `classworks-v2-notification-alerts-seen:${scopeId || "unbound"}`;
 }

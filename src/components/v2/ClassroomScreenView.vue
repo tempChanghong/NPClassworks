@@ -132,7 +132,6 @@
       :binding-id="bindingId"
       :notices="urgentNotices"
       :sound-enabled="settings.urgentNoticeSound"
-      :system-notification-enabled="settings.backgroundSystemNotification"
       @acknowledge="acknowledgeNotice"
     />
 
@@ -313,10 +312,13 @@ import {boardDateRelativeLabel, shiftBoardDate, todayBoardDate} from "@/utils/bo
 import {classworksV2Api} from "@/utils/classworksV2Client";
 import {createNotificationDeliveryQueue} from "@/utils/notificationDeliveryQueue";
 import {
+  alertableScreenNotifications,
+  createNotificationAlertController,
   notificationAlertKey,
   readAcknowledgedNotificationKeys,
   rememberAcknowledgedNotification,
 } from "@/utils/notificationAlerts";
+import {getSetting} from "@/utils/settings";
 import {
   loadScreenDisplaySettings,
   saveScreenDisplaySettings,
@@ -331,6 +333,7 @@ const acknowledgementRevision = ref(0);
 const acknowledgedNoticeKeys = ref(readAcknowledgedNotificationKeys(store.screenSession?.binding?.id));
 const burnInStep = ref(0);
 let burnInTimer = null;
+let notificationAlertController = createNotificationAlertController({scopeId: store.screenSession?.binding?.id});
 const notificationDeliveryQueue = createNotificationDeliveryQueue({
   send: (items) => classworksV2Api.acknowledgeScreenNotifications(items),
 });
@@ -369,6 +372,7 @@ watch(bindingId, (id) => {
   settings.value = loadScreenDisplaySettings(id);
   acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(id);
   notificationCenterOpen.value = false;
+  notificationAlertController = createNotificationAlertController({scopeId: id});
 }, {immediate: true});
 
 watch(() => settings.value.performanceMode, updatePerformanceClass);
@@ -384,6 +388,16 @@ watch(() => store.feed.filter((publication) => publication.type === "NOTICE")
   }));
   if (!items.length || !store.screenSession) return;
   notificationDeliveryQueue.enqueue(items);
+}, {immediate: true});
+
+watch(() => `${bindingId.value}:${activeNotices.value
+  .map((publication) => `${publication.id}:${publication.revision}`)
+  .join(",")}`, () => {
+  void notificationAlertController.alert(alertableScreenNotifications(activeNotices.value), {
+    soundEnabled: settings.value.urgentNoticeSound,
+    soundFile: getSetting("notification.urgentSound"),
+    systemNotificationEnabled: settings.value.backgroundSystemNotification,
+  });
 }, {immediate: true});
 
 function acknowledgeNotice(publication) {

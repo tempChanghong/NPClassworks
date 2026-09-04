@@ -503,7 +503,9 @@ function loadPublication(publication) {
   localError.value = "";
   advancedPanel.value = publication ? "advanced" : undefined;
   form.subjectId = publication?.subjectId || "";
-  form.targetWorkspaceId = publication?.targets?.[0]?.workspaceId || "";
+  form.targetWorkspaceId = store.screenEditableWorkspaceId(publication)
+    || publication?.targets?.[0]?.workspaceId
+    || "";
   form.title = publication?.title || "";
   form.content = publication?.content || "";
   form.boardDate = publication?.boardDate

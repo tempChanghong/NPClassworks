@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  alertableScreenNotifications,
   claimNotificationAlert,
   createNotificationAlertController,
   findUnseenNotifications,
@@ -21,6 +22,19 @@ function memoryStorage() {
 
 test("notification alert identity includes the publication revision", () => {
   assert.equal(notificationAlertKey({id: "notice-a", revision: 3}), "notice-a:3");
+});
+
+test("all screen notices can alert regardless of priority", () => {
+  const publications = [
+    {id: "normal", type: "NOTICE", priority: "NORMAL"},
+    {id: "important", type: "NOTICE", priority: "IMPORTANT"},
+    {id: "urgent", type: "NOTICE", priority: "URGENT"},
+    {id: "homework", type: "ASSIGNMENT", priority: "URGENT"},
+  ];
+  assert.deepEqual(
+    alertableScreenNotifications(publications).map((item) => item.id),
+    ["normal", "important", "urgent"],
+  );
 });
 
 test("seen notifications are remembered per screen and revised notices alert again", () => {

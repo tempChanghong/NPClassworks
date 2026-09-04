@@ -405,9 +405,9 @@ const settingsDefinitions = {
   "notification.urgentSound": {
     type: "string",
     default: DEFAULT_URGENT_NOTIFICATION_SOUND,
-    description: "紧急通知警报声",
+    description: "大屏新通知提示音",
     icon: "mdi-bell-alert",
-    // 设置紧急通知时播放的音频文件
+    // 历史键名保留用于兼容现有设备设置，现在用于所有新通知。
   },
 
   // PWA 设置

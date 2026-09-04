@@ -759,10 +759,12 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       if (!this.screenSession || publication.type !== "ASSIGNMENT" || publication.status !== "PUBLISHED") {
         return false;
       }
+      return Boolean(this.screenEditableWorkspaceId(publication));
+    },
+
+    screenEditableWorkspaceId(publication) {
       const allowed = new Set(this.screenWorkspaces.map((workspace) => workspace.id));
-      return publication.targets?.length === 1 && publication.targets.every(
-        (target) => allowed.has(target.workspaceId),
-      );
+      return publication?.targets?.find((target) => allowed.has(target.workspaceId))?.workspaceId || "";
     },
 
     eligibleScreenWorkspaces(subjectId) {
