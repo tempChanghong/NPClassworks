@@ -42,7 +42,7 @@
             color="success"
             prepend-icon="mdi-check-circle"
             size="small"
-            title="完成状态仅保存在这台设备"
+            title="此设备的完成标记"
             variant="tonal"
           >
             本机已完成

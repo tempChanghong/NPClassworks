@@ -296,7 +296,7 @@
                     chips
                     closable-chips
                     :disabled="!batchForm.subjectId"
-                    hint="这里只显示该科允许随班授课的行政班和同科走班教学班"
+                    hint="可选择随班授课的行政班和同科走班教学班"
                     :items="eligibleWorkspaceOptions"
                     item-title="title"
                     item-value="value"
@@ -699,7 +699,7 @@ async function saveBatchAssignments() {
 
 async function removeAssignment(assignment, workspaceName) {
   const teacherName = accountName(assignment.account);
-  if (!window.confirm(`移除${teacherName}在${workspaceName}的任课关系？教师账号不会被删除。`)) return;
+  if (!window.confirm(`移除${teacherName}在${workspaceName}的任课关系？`)) return;
   removingAssignmentId.value = assignment.id;
   errorMessage.value = "";
   const restoreInput = {

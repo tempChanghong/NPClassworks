@@ -355,7 +355,7 @@
               <v-empty-state
                 v-if="!selectedPermissionPerson"
                 icon="mdi-shield-search-outline"
-                text="选择账号后，将按学校管理员、年级组长、班主任和明确任课关系汇总展示权限来源。"
+                text="选择账号，查看当前学期的职责和教学权限。"
                 title="有效权限检查器"
               />
               <template v-else>
@@ -388,8 +388,8 @@
                   variant="tonal"
                 >
                   {{ isSchoolManager(selectedPermissionPerson)
-                    ? '该账号具有学校管理员授权，可管理全校全部年级、行政班和走班教学空间；下列岗位职责仅作为额外业务身份展示。'
-                    : '权限来自下列职责的叠加；这里展示的是当前学期实际配置，不会自动把班主任扩大为全年级权限。' }}
+                    ? '学校管理员可管理全校教学内容；岗位职责展示其日常业务身份。'
+                    : '以下是该教师在当前学期的职责与权限范围。' }}
                 </v-alert>
                 <v-list
                   class="permission-source-list rounded-lg"
@@ -481,7 +481,7 @@
                 type="info"
                 variant="tonal"
               >
-                这些规则用于诊断和提醒，不会把年级组长自动伪装成全年级任课教师，也不会阻止临时缺岗配置。
+                检查年级组长、班主任和任课关系的配置情况。
               </v-alert>
               <v-btn
                 color="primary"

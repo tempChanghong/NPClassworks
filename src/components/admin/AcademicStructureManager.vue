@@ -150,7 +150,7 @@
                   type="info"
                   variant="tonal"
                 >
-                  已被作业、任课关系或授课规则引用的学科不会提供删除入口；可以安全修改名称、代码、分类和显示顺序。
+                  可修改学科名称、代码、分类和显示顺序。正在使用的学科不能删除。
                 </v-alert>
                 <v-list class="pa-0 rounded-lg">
                   <v-list-item
@@ -210,7 +210,7 @@
               type="info"
               variant="tonal"
             >
-              这里维护当前学期的年级和行政班。学校名称、学校代码和登录方式已经由首次配置保存，无需重复导入 JSON。
+              维护当前学期的年级和行政班。
             </v-alert>
             <div class="grade-grid">
               <v-card
@@ -346,7 +346,7 @@
                   type="info"
                   variant="tonal"
                 >
-                  预设只是快速填充。应用后仍可逐科修改，不会把“一班、二班”写成固定类型。
+                  预设用于快速填充，应用后仍可逐科调整。
                 </v-alert>
               </v-card-text>
             </v-card>
@@ -900,7 +900,7 @@
             type="info"
             variant="tonal"
           >
-            将一次性创建 {{ batchClassPreview.length }} 个班级；如果任一代码已存在，整批操作都不会写入。
+            将创建 {{ batchClassPreview.length }} 个班级。请确认班级代码没有重复。
           </v-alert>
           <div class="d-flex flex-wrap ga-2">
             <v-chip
@@ -945,7 +945,7 @@
             type="warning"
             variant="tonal"
           >
-            停用不会删除历史数据，但学生、教师和大屏将不再把它作为正常可用教学空间。
+            停用后，该教学空间将从学生、教师和大屏的可选范围中移除，历史数据保留。
           </v-alert>
           <v-list
             class="mb-4 rounded-lg"
@@ -1013,7 +1013,7 @@
             type="warning"
             variant="tonal"
           >
-            服务器内容已被其他管理员更新。你的输入仍被完整保留，请比较后选择处理方式。
+            内容已被其他管理员更新。请比较两个版本后选择处理方式。
           </v-alert>
           <div class="organization-conflict-table">
             <div class="organization-conflict-table__header">
@@ -1041,7 +1041,7 @@
             type="info"
             variant="tonal"
           >
-            可见字段目前相同，可能是其他管理员修改后又恢复了内容。仍建议采用服务器最新版。
+            当前可见字段相同，可直接采用最新版本。
           </v-alert>
         </v-card-text>
         <v-card-actions class="px-5 pb-5 flex-wrap ga-2">

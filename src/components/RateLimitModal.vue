@@ -53,7 +53,7 @@
         </v-card>
 
         <div class="text-body-2 text-grey">
-          请在等待时间后再次尝试，或减少请求频率以避免限制。
+          请在等待时间结束后重试。
         </div>
       </v-card-text>
 

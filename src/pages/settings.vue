@@ -83,7 +83,7 @@
           <main class="settings-content">
             <template v-if="activeSection === 'appearance'">
               <SettingsPanel
-                description="控制当前浏览器中的主题和背景，不会影响其他同学或教室。"
+                description="设置当前设备的主题和背景。"
                 icon="mdi-palette-outline"
                 title="外观"
               >
@@ -199,7 +199,7 @@
 
             <template v-else-if="activeSection === 'teacher'">
               <SettingsPanel
-                description="教师身份和学校权限由服务器管理，不会存入公共大屏设置。"
+                description="查看当前教师身份、权限范围和登录状态。"
                 icon="mdi-account-tie-outline"
                 title="教师账号"
               >
@@ -419,7 +419,7 @@
                 title="通知与声音"
               >
                 <SettingRow
-                  description="页面失焦或 PWA 最小化后仍会播放；普通提示音会适度增强，但不会使用 Teams 警报。"
+                  description="普通和重要通知使用温和提示音，紧急通知使用警报音。"
                   title="新通知声音"
                 >
                   <template #scope>
@@ -433,7 +433,7 @@
                   />
                 </SettingRow>
                 <SettingRow
-                  description="播放普通通知使用的温和提示音，同时完成浏览器要求的首次用户交互。"
+                  description="播放普通通知使用的温和提示音，并启用当前浏览器的声音。"
                   title="测试并启用声音"
                 >
                   <template #scope>
@@ -536,7 +536,7 @@
 
             <template v-else-if="activeSection === 'classroom-tools'">
               <SettingsPanel
-                description="决定课堂工具入口中显示哪些功能。关闭功能不会删除考勤或花名册数据。"
+                description="选择课堂工具入口中显示的功能。"
                 icon="mdi-toolbox-outline"
                 title="课堂工具"
               >
@@ -572,7 +572,7 @@
                     />
                   </SettingRow>
                   <SettingRow
-                    description="支持跨午夜时段；开始时间与结束时间相同时不会自动启动。"
+                    description="支持跨午夜时段。开始与结束时间相同时，自动监测关闭。"
                     title="每日监测时段"
                   >
                     <template #scope>
@@ -601,7 +601,7 @@
                     </div>
                   </SettingRow>
                   <SettingRow
-                    description="建议部署后由管理员点击一次，避免计划开始时才出现浏览器麦克风授权窗口。"
+                    description="提前授予麦克风权限，确保自动监测按时启动。"
                     title="麦克风权限"
                   >
                     <template #scope>
@@ -617,7 +617,7 @@
                     </v-btn>
                   </SettingRow>
                   <SettingRow
-                    description="选择物理麦克风并测试输入信号，避开没有声音的虚拟设备。选择结果仅对当前大屏生效。"
+                    description="选择麦克风并测试输入信号。设置保存在当前大屏。"
                     title="采集麦克风"
                   >
                     <template #scope>
@@ -680,7 +680,7 @@
                   </v-btn>
                 </SettingRow>
                 <SettingRow
-                  description="重新选择设备用途；班级大屏只重新检查声音、通知、麦克风和字号，不会解除设备绑定。"
+                  description="重新选择设备用途，并检查大屏的声音、通知、麦克风和字号设置。"
                   title="重新运行首次设置"
                 >
                   <template #scope>
@@ -695,7 +695,7 @@
                   </v-btn>
                 </SettingRow>
                 <SettingRow
-                  description="只删除可重新下载的静态缓存，不会删除选班、登录或大屏绑定。"
+                  description="清理可重新下载的页面资源。选班、登录和大屏绑定将保留。"
                   title="清理资源缓存"
                 >
                   <template #scope>
@@ -949,7 +949,7 @@ async function testNotificationSound() {
       gainValue: profile.gainValue,
     });
     if (!playback) throw new Error("提示音未能播放");
-    notify("测试音已播放；页面失焦后仍会使用此声音");
+    notify("测试音已播放");
   } catch {
     notify("浏览器阻止了声音播放，请检查站点声音权限");
   }
@@ -963,7 +963,7 @@ async function enableSystemNotifications() {
   }
   notificationPermission.value = await Notification.requestPermission();
   notify(notificationPermission.value === "granted"
-    ? "Windows 系统通知已启用；NPClassworks 提示音仍会独立播放"
+    ? "Windows 系统通知已启用"
     : "系统通知未获授权，应用内提示音不受影响");
 }
 
@@ -1018,7 +1018,7 @@ function restartOobe() {
 }
 
 async function clearResourceCaches() {
-  if (!window.confirm("确定清理可重新下载的资源缓存吗？选班、登录和大屏绑定不会被删除。")) return;
+  if (!window.confirm("清理页面资源缓存？选班、登录和大屏绑定将保留。")) return;
   if ("caches" in window) {
     const keys = await window.caches.keys();
     await Promise.all(keys.map((key) => window.caches.delete(key)));

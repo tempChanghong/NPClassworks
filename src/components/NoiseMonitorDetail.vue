@@ -546,7 +546,7 @@
                 暂无统计报告
               </div>
               <div class="text-caption mt-1">
-                定时或手动监测开始后，系统会在当前大屏本地保存统计片段
+                查看当前大屏的噪音监测统计
               </div>
             </div>
 
@@ -560,7 +560,7 @@
                     按日期汇总
                   </div>
                   <div class="text-caption text-medium-emphasis">
-                    每个片段约30秒；仅保存本机统计值，不保存或上传录音。
+                    每个片段约 30 秒，只记录本机响度统计。
                   </div>
                 </div>
                 <v-spacer />

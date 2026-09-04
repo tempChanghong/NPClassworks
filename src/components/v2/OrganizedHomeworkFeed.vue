@@ -45,7 +45,7 @@
             color="success"
             prepend-icon="mdi-check-circle-outline"
             size="small"
-            title="完成状态仅保存在这台设备"
+            title="此设备的完成标记"
             variant="tonal"
           >
             本机已完成 {{ completionStats.completed }}/{{ completionStats.total }}
@@ -188,7 +188,7 @@
       class="rounded-xl"
       :headline="hideCompleted ? '已完成作业已隐藏' : '没有符合条件的作业'"
       :icon="hideCompleted ? 'mdi-check-circle-outline' : 'mdi-filter-off-outline'"
-      :text="hideCompleted ? '完成状态仅保存在这台设备，可以随时重新显示' : '可以清除筛选条件查看当前日期的全部内容'"
+      :text="hideCompleted ? '已隐藏完成的作业，可随时重新显示' : '清除筛选条件可查看当前日期的全部内容'"
     >
       <template #actions>
         <v-btn

@@ -51,7 +51,7 @@
                   {{ audioReady ? "已测试" : "待测试" }}
                 </v-chip>
               </div>
-              <p>点击播放一声短提示，解锁浏览器的后台通知声音。</p>
+              <p>播放一声通知提示，确认音量清晰。</p>
               <v-btn
                 color="primary"
                 prepend-icon="mdi-play"
@@ -124,7 +124,7 @@
                   {{ microphoneLabel }}
                 </v-chip>
               </div>
-              <p>仅在本机分析声音强弱，不上传或保存录音。请测试后避开无信号的虚拟设备。</p>
+              <p>测试麦克风输入，并选择有声音信号的设备。音频只在本机分析。</p>
               <MicrophoneDevicePicker
                 :binding-id="bindingId"
                 @permission="handleMicrophonePermission"

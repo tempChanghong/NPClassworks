@@ -29,7 +29,7 @@
           type="info"
           variant="tonal"
         >
-          恢复不会覆盖或删除历史，而是把所选内容复制成一个新的当前版本。
+          恢复后，所选内容将成为新的当前版本。
         </v-alert>
         <v-skeleton-loader
           v-if="loading"

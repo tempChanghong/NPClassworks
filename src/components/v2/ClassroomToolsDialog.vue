@@ -237,7 +237,7 @@
               type="info"
               variant="tonal"
             >
-              每行一名学生；可填写“学号 姓名”，也可以只填写姓名。名单仅保存在学校服务器中供考勤使用。
+              每行一名学生，可填写“学号 姓名”或只填写姓名。
             </v-alert>
             <v-textarea
               v-model="rosterText"

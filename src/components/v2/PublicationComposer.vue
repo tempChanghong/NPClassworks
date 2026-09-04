@@ -315,7 +315,7 @@
         class="mb-3"
         color="warning"
         icon="mdi-source-branch-sync"
-        title="检测到并发修改，未覆盖服务器内容"
+        title="内容已在其他设备更新"
         variant="tonal"
       >
         <div>{{ conflictMessage }}</div>

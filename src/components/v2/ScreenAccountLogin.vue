@@ -20,7 +20,7 @@
         登录班级大屏
       </div>
       <div class="text-body-1 text-medium-emphasis mb-6 text-center">
-        首次登录后，本机将自动保持班级大屏身份，无需输入管理员账号。
+        首次登录后，本机会记住班级大屏身份。
       </div>
       <v-select
         v-model="schoolId"

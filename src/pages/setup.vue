@@ -133,7 +133,7 @@
                     type="info"
                     variant="tonal"
                   >
-                    检测到未完成的初始化。重新验证部署密钥即可从已有数据继续，不会重复创建学校。
+                    检测到未完成的初始化。验证部署密钥后可继续配置。
                   </v-alert>
                   <v-alert
                     v-if="statusLoadError"
@@ -177,7 +177,7 @@
                     @click:append-inner="showSetupKey = !showSetupKey"
                   />
                   <div class="text-body-2 text-medium-emphasis mb-5">
-                    该密钥来自服务器部署环境，只建立15分钟的安装会话，不会成为日常登录密码。
+                    请输入服务器部署环境中的初始化密钥。验证后安装会话有效 15 分钟。
                   </div>
                   <v-btn
                     color="primary"
@@ -217,7 +217,7 @@
                               从旧服务器迁入整校数据
                             </div>
                             <div class="text-caption text-medium-emphasis">
-                              仅支持学校管理员导出的加密 .npcw-transfer 文件
+                              选择学校管理员导出的 .npcw-transfer 加密文件
                             </div>
                           </div>
                         </div>
@@ -515,7 +515,7 @@
                     type="info"
                     variant="tonal"
                   >
-                    此操作通过数据库事务一次完成。任一步失败都不会留下半个学校。
+                    确认后开始创建学校和首个管理员账号。
                   </v-alert>
                   <div class="d-flex flex-wrap ga-3">
                     <v-btn
@@ -619,7 +619,7 @@
                     type="info"
                     variant="tonal"
                   >
-                    当前学校选择 OAuth 邮箱登录，安装向导不创建短账号。请完成初始化后在学校后台按邮箱分配教师。
+                    当前学校使用 OAuth 邮箱登录。初始化完成后，可在学校后台按邮箱添加教师。
                   </v-alert>
                   <v-alert
                     v-if="setupContext?.school?.teacherAuthMode !== 'OAUTH_EMAIL' && !workspaceOptions.length"
@@ -753,7 +753,7 @@
                         type="info"
                         variant="tonal"
                       >
-                        教师配置可以一次创建短账号、任课关系、年级组长和班主任职责。请使用学校、学期、科目和教学空间的稳定代码，不要填写数据库 UUID。编辑器中的王老师、李老师仅用于展示格式，正式导入前请替换或删除。
+                        可批量创建教师短账号、任课关系、年级组长和班主任职责。请填写学校、学期、科目和教学空间代码，并替换示例中的教师信息。
                       </v-alert>
                       <v-file-input
                         accept="application/json,.json"
@@ -834,7 +834,7 @@
                     type="info"
                     variant="tonal"
                   >
-                    大屏使用独立账号登录，不需要在一体机上输入管理员账号。这里只创建账号；首次在班级一体机登录后才会绑定该设备。
+                    为行政班创建大屏账号。首次登录时，请在对应的班级一体机上完成设备绑定。
                   </v-alert>
                   <v-alert
                     v-if="!administrativeClassOptions.length"
@@ -842,7 +842,7 @@
                     type="warning"
                     variant="tonal"
                   >
-                    尚未配置行政班，无法创建大屏账号。可以安全跳过。
+                    配置行政班后即可创建大屏账号，本步骤可以稍后完成。
                   </v-alert>
                   <v-row v-else>
                     <v-col
@@ -991,7 +991,7 @@
                       type="warning"
                       variant="tonal"
                     >
-                      当前浏览器没有可交付的明文凭据，可能是初始化中途刷新或重新进入。已有账号的原始 PIN 无法从服务器取回；请完成登录测试，遗忘时在管理后台重置。
+                      当前没有待交付的账号凭据。请完成登录测试；忘记 PIN 时可在管理后台重置。
                     </v-alert>
                     <v-alert
                       v-if="deliveryWarning"
@@ -1075,7 +1075,7 @@
                       </v-chip>
                     </div>
                     <div class="text-body-2 text-medium-emphasis mb-4">
-                      测试只校验账号与凭据，不签发登录令牌，不记录为正式登录，也不会绑定大屏设备。
+                      检查教师账号、管理员账号和大屏账号是否可以正常登录。
                     </div>
                     <v-row>
                       <v-col
@@ -1171,7 +1171,7 @@
                     type="info"
                     variant="tonal"
                   >
-                    尚未创建大屏账号，不影响教师先使用系统。
+                    大屏账号可以稍后在学校管理后台创建。
                   </v-alert>
                   <div class="d-flex flex-wrap ga-3">
                     <v-btn

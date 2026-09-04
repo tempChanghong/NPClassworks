@@ -298,7 +298,7 @@
             登录教师工作台
           </div>
           <div class="text-body-1 text-medium-emphasis mb-6 text-center">
-            登录一次即可看到自己负责的所有行政班和走班教学班，无需切换浏览器或多个 UUID。
+            查看并管理自己负责的行政班和走班教学班。
           </div>
           <v-select
             v-model="loginSchoolId"
@@ -336,7 +336,7 @@
               登录
             </v-btn>
             <div class="text-caption text-medium-emphasis text-center mt-3">
-              登录状态默认在本设备保留 180 天；输错只会限制本设备对该账号的继续尝试，不会锁死教师账号。
+              登录状态默认在本设备保留 180 天。连续输错时，请稍后再试。
             </div>
           </template>
           <v-alert
@@ -552,7 +552,7 @@
           type="info"
           variant="tonal"
         >
-          验证后可在15分钟内使用“看作业”和“教师”页面。设备不会解绑，刷新页面会立即回到大屏。
+          输入大屏 PIN 后，可临时使用“看作业”和“教师”页面，有效期为 15 分钟。
         </v-alert>
         <v-text-field
           v-model="screenExitPin"

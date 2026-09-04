@@ -27,7 +27,7 @@
           icon="mdi-check-all"
           variant="tonal"
         >
-          本次发布已作为一个整体事务写入；以下目标均已保存，不会出现部分班级写入、部分班级遗漏。
+          已发布到以下班级：
         </v-alert>
         <v-list
           border
@@ -56,7 +56,7 @@
           v-if="publication.type === 'NOTICE'"
           class="text-caption text-medium-emphasis mt-3"
         >
-          “写入成功”表示通知已经保存在服务器；大屏是否已经展示，需要查看大屏送达状态。
+          可在大屏送达状态中查看通知是否已经展示。
         </div>
       </v-card-text>
       <v-card-actions class="px-5 pb-5 flex-wrap ga-2">

@@ -178,7 +178,7 @@
               type="warning"
               variant="tonal"
             >
-              仅限所有 OWNER 都无法登录时使用。恢复会让该账号的其他设备全部退出。
+              使用恢复密钥重设 OWNER PIN。重设后，该账号需要重新登录。
             </v-alert>
             <v-text-field
               v-model.trim="recoveryUsername"
@@ -335,7 +335,7 @@
                 type="info"
                 variant="tonal"
               >
-                日常新增或修改年级、行政班、走班教学班，请使用“组织与班级”页面。这里仅用于新校批量建档或大规模结构调整；同代码数据会被更新，文件中未出现的数据不会被删除，但被导入班级的授课规则和走班来源会按文件替换。
+                批量导入年级、行政班和走班教学班。同代码数据会被更新；导入班级的授课规则和走班来源以文件内容为准。
               </v-alert>
               <v-alert
                 class="mb-4"
@@ -373,7 +373,7 @@
                 v-if="organizationAuthMode === 'SHARED_PASSWORD'"
                 v-model="organizationSharedPassword"
                 class="mb-2"
-                hint="至少8个字符；首次导入必填，之后留空表示不更换；后端只保存 bcrypt 哈希"
+                hint="至少 8 个字符；之后留空可保持现有密码"
                 label="学校通用教师口令"
                 persistent-hint
                 type="password"
@@ -1503,7 +1503,7 @@
                 />
                 <v-text-field
                   v-model="screenEdit.pin"
-                  hint="留空表示不修改；修改 PIN 不会让已绑定设备退出"
+                  hint="留空则保留当前 PIN"
                   label="新 PIN（可选）"
                   persistent-hint
                   type="password"
@@ -2063,7 +2063,7 @@ const roleOptions = [
 const authModeOptions = [
   {title: "教师个人 PIN（推荐）", value: "LOCAL_PIN"},
   {title: "学校通用教师口令（极简）", value: "SHARED_PASSWORD"},
-  {title: "OAuth 邮箱（兼容）", value: "OAUTH_EMAIL"},
+  {title: "OAuth 邮箱", value: "OAUTH_EMAIL"},
 ];
 const quickDeadlineDayOptions = [
   ...Array.from({length: 15}, (_, dayOffset) => ({
@@ -2111,9 +2111,9 @@ const adminRoleOptions = computed(() => selectedSchool.value?.role === "OWNER"
     ]
   : [{title: "管理员", value: "ADMIN"}]);
 const authModeDescription = computed(() => ({
-  LOCAL_PIN: "推荐方案：每位教师使用短账号和个人 PIN。学生知道其他教师姓名也不能冒用。",
+  LOCAL_PIN: "每位教师使用短账号和个人 PIN。",
   SHARED_PASSWORD: "极简方案：每位教师仍有短账号，但全校共用一个口令。口令泄露后可冒用任意教师，请定期更换。",
-  OAUTH_EMAIL: "兼容方案：沿用邮箱预分配与 OAuth 登录；适合已有统一身份系统的学校。",
+  OAUTH_EMAIL: "使用邮箱预分配与 OAuth 登录，适合已有统一身份系统的学校。",
 }[organizationAuthMode.value]));
 const teacherAssignmentHelp = computed(() => selectedTeacherAuthMode.value === "OAUTH_EMAIL"
   ? "教师尚未登录也可以分配；其首次使用相同邮箱 OAuth 登录后会自动获得这些班级。"
