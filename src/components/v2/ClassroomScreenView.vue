@@ -86,6 +86,12 @@
             </template>
             <v-list>
               <v-list-item
+                prepend-icon="mdi-file-cog-outline"
+                subtitle="需验证本大屏 PIN"
+                title="下载本机诊断包"
+                @click="$emit('diagnostics')"
+              />
+              <v-list-item
                 prepend-icon="mdi-exit-to-app"
                 subtitle="需验证本大屏 PIN"
                 title="临时退出大屏"
@@ -326,7 +332,7 @@ import {
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 
-defineEmits(["create", "edit", "history", "tools", "copy-board", "settings", "exit"]);
+defineEmits(["create", "edit", "history", "tools", "copy-board", "settings", "exit", "diagnostics"]);
 const store = useClassworksV2Store();
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const notificationCenterOpen = ref(false);

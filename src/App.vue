@@ -29,6 +29,7 @@
     <PwaLifecyclePrompt />
     <NoiseScheduleManager />
     <ActionDialogHost />
+    <AppRecoveryDialog />
   </v-app>
 </template>
 
@@ -40,6 +41,7 @@ import RateLimitModal from "@/components/RateLimitModal.vue";
 import PwaLifecyclePrompt from "@/components/v2/PwaLifecyclePrompt.vue";
 import NoiseScheduleManager from "@/components/v2/NoiseScheduleManager.vue";
 import ActionDialogHost from "@/components/common/ActionDialogHost.vue";
+import AppRecoveryDialog from "@/components/common/AppRecoveryDialog.vue";
 
 const theme = useTheme();
 

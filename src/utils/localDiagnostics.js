@@ -1,3 +1,5 @@
+import {showAppRecovery} from "./appRecovery.js";
+
 const STORAGE_KEY = "npclassworks-local-diagnostics:v1";
 const EVENT_NAME = "npclassworks:diagnostics-updated";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -198,18 +200,36 @@ export function installLocalDiagnostics(app) {
       message: error?.message || String(error),
       context: {component: instance?.$options?.name || "", info, stack: error?.stack || ""},
     });
+    showAppRecovery({
+      kind: "application",
+      title: "页面组件运行失败",
+      message: "当前页面没有正常完成运行，可以重新加载或下载诊断包。",
+      detail: error?.message || String(error),
+    });
     if (previousHandler) previousHandler(error, instance, info);
     else console.error(error);
   };
   if (typeof window === "undefined" || window.__NP_LOCAL_DIAGNOSTICS_INSTALLED__) return;
   window.__NP_LOCAL_DIAGNOSTICS_INSTALLED__ = true;
-  window.addEventListener("error", (event) => recordDiagnosticEvent({
-    category: "APP",
-    severity: "ERROR",
-    code: event.error ? "WINDOW_ERROR" : "RESOURCE_LOAD_ERROR",
-    message: event.message || "页面资源载入失败",
-    context: {source: event.filename || event.target?.src || event.target?.href || "", line: event.lineno || 0, column: event.colno || 0, stack: event.error?.stack || ""},
-  }), true);
+  window.addEventListener("error", (event) => {
+    const targetTag = event.target?.tagName?.toUpperCase?.() || "";
+    const isCriticalResource = targetTag === "SCRIPT" || (targetTag === "LINK" && event.target?.rel === "stylesheet");
+    recordDiagnosticEvent({
+      category: "APP",
+      severity: "ERROR",
+      code: event.error ? "WINDOW_ERROR" : "RESOURCE_LOAD_ERROR",
+      message: event.message || "页面资源载入失败",
+      context: {source: event.filename || event.target?.src || event.target?.href || "", line: event.lineno || 0, column: event.colno || 0, stack: event.error?.stack || ""},
+    });
+    if (isCriticalResource) {
+      showAppRecovery({
+        kind: "resource",
+        title: "新版页面资源载入失败",
+        message: "脚本或样式文件没有完整载入，可以清理资源缓存后重新加载。",
+        detail: event.target?.src || event.target?.href || "",
+      });
+    }
+  }, true);
   window.addEventListener("unhandledrejection", (event) => recordDiagnosticEvent({
     category: "APP",
     severity: "ERROR",

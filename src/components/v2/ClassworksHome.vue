@@ -248,6 +248,7 @@
         @settings="openSettings('screen')"
         @tools="classroomToolsDialog = true"
         @copy-board="copyScreenBoardToToday"
+        @diagnostics="openScreenDiagnosticDialog"
         @exit="openScreenExitDialog"
       />
       <ScreenAccountLogin
@@ -544,7 +545,7 @@
   >
     <v-card class="rounded-xl">
       <v-card-title class="pa-5 pb-2">
-        临时退出班级大屏
+        {{ screenProtectedAction === "diagnostics" ? "下载大屏本机诊断包" : "临时退出班级大屏" }}
       </v-card-title>
       <v-card-text class="px-5">
         <v-alert
@@ -552,7 +553,9 @@
           type="info"
           variant="tonal"
         >
-          输入大屏 PIN 后，可临时使用“看作业”和“教师”页面，有效期为 15 分钟。
+          {{ screenProtectedAction === "diagnostics"
+            ? "输入本大屏 PIN 后，将下载这台一体机的脱敏运行记录与性能基线。"
+            : "输入大屏 PIN 后，可临时使用“看作业”和“教师”页面，有效期为 15 分钟。" }}
         </v-alert>
         <v-text-field
           v-model="screenExitPin"
@@ -562,7 +565,7 @@
           prepend-inner-icon="mdi-lock-outline"
           type="password"
           variant="outlined"
-          @keyup.enter="unlockScreenTemporarily"
+          @keyup.enter="performScreenProtectedAction"
         />
       </v-card-text>
       <v-card-actions class="px-5 pb-5">
@@ -573,9 +576,9 @@
         <v-btn
           color="primary"
           :loading="screenExitBusy"
-          @click="unlockScreenTemporarily"
+          @click="performScreenProtectedAction"
         >
-          验证并退出
+          {{ screenProtectedAction === "diagnostics" ? "验证并下载" : "验证并退出" }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -642,6 +645,9 @@ import {
   teacherPublicationSaveFeedback,
 } from "@/utils/screenSaveFeedback";
 import {isPublicationRevisionConflict} from "@/utils/publicationConflict";
+import packageInfo from "../../../package.json";
+import {createDiagnosticBundle, downloadDiagnosticBundle} from "@/utils/localDiagnostics";
+import {getServerUrl} from "@/utils/socketClient";
 import {
   CLASSWORKS_OOBE_VERSION,
   completeClassworksOobe,
@@ -694,6 +700,7 @@ const screenExitDialog = ref(false);
 const screenExitPin = ref("");
 const screenExitError = ref("");
 const screenExitBusy = ref(false);
+const screenProtectedAction = ref("exit");
 const screenTemporarilyUnlocked = ref(false);
 const screenUnlockRemainingSeconds = ref(0);
 let screenUnlockDeadline = 0;
@@ -874,6 +881,14 @@ onUnmounted(() => {
 });
 
 function openScreenExitDialog() {
+  screenProtectedAction.value = "exit";
+  screenExitPin.value = "";
+  screenExitError.value = "";
+  screenExitDialog.value = true;
+}
+
+function openScreenDiagnosticDialog() {
+  screenProtectedAction.value = "diagnostics";
   screenExitPin.value = "";
   screenExitError.value = "";
   screenExitDialog.value = true;
@@ -920,6 +935,53 @@ async function unlockScreenTemporarily() {
   } finally {
     screenExitBusy.value = false;
   }
+}
+
+async function downloadScreenDiagnostics() {
+  if (!screenExitPin.value) {
+    screenExitError.value = "请输入本大屏 PIN";
+    return;
+  }
+  screenExitBusy.value = true;
+  screenExitError.value = "";
+  try {
+    await classworksV2Api.unlockClassroomScreen(screenExitPin.value);
+    const bundle = await createDiagnosticBundle({
+      app: {name: "NPClassworks", version: packageInfo.version, codename: packageInfo.codename, codenameZh: packageInfo.codenameZh},
+      backendUrl: getServerUrl(),
+      context: {
+        page: "classroom-screen",
+        screenState: {
+          syncState: store.screenSyncState,
+          online: store.screenNetworkOnline,
+          realtimeConnected: store.screenRealtimeConnected,
+          pendingUploads: store.screenPendingUploads.length,
+          lastSyncedAt: store.screenLastSyncedAt,
+          lastHeartbeatAt: store.screenHeartbeatAt,
+          hasSession: Boolean(store.screenSession),
+        },
+      },
+    });
+    downloadDiagnosticBundle(bundle, `npclassworks-screen-diagnostics-${Date.now()}.json`);
+    screenExitDialog.value = false;
+    screenExitPin.value = "";
+    showFeedback({
+      title: "本机诊断包已下载",
+      detail: "文件已脱敏，可交给部署或开发人员排查",
+      color: "info",
+      icon: "mdi-file-check-outline",
+    });
+  } catch (error) {
+    screenExitError.value = describeApiError(error, "PIN 验证失败");
+  } finally {
+    screenExitBusy.value = false;
+  }
+}
+
+function performScreenProtectedAction() {
+  return screenProtectedAction.value === "diagnostics"
+    ? downloadScreenDiagnostics()
+    : unlockScreenTemporarily();
 }
 
 async function loginTeacher() {

@@ -15,6 +15,8 @@ import {
   rememberCompletedSetup,
   SETUP_STATUS_TIMEOUT_MS,
 } from '@/utils/setupStatusCache'
+import {recordDiagnosticEvent} from '@/utils/localDiagnostics'
+import {showAppRecovery} from '@/utils/appRecovery'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -42,23 +44,24 @@ router.beforeEach(async (to) => {
   return true
 })
 
-// Workaround for https://github.com/vitejs/vite/issues/11804
 router.onError((err, to) => {
-  if (err?.message?.includes?.('Failed to fetch dynamically imported module')) {
-    if (!localStorage.getItem('vuetify:dynamic-reload')) {
-      console.log('Reloading page to fix dynamic import error')
-      localStorage.setItem('vuetify:dynamic-reload', 'true')
-      window.location.assign(to.fullPath)
-    } else {
-      console.error('Dynamic import error, reloading page did not fix it', err)
-    }
-  } else {
-    console.error(err)
+  const message = err?.message || String(err)
+  if (/dynamically imported module|module script failed|error loading dynamically imported module/i.test(message)) {
+    recordDiagnosticEvent({
+      category: 'APP',
+      severity: 'ERROR',
+      code: 'ROUTE_CHUNK_LOAD_FAILED',
+      message,
+      context: {route: to?.path || ''},
+    })
+    showAppRecovery({
+      kind: 'resource',
+      title: '新版页面资源载入失败',
+      message: '页面模块没有完整载入，可以清理资源缓存后重新加载。',
+      detail: message,
+    })
   }
-})
-
-router.isReady().then(() => {
-  localStorage.removeItem('vuetify:dynamic-reload')
+  console.error(err)
 })
 
 export default router

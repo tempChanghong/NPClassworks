@@ -18,8 +18,10 @@ import messageService from './utils/message'
 import { captureOAuthCallback } from './utils/classworksV2Client'
 import { initializeAnalytics } from 'virtual:npclassworks-analytics'
 import { installLocalDiagnostics } from './utils/localDiagnostics'
+import { markApplicationMounted, startPerformanceBaseline } from './utils/performanceBaseline'
 
 captureOAuthCallback()
+startPerformanceBaseline()
 
 const app = createApp(App)
 
@@ -31,6 +33,7 @@ app.component('GlobalMessage', GlobalMessage)
 
 // 挂载 Vue app（首要目标：尽快渲染首屏）
 app.mount('#app')
+markApplicationMounted()
 
 // ====== 以下全部异步，不阻塞首屏渲染 ======
 
