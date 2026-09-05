@@ -72,6 +72,54 @@ test("installed PWA reloads offline and uploads queued homework once after recon
   } finally { await screen.context.close(); }
 });
 
+test("screen first opens its lazy composer offline and restores a draft after closing and reopening", async ({browser, request}) => {
+  const screen = await openRole(browser, "screen");
+  try {
+    await screen.page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await expect.poll(() => screen.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    expect(await screen.page.evaluate(() => globalThis.performance.getEntriesByType("resource")
+      .some(entry => /ScreenHomeworkDialog-.*\.js/.test(entry.name)))).toBe(false);
+    await screen.context.setOffline(true);
+    const chunk = screen.page.waitForResponse(response => /ScreenHomeworkDialog-.*\.js/.test(response.url()));
+    await screen.page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    expect((await chunk).fromServiceWorker()).toBe(true);
+    await screen.page.getByRole("button", {name: "数学", exact: true}).click();
+    const content = screen.page.getByRole("textbox", {name: "作业内容 作业内容", exact: true});
+    await content.fill("首次断网打开仍保留的草稿");
+    await screen.page.getByRole("button", {name: "取消", exact: true}).click();
+    await expect(screen.page.locator(".screen-composer")).not.toBeVisible();
+    await screen.page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    await expect(content).toHaveValue("首次断网打开仍保留的草稿");
+    await screen.page.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(screen.page.locator(".screen-composer")).not.toBeVisible();
+    const queued = await screen.page.evaluate(() => JSON.parse(localStorage.getItem("classworks-v2-screen-publication-queue:screen-a")));
+    expect(queued).toHaveLength(1);
+    expect(queued[0].input.content).toBe("首次断网打开仍保留的草稿");
+    expect((await (await request.get(`${api}/__test/state`)).json()).data.items).toHaveLength(0);
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
+test("lazy history and delivery dialogs fetch their data on the first opening", async ({browser, request}) => {
+  expect((await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content: "异步弹窗验证通知"}})).ok()).toBe(true);
+  const teacher = await openRole(browser, "teacher");
+  try {
+    const menu = teacher.page.getByRole("button").filter({has: teacher.page.locator(".mdi-dots-vertical")});
+    await menu.click();
+    const history = teacher.page.waitForResponse(response => response.url().endsWith("/publications/pub-1/revisions"));
+    await teacher.page.getByText("版本历史与恢复", {exact: true}).click();
+    expect((await history).ok()).toBe(true);
+    await expect(teacher.page.getByText("不可删除的版本历史", {exact: true})).toBeVisible();
+    await teacher.page.getByRole("button", {name: "关闭", exact: true}).click();
+    await menu.click();
+    const delivery = teacher.page.waitForResponse(response => response.url().endsWith("/publications/pub-1/screen-deliveries"));
+    await teacher.page.getByText("查看大屏送达状态", {exact: true}).click();
+    expect((await delivery).ok()).toBe(true);
+    await expect(teacher.page.getByText("没有目标班级大屏", {exact: true})).toBeVisible();
+    expect(teacher.errors).toEqual([]);
+  } finally { await teacher.context.close(); }
+});
+
 test("PWA upgrade preserves pending homework through worker activation and offline reload before uploading once", async ({browser, request}) => {
   test.setTimeout(90000);
   const screen = await openRole(browser, "screen");

@@ -480,11 +480,13 @@
     v-model="classroomToolsDialog"
   />
   <screen-homework-dialog
+    v-if="screenComposerDialog"
     v-model="screenComposerDialog"
     :publication="screenEditingPublication"
     @saved="showScreenSavedMessage"
   />
   <publication-history-dialog
+    v-if="historyDialog"
     v-model="historyDialog"
     :mode="historyMode"
     :publication="historyPublication"
@@ -492,10 +494,12 @@
     @refreshed="historyPublication = $event"
   />
   <NotificationDeliveryDialog
+    v-if="notificationDeliveryDialog"
     v-model="notificationDeliveryDialog"
     :publication="deliveryPublication"
   />
   <PublicationResultDialog
+    v-if="publicationResultDialog"
     v-model="publicationResultDialog"
     :publication="publicationResult"
     @inspect-delivery="inspectResultDelivery"
@@ -626,17 +630,10 @@ import {
 } from "@/utils/classworksV2Client";
 import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
 import ScreenAccountLogin from "@/components/v2/ScreenAccountLogin.vue";
-import PublicationComposer from "@/components/v2/PublicationComposer.vue";
-import ScreenHomeworkDialog from "@/components/v2/ScreenHomeworkDialog.vue";
-import PublicationHistoryDialog from "@/components/v2/PublicationHistoryDialog.vue";
-import NotificationDeliveryDialog from "@/components/v2/NotificationDeliveryDialog.vue";
-import PublicationResultDialog from "@/components/v2/PublicationResultDialog.vue";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
-import TeacherPublicationManager from "@/components/v2/TeacherPublicationManager.vue";
-import TeacherActionCenter from "@/components/v2/TeacherActionCenter.vue";
 import ClassworksOobe from "@/components/v2/ClassworksOobe.vue";
 import ScreenOobeChecklist from "@/components/v2/ScreenOobeChecklist.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
@@ -661,6 +658,13 @@ import {
 } from "@/utils/classworksOobe";
 
 const ClassroomToolsDialog = defineAsyncComponent(() => import("@/components/v2/ClassroomToolsDialog.vue"));
+const PublicationComposer = defineAsyncComponent(() => import("@/components/v2/PublicationComposer.vue"));
+const TeacherPublicationManager = defineAsyncComponent(() => import("@/components/v2/TeacherPublicationManager.vue"));
+const TeacherActionCenter = defineAsyncComponent(() => import("@/components/v2/TeacherActionCenter.vue"));
+const ScreenHomeworkDialog = defineAsyncComponent(() => import("@/components/v2/ScreenHomeworkDialog.vue"));
+const PublicationHistoryDialog = defineAsyncComponent(() => import("@/components/v2/PublicationHistoryDialog.vue"));
+const NotificationDeliveryDialog = defineAsyncComponent(() => import("@/components/v2/NotificationDeliveryDialog.vue"));
+const PublicationResultDialog = defineAsyncComponent(() => import("@/components/v2/PublicationResultDialog.vue"));
 
 const store = useClassworksV2Store();
 const route = useRoute();

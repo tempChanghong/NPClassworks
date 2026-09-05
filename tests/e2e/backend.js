@@ -81,6 +81,8 @@ export function startTestBackend(port = apiPort) {
     if (path === "/api/v2/classroom-screens/heartbeat") return reply({receivedAt: new Date().toISOString(), commands: []});
     if (path.endsWith("/notification-deliveries")) return reply([]);
     if (path === "/api/v2/publications/action-required") return reply({items: [], total: 0, summary: {}});
+    if (/^\/api\/v2\/publications\/[^/]+\/revisions$/.test(path)) return reply([]);
+    if (/^\/api\/v2\/publications\/[^/]+\/screen-deliveries$/.test(path)) return reply({screens: []});
     if (path.endsWith("/feed")) {
       if (path === "/api/v2/classroom-screens/feed") screenFeedRequests++;
       return reply({items, generatedAt: new Date().toISOString()});
@@ -92,7 +94,7 @@ export function startTestBackend(port = apiPort) {
       const existing = body.clientRequestId && items.find((item) => item.clientRequestId === body.clientRequestId);
       if (existing) return reply(existing);
       const now = new Date().toISOString();
-      const publication = {...body, id: `pub-${items.length + 1}`, type: "ASSIGNMENT", status: "PUBLISHED", revision: 1,
+      const publication = {...body, id: `pub-${items.length + 1}`, type: body.type || "ASSIGNMENT", status: "PUBLISHED", revision: 1,
         isCertified: path === "/api/v2/publications", author: account, subject, priority: "NORMAL",
         publishAt: body.publishAt || now, updatedAt: now, createdAt: now,
         targets: [{workspaceId: workspace.id, workspace}]};

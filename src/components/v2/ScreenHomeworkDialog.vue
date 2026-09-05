@@ -467,7 +467,7 @@ watch(() => props.publication, (publication) => {
 watch(() => props.modelValue, (open) => {
   if (open) restoreDraft();
   else draftReady.value = false;
-});
+}, {immediate: true});
 watch(() => form.subjectId, () => {
   if (!eligibleTargets.value.some((workspace) => workspace.id === form.targetWorkspaceId)) {
     form.targetWorkspaceId = eligibleTargets.value.length === 1 ? eligibleTargets.value[0].id : "";

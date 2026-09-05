@@ -145,7 +145,7 @@ watch(() => props.modelValue, (open) => {
     workingPublication.value = props.publication;
     load();
   }
-});
+}, {immediate: true});
 
 async function load() {
   loading.value = true;

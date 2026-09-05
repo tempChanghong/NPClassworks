@@ -97,7 +97,7 @@ const result = ref(null);
 
 watch([() => props.modelValue, () => props.publication?.id], ([open]) => {
   if (open) load();
-});
+}, {immediate: true});
 
 async function load() {
   if (!props.publication?.id) return;
