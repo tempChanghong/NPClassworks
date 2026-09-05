@@ -32,6 +32,7 @@ import {
   toggleFavoriteTeacherTargets,
 } from "@/utils/teacherTargetPreferences";
 import {
+  ScreenPublicationQueueError,
   enqueueScreenPublication,
   loadScreenPublicationQueue,
   removeScreenPublicationQueueItem,
@@ -952,7 +953,12 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     enqueueOfflineScreenPublication(input, context = {}) {
       const bindingId = this.screenSession?.binding?.id;
       if (!bindingId) throw new Error("大屏尚未绑定，无法保存离线作业");
-      this.screenPendingUploads = enqueueScreenPublication(bindingId, input, context);
+      try {
+        this.screenPendingUploads = enqueueScreenPublication(bindingId, input, context);
+      } catch (error) {
+        this.reportScreenQueueError(error);
+        throw error;
+      }
       recordDiagnosticEvent({
         category: "SCREEN_SYNC",
         severity: "WARNING",
@@ -987,6 +993,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
             this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, item.id);
             savedAny = true;
           } catch (error) {
+            if (error instanceof ScreenPublicationQueueError) throw error;
             if (isTransientScreenRequestError(error)) break;
             this.screenPendingUploads = updateScreenPublicationQueueItem(bindingId, item.id, {
               attempts: item.attempts + 1,
@@ -1010,6 +1017,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
           this.screenLastSyncedAt = new Date().toISOString();
           await this.loadActiveFeed();
         }
+      } catch (error) {
+        this.reportScreenQueueError(error);
       } finally {
         this.screenPendingUploads = loadScreenPublicationQueue(bindingId);
         this.screenSyncing = false;
@@ -1031,15 +1040,24 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         await this.loadActiveFeed();
         return true;
       } catch (error) {
-        this.screenPendingUploads = updateScreenPublicationQueueItem(bindingId, item.id, {
-          attempts: item.attempts + 1,
-          status: isTransientScreenRequestError(error) ? "pending" : "needs_review",
-          error: {
-            code: error.response?.data?.code || "SCREEN_UPLOAD_FAILED",
-            message: error.response?.data?.message || error.message || "提交失败",
-            details: error.response?.data?.details || null,
-          },
-        });
+        if (error instanceof ScreenPublicationQueueError) {
+          this.reportScreenQueueError(error);
+          return false;
+        }
+        try {
+          this.screenPendingUploads = updateScreenPublicationQueueItem(bindingId, item.id, {
+            attempts: item.attempts + 1,
+            status: isTransientScreenRequestError(error) ? "pending" : "needs_review",
+            error: {
+              code: error.response?.data?.code || "SCREEN_UPLOAD_FAILED",
+              message: error.response?.data?.message || error.message || "提交失败",
+              details: error.response?.data?.details || null,
+            },
+          });
+        } catch (storageError) {
+          this.reportScreenQueueError(storageError);
+          return false;
+        }
         recordDiagnosticEvent({
           category: "SCREEN_SYNC",
           severity: isTransientScreenRequestError(error) ? "WARNING" : "ERROR",
@@ -1056,7 +1074,21 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     removeScreenQueuedPublication(itemId) {
       const bindingId = this.screenSession?.binding?.id;
       if (!bindingId) return;
-      this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, itemId);
+      try {
+        this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, itemId);
+      } catch (error) {
+        this.reportScreenQueueError(error);
+      }
+    },
+
+    reportScreenQueueError(error) {
+      this.screenError = describeApiError(error, "本机同步队列操作失败，请重试");
+      recordDiagnosticEvent({
+        category: "SCREEN_SYNC",
+        severity: "ERROR",
+        code: error.code || "SCREEN_QUEUE_FAILED",
+        message: this.screenError,
+      });
     },
 
     async publicationRevisions(publication, mode = "teacher") {

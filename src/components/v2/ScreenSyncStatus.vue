@@ -30,6 +30,14 @@
       </v-card-title>
       <v-card-text class="px-5">
         <v-alert
+          v-if="store.screenError"
+          class="mb-4"
+          type="error"
+          variant="tonal"
+        >
+          {{ store.screenError }}
+        </v-alert>
+        <v-alert
           class="mb-4"
           :color="status.color"
           :icon="status.icon"
@@ -129,7 +137,7 @@ const status = computed(() => {
   return states[store.screenSyncState];
 });
 const statusDetail = computed(() => {
-  if (!store.screenNetworkOnline) return "网络已断开。新录入的作业会保存在这台大屏，联网后自动提交。";
+  if (!store.screenNetworkOnline) return "网络已断开。作业保存成功后会留在这台大屏，联网后自动提交；超过 7 天的作业需人工核对。队列最多接收 50 项，满额后请先处理已有作业。";
   if (store.screenPendingReviewCount) return `有 ${store.screenPendingReviewCount} 项作业需要核对后再提交。`;
   if (store.screenPendingUploads.length) return "正在等待或尝试将本机作业提交到服务器。";
   if (!store.screenRealtimeConnected) return "网页可以继续使用，实时连接恢复后会自动刷新作业。";

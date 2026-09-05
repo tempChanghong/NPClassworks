@@ -614,6 +614,8 @@ async function save(allowDuplicate = false) {
       } catch {
         conflict.value = nextConflict;
       }
+    } else {
+      localError.value = error.message || "保存失败，当前输入已保留，请重试。";
     }
   } finally {
     saving.value = false;

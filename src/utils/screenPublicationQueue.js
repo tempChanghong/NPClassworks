@@ -2,6 +2,14 @@ const PREFIX = "classworks-v2-screen-publication-queue:";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ITEMS = 50;
 
+export class ScreenPublicationQueueError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "ScreenPublicationQueueError";
+    this.code = code;
+  }
+}
+
 export function screenPublicationQueueKey(bindingId) {
   return `${PREFIX}${bindingId || "unbound"}`;
 }
@@ -23,41 +31,50 @@ export function sanitizeScreenPublicationQueue(value, now = Date.now()) {
     && item.input
     && typeof item.input === "object"
     && Number.isFinite(item.queuedAt)
-    && now - item.queuedAt <= RETENTION_MS
   )).map((item) => ({
     id: String(item.id),
     input: item.input,
     context: item.context && typeof item.context === "object" ? item.context : {},
     queuedAt: item.queuedAt,
     attempts: Math.max(0, Number(item.attempts) || 0),
-    status: item.status === "needs_review" ? "needs_review" : "pending",
-    error: item.error && typeof item.error === "object" ? item.error : null,
-  })).sort((left, right) => left.queuedAt - right.queuedAt).slice(-MAX_ITEMS);
+    status: item.status === "needs_review" || now - item.queuedAt > RETENTION_MS ? "needs_review" : "pending",
+    error: item.error && typeof item.error === "object" ? item.error
+      : now - item.queuedAt > RETENTION_MS
+        ? {code: "SCREEN_QUEUE_EXPIRED", message: "这项作业已等待超过 7 天，请核对日期和内容后手动提交，或确认移除。"}
+        : null,
+  })).sort((left, right) => left.queuedAt - right.queuedAt);
 }
 
-export function loadScreenPublicationQueue(bindingId, storage) {
-  const target = storageOrNull(storage);
-  if (!target) return [];
+export function loadScreenPublicationQueue(bindingId, storage, {strict = false} = {}) {
   try {
-    return sanitizeScreenPublicationQueue(JSON.parse(target.getItem(screenPublicationQueueKey(bindingId)) || "[]"));
+    const target = storageOrNull(storage);
+    if (!target) throw new Error("Storage unavailable");
+    const items = JSON.parse(target.getItem(screenPublicationQueueKey(bindingId)) || "[]");
+    if (!Array.isArray(items)) throw new Error("Invalid queue");
+    return sanitizeScreenPublicationQueue(items);
   } catch {
+    if (strict) throw new ScreenPublicationQueueError("SCREEN_QUEUE_READ_FAILED", "无法读取本机待提交作业，未保存本次输入。请勿关闭或刷新录入窗口，恢复本地存储后重试。");
     return [];
   }
 }
 
 export function saveScreenPublicationQueue(bindingId, items, storage) {
-  const target = storageOrNull(storage);
   const normalized = sanitizeScreenPublicationQueue(items);
   try {
-    target?.setItem(screenPublicationQueueKey(bindingId), JSON.stringify(normalized));
+    const target = storageOrNull(storage);
+    if (!target) throw new Error("Storage unavailable");
+    target.setItem(screenPublicationQueueKey(bindingId), JSON.stringify(normalized));
   } catch {
-    // 存储空间不足时仍返回内存中的队列，调用方可显示错误。
+    throw new ScreenPublicationQueueError("SCREEN_QUEUE_WRITE_FAILED", "本机存储不可用或空间不足，未能保存队列更改。当前输入仍在窗口中，请勿关闭或刷新，恢复存储或联网后重试。");
   }
   return normalized;
 }
 
 export function enqueueScreenPublication(bindingId, input, context = {}, storage, now = Date.now()) {
-  const items = loadScreenPublicationQueue(bindingId, storage);
+  const items = loadScreenPublicationQueue(bindingId, storage, {strict: true});
+  if (items.length >= MAX_ITEMS) {
+    throw new ScreenPublicationQueueError("SCREEN_QUEUE_FULL", "本机待提交作业已达到 50 项，未保存本次输入。请保留当前输入，先在同步队列中提交或确认移除已有作业，再重试。");
+  }
   items.push({
     id: makeId(now),
     input,
@@ -71,11 +88,11 @@ export function enqueueScreenPublication(bindingId, input, context = {}, storage
 }
 
 export function updateScreenPublicationQueueItem(bindingId, itemId, patch, storage) {
-  return saveScreenPublicationQueue(bindingId, loadScreenPublicationQueue(bindingId, storage)
+  return saveScreenPublicationQueue(bindingId, loadScreenPublicationQueue(bindingId, storage, {strict: true})
     .map((item) => item.id === itemId ? {...item, ...patch} : item), storage);
 }
 
 export function removeScreenPublicationQueueItem(bindingId, itemId, storage) {
-  return saveScreenPublicationQueue(bindingId, loadScreenPublicationQueue(bindingId, storage)
+  return saveScreenPublicationQueue(bindingId, loadScreenPublicationQueue(bindingId, storage, {strict: true})
     .filter((item) => item.id !== itemId), storage);
 }
