@@ -24,6 +24,10 @@ function makeId(now) {
   return `queued-${now}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function withScreenPublicationRequestId(input, fallbackId) {
+  return {...input, clientRequestId: input.clientRequestId || fallbackId || makeId(Date.now())};
+}
+
 export function sanitizeScreenPublicationQueue(value, now = Date.now()) {
   if (!Array.isArray(value)) return [];
   return value.filter((item) => (
@@ -33,7 +37,7 @@ export function sanitizeScreenPublicationQueue(value, now = Date.now()) {
     && Number.isFinite(item.queuedAt)
   )).map((item) => ({
     id: String(item.id),
-    input: item.input,
+    input: withScreenPublicationRequestId(item.input, String(item.id)),
     context: item.context && typeof item.context === "object" ? item.context : {},
     queuedAt: item.queuedAt,
     attempts: Math.max(0, Number(item.attempts) || 0),
@@ -75,9 +79,10 @@ export function enqueueScreenPublication(bindingId, input, context = {}, storage
   if (items.length >= MAX_ITEMS) {
     throw new ScreenPublicationQueueError("SCREEN_QUEUE_FULL", "本机待提交作业已达到 50 项，未保存本次输入。请保留当前输入，先在同步队列中提交或确认移除已有作业，再重试。");
   }
+  const id = makeId(now);
   items.push({
-    id: makeId(now),
-    input,
+    id,
+    input: withScreenPublicationRequestId(input, id),
     context,
     queuedAt: now,
     attempts: 0,

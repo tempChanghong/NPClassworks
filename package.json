@@ -12,6 +12,7 @@
     "build:store": "node scripts/generate-sound-list.js && vite build && node scripts/validate-pwa-build.js",
     "preview": "vite preview",
     "lint": "eslint . --fix",
+    "lint:check": "eslint . --max-warnings=0",
     "pwa:validate": "node scripts/validate-pwa-build.js",
     "test": "node --test tests/*.test.js",
     "test:flows": "node --test tests/publicationFlows.test.js",

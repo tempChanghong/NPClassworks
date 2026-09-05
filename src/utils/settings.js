@@ -31,20 +31,6 @@ async function requestPersistentStorage() {
   }
 }
 
-/**
- * 初始化存储权限
- */
-async function initializeStorage() {
-  const notificationGranted = await requestNotificationPermission();
-  if (
-    notificationGranted &&
-    SettingsManager.getSetting("storage.persistOnLoad")
-  ) {
-    const persisted = await requestPersistentStorage();
-    console.log(`持久性存储状态: ${persisted ? "已启用" : "未启用"}`);
-  }
-}
-
 // 初始化将由显式触发方调用，避免页面加载时立即请求权限
 
 /**

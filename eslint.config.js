@@ -57,6 +57,8 @@ export default [
         // Web Storage API
         Storage: 'readonly',
         StorageEvent: 'readonly',
+        CustomEvent: 'readonly',
+        Blob: 'readonly',
         // Web Socket
         WebSocket: 'readonly',
         // Web Workers
@@ -66,5 +68,15 @@ export default [
         AbortController: 'readonly',
       },
     },
-  }
+  },
+  {
+    files: ['public/noise-meter-worklet.js'],
+    languageOptions: {
+      globals: {
+        AudioWorkletProcessor: 'readonly',
+        sampleRate: 'readonly',
+        registerProcessor: 'readonly',
+      },
+    },
+  },
 ]

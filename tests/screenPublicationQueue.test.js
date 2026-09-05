@@ -102,3 +102,12 @@ test("preexisting oversized queues are preserved and can be reduced manually", (
   assert.equal(updated.length, 51);
   assert.equal(removeScreenPublicationQueueItem("screen-a", "0", storage).length, 50);
 });
+
+test("legacy queues derive a stable request ID from their persisted item ID", () => {
+  const storage = fakeStorage();
+  storage.setItem(screenPublicationQueueKey("screen-a"), JSON.stringify([
+    {id: "old-item", input: {content: "旧队列"}, queuedAt: Date.now()},
+  ]));
+  assert.equal(loadScreenPublicationQueue("screen-a", storage)[0].input.clientRequestId, "old-item");
+  assert.equal(loadScreenPublicationQueue("screen-a", storage)[0].input.clientRequestId, "old-item");
+});

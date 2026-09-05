@@ -75,6 +75,31 @@ test("temporary HTTP failure queues new work and automatic retry drains it after
   assert.equal(store.feed[0].content, "离线补传");
 });
 
+test("a committed request with a lost response reuses its ID after reload and does not create a second assignment", async () => {
+  const store = h.newStore({screen: true});
+  const receipts = new Map();
+  const attempts = [];
+  h.routes.set("POST /api/v2/classroom-screens/publications", (req, reply) => {
+    const id = req.body.clientRequestId;
+    assert.ok(id);
+    attempts.push(id);
+    if (receipts.has(id)) return reply(receipts.get(id));
+    const publication = {...req.body, id: "committed", revision: 1};
+    receipts.set(id, publication);
+    h.publications.push(publication);
+    // The database committed, but the proxy returned an error instead of its response.
+    reply({message: "upstream response lost"}, 502);
+  });
+  const saved = await store.saveScreenPublication({content: "不能重复的作业", allowDuplicate: true});
+  assert.equal(saved.offlineQueued, true);
+  const reloaded = h.newStore({screen: true});
+  await reloaded.flushScreenPublicationQueue();
+  assert.deepEqual(attempts, [attempts[0], attempts[0]]);
+  assert.equal(h.publications.length, 1);
+  assert.equal(reloaded.screenPendingUploads.length, 0);
+  assert.equal(reloaded.feed[0].id, "committed");
+});
+
 test("validation failure enters manual review and is never retried automatically", async () => {
   const store = h.newStore({screen: true});
   store.screenNetworkOnline = false;

@@ -33,6 +33,7 @@ import {
 } from "@/utils/teacherTargetPreferences";
 import {
   ScreenPublicationQueueError,
+  withScreenPublicationRequestId,
   enqueueScreenPublication,
   loadScreenPublicationQueue,
   removeScreenPublicationQueueItem,
@@ -798,6 +799,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
 
     async saveScreenPublication(input, publication = null, queueContext = {}) {
       this.screenError = "";
+      if (!publication) input = withScreenPublicationRequestId(input);
       if (publication && !this.screenNetworkOnline) {
         const error = new Error("离线状态下不能修改现有作业，当前输入已保留为草稿，请联网后再保存");
         this.screenError = error.message;
