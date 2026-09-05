@@ -142,6 +142,21 @@ export async function createFlowHarness() {
   reset();
   return {
     api, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    async openAcademicManager(initialProps = {schoolId: "school", termId: "term"}) {
+      const {default: manager} = await vite.ssrLoadModule("/src/components/admin/AcademicStructureManager.vue");
+      const props = reactive({...initialProps});
+      let state;
+      const app = renderer.createApp({setup() {
+        state = manager.setup(props, {expose() {}});
+        return () => null;
+      }});
+      app.provide(ssrContextKey, {});
+      app.mount({}); mounted.push(app);
+      return {state, props, unmount: () => {
+        mounted.splice(mounted.indexOf(app), 1);
+        app.unmount();
+      }};
+    },
     async openComposer(publication = null) {
       const props = reactive({modelValue: false, publication});
       const events = [];
