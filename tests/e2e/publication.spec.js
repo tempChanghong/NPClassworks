@@ -171,3 +171,54 @@ test("revision conflict preserves typed content until explicit confirmation save
     expect(screen.errors).toEqual([]);
   } finally { await screen.context.close(); }
 });
+
+test("screen survives repeated transport loss and browser freezing without accumulating subscriptions or missing updates", async ({browser, request}) => {
+  test.setTimeout(120000);
+  const screen = await openRole(browser, "screen");
+  const cdp = await screen.context.newCDPSession(screen.page);
+  const state = async () => (await (await request.get(`${api}/__test/state`)).json()).data;
+  try {
+    await expect.poll(async () => (await state()).classroomSubscribers).toBe(1);
+    // Let initial bootstrap/connect refreshes finish before measuring steady state.
+    await screen.page.waitForTimeout(600);
+    for (let cycle = 1; cycle <= 8; cycle++) {
+      const freeze = cycle % 2 === 0;
+      await screen.context.setOffline(true);
+      if (freeze) await cdp.send("Page.setWebLifecycleState", {state: "frozen"});
+      expect((await request.post(`${api}/__test/drop-connections`)).ok()).toBe(true);
+      await expect.poll(async () => (await state()).connections).toBe(0);
+      const disconnected = await state();
+      expect(disconnected.classroomSubscribers).toBe(0);
+      const content = `第 ${cycle} 次断线期间的新作业`;
+      const published = await request.post(`${api}/api/v2/publications`, {data: {content}});
+      expect(published.ok()).toBe(true);
+      const item = (await published.json()).data;
+      if (freeze) await cdp.send("Page.setWebLifecycleState", {state: "active"});
+      await screen.context.setOffline(false);
+      await expect.poll(async () => (await state()).classroomSubscribers).toBe(1);
+      await expect(screen.page.getByText(content, {exact: true})).toBeVisible();
+      await screen.page.waitForTimeout(600);
+      const recovered = await state();
+      expect(recovered.connections).toBe(1);
+      expect(recovered.roomJoins - disconnected.roomJoins).toBe(1);
+      // Online recovery and a later Socket.IO connect may each request a fresh
+      // snapshot. Neither count should grow with successive reconnect cycles.
+      expect(recovered.screenFeedRequests - disconnected.screenFeedRequests).toBeGreaterThanOrEqual(1);
+      expect(recovered.screenFeedRequests - disconnected.screenFeedRequests).toBeLessThanOrEqual(2);
+      const edited = `第 ${cycle} 次恢复后的最新版`;
+      expect((await request.post(`${api}/__test/concurrent-edit`, {data: {id: item.id, content: edited}})).ok()).toBe(true);
+      expect((await request.post(`${api}/__test/invalidation-burst`)).ok()).toBe(true);
+      await expect(screen.page.getByText(edited, {exact: true})).toBeVisible();
+      await screen.page.waitForTimeout(350);
+      expect((await state()).screenFeedRequests - recovered.screenFeedRequests).toBe(1);
+    }
+    expect(screen.errors).toEqual([]);
+  } finally {
+    await cdp.send("Page.setWebLifecycleState", {state: "active"}).catch(() => {});
+    await screen.context.close();
+  }
+  // Polling transports may require the normal Socket.IO heartbeat timeout after
+  // their browser disappears; do not forcibly clear the server for this assertion.
+  await expect.poll(async () => (await state()).connections, {timeout: 50000}).toBe(0);
+  expect((await state()).classroomSubscribers).toBe(0);
+});

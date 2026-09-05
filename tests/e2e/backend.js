@@ -15,6 +15,7 @@ export function startTestBackend(port = apiPort) {
   let socketEvents = 0;
   let uploadsAvailable = true;
   let uploadRequests = [];
+  let screenFeedRequests = 0;
   const server = createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Classworks-Screen-Token,If-Match");
@@ -29,11 +30,26 @@ export function startTestBackend(port = apiPort) {
       res.end(JSON.stringify(status >= 400 ? data : {data}));
     };
     if (path === "/__test/reset") {
+      // A closed browser's polling transport can remain until the heartbeat
+      // timeout. Isolate test cases; never reset connections within a stress cycle.
+      io.disconnectSockets(true);
       items = []; versionChecks = []; roomJoins = 0; socketEvents = 0;
       uploadsAvailable = true; uploadRequests = [];
+      screenFeedRequests = 0;
       return reply({});
     }
-    if (path === "/__test/state") return reply({items, versionChecks, roomJoins, socketEvents, uploadRequests});
+    if (path === "/__test/state") return reply({items, versionChecks, roomJoins, socketEvents, uploadRequests,
+      screenFeedRequests, connections: io.of("/").sockets.size,
+      classroomSubscribers: io.of("/").adapter.rooms.get(workspace.id)?.size || 0});
+    if (path === "/__test/drop-connections" && req.method === "POST") {
+      // Close the transport, allowing the real Socket.IO client's automatic retry.
+      for (const socket of io.of("/").sockets.values()) socket.conn.close();
+      return reply({});
+    }
+    if (path === "/__test/invalidation-burst" && req.method === "POST") {
+      for (let i = 0; i < 20; i++) io.to(workspace.id).emit("publication.updated", {content: {}});
+      return reply({});
+    }
     if (path === "/__test/upload-availability" && req.method === "POST") {
       uploadsAvailable = body.available === true;
       return reply({uploadsAvailable});
@@ -65,7 +81,10 @@ export function startTestBackend(port = apiPort) {
     if (path === "/api/v2/classroom-screens/heartbeat") return reply({receivedAt: new Date().toISOString(), commands: []});
     if (path.endsWith("/notification-deliveries")) return reply([]);
     if (path === "/api/v2/publications/action-required") return reply({items: [], total: 0, summary: {}});
-    if (path.endsWith("/feed")) return reply({items, generatedAt: new Date().toISOString()});
+    if (path.endsWith("/feed")) {
+      if (path === "/api/v2/classroom-screens/feed") screenFeedRequests++;
+      return reply({items, generatedAt: new Date().toISOString()});
+    }
     if (["/api/v2/publications", "/api/v2/classroom-screens/publications"].includes(path)) {
       if (req.method === "GET") return reply({items});
       uploadRequests.push({clientRequestId: body.clientRequestId, available: uploadsAvailable});

@@ -328,7 +328,21 @@ export const boardActions = {
     ]) {
       realtimeCleanup.push(socketOn(event, refresh));
     }
-    realtimeCleanup.push(onConnect(() => joinWorkspaces(this.realtimeWorkspaceIds)));
+    realtimeCleanup.push(onConnect(() => {
+      joinWorkspaces(this.realtimeWorkspaceIds);
+      // Socket events missed during a disconnect are not replayed by the server.
+      refresh();
+    }));
+    const resume = () => {
+      if (navigator.onLine !== false && document.visibilityState !== "hidden") refresh();
+    };
+    const pageShown = (event) => { if (event.persisted) resume(); };
+    window.addEventListener("online", resume);
+    window.addEventListener("visibilitychange", resume);
+    window.addEventListener("pageshow", pageShown);
+    realtimeCleanup.push(() => window.removeEventListener("online", resume));
+    realtimeCleanup.push(() => window.removeEventListener("visibilitychange", resume));
+    realtimeCleanup.push(() => window.removeEventListener("pageshow", pageShown));
     joinWorkspaces(this.realtimeWorkspaceIds);
     fallbackTimer = setInterval(() => {
       if (document.visibilityState !== "hidden") {
