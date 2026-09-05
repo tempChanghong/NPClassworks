@@ -14,9 +14,7 @@
     "lint": "eslint . --fix",
     "pwa:validate": "node scripts/validate-pwa-build.js",
     "test": "node --test tests/*.test.js",
-    "prebuild": "node scripts/generate-sound-list.js",
-    "sync:uaf": "node scripts/sync-uaf-browser.js",
-    "test:uaf": "node scripts/test-uaf-export.js"
+    "prebuild": "node scripts/generate-sound-list.js"
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^5.0.1",

@@ -60,9 +60,7 @@ export default defineConfig(({ mode }) => {
           // precache，否则首次安装/更新 PWA 时会一次性下载全部 MP3。
           '**/*.{js,css,html,ico,png,svg,webmanifest,txt,json,woff2}',
         ],
-        // UAF PDF 导出的三套中文字库接近 24 MB，只有使用导出功能时
-        // 才需要。文件仍会复制到 dist，但交给 uaf-cache 首次按需获取。
-        globIgnores: ['sounds/**', 'uaf/**'],
+        globIgnores: ['sounds/**'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [
           /^\/api\//,
@@ -134,22 +132,6 @@ export default defineConfig(({ mode }) => {
           },
           {
             urlPattern: ({ url, sameOrigin }) => {
-              return sameOrigin && url.pathname.startsWith('/uaf/');
-            },
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'uaf-cache',
-              expiration: {
-                maxEntries: 8,
-                maxAgeSeconds: 60 * 60 * 24 * 90 // 90 天
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          {
-            urlPattern: ({ url, sameOrigin }) => {
               return sameOrigin && url.pathname.startsWith('/pwa/');
             },
             handler: 'StaleWhileRevalidate',
@@ -189,8 +171,7 @@ export default defineConfig(({ mode }) => {
               return !(
                 path.includes('/assets/') ||
                 path.includes('/pwa/') ||
-                path.includes('/sounds/') ||
-                path.includes('/uaf/')
+                path.includes('/sounds/')
               );
             },
             handler: 'NetworkFirst',

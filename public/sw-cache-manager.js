@@ -2,7 +2,11 @@
 // key 不包含 Authorization，升级 Service Worker 时必须完整清除，避免
 // 管理员/教师切换账号后读到其他会话的权限响应。
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.delete('external-resources'));
+  // UAF 已移除，升级时释放旧版本按需下载的字体与 WASM 缓存。
+  event.waitUntil(Promise.all([
+    caches.delete('external-resources'),
+    caches.delete('uaf-cache'),
+  ]));
 });
 
 // 添加缓存管理消息处理

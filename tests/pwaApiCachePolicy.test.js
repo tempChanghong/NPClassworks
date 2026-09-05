@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {runInNewContext} from "node:vm";
 
 const viteConfig = readFileSync(new URL("../vite.config.mjs", import.meta.url), "utf8");
 const cacheManager = readFileSync(new URL("../public/sw-cache-manager.js", import.meta.url), "utf8");
@@ -32,9 +33,18 @@ test("service worker keeps backend namespaces network-only across origins", () =
   assert.match(customWorker, /!isBackendRequest\(url\)/);
 });
 
-test("service worker upgrade removes legacy cross-origin response cache", () => {
-  assert.match(cacheManager, /addEventListener\(['"]activate['"]/);
-  assert.match(cacheManager, /caches\.delete\(['"]external-resources['"]\)/);
+test("service worker upgrade removes retired caches and preserves offline user data", async () => {
+  const listeners = new Map();
+  const remaining = new Set(["external-resources", "uaf-cache", "sound-cache", "user-offline-data"]);
+  runInNewContext(cacheManager, {
+    self: {addEventListener: (event, handler) => listeners.set(event, handler)},
+    caches: {delete: async (name) => remaining.delete(name)},
+    console: {log() {}},
+  });
+  let activation;
+  listeners.get("activate")({waitUntil: (promise) => { activation = promise; }});
+  await activation;
+  assert.deepEqual([...remaining], ["sound-cache", "user-offline-data"]);
 });
 
 test("school management permission discovery bypasses pre-upgrade caches", () => {

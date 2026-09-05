@@ -127,8 +127,6 @@ if (!fs.existsSync(serviceWorkerPath)) {
     fail('sw.js 中未找到 Workbox precache 清单。');
   } else if (/url:\s*["'](?:\.\/)?sounds\//.test(precacheManifest)) {
     fail('声音资源不应进入 precache，应由 sound-cache 按需缓存。');
-  } else if (/url:\s*["'](?:\.\/)?uaf\//.test(precacheManifest)) {
-    fail('UAF 字体和 WASM 不应进入 precache，应由 uaf-cache 按需缓存。');
   }
 }
 

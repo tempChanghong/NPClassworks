@@ -187,12 +187,6 @@ const settingsDefinitions = {
     description: "是否显示列表卡片",
     icon: "mdi-list-box",
   },
-  "display.showUafTransfer": {
-    type: "boolean",
-    default: true,
-    description: "是否显示UAF作业导入导出",
-    icon: "mdi-swap-vertical-bold",
-  },
   "display.showQuickTools": {
     type: "boolean",
     default: true,
