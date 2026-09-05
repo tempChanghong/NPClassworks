@@ -57,6 +57,8 @@ pnpm run build
 pnpm run lint
 ```
 
+测试范围、流程测试运行方式与边界见 [前端自动化测试](./docs/testing.md)。
+
 ## 部署
 
 生产环境建议让前后端保持同源，由反向代理统一提供 HTTPS，并将 `/api`、`/accounts`、`/socket.io`、健康检查和指标路径转发至 NPClassworksKV。部署前请先阅读后端仓库的生产配置说明并执行数据库迁移。

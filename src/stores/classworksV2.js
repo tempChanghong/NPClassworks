@@ -96,6 +96,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     selectionDialog: false,
 
     account: null,
+    teacherSessionVersion: 0,
     oauthProviders: [],
     memberships: [],
     teacherSubjects: [],
@@ -520,10 +521,13 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     },
 
     async bootstrapTeacher() {
+      const sessionVersion = ++this.teacherSessionVersion;
       this.teacherLoading = true;
       this.teacherError = consumeOAuthError();
       try {
-        this.oauthProviders = await getOAuthProviders();
+        const providers = await getOAuthProviders();
+        if (sessionVersion !== this.teacherSessionVersion) return;
+        this.oauthProviders = providers;
         if (!getAccountTokens().accessToken) return;
         const [account, memberships, publications, actionCenter, schoolMemberships] = await Promise.all([
           classworksV2Api.profile(),
@@ -532,6 +536,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
           classworksV2Api.actionRequiredPublications({limit: 50}),
           classworksV2Api.mySchools(),
         ]);
+        if (sessionVersion !== this.teacherSessionVersion) return;
         this.account = account;
         this.memberships = memberships;
         this.teacherPublications = publications.items || [];
@@ -539,6 +544,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         this.schoolMemberships = schoolMemberships;
         joinWorkspaces(this.realtimeWorkspaceIds);
         await this.hydrateTeacherTargetPreferences();
+        if (sessionVersion !== this.teacherSessionVersion) return;
         const schoolIds = [...new Set(
           memberships.map((membership) => membership.workspace.term.school.id),
         )];
@@ -549,16 +555,18 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
             await classworksV2Api.publicSchoolHomeworkSettings(schoolId),
           ])),
         ]);
+        if (sessionVersion !== this.teacherSessionVersion) return;
         this.teacherSubjects = subjectLists.flat();
         this.teacherHomeworkSettingsBySchool = Object.fromEntries(homeworkSettings);
       } catch (error) {
+        if (sessionVersion !== this.teacherSessionVersion) return;
         this.teacherError = describeApiError(error, "加载教师工作台失败");
         if (error.response?.status === 401) {
           clearAccountTokens();
           this.account = null;
         }
       } finally {
-        this.teacherLoading = false;
+        if (sessionVersion === this.teacherSessionVersion) this.teacherLoading = false;
       }
     },
 
@@ -577,6 +585,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     async hydrateTeacherTargetPreferences() {
       if (!this.account?.id) return;
       const accountId = this.account.id;
+      const sessionVersion = this.teacherSessionVersion;
       const local = loadTeacherTargetPreferences(accountId);
       const syncState = loadTeacherTargetSyncState(accountId);
       this.teacherTargetPreferences = local;
@@ -584,6 +593,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       this.teacherTargetPreferencesError = "";
       try {
         const remoteResult = await classworksV2Api.teacherTargetPreferences();
+        if (sessionVersion !== this.teacherSessionVersion) return;
         const remote = sanitizeTeacherTargetPreferences(remoteResult.preferences);
         const remoteEmpty = !remote.favorites.length && !remote.recent.length;
         const next = syncState.dirty || remoteEmpty
@@ -592,6 +602,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         if (syncState.dirty || (remoteEmpty && (next.favorites.length || next.recent.length))) {
           await classworksV2Api.saveTeacherTargetPreferences(next);
         }
+        if (sessionVersion !== this.teacherSessionVersion) return;
         this.teacherTargetPreferences = saveTeacherTargetPreferences(
           accountId,
           next,
@@ -600,15 +611,18 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         );
         this.teacherTargetPreferencesSynced = true;
       } catch (error) {
+        if (sessionVersion !== this.teacherSessionVersion) return;
         this.teacherTargetPreferencesSynced = false;
         this.teacherTargetPreferencesError = describeApiError(error, "偏好暂存于本机，联网后可重新同步");
       } finally {
-        this.teacherTargetPreferencesSyncing = false;
+        if (sessionVersion === this.teacherSessionVersion) this.teacherTargetPreferencesSyncing = false;
       }
     },
 
     async syncTeacherTargetPreferences() {
       if (!this.account?.id) return;
+      const accountId = this.account.id;
+      const sessionVersion = this.teacherSessionVersion;
       if (this.teacherTargetPreferencesSyncing) {
         this.teacherTargetPreferencesSyncPending = true;
         return;
@@ -621,9 +635,10 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         const serializedSnapshot = JSON.stringify(snapshot);
         try {
           const result = await classworksV2Api.saveTeacherTargetPreferences(snapshot);
+          if (sessionVersion !== this.teacherSessionVersion) return;
           if (JSON.stringify(this.teacherTargetPreferences) === serializedSnapshot) {
             this.teacherTargetPreferences = saveTeacherTargetPreferences(
-              this.account.id,
+              accountId,
               result.preferences,
               localStorage,
               {dirty: false},
@@ -633,6 +648,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
             this.teacherTargetPreferencesSyncPending = true;
           }
         } catch (error) {
+          if (sessionVersion !== this.teacherSessionVersion) return;
           this.teacherTargetPreferencesSynced = false;
           this.teacherTargetPreferencesError = describeApiError(error, "同步失败，偏好已保存在本机");
           this.teacherTargetPreferencesSyncPending = false;
@@ -1134,26 +1150,33 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     },
 
     async refreshTeacherPublications() {
+      const sessionVersion = this.teacherSessionVersion;
       this.teacherPublicationsLoading = true;
       try {
         const result = await classworksV2Api.publications({limit: 100});
+        if (sessionVersion !== this.teacherSessionVersion) return;
         this.teacherPublications = result.items || [];
       } catch (error) {
+        if (sessionVersion !== this.teacherSessionVersion) return;
         this.teacherError = describeApiError(error, "刷新发布记录失败");
       } finally {
-        this.teacherPublicationsLoading = false;
+        if (sessionVersion === this.teacherSessionVersion) this.teacherPublicationsLoading = false;
       }
     },
 
     async refreshTeacherActionCenter() {
       if (!this.isTeacherSignedIn) return;
+      const sessionVersion = this.teacherSessionVersion;
       this.teacherActionCenterLoading = true;
       try {
-        this.teacherActionCenter = await classworksV2Api.actionRequiredPublications({limit: 50});
+        const result = await classworksV2Api.actionRequiredPublications({limit: 50});
+        if (sessionVersion !== this.teacherSessionVersion) return;
+        this.teacherActionCenter = result;
       } catch (error) {
+        if (sessionVersion !== this.teacherSessionVersion) return;
         this.teacherError = describeApiError(error, "刷新待处理事项失败");
       } finally {
-        this.teacherActionCenterLoading = false;
+        if (sessionVersion === this.teacherSessionVersion) this.teacherActionCenterLoading = false;
       }
     },
 
@@ -1199,12 +1222,15 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     },
 
     async signOutTeacher() {
+      // Invalidate outstanding account requests before waiting for the logout API.
+      const sessionVersion = ++this.teacherSessionVersion;
       const teacherWorkspaceIds = this.teacherWorkspaces.map((workspace) => workspace.id);
       try {
         if (getAccountTokens().accessToken) await classworksV2Api.logout();
       } catch {
         // 本地登出不能被临时网络故障阻塞；服务端会话仍会自然过期。
       }
+      if (sessionVersion !== this.teacherSessionVersion) return;
       clearAccountTokens();
       this.account = null;
       this.memberships = [];
@@ -1217,6 +1243,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
         summary: {total: 0, changedAfterCertified: 0, createdByScreen: 0, other: 0, dueSoon: 0, overdue: 0},
       };
       this.teacherPublicationsLoading = false;
+      this.teacherLoading = false;
       this.teacherActionCenterLoading = false;
       this.schoolMemberships = [];
       this.teacherTargetPreferences = sanitizeTeacherTargetPreferences();
