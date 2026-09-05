@@ -32,11 +32,18 @@ test("nginx preserves SPA routing and never long-caches the service worker", () 
   assert.match(nginx, /location \/assets\/[\s\S]*immutable/);
 });
 
-test("production deployment verifies the frontend before requesting the signed server upgrade", () => {
+test("production deployment requires frontend and browser checks before requesting the signed server upgrade", () => {
   assert.match(productionDeploy, /push:[\s\S]*branches: \["main"\]/);
   assert.match(productionDeploy, /pnpm test/);
   assert.match(productionDeploy, /pnpm run build/);
-  assert.match(productionDeploy, /needs: verify/);
+  assert.match(productionDeploy, /deploy:\s*\n\s*needs: \[verify, browser\]/);
+  const browserJob = productionDeploy.replaceAll("\r\n", "\n").split("\n  browser:\n")[1]?.split("\n  deploy:\n")[0];
+  assert.ok(browserJob, "production must define its own browser gate for main pushes");
+  assert.match(browserJob, /pnpm exec playwright install --with-deps chromium/);
+  assert.match(browserJob, /pnpm test:e2e/);
+  assert.match(browserJob, /if: failure\(\)/);
+  assert.match(browserJob, /path: test-results\//);
+  assert.doesNotMatch(browserJob, /continue-on-error: true/);
   assert.match(productionDeploy, /DEPLOY_AGENT_URL/);
   assert.match(productionDeploy, /X-NP-Deploy-Signature/);
   assert.match(productionDeploy, /createHmac\("sha256"/);

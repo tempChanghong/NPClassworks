@@ -1,4 +1,5 @@
 import {defineConfig} from "@playwright/test";
+import {origin} from "./tests/e2e/environment.js";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -8,7 +9,7 @@ export default defineConfig({
   timeout: 45000,
   expect: {timeout: 10000},
   retries: 0,
-  use: {baseURL: "http://127.0.0.1:4180", browserName: "chromium", serviceWorkers: "allow",
+  use: {baseURL: origin, browserName: "chromium", serviceWorkers: "allow",
     viewport: {width: 1440, height: 1000}, trace: "retain-on-failure", screenshot: "only-on-failure"},
-  webServer: {command: "node scripts/serve-e2e.js", url: "http://127.0.0.1:4180", timeout: 120000, reuseExistingServer: false},
+  webServer: {command: "node scripts/serve-e2e.js", url: origin, timeout: 120000, reuseExistingServer: false},
 });

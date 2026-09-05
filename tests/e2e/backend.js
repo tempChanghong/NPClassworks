@@ -1,7 +1,8 @@
 import {createServer} from "node:http";
 import {Server} from "socket.io";
+import {apiPort, origin} from "./environment.js";
 
-export function startTestBackend(port = 4181) {
+export function startTestBackend(port = apiPort) {
   const school = {id: "school", code: "E2E", name: "浏览器测试学校", teacherAuthMode: "PERSONAL_PIN"};
   const term = {id: "term", schoolId: school.id, school, status: "ACTIVE"};
   const subject = {id: "math", name: "数学", code: "MATH"};
@@ -12,8 +13,10 @@ export function startTestBackend(port = 4181) {
   let versionChecks = [];
   let roomJoins = 0;
   let socketEvents = 0;
+  let uploadsAvailable = true;
+  let uploadRequests = [];
   const server = createServer(async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:4180");
+    res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Classworks-Screen-Token,If-Match");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,OPTIONS");
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
@@ -25,8 +28,16 @@ export function startTestBackend(port = 4181) {
       res.writeHead(status, {"Content-Type": "application/json", "Cache-Control": "no-store"});
       res.end(JSON.stringify(status >= 400 ? data : {data}));
     };
-    if (path === "/__test/reset") { items = []; versionChecks = []; roomJoins = 0; socketEvents = 0; return reply({}); }
-    if (path === "/__test/state") return reply({items, versionChecks, roomJoins, socketEvents});
+    if (path === "/__test/reset") {
+      items = []; versionChecks = []; roomJoins = 0; socketEvents = 0;
+      uploadsAvailable = true; uploadRequests = [];
+      return reply({});
+    }
+    if (path === "/__test/state") return reply({items, versionChecks, roomJoins, socketEvents, uploadRequests});
+    if (path === "/__test/upload-availability" && req.method === "POST") {
+      uploadsAvailable = body.available === true;
+      return reply({uploadsAvailable});
+    }
     if (path === "/__test/concurrent-edit") {
       const item = items.find((candidate) => candidate.id === body.id);
       Object.assign(item, {content: body.content, revision: item.revision + 1, updatedAt: new Date().toISOString()});
@@ -57,6 +68,8 @@ export function startTestBackend(port = 4181) {
     if (path.endsWith("/feed")) return reply({items, generatedAt: new Date().toISOString()});
     if (["/api/v2/publications", "/api/v2/classroom-screens/publications"].includes(path)) {
       if (req.method === "GET") return reply({items});
+      uploadRequests.push({clientRequestId: body.clientRequestId, available: uploadsAvailable});
+      if (!uploadsAvailable) return reply({message: "Upload service temporarily unavailable"}, 503);
       const existing = body.clientRequestId && items.find((item) => item.clientRequestId === body.clientRequestId);
       if (existing) return reply(existing);
       const now = new Date().toISOString();
@@ -85,7 +98,7 @@ export function startTestBackend(port = 4181) {
     }
     return reply({message: `Unimplemented fixture: ${req.method} ${path}`}, 404);
   });
-  const io = new Server(server, {cors: {origin: "http://127.0.0.1:4180"}});
+  const io = new Server(server, {cors: {origin}});
   io.on("connection", (socket) => {
     socket.on("join-workspaces", ({workspaceIds}) => { socket.join(workspaceIds); roomJoins++; });
     socket.on("leave-workspaces", ({workspaceIds} = {}) => {
