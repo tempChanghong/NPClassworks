@@ -94,8 +94,7 @@ test("thirty initializations keep one set of timers over a simulated day and cle
   const upload = t.mock.method(screen, "flushScreenPublicationQueue", async () => {});
   try {
     for (let i = 0; i < 30; i++) { screen.startRealtime(); screen.initializeScreenSync(); }
-    assert.equal(timers.size, 3);
-    screen.screenPendingUploads = [{status: "pending"}];
+    assert.equal(timers.size, 2);
     feed.mock.resetCalls(); heartbeat.mock.resetCalls(); upload.mock.resetCalls();
     // Advance timer deadlines, not the wall clock or HTTP transport. This catches
     // accumulated interval registrations without claiming 24 hours of real uptime.
@@ -109,7 +108,7 @@ test("thirty initializations keep one set of timers over a simulated day and cle
     }
     assert.equal(feed.mock.callCount(), 288);
     assert.equal(heartbeat.mock.callCount(), 1440);
-    assert.equal(upload.mock.callCount(), 2880);
+    assert.equal(upload.mock.callCount(), 0);
     screen.stopRealtime(); screen.stopScreenSync();
     assert.equal(timers.size, 0);
     h.realtime.emitServerEvent("connect");
@@ -119,6 +118,6 @@ test("thirty initializations keep one set of timers over a simulated day and cle
     await new Promise(resolve => setTimeout(resolve, 350));
     assert.equal(feed.mock.callCount(), 288);
     assert.equal(heartbeat.mock.callCount(), 1440);
-    assert.equal(upload.mock.callCount(), 2880);
+    assert.equal(upload.mock.callCount(), 0);
   } finally { screen.stopRealtime(); screen.stopScreenSync(); }
 });

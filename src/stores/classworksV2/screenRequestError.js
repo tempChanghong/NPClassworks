@@ -1,3 +1,4 @@
 export function isTransientScreenRequestError(error) {
-  return !error?.response || [502, 503, 504].includes(error.response.status);
+  const status = Number(error?.response?.status);
+  return !error?.response || status === 408 || status === 429 || (status >= 500 && status < 600);
 }
