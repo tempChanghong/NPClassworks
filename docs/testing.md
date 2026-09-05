@@ -6,9 +6,25 @@
 pnpm test          # 工具函数、配置约束和前端流程测试
 pnpm test:flows   # 仅运行发布与账号流程测试
 pnpm lint:check   # ESLint 只检查，不修改文件；警告也会导致失败
+pnpm exec playwright install chromium  # 首次运行浏览器测试时安装
+pnpm test:e2e     # Chromium、生产构建、真实 Socket.IO 和 Service Worker
 ```
 
-完整测试由 PR 的 `Frontend tests` 工作流执行；生产部署现有的 verify 阶段也会执行同一组测试。流程测试沿用 Node test runner、Vite、Vue 和 Pinia，不需要安装浏览器或启动 NPClassworksKV。
+PR 的 `Frontend tests` 工作流执行 Node 测试、静态检查及独立的浏览器测试任务；浏览器失败时保留截图与 trace 7 天。生产部署现有 verify 阶段仍执行 Node 测试和静态检查，不需要在服务器安装浏览器。Node 流程测试沿用 Vite、Vue 和 Pinia，不需要启动 NPClassworksKV。
+
+## 登录刷新测试
+
+`tests/accountRefresh.test.js` 验证并发 401 只刷新一次、刷新请求在 10 秒内超时、临时故障保留凭据并可恢复、刷新凭据失效才清理登录，以及切换账号或退出时旧刷新响应不能写回凭据。
+
+## 浏览器流程测试
+
+`tests/e2e/publication.spec.js` 点击真实 Vuetify 按钮并检查页面结果：
+
+- 教师发布作业后，独立浏览器上下文中的大屏经真实 Socket.IO 通知自动更新。
+- Service Worker 接管后断网录入、刷新页面，确认导航来自 Service Worker、缓存内容和待提交队列保留；恢复联网后补传且只有两条最终作业。
+- 制造版本冲突，确认输入保留；点击人工确认后携带最新版本保存。
+
+测试自动构建生产资源到 `dist-e2e/`，在本机 4180/4181 端口启动静态站点和隔离 API fixture；请保持这两个端口空闲。每个用例重置数据，每个角色使用独立浏览器存储，不访问线上数据。API fixture 不使用生产后端或数据库，因此这组测试证明浏览器交互、传输和 PWA 行为，服务端权限与事务仍由后端测试及部署环境联调验证。
 
 ## 流程测试覆盖
 
@@ -28,6 +44,6 @@ pnpm lint:check   # ESLint 只检查，不修改文件；警告也会导致失�
 
 HTTP 使用监听 `127.0.0.1` 随机端口的隔离服务，实际校验请求体、账号/大屏令牌和版本头。响应由 fixture 控制，可精确制造延迟和错误；它不是生产后端实现，不能证明服务端鉴权、数据库事务或 Socket.IO 房间授权正确。
 
-Socket.IO 传输由可控事件源替代，本地存储由内存实现替代。录入组件挂载于 Vue 的无 DOM renderer，执行真实组件生命周期与交互逻辑，但不渲染 Vuetify 模板。因此这些是前端集成测试，不是浏览器端到端测试：按钮可点击性、布局、Service Worker 离线导航、真实 WebSocket 重连、浏览器存储配额以及多设备后端联调仍需浏览器/部署环境验证。
+Node 流程测试的 Socket.IO 传输由可控事件源替代，本地存储由内存实现替代。录入组件挂载于 Vue 的无 DOM renderer，执行真实组件生命周期与交互逻辑，但不渲染 Vuetify 模板。上述浏览器测试另行覆盖按钮操作、Service Worker 离线导航和真实 Socket.IO；浏览器存储配额耗尽、多浏览器兼容性以及生产后端多设备联调仍不在覆盖范围内。
 
 新增场景优先验证可观察结果（输入、草稿、持久化队列、发出的事件、HTTP 请求和最终 Store 状态），不以源码字符串存在作为交互正确的依据。修改学校管理权限时，也仍需新增对应组件交互和后端授权测试，不能依赖现有权限文案正则检查。

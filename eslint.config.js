@@ -9,7 +9,7 @@ export default [
 
   {
     name: 'app/files-to-ignore',
-    ignores: ['**/dist/**', '**/dist-ssr/**', '**/coverage/**'],
+    ignores: ['**/dist/**', '**/dist-e2e/**', '**/test-results/**', '**/playwright-report/**', '**/dist-ssr/**', '**/coverage/**'],
   },
 
   js.configs.recommended,

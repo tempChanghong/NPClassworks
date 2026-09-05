@@ -184,3 +184,8 @@ package-lock.json
 # pnpm SQLite sidecar files created while the local store is open
 .pnpm-store/**/*.db-shm
 .pnpm-store/**/*.db-wal
+
+# Browser integration artifacts
+dist-e2e/
+test-results/
+playwright-report/

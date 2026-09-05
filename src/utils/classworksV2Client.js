@@ -14,7 +14,22 @@ const client = axios.create({
   headers: {Accept: "application/json"},
 });
 
-let refreshPromise = null;
+export const ACCOUNT_REFRESH_TIMEOUT_MS = 10000;
+let accountSessionVersion = 0;
+let refreshingSession = null;
+
+function accountSession() {
+  return {...getAccountTokens(), version: accountSessionVersion, server: baseUrl()};
+}
+
+function isCurrentAccountSession(session) {
+  return session && session.version === accountSessionVersion
+    && session.refreshToken === getAccountTokens().refreshToken && session.server === baseUrl();
+}
+
+function staleAccountRequest() {
+  return new axios.CanceledError("账号已切换，已忽略旧会话请求");
+}
 
 function baseUrl() {
   return getServerUrl().replace(/\/$/, "");
@@ -32,11 +47,14 @@ export function getAccountTokens() {
 }
 
 export function saveAccountTokens({accessToken, refreshToken}) {
+  // A token pair represents a login; access-token renewal keeps the same session.
+  if (refreshToken) accountSessionVersion += 1;
   if (accessToken) localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 export function clearAccountTokens() {
+  accountSessionVersion += 1;
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
@@ -186,45 +204,67 @@ export function consumeOAuthError() {
   return error;
 }
 
-async function refreshAccountToken() {
-  const {refreshToken} = getAccountTokens();
-  if (!refreshToken) throw new Error("没有可用的刷新令牌");
-  if (!refreshPromise) {
-    refreshPromise = axios.post(`${baseUrl()}/accounts/refresh`, {
-      refresh_token: refreshToken,
-    }).then((response) => {
+async function refreshAccountToken(session) {
+  if (!isCurrentAccountSession(session)) throw staleAccountRequest();
+  if (!refreshingSession || refreshingSession.version !== session.version
+    || refreshingSession.refreshToken !== session.refreshToken || refreshingSession.server !== session.server) {
+    const pending = {...session};
+    pending.promise = axios.post(`${session.server}/accounts/refresh`, {
+      refresh_token: session.refreshToken,
+    }, {timeout: ACCOUNT_REFRESH_TIMEOUT_MS}).then((response) => {
+      if (!isCurrentAccountSession(session)) throw staleAccountRequest();
       const data = unwrap(response);
+      if (typeof data.access_token !== "string" || !data.access_token) {
+        throw new Error("登录续期响应无效，请稍后重试");
+      }
       saveAccountTokens({accessToken: data.access_token});
       return data.access_token;
     }).finally(() => {
-      refreshPromise = null;
+      if (refreshingSession === pending) refreshingSession = null;
     });
+    refreshingSession = pending;
   }
-  return refreshPromise;
+  return refreshingSession.promise;
 }
 
 client.interceptors.request.use((config) => {
+  if (config._v2Retried && !isCurrentAccountSession(config._accountSession)) throw staleAccountRequest();
   config.baseURL = baseUrl();
   config._diagnosticStartedAt = Date.now();
   const {accessToken} = getAccountTokens();
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  else delete config.headers.Authorization;
+  config._accountSession = accountSession();
   return config;
 });
 
 client.interceptors.response.use((response) => {
   const renewedToken = response.headers["x-new-access-token"];
-  if (renewedToken) saveAccountTokens({accessToken: renewedToken});
+  if (renewedToken && isCurrentAccountSession(response.config._accountSession)
+    && response.config._accountSession.accessToken === getAccountTokens().accessToken) {
+    saveAccountTokens({accessToken: renewedToken});
+  }
   return response;
 }, async (error) => {
   const original = error.config;
-  if (error.response?.status === 401 && !original?._v2Retried && getAccountTokens().refreshToken) {
+  const session = original?._accountSession;
+  if (session && !isCurrentAccountSession(session)) return Promise.reject(staleAccountRequest());
+  const accountAuthenticated = session?.accessToken && !original?.headers?.["X-Classworks-Screen-Token"]
+    && !["/accounts/local/login", "/accounts/local/bootstrap", "/accounts/local/recover-owner"].includes(original?.url);
+  if (error.response?.status === 401 && !original?._v2Retried && accountAuthenticated && session.refreshToken) {
     original._v2Retried = true;
     try {
-      const token = await refreshAccountToken();
+      const token = getAccountTokens().accessToken !== session.accessToken
+        ? getAccountTokens().accessToken : await refreshAccountToken(session);
+      if (!isCurrentAccountSession(session)) throw staleAccountRequest();
       original.headers.Authorization = `Bearer ${token}`;
       return client(original);
-    } catch {
-      clearAccountTokens();
+    } catch (refreshError) {
+      if (!isCurrentAccountSession(session)) return Promise.reject(staleAccountRequest());
+      if ([401, 403].includes(refreshError.response?.status)) clearAccountTokens();
+      // Propagate the refresh failure, not the original 401: temporary outages must
+      // not be interpreted as an expired login by the store.
+      return Promise.reject(refreshError);
     }
   }
   if (error.code !== "ERR_CANCELED" && !original?._diagnosticRecorded) {
