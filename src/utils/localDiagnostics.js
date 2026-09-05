@@ -5,6 +5,8 @@ const EVENT_NAME = "npclassworks:diagnostics-updated";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_EVENTS = 150;
 const DEDUPLICATION_MS = 5 * 60 * 1000;
+const SNAPSHOT_FLUSH_MS = 1000;
+const pendingSnapshots = new WeakMap();
 const SENSITIVE_KEY = /(authorization|cookie|credential|password|passphrase|pin|secret|setup.?key|token)/i;
 const UUID_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -12,7 +14,11 @@ const LONG_SECRET_PATTERN = /\b[0-9a-f]{32,}\b/gi;
 
 function storageOrNull(storage) {
   if (storage) return storage;
-  return typeof window === "undefined" ? null : window.localStorage;
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function emptyState() {
@@ -97,8 +103,26 @@ function writeState(state, storage) {
   }
 }
 
+function takePendingSnapshots(storage) {
+  const pending = storage && pendingSnapshots.get(storage);
+  if (!pending) return {};
+  clearTimeout(pending.timer);
+  pendingSnapshots.delete(storage);
+  return pending.values;
+}
+
+export function flushDiagnosticSnapshots(storage, now = Date.now()) {
+  const target = storageOrNull(storage);
+  if (!target || !pendingSnapshots.has(target)) return;
+  const state = readState(target, now);
+  Object.assign(state.snapshots, takePendingSnapshots(target));
+  writeState(state, target);
+}
+
 export function recordDiagnosticEvent(event, {storage, now = Date.now()} = {}) {
-  const state = readState(storage, now);
+  const target = storageOrNull(storage);
+  const state = readState(target, now);
+  Object.assign(state.snapshots, takePendingSnapshots(target));
   const next = normalizeEvent(event, now);
   const previous = state.events.slice().reverse().find((candidate) => (
     candidate.category === next.category
@@ -114,25 +138,34 @@ export function recordDiagnosticEvent(event, {storage, now = Date.now()} = {}) {
     state.events.push(next);
   }
   state.events = state.events.slice(-MAX_EVENTS);
-  writeState(state, storage);
+  writeState(state, target);
   return next;
 }
 
 export function recordDiagnosticSnapshot(name, value, {storage, now = Date.now()} = {}) {
-  const state = readState(storage, now);
-  state.snapshots[sanitizeDiagnosticText(name).slice(0, 60)] = {
+  const target = storageOrNull(storage);
+  if (!target) return;
+  let pending = pendingSnapshots.get(target);
+  if (!pending) {
+    pending = {values: Object.create(null), timer: setTimeout(() => flushDiagnosticSnapshots(target), SNAPSHOT_FLUSH_MS)};
+    pendingSnapshots.set(target, pending);
+  }
+  pending.values[sanitizeDiagnosticText(name).slice(0, 60)] = {
     updatedAt: new Date(now).toISOString(),
     value: sanitizeDiagnosticValue(value),
   };
-  writeState(state, storage);
 }
 
 export function getLocalDiagnostics(storage, now = Date.now()) {
-  return readState(storage, now);
+  const target = storageOrNull(storage);
+  const state = readState(target, now);
+  Object.assign(state.snapshots, target && pendingSnapshots.get(target)?.values);
+  return state;
 }
 
 export function clearLocalDiagnostics(storage) {
   const target = storageOrNull(storage);
+  takePendingSnapshots(target);
   try {
     target?.removeItem(STORAGE_KEY);
     if (typeof window !== "undefined") window.dispatchEvent(new window.CustomEvent(EVENT_NAME));
@@ -211,6 +244,10 @@ export function installLocalDiagnostics(app) {
   };
   if (typeof window === "undefined" || window.__NP_LOCAL_DIAGNOSTICS_INSTALLED__) return;
   window.__NP_LOCAL_DIAGNOSTICS_INSTALLED__ = true;
+  window.addEventListener("pagehide", () => flushDiagnosticSnapshots());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushDiagnosticSnapshots();
+  });
   window.addEventListener("error", (event) => {
     const targetTag = event.target?.tagName?.toUpperCase?.() || "";
     const isCriticalResource = targetTag === "SCRIPT" || (targetTag === "LINK" && event.target?.rel === "stylesheet");

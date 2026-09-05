@@ -1,4 +1,5 @@
-import {getLocalDiagnostics, recordDiagnosticSnapshot} from "./localDiagnostics.js";
+import {flushDiagnosticSnapshots, getLocalDiagnostics, recordDiagnosticSnapshot} from "./localDiagnostics.js";
+import {createPerformanceActivity} from "./performanceActivity.js";
 
 const SNAPSHOT_NAME = "performanceBaseline";
 const MAX_SAMPLES = 48;
@@ -7,12 +8,7 @@ let startedAt = 0;
 let appMountedAt = 0;
 let lcp = 0;
 let fcp = 0;
-let longTaskCount = 0;
-let longTaskTotal = 0;
-let longTaskMax = 0;
-let driftCount = 0;
-let driftTotal = 0;
-let driftMax = 0;
+let activity = null;
 
 export function summarizeNavigationTiming(entry) {
   if (!entry) return null;
@@ -47,8 +43,7 @@ function collectSample(reason) {
     firstContentfulPaintMs: Math.round(fcp),
     largestContentfulPaintMs: Math.round(lcp),
     navigation: summarizeNavigationTiming(navigation),
-    longTasks: {count: longTaskCount, totalMs: rounded(longTaskTotal), maxMs: rounded(longTaskMax)},
-    eventLoopDrift: {samples: driftCount, averageMs: driftCount ? rounded(driftTotal / driftCount) : 0, maxMs: rounded(driftMax)},
+    ...activity?.snapshot(),
     memory: memory ? {
       usedMb: rounded(memory.usedJSHeapSize / 1024 / 1024),
       totalMb: rounded(memory.totalJSHeapSize / 1024 / 1024),
@@ -91,6 +86,7 @@ export function startPerformanceBaseline() {
   if (started || typeof window === "undefined" || typeof globalThis.performance === "undefined") return;
   started = true;
   startedAt = globalThis.performance.now();
+  activity = createPerformanceActivity({visible: document.visibilityState !== "hidden"});
   fcp = globalThis.performance.getEntriesByName?.("first-contentful-paint")?.[0]?.startTime || 0;
   observe("paint", (entries) => {
     fcp = entries.find((entry) => entry.name === "first-contentful-paint")?.startTime || fcp;
@@ -99,28 +95,28 @@ export function startPerformanceBaseline() {
     lcp = entries.at(-1)?.startTime || lcp;
   });
   observe("longtask", (entries) => {
-    for (const entry of entries) {
-      longTaskCount += 1;
-      longTaskTotal += entry.duration;
-      longTaskMax = Math.max(longTaskMax, entry.duration);
-    }
+    for (const entry of entries) activity.longTask(entry);
   });
-  let expected = globalThis.performance.now() + 30000;
+  window.setInterval(activity.tick, 30000);
   window.setInterval(() => {
-    const current = globalThis.performance.now();
-    const drift = Math.max(0, current - expected);
-    driftCount += 1;
-    driftTotal += drift;
-    driftMax = Math.max(driftMax, drift);
-    expected = current + 30000;
-  }, 30000);
-  window.setInterval(() => collectSample("periodic"), 15 * 60 * 1000);
+    if (document.visibilityState !== "hidden") collectSample("periodic");
+  }, 15 * 60 * 1000);
   const collectInitialSettledSample = () => window.setTimeout(() => collectSample("initial-settled"), 3000);
   if (document.readyState === "complete") collectInitialSettledSample();
   else window.addEventListener("load", collectInitialSettledSample, {once: true});
   window.addEventListener("online", () => collectSample("online"));
   window.addEventListener("offline", () => collectSample("offline"));
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") collectSample("hidden");
+    if (document.visibilityState === "hidden") activity.pause();
+    else activity.resume();
+    collectSample(document.visibilityState === "hidden" ? "hidden" : "visible");
+    if (document.visibilityState === "hidden") flushDiagnosticSnapshots();
   });
+  const resumeActivity = () => {
+    if (document.visibilityState !== "hidden") activity.resume();
+  };
+  document.addEventListener("freeze", activity.pause);
+  document.addEventListener("resume", resumeActivity);
+  window.addEventListener("pagehide", activity.pause);
+  window.addEventListener("pageshow", resumeActivity);
 }

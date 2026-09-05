@@ -317,6 +317,7 @@ import ScreenNotificationCenter from "@/components/v2/ScreenNotificationCenter.v
 import {boardDateRelativeLabel, shiftBoardDate, todayBoardDate} from "@/utils/boardDate";
 import {classworksV2Api} from "@/utils/classworksV2Client";
 import {createNotificationDeliveryQueue} from "@/utils/notificationDeliveryQueue";
+import {recordDiagnosticEvent, recordDiagnosticSnapshot} from "@/utils/localDiagnostics";
 import {
   alertableScreenNotifications,
   createNotificationAlertController,
@@ -341,9 +342,33 @@ const acknowledgedNoticeKeys = ref(readAcknowledgedNotificationKeys(store.screen
 const burnInStep = ref(0);
 let burnInTimer = null;
 let notificationAlertController = createNotificationAlertController({scopeId: store.screenSession?.binding?.id});
-const notificationDeliveryQueue = createNotificationDeliveryQueue({
-  send: (items) => classworksV2Api.acknowledgeScreenNotifications(items),
-});
+function createDeliveryQueue() {
+  let reportedBlock = false;
+  return createNotificationDeliveryQueue({
+    send: (items) => classworksV2Api.acknowledgeScreenNotifications(items),
+    onStateChange: (state) => {
+      recordDiagnosticSnapshot("notificationDelivery", state);
+      if (state.status === "blocked" && !reportedBlock) {
+        reportedBlock = true;
+        recordDiagnosticEvent({
+          category: "SCREEN",
+          code: "NOTIFICATION_DELIVERY_BLOCKED",
+          message: "通知回执被服务器拒绝，已停止自动重试并保留待处理状态",
+          context: state,
+        });
+      }
+    },
+  });
+}
+let notificationDeliveryQueue = createDeliveryQueue();
+
+function retryNotificationDelivery() {
+  void notificationDeliveryQueue.retryNow();
+}
+
+function pauseNotificationDelivery() {
+  notificationDeliveryQueue.pause();
+}
 
 const bindingId = computed(() => store.screenSession?.binding?.id || "");
 const activeNotices = computed(() => store.feed.filter((publication) => publication.type === "NOTICE"));
@@ -376,6 +401,8 @@ function updatePerformanceClass() {
 }
 
 watch(bindingId, (id) => {
+  notificationDeliveryQueue.dispose();
+  notificationDeliveryQueue = createDeliveryQueue();
   settings.value = loadScreenDisplaySettings(id);
   acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(id);
   notificationCenterOpen.value = false;
@@ -384,7 +411,7 @@ watch(bindingId, (id) => {
 
 watch(() => settings.value.performanceMode, updatePerformanceClass);
 
-watch(() => store.feed.filter((publication) => publication.type === "NOTICE")
+watch(() => `${bindingId.value}:` + store.feed.filter((publication) => publication.type === "NOTICE")
   .map((publication) => `${publication.id}:${publication.revision}`).join(","), () => {
   const acknowledged = readAcknowledgedNotificationKeys(bindingId.value);
   const items = store.feed.filter((publication) => publication.type === "NOTICE").map((publication) => ({
@@ -458,7 +485,8 @@ onMounted(() => {
   document.body.classList.add("classworks-screen-active");
   updatePerformanceClass();
   window.addEventListener("keydown", handleShortcut);
-  window.addEventListener("online", notificationDeliveryQueue.retryNow);
+  window.addEventListener("online", retryNotificationDelivery);
+  window.addEventListener("offline", pauseNotificationDelivery);
   burnInTimer = window.setInterval(() => {
     burnInStep.value += 1;
   }, 5 * 60 * 1000);
@@ -468,7 +496,8 @@ onUnmounted(() => {
   document.body.classList.remove("classworks-screen-active");
   document.body.classList.remove("classworks-screen-efficient");
   window.removeEventListener("keydown", handleShortcut);
-  window.removeEventListener("online", notificationDeliveryQueue.retryNow);
+  window.removeEventListener("online", retryNotificationDelivery);
+  window.removeEventListener("offline", pauseNotificationDelivery);
   notificationDeliveryQueue.dispose();
   window.clearInterval(burnInTimer);
 });
