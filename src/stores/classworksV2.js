@@ -60,6 +60,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     screenNetworkOnline: typeof navigator === "undefined" ? true : navigator.onLine,
     screenRealtimeConnected: false,
     screenPendingUploads: [],
+    screenQueueBindingId: null,
+    screenQueueReadError: "",
     screenSyncing: false,
     screenLastSyncedAt: null,
     screenHeartbeatAt: null,
@@ -113,6 +115,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       return state.screenPendingUploads.filter((item) => item.status === "needs_review").length;
     },
     screenSyncState(state) {
+      if (state.screenQueueReadError) return "pending";
       if (!state.screenNetworkOnline) return "offline";
       if (state.screenSyncing) return "syncing";
       if (state.screenPendingUploads.length) return "pending";

@@ -29,6 +29,15 @@
         />
       </v-card-title>
       <v-card-text class="px-5">
+        <v-btn
+          v-if="store.screenQueueReadError"
+          class="mb-4"
+          :disabled="store.screenSyncing"
+          variant="tonal"
+          @click="store.recoverScreenPublicationQueue()"
+        >
+          重新读取本机队列
+        </v-btn>
         <v-alert
           v-if="store.screenError"
           class="mb-4"
@@ -77,7 +86,7 @@
               <div class="d-flex flex-wrap justify-end ga-1 queued-actions">
                 <v-btn
                   v-if="store.screenNetworkOnline"
-                  :disabled="store.screenSyncing"
+                  :disabled="store.screenSyncing || Boolean(store.screenQueueReadError)"
                   size="small"
                   variant="tonal"
                   @click="retry(item)"
@@ -87,7 +96,7 @@
                 <v-btn
                   v-if="item.error?.code === 'DUPLICATE_ASSIGNMENT_SUSPECTED' && store.screenNetworkOnline"
                   color="warning"
-                  :disabled="store.screenSyncing"
+                  :disabled="store.screenSyncing || Boolean(store.screenQueueReadError)"
                   size="small"
                   variant="tonal"
                   @click="retry(item, true)"
@@ -99,6 +108,7 @@
                   icon="mdi-delete-outline"
                   size="small"
                   title="移除本机待提交作业"
+                  :disabled="store.screenSyncing || Boolean(store.screenQueueReadError)"
                   variant="text"
                   @click="remove(item)"
                 />
@@ -107,7 +117,7 @@
           </v-list-item>
         </v-list>
         <v-empty-state
-          v-else
+          v-else-if="!store.screenQueueReadError"
           headline="没有待提交作业"
           icon="mdi-cloud-check-outline"
           text="当前大屏上的作业已经与服务器同步"
@@ -126,6 +136,7 @@ const store = useClassworksV2Store();
 const dialog = ref(false);
 
 const status = computed(() => {
+  if (store.screenQueueReadError) return {label: "本机队列读取异常", color: "error", icon: "mdi-cloud-alert-outline", variant: "tonal"};
   const count = store.screenPendingUploads.length;
   const states = {
     offline: {label: count ? `离线 · ${count} 项待提交` : "离线", color: "error", icon: "mdi-cloud-off-outline", variant: "tonal"},
@@ -137,6 +148,7 @@ const status = computed(() => {
   return states[store.screenSyncState];
 });
 const statusDetail = computed(() => {
+  if (store.screenQueueReadError) return store.screenQueueReadError;
   if (!store.screenNetworkOnline) return "网络已断开。作业保存成功后会留在这台大屏，联网后自动提交；超过 7 天的作业需人工核对。队列最多接收 50 项，满额后请先处理已有作业。";
   if (store.screenPendingReviewCount) return `有 ${store.screenPendingReviewCount} 项作业需要核对后再提交。`;
   if (store.screenPendingUploads.length) return "正在等待或尝试将本机作业提交到服务器。";

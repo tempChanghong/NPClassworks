@@ -29,6 +29,34 @@ function screenCommandGuard(store) {
 
 // Mixed into the existing store: actions share its reactive state and Pinia binding.
 export const screenSyncActions = {
+  readScreenPublicationQueue() {
+    const bindingId = this.screenSession?.binding?.id || null;
+    if (this.screenQueueBindingId !== bindingId) {
+      this.screenPendingUploads = [];
+      this.screenQueueReadError = "";
+      this.screenQueueBindingId = bindingId;
+    }
+    try {
+      const items = bindingId ? loadScreenPublicationQueue(bindingId, undefined, {strict: true}) : [];
+      if (this.screenQueueReadError) screenSyncContexts.get(this)?.retry?.succeeded();
+      this.screenPendingUploads = items;
+      this.screenQueueReadError = "";
+      return true;
+    } catch (error) {
+      this.reportScreenQueueError(error);
+      return false;
+    }
+  },
+
+  recoverScreenPublicationQueue() {
+    const recovered = this.readScreenPublicationQueue();
+    const retry = screenSyncContexts.get(this)?.retry;
+    if (recovered) retry?.succeeded();
+    else retry?.failed();
+    retry?.request();
+    return recovered;
+  },
+
   initializeScreenSync() {
     this.stopScreenSync();
     const screenSyncCleanup = [];
@@ -39,11 +67,11 @@ export const screenSyncActions = {
       context.reloadTimers.clear();
     });
     const bindingId = this.screenSession?.binding?.id;
-    this.screenPendingUploads = bindingId ? loadScreenPublicationQueue(bindingId) : [];
+    this.readScreenPublicationQueue();
     context.retry = createScreenUploadRetry({
       run: () => this.flushScreenPublicationQueue(),
       isOnline: () => isCurrentSync(this, bindingId, context) && this.screenNetworkOnline,
-      hasPending: () => this.screenPendingUploads.some((item) => item.status === "pending"),
+      hasPending: () => Boolean(this.screenQueueReadError) || this.screenPendingUploads.some((item) => item.status === "pending"),
       onError: (error) => this.reportScreenQueueError(error),
     });
     let previousOnline = this.screenNetworkOnline;
@@ -118,7 +146,7 @@ export const screenSyncActions = {
         realtimeConnected: this.screenRealtimeConnected,
         pendingUploads: this.screenPendingUploads.length,
         syncState: this.screenSyncState,
-        lastError: this.screenError,
+        lastError: this.screenQueueReadError || this.screenError,
         displayMode: "screen",
       });
       if (!isCurrent()) return;
@@ -213,6 +241,8 @@ export const screenSyncActions = {
     if (!bindingId) throw new Error("大屏尚未绑定，无法保存离线作业");
     try {
       this.screenPendingUploads = enqueueScreenPublication(bindingId, input, context);
+      this.screenQueueBindingId = bindingId;
+      this.screenQueueReadError = "";
     } catch (error) {
       this.reportScreenQueueError(error);
       throw error;
@@ -240,14 +270,14 @@ export const screenSyncActions = {
     const context = screenSyncContexts.get(this);
     if (!bindingId || !this.screenNetworkOnline || this.screenSyncing) return;
     context?.retry.begin();
-    const pending = loadScreenPublicationQueue(bindingId).filter((item) => item.status === "pending");
-    if (!pending.length) {
-      this.screenPendingUploads = loadScreenPublicationQueue(bindingId);
-      return;
-    }
     this.screenSyncing = true;
     let savedAny = false;
     try {
+      if (!this.readScreenPublicationQueue()) {
+        context?.retry.failed();
+        return;
+      }
+      const pending = this.screenPendingUploads.filter((item) => item.status === "pending");
       for (const item of pending) {
         if (!isCurrentSync(this, bindingId, context) || !this.screenNetworkOnline) break;
         try {
@@ -289,7 +319,7 @@ export const screenSyncActions = {
       }
     } finally {
       if (isCurrentSync(this, bindingId, context)) {
-        this.screenPendingUploads = loadScreenPublicationQueue(bindingId);
+        if (!this.screenQueueReadError && !this.readScreenPublicationQueue()) context?.retry.failed();
         this.screenSyncing = false;
         context?.retry.request();
       }
@@ -299,8 +329,10 @@ export const screenSyncActions = {
   async retryScreenQueuedPublication(itemId, {allowDuplicate = false} = {}) {
     const bindingId = this.screenSession?.binding?.id;
     const context = screenSyncContexts.get(this);
+    if (!bindingId || !this.screenNetworkOnline || this.screenSyncing) return false;
+    if (!this.recoverScreenPublicationQueue()) return false;
     const item = this.screenPendingUploads.find((candidate) => candidate.id === itemId);
-    if (!bindingId || !item || !this.screenNetworkOnline || this.screenSyncing) return false;
+    if (!item) return false;
     context?.retry.begin();
     this.screenSyncing = true;
     try {
@@ -355,7 +387,7 @@ export const screenSyncActions = {
 
   removeScreenQueuedPublication(itemId) {
     const bindingId = this.screenSession?.binding?.id;
-    if (!bindingId) return;
+    if (!bindingId || this.screenSyncing || !this.recoverScreenPublicationQueue()) return;
     try {
       this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, itemId);
       screenSyncContexts.get(this)?.retry.request();
@@ -365,6 +397,21 @@ export const screenSyncActions = {
   },
 
   reportScreenQueueError(error) {
+    if (error.code === "SCREEN_QUEUE_READ_FAILED") {
+      const bindingId = this.screenSession?.binding?.id || null;
+      if (this.screenQueueBindingId !== bindingId) {
+        this.screenPendingUploads = [];
+        this.screenQueueReadError = "";
+        this.screenQueueBindingId = bindingId;
+      }
+      const message = "无法读取本机待提交作业，暂时不能确认同步是否完成。已保留上次读取的列表；请勿清除浏览器数据，存储恢复后将重新读取。";
+      if (!this.screenQueueReadError) recordDiagnosticEvent({
+        category: "SCREEN_SYNC", severity: "ERROR", code: error.code, message,
+      });
+      this.screenQueueReadError = message;
+      screenSyncContexts.get(this)?.retry?.request();
+      return;
+    }
     this.screenError = describeApiError(error, "本机同步队列操作失败，请重试");
     recordDiagnosticEvent({
       category: "SCREEN_SYNC",

@@ -31,6 +31,37 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("unreadable local queue shows an error instead of synced and recovers through the UI", async ({browser}) => {
+  const screen = await openRole(browser, "screen");
+  try {
+    await screen.page.addInitScript(() => {
+      const read = Storage.prototype.getItem;
+      window.queueReadsBlocked = true;
+      Storage.prototype.getItem = function (key) {
+        if (window.queueReadsBlocked && key.startsWith("classworks-v2-screen-publication-queue:")) {
+          throw new window.DOMException("Storage unavailable", "SecurityError");
+        }
+        return read.call(this, key);
+      };
+    });
+    await screen.page.reload();
+    await expect(screen.page.locator(".screen-sync-chip")).toHaveText("本机队列读取异常");
+    await screen.page.locator(".screen-sync-chip").click();
+    const dialog = screen.page.getByRole("dialog");
+    await expect(dialog.getByText(/无法读取本机待提交作业/)).toBeVisible();
+    await expect(dialog.getByText("没有待提交作业", {exact: true})).toHaveCount(0);
+    await expect(dialog.getByText("当前大屏上的作业已经与服务器同步")).toHaveCount(0);
+    await dialog.getByRole("button", {name: "重新读取本机队列"}).click();
+    await expect(screen.page.locator(".screen-sync-chip")).toHaveText("本机队列读取异常");
+    await screen.page.evaluate(() => { window.queueReadsBlocked = false; });
+    await dialog.getByRole("button", {name: "重新读取本机队列"}).click();
+    await expect(dialog.getByText("没有待提交作业", {exact: true})).toBeVisible();
+    await expect(dialog.getByRole("button", {name: "重新读取本机队列"})).toHaveCount(0);
+    await expect(screen.page.locator(".screen-sync-chip")).toHaveText("实时同步");
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("remote reload preserves editing during a storage failure and runs after successful submission", async ({browser, request}) => {
   const screen = await openRole(browser, "screen");
   const {page} = screen;
