@@ -151,7 +151,7 @@
               </v-btn>
             </template>
             <v-btn
-              v-if="completionEnabled && publication.type === 'ASSIGNMENT'"
+              v-if="completionEnabled && publication.type === 'ASSIGNMENT' && !isNoHomework(publication)"
               :color="isCompleted(publication) ? 'success' : undefined"
               :prepend-icon="isCompleted(publication) ? 'mdi-check-circle' : 'mdi-check-circle-outline'"
               size="small"
@@ -169,6 +169,7 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {isNoHomework} from "@/utils/noHomework";
 import {
   calculateScreenFeedColumns,
   SCREEN_DISPLAY_DEFAULTS,

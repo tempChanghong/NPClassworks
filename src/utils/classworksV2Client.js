@@ -376,6 +376,12 @@ export const classworksV2Api = {
       params: {workspaceIds: workspaceIds.join(","), boardDate},
     }));
   },
+  async publicationWeek(workspaceIds, params, {screen = false, signal} = {}) {
+    return unwrap(await client.get(screen ? "/api/v2/classroom-screens/feed" : "/api/v2/publications/feed", {
+      params: {...params, ...(screen ? {} : {workspaceIds: workspaceIds.join(",")})},
+      ...(screen ? {headers: screenHeaders()} : {}), signal,
+    }));
+  },
   async profile() {
     return unwrap(await client.get("/accounts/profile"));
   },

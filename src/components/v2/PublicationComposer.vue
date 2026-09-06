@@ -1,6 +1,6 @@
 <template>
   <v-card
-    class="rounded-xl"
+    class="publication-composer rounded-xl"
     variant="flat"
   >
     <v-card-title class="d-flex align-center pa-5">
@@ -128,14 +128,23 @@
         variant="outlined"
       />
 
+      <v-switch
+        v-if="form.type === 'ASSIGNMENT'"
+        color="primary"
+        label="该科目在所选日期无作业"
+        :model-value="form.noHomework"
+        @update:model-value="setNoHomework"
+      />
       <v-text-field
         v-model="form.title"
+        :disabled="form.noHomework"
         label="标题（可选）"
         variant="outlined"
       />
       <v-textarea
         ref="contentInput"
         v-model="form.content"
+        :disabled="form.noHomework"
         auto-grow
         label="正文"
         placeholder="使用换行分条填写"
@@ -143,7 +152,7 @@
         variant="outlined"
       />
       <HomeworkQuickInputBar
-        v-if="form.type === 'ASSIGNMENT'"
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
         density="teacher"
         :items="quickInputs"
         :subject-id="form.subjectId"
@@ -167,14 +176,14 @@
           md="4"
         >
           <v-text-field
-            v-if="form.type === 'ASSIGNMENT'"
+            v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
             v-model="form.dueAt"
             label="截止时间（可选）"
             type="datetime-local"
             variant="outlined"
           />
           <v-text-field
-            v-else
+            v-else-if="form.type === 'NOTICE'"
             v-model="form.expiresAt"
             hint="留空时默认在发布三天后的同一时间自动消失"
             label="自动失效时间（可选）"
@@ -437,6 +446,7 @@ import {
   publicationDuplicateState,
 } from "@/utils/publicationDuplicate";
 import {confirmAction} from "@/utils/actionDialog";
+import {isNoHomework, NO_HOMEWORK_TITLE, NO_HOMEWORK_CONTENT, NO_HOMEWORK_META} from "@/utils/noHomework";
 
 const props = defineProps({
   editingPublication: {
@@ -458,6 +468,19 @@ const conflictApplying = ref(false);
 const duplicateWarning = ref(null);
 const duplicateStatus = ref("PUBLISHED");
 const contentInput = ref(null);
+let previousHomework = null;
+let originalContentJson = null;
+
+function setNoHomework(value) {
+  if (value) {
+    previousHomework = {title: form.title, content: form.content, dueAt: form.dueAt};
+    Object.assign(form, {title: NO_HOMEWORK_TITLE, content: NO_HOMEWORK_CONTENT, dueAt: ""});
+  } else {
+    Object.assign(form, previousHomework || {title: "", content: "", dueAt: ""});
+    previousHomework = null;
+  }
+  form.noHomework = Boolean(value);
+}
 
 function localDateTime(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
@@ -475,6 +498,7 @@ function formatPreviewDateTime(date) {
 }
 
 const form = reactive({
+  noHomework: false,
   type: "ASSIGNMENT",
   subjectId: "",
   targetWorkspaceIds: [],
@@ -574,7 +598,10 @@ const targetShortcuts = computed(() => {
 watch([() => form.type, () => form.subjectId], () => {
   const allowed = new Set(eligibleTargets.value.map((item) => item.id));
   form.targetWorkspaceIds = form.targetWorkspaceIds.filter((id) => allowed.has(id));
-  if (form.type === "NOTICE") form.subjectId = "";
+  if (form.type === "NOTICE") {
+    if (form.noHomework) setNoHomework(false);
+    form.subjectId = "";
+  }
 });
 watch(form, () => {
   duplicateWarning.value = null;
@@ -590,6 +617,9 @@ watch(() => props.editingPublication, (publication) => {
     return;
   }
   form.type = publication.type;
+  previousHomework = null;
+  originalContentJson = publication.contentJson?.kind === "NO_HOMEWORK" ? null : publication.contentJson || null;
+  form.noHomework = isNoHomework(publication);
   form.subjectId = publication.subjectId || "";
   form.targetWorkspaceIds = publication.targets?.map((target) => target.workspaceId) || [];
   form.title = publication.title || "";
@@ -632,6 +662,9 @@ async function insertQuickInput(item) {
 }
 
 function reset() {
+  form.noHomework = false;
+  previousHomework = null;
+  originalContentJson = null;
   form.targetWorkspaceIds = [];
   form.title = "";
   form.content = "";
@@ -666,6 +699,7 @@ async function submit(status, allowDuplicate = false) {
       targetWorkspaceIds: form.targetWorkspaceIds,
       title: form.title,
       content: form.content,
+      contentJson: form.noHomework && form.type === "ASSIGNMENT" ? {...NO_HOMEWORK_META} : originalContentJson,
       boardDate: form.type === "ASSIGNMENT" ? form.boardDate : null,
       publishAt: new Date(form.publishAt).toISOString(),
       dueAt: form.type === "ASSIGNMENT" && form.dueAt ? new Date(form.dueAt).toISOString() : null,

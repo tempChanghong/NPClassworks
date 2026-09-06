@@ -86,7 +86,10 @@ export function startTestBackend(port = apiPort) {
     if (path === "/api/v2/catalog/grades") return reply([{id: "grade", name: "高一"}]);
     if (path === "/api/v2/catalog/workspaces") return reply([workspace]);
     if (path === "/api/v2/catalog/subjects") return reply([subject]);
-    if (path === "/api/v2/catalog/administrative-classes/class-a/course-options") return reply({subjects: []});
+    if (path === "/api/v2/catalog/administrative-classes/class-a/course-options") return reply({
+      administrativeClass: {id: workspace.id, name: workspace.name},
+      subjects: [{subject, deliveryMode: "ADMIN_CLASS", courseGroups: [], requiresSelection: false}],
+    });
     if (path === "/api/v2/catalog/administrative-classes/class-a/student-selection/validate") {
       return reply({normalized: {courseGroupIds: {}, declinedSubjectIds: []}, issues: [], confirmedAt: new Date().toISOString()});
     }
@@ -127,6 +130,18 @@ export function startTestBackend(port = apiPort) {
     if (/^\/api\/v2\/publications\/[^/]+\/screen-deliveries$/.test(path)) return reply({screens: []});
     if (path.endsWith("/feed")) {
       if (path === "/api/v2/classroom-screens/feed") screenFeedRequests++;
+      const query = new URL(req.url, "http://localhost").searchParams;
+      if (query.has("weekStart")) {
+        const weekStart = query.get("weekStart"), weekView = query.get("weekView");
+        const start = new Date(`${weekStart}T00:00:00${weekView === "due" ? "+08:00" : "Z"}`).getTime();
+        const selected = items.filter(item => {
+          const date = new Date(weekView === "due" ? item.dueAt : item.boardDate).getTime();
+          return item.type === "ASSIGNMENT" && item.status === "PUBLISHED" && new Date(item.publishAt).getTime() <= Date.now()
+            && date >= start && date < start + 7 * 86400000;
+        });
+        const skip = Number(query.get("skip") || 0), limit = Number(query.get("limit") || 100);
+        return reply({items: selected.slice(skip, skip + limit), total: selected.length, weekStart, weekView});
+      }
       return reply({items, generatedAt: new Date().toISOString()});
     }
     if (["/api/v2/publications", "/api/v2/classroom-screens/publications"].includes(path)) {

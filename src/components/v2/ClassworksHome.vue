@@ -144,6 +144,7 @@
               </div>
             </div>
             <div class="selection-summary__actions">
+              <HomeworkWeekButton :class-name="store.selectedClassName" />
               <HomeworkPrintButton
                 :class-name="store.selectedClassName"
                 :scope-label="selectionDescription"
@@ -209,6 +210,7 @@
           :date="store.boardDate"
           @change="store.setBoardDate"
         />
+        <HomeworkSubjectStatus />
         <v-empty-state
           v-if="store.feedLoadError && !store.feed.length"
           class="rounded-xl"
@@ -236,7 +238,7 @@
 
         <v-empty-state
           v-else-if="!store.feedLoading && !store.studentError"
-          :headline="`${boardDateLabel}没有作业`"
+          :headline="`${boardDateLabel}尚未录入作业`"
           icon="mdi-check-circle-outline"
           text="可以切换到前一天、后一天或选择其他日期查看"
         />
@@ -636,6 +638,8 @@ import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
 import ScreenAccountLogin from "@/components/v2/ScreenAccountLogin.vue";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
+import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
+import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
 import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";

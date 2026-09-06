@@ -86,6 +86,11 @@
             </template>
             <v-list>
               <v-list-item
+                prepend-icon="mdi-calendar-week"
+                title="一周总览"
+                @click="weekTool.open()"
+              />
+              <v-list-item
                 :disabled="!printTool || printTool.disabled"
                 prepend-icon="mdi-printer-outline"
                 title="打印作业清单"
@@ -114,6 +119,11 @@
       :class-name="className"
       hide-button
       :scope-label="workspaceSummary"
+    />
+    <HomeworkWeekButton
+      ref="weekTool"
+      :class-name="className"
+      hide-button
     />
 
     <v-alert
@@ -169,6 +179,8 @@
       @change="store.setBoardDate"
       @copy-to-today="$emit('copy-board')"
     />
+
+    <HomeworkSubjectStatus />
 
     <v-progress-linear
       v-if="store.feedLoading && store.feed.length"
@@ -236,7 +248,7 @@
     <v-empty-state
       v-else
       class="mt-6"
-      :headline="`${boardDateLabel}没有作业`"
+      :headline="`${boardDateLabel}尚未录入作业`"
       icon="mdi-check-circle-outline"
       text="本行政班及相关走班的作业会按日期出现在这里"
     />
@@ -322,6 +334,8 @@
 import {computed, onMounted, onUnmounted, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
+import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
+import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
@@ -350,6 +364,7 @@ import {
 defineEmits(["create", "edit", "history", "tools", "copy-board", "settings", "exit", "diagnostics"]);
 const store = useClassworksV2Store();
 const printTool = ref(null);
+const weekTool = ref(null);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const notificationCenterOpen = ref(false);
 const acknowledgementRevision = ref(0);

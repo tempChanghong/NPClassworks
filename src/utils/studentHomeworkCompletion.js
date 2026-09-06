@@ -1,3 +1,5 @@
+import {isNoHomework} from "./noHomework.js";
+
 const STORAGE_KEY = "classworks-v2-student-homework-completions";
 const MAX_RECORDS = 500;
 const RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
@@ -35,11 +37,13 @@ export function loadStudentHomeworkCompletions(storage) {
 }
 
 export function isStudentHomeworkCompleted(publication, records) {
+  if (isNoHomework(publication)) return false;
   if (!publication?.id || publication.type !== "ASSIGNMENT") return false;
   return records?.[publication.id]?.revision === publication.revision;
 }
 
 export function isStudentHomeworkUpdatedAfterCompletion(publication, records) {
+  if (isNoHomework(publication)) return false;
   if (!publication?.id || publication.type !== "ASSIGNMENT") return false;
   const completedRevision = records?.[publication.id]?.revision;
   return Number.isInteger(completedRevision)
@@ -50,7 +54,7 @@ export function isStudentHomeworkUpdatedAfterCompletion(publication, records) {
 export function setStudentHomeworkCompleted(publication, completed, storage, now = Date.now()) {
   const target = storageOrNull(storage);
   const records = loadStudentHomeworkCompletions(target);
-  if (!publication?.id || publication.type !== "ASSIGNMENT") return records;
+  if (!publication?.id || publication.type !== "ASSIGNMENT" || isNoHomework(publication)) return records;
   if (completed) {
     records[publication.id] = {revision: publication.revision, completedAt: now};
   } else {
@@ -66,7 +70,7 @@ export function setStudentHomeworkCompleted(publication, completed, storage, now
 }
 
 export function studentHomeworkCompletionStats(publications, records) {
-  const assignments = (publications || []).filter((item) => item.type === "ASSIGNMENT");
+  const assignments = (publications || []).filter((item) => item.type === "ASSIGNMENT" && !isNoHomework(item));
   return {
     total: assignments.length,
     completed: assignments.filter((item) => isStudentHomeworkCompleted(item, records)).length,
