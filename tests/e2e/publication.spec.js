@@ -31,6 +31,46 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("draft read failure preserves original text until explicit retry restores the editor", async ({browser}) => {
+  const screen = await openRole(browser, "screen");
+  const key = "classworks-v2-screen-homework-draft:screen-a:new";
+  try {
+    const original = await screen.page.evaluate(key => {
+      const raw = JSON.stringify({subjectId: "math", targetWorkspaceId: "class-a", content: "读取失败也不能丢掉的草稿", updatedAt: Date.now()});
+      localStorage.setItem(key, raw);
+      window.originalDraftRead = Storage.prototype.getItem;
+      window.draftReadBlocked = true;
+      Storage.prototype.getItem = function (name) {
+        if (window.draftReadBlocked && name === key) throw new window.DOMException("Read blocked", "SecurityError");
+        return window.originalDraftRead.call(this, name);
+      };
+      return raw;
+    }, key);
+    await screen.page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    const composer = screen.page.locator(".screen-composer");
+    await expect(composer.getByText(/无法读取本机草稿/)).toBeVisible();
+    await expect(composer.getByRole("button", {name: "保存作业", exact: true})).toBeDisabled();
+    await expect(composer.getByRole("textbox")).toHaveCount(0);
+    await composer.getByRole("button", {name: "重新读取草稿"}).click();
+    expect(await screen.page.evaluate(key => window.originalDraftRead.call(localStorage, key), key)).toBe(original);
+    await composer.getByRole("button", {name: "取消", exact: true}).click();
+    await expect(composer).not.toBeVisible();
+    await screen.page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    await expect(composer.getByText(/无法读取本机草稿/)).toBeVisible();
+    await screen.page.evaluate(() => { window.draftReadBlocked = false; });
+    await composer.getByRole("button", {name: "重新读取草稿"}).click();
+    const content = composer.getByRole("textbox", {name: "作业内容 作业内容", exact: true});
+    await expect(content).toHaveValue("读取失败也不能丢掉的草稿");
+    await expect(composer.getByText(/已自动恢复这台大屏/)).toBeVisible();
+    await content.fill("恢复后提交的作业");
+    await composer.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(composer).not.toBeVisible();
+    await expect(screen.page.getByText("恢复后提交的作业", {exact: true})).toBeVisible();
+    expect(await screen.page.evaluate(key => localStorage.getItem(key), key)).toBeNull();
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("unreadable local queue shows an error instead of synced and recovers through the UI", async ({browser}) => {
   const screen = await openRole(browser, "screen");
   try {

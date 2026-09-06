@@ -24,7 +24,28 @@
         </v-chip>
       </v-card-title>
 
-      <v-card-text class="screen-composer__body px-5">
+      <v-card-text
+        v-if="draftReadError"
+        class="screen-composer__body px-5"
+      >
+        <v-alert
+          class="mb-4"
+          type="error"
+          variant="tonal"
+        >
+          {{ draftReadError }}
+        </v-alert>
+        <v-btn
+          variant="tonal"
+          @click="restoreDraft"
+        >
+          重新读取草稿
+        </v-btn>
+      </v-card-text>
+      <v-card-text
+        v-else
+        class="screen-composer__body px-5"
+      >
         <v-alert
           v-if="draftSaveFailed"
           class="mb-4"
@@ -413,6 +434,7 @@ const advancedPanel = ref();
 const draftRestored = ref(false);
 const draftReady = ref(false);
 const draftSaveFailed = ref(false);
+const draftReadError = ref("");
 const releaseReloadBlocker = registerScreenReloadBlocker(store, () =>
   props.modelValue || saving.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 onUnmounted(releaseReloadBlocker);
@@ -442,6 +464,7 @@ const quickInputs = computed(() => sanitizeHomeworkQuickInputs(
   store.screenSession?.homeworkSettings?.quickInputs,
 ));
 const canSave = computed(() => Boolean(
+  !draftReadError.value &&
   form.subjectId &&
   form.targetWorkspaceId &&
   (form.title.trim() || form.content.trim()),
@@ -546,21 +569,29 @@ function restoreDraft() {
   draftReady.value = false;
   draftRestored.value = false;
   draftSaveFailed.value = false;
+  let draft;
+  try {
+    draft = loadScreenHomeworkDraft(
+      store.screenSession?.binding?.id,
+      basePublication.value?.id || "new",
+    );
+  } catch (error) {
+    draftReadError.value = error.message;
+    return;
+  }
+  draftReadError.value = "";
   loadPublication(basePublication.value);
-  const draft = loadScreenHomeworkDraft(
-    store.screenSession?.binding?.id,
-    basePublication.value?.id || "new",
-  );
   if (draft) {
     Object.assign(form, draft);
     draftRestored.value = true;
   }
   nextTick(() => {
-    draftReady.value = true;
+    draftReady.value = props.modelValue && !draftReadError.value;
   });
 }
 
 function discardRecoveredDraft() {
+  if (draftReadError.value) return;
   clearScreenHomeworkDraft(
     store.screenSession?.binding?.id,
     basePublication.value?.id || "new",
@@ -587,6 +618,7 @@ function setQuickDeadline(preset) {
 }
 
 async function save(allowDuplicate = false) {
+  if (draftReadError.value) return;
   localError.value = "";
   if (!form.subjectId || !form.targetWorkspaceId) {
     localError.value = "请选择科目和具体班级";
