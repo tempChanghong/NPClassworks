@@ -86,9 +86,16 @@
           {{ publication.title }}
         </v-card-subtitle>
         <v-card-text class="publication-body">
-          <div class="publication-content">
+          <component
+            :is="screenMode && publication.type === 'ASSIGNMENT' ? 'button' : 'div'"
+            class="publication-content"
+            :class="{'publication-focus-trigger': screenMode && publication.type === 'ASSIGNMENT'}"
+            :type="screenMode && publication.type === 'ASSIGNMENT' ? 'button' : undefined"
+            :aria-label="screenMode && publication.type === 'ASSIGNMENT' ? `放大查看${publication.subject?.name || ''}作业` : undefined"
+            @click="screenMode && publication.type === 'ASSIGNMENT' && $emit('focus', {publication, activator: $event.currentTarget})"
+          >
             {{ publication.content }}
-          </div>
+          </component>
           <v-divider class="publication-divider" />
           <div class="publication-metadata d-flex flex-wrap text-medium-emphasis">
             <span v-if="settings.showSecondaryMetadata">
@@ -130,9 +137,18 @@
             </span>
           </div>
           <div
-            v-if="(screenMode && canEdit(publication)) || (completionEnabled && publication.type === 'ASSIGNMENT')"
+            v-if="(screenMode && (canEdit(publication) || publication.type === 'ASSIGNMENT')) || (completionEnabled && publication.type === 'ASSIGNMENT')"
             class="publication-actions d-flex justify-end"
           >
+            <v-btn
+              v-if="screenMode && publication.type === 'ASSIGNMENT'"
+              prepend-icon="mdi-magnify-plus-outline"
+              size="small"
+              variant="text"
+              @click="$emit('focus', {publication, activator: $event.currentTarget})"
+            >
+              放大查看
+            </v-btn>
             <template v-if="screenMode && canEdit(publication)">
               <v-btn
                 icon="mdi-history"
@@ -191,7 +207,7 @@ const props = defineProps({
   completionEnabled: Boolean,
   completionRecords: {type: Object, default: () => ({})},
 });
-defineEmits(["edit", "history", "toggle-complete"]);
+defineEmits(["edit", "history", "toggle-complete", "focus"]);
 
 function publicationState(publication) {
   return publicationDisplayState(publication, {now: props.currentTime});
@@ -378,6 +394,8 @@ function targetNames(publication) {
 }
 
 .publication-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.11) !important; }
+.publication-focus-trigger { display: block; width: 100%; padding: 0; border: 0; color: inherit; background: transparent; text-align: start; font: inherit; cursor: zoom-in; }
+.publication-focus-trigger:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 4px; border-radius: 4px; }
 .publication-card--overdue { border-left: 4px solid rgb(var(--v-theme-error)); }
 .publication-card--today,
 .publication-card--soon { border-left: 4px solid rgb(var(--v-theme-warning)); }

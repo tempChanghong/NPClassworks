@@ -182,6 +182,10 @@
 
     <HomeworkSubjectStatus />
     <ScreenHomeworkChanges :font-scale="settings.fontScale" />
+    <ScreenHomeworkFocus
+      ref="focusTool"
+      :font-scale="settings.fontScale"
+    />
 
     <v-progress-linear
       v-if="store.feedLoading && store.feed.length"
@@ -223,6 +227,7 @@
         :settings="settings"
         @edit="$emit('edit', $event)"
         @history="$emit('history', $event)"
+        @focus="focusTool.open($event.publication, $event.activator)"
       />
     </div>
 
@@ -337,6 +342,7 @@ import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
 import ScreenHomeworkChanges from "@/components/v2/ScreenHomeworkChanges.vue";
+import ScreenHomeworkFocus from "@/components/v2/ScreenHomeworkFocus.vue";
 import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
@@ -365,6 +371,7 @@ import {
 
 defineEmits(["create", "edit", "history", "tools", "copy-board", "settings", "exit", "diagnostics"]);
 const store = useClassworksV2Store();
+const focusTool = ref(null);
 const printTool = ref(null);
 const weekTool = ref(null);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));

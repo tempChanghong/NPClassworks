@@ -145,6 +145,7 @@
         :completion-records="completionRecords"
         @edit="$emit('edit', $event)"
         @history="$emit('history', $event)"
+        @focus="$emit('focus', $event)"
         @toggle-complete="toggleCompletion"
       />
     </section>
@@ -232,7 +233,7 @@ const props = defineProps({
   excludeUrgentNotices: Boolean,
   completionEnabled: Boolean,
 });
-defineEmits(["edit", "history"]);
+defineEmits(["edit", "history", "focus"]);
 
 const subjectId = ref("");
 const workspaceId = ref("");

@@ -31,6 +31,81 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("screen enlarges complete homework, preserves scroll/focus and follows live corrections", async ({browser, request}, testInfo) => {
+  const original = "放大正文第一行\n" + "保留完整正文和换行\n".repeat(90) + "放大正文最后一行";
+  const response = await request.post(`${api}/api/v2/publications`, {data: {type: "ASSIGNMENT", subjectId: "math", boardDate: "2026-09-07",
+    content: original, title: "放大测试作业", dueAt: "2026-09-08T10:00:00Z", targetWorkspaceIds: ["class-a"]}});
+  const item = (await response.json()).data;
+  const screen = await openRole(browser, "screen");
+  try {
+    await screen.page.getByLabel("选择日期").fill("2026-09-07");
+    const trigger = screen.page.getByRole("button", {name: "放大查看", exact: true});
+    await trigger.scrollIntoViewIfNeeded();
+    const y = await screen.page.evaluate(() => window.scrollY);
+    await trigger.click();
+    const focus = screen.page.locator(".screen-homework-focus");
+    await expect(focus).toBeVisible();
+    await expect(focus.locator(".focus-content")).toHaveText(original);
+    await expect(focus).toContainText("2026/9/8 18:00");
+    const body = focus.locator(".focus-scroll");
+    expect(await body.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    const size = await focus.locator(".focus-content").evaluate(element => parseFloat(window.getComputedStyle(element).fontSize));
+    expect(size).toBeGreaterThanOrEqual(28);
+    await focus.getByRole("button", {name: "放大字号", exact: true}).click();
+    expect(await focus.locator(".focus-content").evaluate(element => parseFloat(window.getComputedStyle(element).fontSize))).toBeGreaterThan(size);
+    await body.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await expect(focus.getByRole("button", {name: "关闭放大", exact: true})).toBeVisible();
+    await screen.page.keyboard.press("Escape");
+    await expect(focus).not.toBeVisible();
+    await expect.poll(() => screen.page.evaluate(() => window.scrollY)).toBe(y);
+    await expect(trigger).toBeFocused();
+
+    const textTrigger = screen.page.getByRole("button", {name: "放大查看数学作业", exact: true});
+    await textTrigger.focus();
+    await screen.page.keyboard.press("Enter");
+    await expect(focus).toBeVisible();
+    const changed = await request.patch(`${api}/api/v2/publications/${item.id}`, {headers: {"If-Match": '"1"'},
+      data: {content: "老师更正后的完整正文\n仍需完成最后一题", isCertified: false}});
+    expect(changed.ok()).toBe(true);
+    await expect(focus.locator(".focus-content")).toHaveText("老师更正后的完整正文\n仍需完成最后一题");
+    await expect(focus).toContainText("作业信息已更新");
+    await expect(focus).toContainText("待教师确认");
+    await screen.page.screenshot({path: testInfo.outputPath("homework-focus.png")});
+    const withdrawn = await request.patch(`${api}/api/v2/publications/${item.id}`, {headers: {"If-Match": '"2"'}, data: {status: "WITHDRAWN"}});
+    expect(withdrawn.ok()).toBe(true);
+    await expect(focus).not.toBeVisible();
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
+test("screen first opens enlarged cached homework offline and scope changes close it", async ({browser, request}) => {
+  await request.post(`${api}/api/v2/publications`, {data: {type: "ASSIGNMENT", subjectId: "math", boardDate: "2026-09-07",
+    content: "本日该科目无作业。", title: "今日无作业", contentJson: {kind: "NO_HOMEWORK", version: 1}, targetWorkspaceIds: ["class-a"]}});
+  const screen = await openRole(browser, "screen");
+  try {
+    await screen.page.getByLabel("选择日期").fill("2026-09-07");
+    await expect(screen.page.getByText("本日该科目无作业。", {exact: true})).toBeVisible();
+    await screen.page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await expect.poll(() => screen.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await screen.context.setOffline(true);
+    await screen.page.getByRole("button", {name: "刷新", exact: true}).first().click();
+    await expect(screen.page.getByText("当前无法连接服务器，正在显示这台大屏上次同步的内容")).toBeVisible();
+    await screen.page.getByRole("button", {name: "放大查看", exact: true}).click();
+    const focus = screen.page.locator(".screen-homework-focus");
+    await expect(focus.locator(".focus-content")).toHaveText("本日该科目无作业。");
+    await expect(focus).toContainText("离线时可能不是最新作业");
+    await expect(focus.getByText(/截止：/)).toHaveCount(0);
+    // Simulate the board-date control changing while the overlay is open.
+    await screen.page.getByLabel("选择日期").evaluate(input => {
+      input.value = "2026-09-08";
+      input.dispatchEvent(new window.Event("input", {bubbles: true}));
+      input.dispatchEvent(new window.Event("change", {bubbles: true}));
+    });
+    await expect(focus).not.toBeVisible();
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("screen highlights real corrections, coalesces consecutive edits and resets on date switch", async ({browser, request}, testInfo) => {
   const response = await request.post(`${api}/api/v2/publications`, {data: {type: "ASSIGNMENT", subjectId: "math", boardDate: "2026-09-07",
     content: "练习册第10页", title: "数学练习", targetWorkspaceIds: ["class-a"]}});
