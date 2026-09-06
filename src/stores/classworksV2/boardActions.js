@@ -177,7 +177,8 @@ export const boardActions = {
     joinWorkspaces(this.realtimeWorkspaceIds);
   },
 
-  async loadStudentFeed() {
+  async loadStudentFeed({isCurrent = () => true} = {}) {
+    if (!isCurrent()) return;
     const requestId = ++feedRequest;
     if (this.selectedWorkspaceIds.length === 0) {
       if (this.feedAudience === "student") {
@@ -194,12 +195,12 @@ export const boardActions = {
     this.studentError = "";
     try {
       const result = await classworksV2Api.feed(this.selectedWorkspaceIds, this.boardDate);
-      if (requestId !== feedRequest || this.feedAudience !== "student") return;
+      if (requestId !== feedRequest || this.feedAudience !== "student" || !isCurrent()) return;
       this.feed = result.items || [];
       this.feedGeneratedAt = result.generatedAt;
       this.scheduleFeedTransition(result.nextTransitionAt);
     } catch (error) {
-      if (requestId === feedRequest && this.feedAudience === "student") {
+      if (requestId === feedRequest && this.feedAudience === "student" && isCurrent()) {
         this.feed = [];
         this.feedGeneratedAt = null;
         this.feedLoadError = describeApiError(error, "加载作业失败");
@@ -209,21 +210,21 @@ export const boardActions = {
     }
   },
 
-  async loadScreenFeed() {
-    if (!this.screenSession) return;
+  async loadScreenFeed({isCurrent = () => true} = {}) {
+    if (!this.screenSession || !isCurrent()) return;
     const requestId = ++feedRequest;
     this.feedLoading = true;
     this.feedLoadError = "";
     this.feedUsingCache = false;
     try {
       const result = await classworksV2Api.classroomScreenFeed(this.boardDate);
-      if (requestId !== feedRequest || this.feedAudience !== "screen") return;
+      if (requestId !== feedRequest || this.feedAudience !== "screen" || !isCurrent()) return;
       this.feed = result.items || [];
       this.feedGeneratedAt = result.generatedAt;
       saveCachedScreenFeed(this.screenSession.binding.id, this.boardDate, result);
       this.scheduleFeedTransition(result.nextTransitionAt);
     } catch (error) {
-      if (requestId !== feedRequest || this.feedAudience !== "screen") return;
+      if (requestId !== feedRequest || this.feedAudience !== "screen" || !isCurrent()) return;
       const cached = isTransientScreenRequestError(error)
         ? loadCachedScreenFeed(this.screenSession?.binding?.id, this.boardDate)
         : null;
@@ -254,10 +255,10 @@ export const boardActions = {
     }
   },
 
-  async loadActiveFeed() {
+  async loadActiveFeed(options) {
     return this.feedAudience === "screen"
-      ? this.loadScreenFeed()
-      : this.loadStudentFeed();
+      ? this.loadScreenFeed(options)
+      : this.loadStudentFeed(options);
   },
 
   async setBoardDate(value) {
@@ -309,16 +310,42 @@ export const boardActions = {
     refreshTimer = null;
     clearInterval(fallbackTimer);
     fallbackTimer = null;
-    const refresh = () => {
-      clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => {
-        void this.loadActiveFeed();
-        if (this.isTeacherSignedIn) {
-          void this.refreshTeacherPublications();
-          void this.refreshTeacherActionCenter();
+    let disposed = false;
+    let running = null;
+    let pending = false;
+    let pendingPublications = false;
+    realtimeCleanup.push(() => { disposed = true; pending = false; });
+    const drain = () => {
+      if (disposed || running) return running;
+      running = (async () => {
+        while (pending && !disposed) {
+          const publications = pendingPublications;
+          pending = false;
+          pendingPublications = false;
+          // Wait for every request, even if one fails, before draining new events.
+          const tasks = [() => this.loadActiveFeed({isCurrent: () => !disposed})];
+          if (this.isTeacherSignedIn) {
+            if (publications) tasks.push(() => this.refreshTeacherPublications());
+            tasks.push(() => this.refreshTeacherActionCenter());
+          }
+          await Promise.allSettled(tasks.map(task => Promise.resolve().then(task)));
         }
-      }, 250);
+      })().finally(() => {
+        running = null;
+        if (pending && !disposed) return drain();
+      });
+      return running;
     };
+    const requestRefresh = ({immediate = false, publications = true} = {}) => {
+      if (disposed) return;
+      pending = true;
+      pendingPublications ||= publications;
+      if (running) return running;
+      clearTimeout(refreshTimer);
+      if (immediate) return drain();
+      refreshTimer = setTimeout(drain, 250);
+    };
+    const refresh = () => requestRefresh();
     for (const event of [
       "publication.created",
       "publication.updated",
@@ -346,8 +373,9 @@ export const boardActions = {
     joinWorkspaces(this.realtimeWorkspaceIds);
     fallbackTimer = setInterval(() => {
       if (document.visibilityState !== "hidden") {
-        if (this.activeWorkspaceIds.length > 0) void this.loadActiveFeed();
-        if (this.isTeacherSignedIn) void this.refreshTeacherActionCenter();
+        if (this.activeWorkspaceIds.length > 0 || this.isTeacherSignedIn) {
+          return requestRefresh({immediate: true, publications: false});
+        }
       }
     }, 5 * 60 * 1000);
   },

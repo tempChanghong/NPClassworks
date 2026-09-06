@@ -97,6 +97,23 @@
             </v-card>
           </v-timeline-item>
         </v-timeline>
+        <div class="d-flex justify-center mt-4">
+          <v-btn
+            v-if="nextBeforeRevision !== null && !loading"
+            :loading="loadingMore"
+            variant="tonal"
+            @click="loadMore"
+          >
+            加载更早版本
+          </v-btn>
+          <v-btn
+            v-else-if="error && !loading && !revisions.length"
+            variant="tonal"
+            @click="load()"
+          >
+            重新加载
+          </v-btn>
+        </div>
         <v-alert
           v-if="error"
           class="mt-4"
@@ -117,10 +134,11 @@
 </template>
 
 <script setup>
-import {ref, watch} from "vue";
+import {onBeforeUnmount, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {isPublicationRevisionConflict} from "@/utils/publicationConflict";
 import {publicationDisplayState} from "@/utils/publicationStatus";
+import {publicationHistoryPage} from "@/utils/publicationHistoryPage";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -132,6 +150,10 @@ const store = useClassworksV2Store();
 const workingPublication = ref(props.publication);
 const revisions = ref([]);
 const loading = ref(false);
+const loadingMore = ref(false);
+const nextBeforeRevision = ref(null);
+let requestGeneration = 0;
+let dialogGeneration = 0;
 const certifying = ref(false);
 const restoringRevision = ref(null);
 const error = ref("");
@@ -140,23 +162,58 @@ function revisionState(item) {
   return publicationDisplayState({...item.snapshot, isCertified: item.isCertified});
 }
 
-watch(() => props.modelValue, (open) => {
+watch([() => props.modelValue, () => props.publication?.id, () => props.mode], ([open]) => {
+  dialogGeneration++;
+  requestGeneration++;
+  loading.value = false;
+  loadingMore.value = false;
+  revisions.value = [];
+  nextBeforeRevision.value = null;
+  certifying.value = false;
+  restoringRevision.value = null;
+  error.value = "";
   if (open && props.publication) {
     workingPublication.value = props.publication;
     load();
   }
 }, {immediate: true});
+onBeforeUnmount(() => { requestGeneration++; dialogGeneration++; });
 
-async function load() {
-  loading.value = true;
+function currentDialog() {
+  const generation = dialogGeneration;
+  return () => props.modelValue && generation === dialogGeneration;
+}
+
+async function load({append = false} = {}) {
+  if (!props.modelValue || !workingPublication.value) return;
+  const generation = ++requestGeneration;
+  const page = {limit: 20, ...(append ? {beforeRevision: nextBeforeRevision.value} : {})};
+  if (append) loadingMore.value = true;
+  else {
+    loading.value = true;
+    loadingMore.value = false;
+    revisions.value = [];
+    nextBeforeRevision.value = null;
+  }
   error.value = "";
   try {
-    revisions.value = await store.publicationRevisions(workingPublication.value, props.mode);
+    const result = publicationHistoryPage(await store.publicationRevisions(workingPublication.value, props.mode, page), page);
+    if (generation !== requestGeneration) return;
+    revisions.value = append ? [...revisions.value, ...result.items] : result.items;
+    nextBeforeRevision.value = result.nextBeforeRevision;
   } catch (loadError) {
-    error.value = loadError.response?.data?.message || loadError.message || "加载历史失败";
+    if (generation === requestGeneration) error.value = loadError.response?.data?.message || loadError.message || "加载历史失败";
   } finally {
-    loading.value = false;
+    if (generation === requestGeneration) {
+      loading.value = false;
+      loadingMore.value = false;
+    }
   }
+}
+
+function loadMore() {
+  if (loading.value || loadingMore.value || nextBeforeRevision.value === null) return;
+  return load({append: true});
 }
 
 function actorLabel(item) {
@@ -174,46 +231,54 @@ function formatDateTime(value) {
 }
 
 async function certifyCurrent() {
+  const isCurrent = currentDialog();
   certifying.value = true;
   error.value = "";
   try {
     const changed = await store.certify(workingPublication.value);
+    if (!isCurrent()) return;
     workingPublication.value = changed;
     emit("changed", changed);
     await load();
   } catch (caught) {
-    if (isPublicationRevisionConflict(caught)) await refreshConflict("教师确认");
+    if (!isCurrent()) return;
+    if (isPublicationRevisionConflict(caught)) await refreshConflict("教师确认", isCurrent);
     else error.value = store.teacherError;
   } finally {
-    certifying.value = false;
+    if (isCurrent()) certifying.value = false;
   }
 }
 
 async function restore(item) {
+  const isCurrent = currentDialog();
   restoringRevision.value = item.revision;
   error.value = "";
   try {
     const changed = await store.restoreRevision(workingPublication.value, item.revision, props.mode);
+    if (!isCurrent()) return;
     workingPublication.value = changed;
     emit("changed", changed);
     await load();
   } catch (caught) {
-    if (isPublicationRevisionConflict(caught)) await refreshConflict("恢复");
+    if (!isCurrent()) return;
+    if (isPublicationRevisionConflict(caught)) await refreshConflict("恢复", isCurrent);
     else error.value = props.mode === "screen" ? store.screenError : store.teacherError;
   } finally {
-    restoringRevision.value = null;
+    if (isCurrent()) restoringRevision.value = null;
   }
 }
 
-async function refreshConflict(action) {
+async function refreshConflict(action, isCurrent) {
   try {
     const latest = await store.latestPublication(workingPublication.value.id, props.mode);
+    if (!isCurrent()) return;
     workingPublication.value = latest;
     emit("refreshed", latest);
     await load();
+    if (!isCurrent()) return;
     error.value = `${action}未执行：内容已被其他设备修改，已载入服务器最新版本，请重新检查后操作。`;
   } catch (caught) {
-    error.value = caught.response?.data?.message || caught.message || "载入最新版本失败";
+    if (isCurrent()) error.value = caught.response?.data?.message || caught.message || "载入最新版本失败";
   }
 }
 </script>

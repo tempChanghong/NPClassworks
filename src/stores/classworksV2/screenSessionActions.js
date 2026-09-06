@@ -8,19 +8,35 @@ import {withScreenPublicationRequestId} from "@/utils/screenPublicationQueue";
 import {clearCachedScreenSession, loadCachedScreenSession, saveCachedScreenSession} from "@/utils/screenOfflineCache";
 import {isTransientScreenRequestError} from "./screenRequestError";
 
+const bootstrapRequests = new WeakMap();
+
 // Mixed into the existing store: actions share its reactive state and Pinia binding.
 export const screenSessionActions = {
-  async bootstrapClassroomScreen() {
+  async bootstrapClassroomScreen({isCurrent = () => true} = {}) {
+    const token = getClassroomScreenToken();
+    const initialSession = this.screenSession;
+    const request = {};
+    if (!isCurrent()) return;
+    bootstrapRequests.set(this, request);
+    const ownsRequest = () => bootstrapRequests.get(this) === request;
+    const current = () => ownsRequest() && isCurrent() && getClassroomScreenToken() === token;
+    if (!current()) return;
     if (!getClassroomScreenToken()) {
       this.screenSession = null;
       return;
     }
     this.screenLoading = true;
     this.screenError = "";
+    let applied = false;
     try {
-      this.screenSession = await classworksV2Api.classroomScreenSession();
+      const session = await classworksV2Api.classroomScreenSession();
+      if (!current()) return;
+      applied = true;
+      this.screenSession = session;
       saveCachedScreenSession(this.screenSession);
     } catch (error) {
+      if (!current()) return;
+      applied = true;
       const cached = isTransientScreenRequestError(error) ? loadCachedScreenSession() : null;
       this.screenSession = cached;
       this.screenError = cached
@@ -31,7 +47,10 @@ export const screenSessionActions = {
         clearCachedScreenSession();
       }
     } finally {
-      this.screenLoading = false;
+      if (ownsRequest() && (applied || current()
+        || (getClassroomScreenToken() === token && this.screenSession === initialSession))) {
+        this.screenLoading = false;
+      }
     }
   },
 

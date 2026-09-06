@@ -184,10 +184,10 @@ export const teacherActions = {
     }
   },
 
-  async publicationRevisions(publication, mode = "teacher") {
+  async publicationRevisions(publication, mode = "teacher", page) {
     return mode === "screen"
-      ? classworksV2Api.screenPublicationRevisions(publication.id)
-      : classworksV2Api.publicationRevisions(publication.id);
+      ? classworksV2Api.screenPublicationRevisions(publication.id, page)
+      : classworksV2Api.publicationRevisions(publication.id, page);
   },
 
   async latestPublication(publicationId, mode = "teacher") {

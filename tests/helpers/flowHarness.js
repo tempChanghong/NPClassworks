@@ -142,6 +142,20 @@ export async function createFlowHarness() {
   reset();
   return {
     api, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    async openHistory(publication, mode = "teacher") {
+      const {default: component} = await vite.ssrLoadModule("/src/components/v2/PublicationHistoryDialog.vue");
+      const props = reactive({modelValue: true, publication, mode});
+      let state;
+      const events = [];
+      const app = renderer.createApp({setup() {
+        state = component.setup(props, {expose() {}, emit: (...args) => events.push(args)});
+        return () => null;
+      }});
+      app.use(currentPinia); app.provide(ssrContextKey, {});
+      app.mount({}); mounted.push(app);
+      await nextTick();
+      return {state, props, events};
+    },
     async openAcademicManager(initialProps = {schoolId: "school", termId: "term"}) {
       const {default: manager} = await vite.ssrLoadModule("/src/components/admin/AcademicStructureManager.vue");
       const props = reactive({...initialProps});

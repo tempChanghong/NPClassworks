@@ -106,7 +106,7 @@ test("lazy history and delivery dialogs fetch their data on the first opening", 
   try {
     const menu = teacher.page.getByRole("button").filter({has: teacher.page.locator(".mdi-dots-vertical")});
     await menu.click();
-    const history = teacher.page.waitForResponse(response => response.url().endsWith("/publications/pub-1/revisions"));
+    const history = teacher.page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/publications/pub-1/revisions"));
     await teacher.page.getByText("版本历史与恢复", {exact: true}).click();
     expect((await history).ok()).toBe(true);
     await expect(teacher.page.getByText("不可删除的版本历史", {exact: true})).toBeVisible();
@@ -116,6 +116,30 @@ test("lazy history and delivery dialogs fetch their data on the first opening", 
     await teacher.page.getByText("查看大屏送达状态", {exact: true}).click();
     expect((await delivery).ok()).toBe(true);
     await expect(teacher.page.getByText("没有目标班级大屏", {exact: true})).toBeVisible();
+    expect(teacher.errors).toEqual([]);
+  } finally { await teacher.context.close(); }
+});
+
+test("history opens one page, loads older versions and restores one from the last page", async ({browser, request}) => {
+  await request.post(`${api}/api/v2/publications`, {data: {content: "历史分页测试"}});
+  await request.post(`${api}/__test/history`);
+  const teacher = await openRole(browser, "teacher");
+  try {
+    await teacher.page.getByRole("button").filter({has: teacher.page.locator(".mdi-dots-vertical")}).click();
+    await teacher.page.getByText("版本历史与恢复", {exact: true}).click();
+    const dialog = teacher.page.getByRole("dialog").filter({hasText: "不可删除的版本历史"});
+    await expect(dialog.locator(".v-timeline-item")).toHaveCount(20);
+    await dialog.getByRole("button", {name: "加载更早版本"}).click();
+    await expect(dialog.locator(".v-timeline-item")).toHaveCount(40);
+    await dialog.getByRole("button", {name: "加载更早版本"}).click();
+    await expect(dialog.locator(".v-timeline-item")).toHaveCount(45);
+    await expect(dialog.getByRole("button", {name: "加载更早版本"})).toHaveCount(0);
+    await dialog.locator(".v-timeline-item").last().getByRole("button", {name: "恢复此版本"}).click();
+    await expect(dialog.locator(".v-timeline-item")).toHaveCount(20);
+    await expect(dialog.getByText("版本 46", {exact: true})).toBeVisible();
+    const state = (await (await request.get(`${api}/__test/state`)).json()).data;
+    expect(state.historyRequests).toEqual([{limit:20,before:null},{limit:20,before:26},{limit:20,before:6},{limit:20,before:null}]);
+    expect(state.items[0].content).toBe("历史正文1");
     expect(teacher.errors).toEqual([]);
   } finally { await teacher.context.close(); }
 });

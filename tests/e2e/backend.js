@@ -16,6 +16,8 @@ export function startTestBackend(port = apiPort) {
   let uploadsAvailable = true;
   let uploadRequests = [];
   let screenFeedRequests = 0;
+  let historyRows = [];
+  let historyRequests = [];
   const server = createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Classworks-Screen-Token,If-Match");
@@ -36,11 +38,20 @@ export function startTestBackend(port = apiPort) {
       items = []; versionChecks = []; roomJoins = 0; socketEvents = 0;
       uploadsAvailable = true; uploadRequests = [];
       screenFeedRequests = 0;
+      historyRows = []; historyRequests = [];
       return reply({});
     }
-    if (path === "/__test/state") return reply({items, versionChecks, roomJoins, socketEvents, uploadRequests,
+    if (path === "/__test/state") return reply({items, versionChecks, roomJoins, socketEvents, uploadRequests, historyRequests,
       screenFeedRequests, connections: io.of("/").sockets.size,
       classroomSubscribers: io.of("/").adapter.rooms.get(workspace.id)?.size || 0});
+    if (path === "/__test/history") {
+      const item = items[0];
+      item.revision = 45;
+      historyRows = Array.from({length:45}, (_, i) => ({id: `history-${45-i}`, revision: 45-i,
+        createdAt: new Date().toISOString(), actorType: "ACCOUNT", editor: account, isCertified: true,
+        snapshot: {...item, content: `历史正文${45-i}`}}));
+      return reply({});
+    }
     if (path === "/__test/drop-connections" && req.method === "POST") {
       // Close the transport, allowing the real Socket.IO client's automatic retry.
       for (const socket of io.of("/").sockets.values()) socket.conn.close();
@@ -81,7 +92,24 @@ export function startTestBackend(port = apiPort) {
     if (path === "/api/v2/classroom-screens/heartbeat") return reply({receivedAt: new Date().toISOString(), commands: []});
     if (path.endsWith("/notification-deliveries")) return reply([]);
     if (path === "/api/v2/publications/action-required") return reply({items: [], total: 0, summary: {}});
-    if (/^\/api\/v2\/publications\/[^/]+\/revisions$/.test(path)) return reply([]);
+    if (/^\/api\/v2\/(?:classroom-screens\/)?publications\/[^/]+\/revisions$/.test(path)) {
+      const query = new URL(req.url, "http://localhost").searchParams;
+      const limit = Number(query.get("limit") || 20);
+      const before = Number(query.get("beforeRevision") || Infinity);
+      historyRequests.push({limit, before: Number.isFinite(before) ? before : null});
+      const rows = historyRows.filter(item => item.revision < before);
+      const page = rows.slice(0, limit);
+      return reply({items: page, nextBeforeRevision: rows.length > limit ? page.at(-1).revision : null});
+    }
+    if (/^\/api\/v2\/publications\/[^/]+\/restore$/.test(path)) {
+      const item = items[0];
+      if (req.headers["if-match"] !== `"${item.revision}"`) return reply({code: "PUBLICATION_REVISION_CONFLICT", message: "版本冲突"}, 409);
+      item.content = historyRows.find(row => row.revision === body.sourceRevision).snapshot.content;
+      item.revision++;
+      historyRows.unshift({...historyRows[0], id: `history-${item.revision}`, revision: item.revision,
+        snapshot: {...item}, action: "RESTORED", restoredFromRevision: body.sourceRevision});
+      return reply(item);
+    }
     if (/^\/api\/v2\/publications\/[^/]+\/screen-deliveries$/.test(path)) return reply({screens: []});
     if (path.endsWith("/feed")) {
       if (path === "/api/v2/classroom-screens/feed") screenFeedRequests++;

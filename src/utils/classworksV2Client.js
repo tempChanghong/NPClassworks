@@ -492,10 +492,10 @@ export const classworksV2Api = {
       {headers: screenHeaders()},
     ));
   },
-  async screenPublicationRevisions(publicationId) {
+  async screenPublicationRevisions(publicationId, page) {
     return unwrap(await client.get(
       `/api/v2/classroom-screens/publications/${publicationId}/revisions`,
-      {headers: screenHeaders()},
+      {headers: screenHeaders(), params: page},
     ));
   },
   async restoreScreenPublication(publication, sourceRevision) {
@@ -763,8 +763,8 @@ export const classworksV2Api = {
   async publication(id) {
     return unwrap(await client.get(`/api/v2/publications/${id}`));
   },
-  async publicationRevisions(id) {
-    return unwrap(await client.get(`/api/v2/publications/${id}/revisions`));
+  async publicationRevisions(id, page) {
+    return unwrap(await client.get(`/api/v2/publications/${id}/revisions`, {params: page}));
   },
   async notificationScreenDeliveries(id) {
     return unwrap(await client.get(`/api/v2/publications/${id}/screen-deliveries`));

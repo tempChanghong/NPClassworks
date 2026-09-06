@@ -1,12 +1,66 @@
 import assert from "node:assert/strict";
 import {after, before, beforeEach, test} from "node:test";
-import {createFlowHarness, eventually} from "./helpers/flowHarness.js";
+import {createFlowHarness, deferred, eventually} from "./helpers/flowHarness.js";
 
 const {Event} = globalThis;
 let h;
 before(async () => { h = await createFlowHarness(); });
 after(async () => { await h?.close(); });
 beforeEach(() => { h.reset(); navigator.onLine = true; document.visibilityState = "visible"; });
+
+for (const stop of [false, true]) {
+  test(`slow realtime refresh merges in-flight events${stop ? " and drops follow-up on stop" : " into one trailing refresh"}`, async () => {
+    const screen = h.newStore({screen: true});
+    const response = deferred();
+    let reads = 0;
+    h.routes.set("GET /api/v2/classroom-screens/feed", async (_req, reply) => {
+      reads++;
+      const items = [{id: reads === 1 ? "old" : "latest"}];
+      if (reads === 1) await response.promise;
+      reply({items});
+    });
+    screen.startRealtime();
+    try {
+      h.realtime.emitServerEvent("publication.updated");
+      await eventually(() => assert.equal(reads, 1));
+      for (let i = 0; i < 15; i++) h.realtime.emitServerEvent("publication.updated");
+      await new Promise(resolve => setTimeout(resolve, 350));
+      assert.equal(reads, 1, "do not issue a second HTTP request while the first is running");
+      if (stop) screen.stopRealtime();
+      response.resolve();
+      if (!stop) await eventually(() => assert.equal(screen.feed[0]?.id, "latest"));
+      await new Promise(resolve => setTimeout(resolve, 350));
+      assert.equal(reads, stop ? 1 : 2);
+      assert.equal(screen.feedLoading, false);
+    } finally { response.resolve(); screen.stopRealtime(); }
+  });
+}
+
+test("refresh batches wait for slow teacher requests even when another request fails", async (t) => {
+  const screen = h.newStore({screen: true});
+  screen.account = {id: "teacher"};
+  h.api.saveAccountTokens({accessToken: "teacher", refreshToken: "refresh"});
+  const response = deferred();
+  const publications = t.mock.method(screen, "refreshTeacherPublications", async () => { throw new Error("temporary failure"); });
+  let actionReads = 0;
+  t.mock.method(screen, "refreshTeacherActionCenter", async () => {
+    actionReads++;
+    if (actionReads === 1) await response.promise;
+  });
+  const reads = () => h.requests.filter(req => req.path === "/api/v2/classroom-screens/feed").length;
+  screen.startRealtime();
+  try {
+    h.realtime.emitServerEvent("publication.updated");
+    await eventually(() => { assert.equal(actionReads, 1); assert.equal(reads(), 1); });
+    for (let i = 0; i < 10; i++) h.realtime.emitServerEvent("publication.updated");
+    await new Promise(resolve => setTimeout(resolve, 350));
+    assert.equal(reads(), 1);
+    assert.equal(publications.mock.callCount(), 1);
+    response.resolve();
+    await eventually(() => { assert.equal(actionReads, 2); assert.equal(reads(), 2); });
+    assert.equal(publications.mock.callCount(), 2);
+  } finally { response.resolve(); screen.stopRealtime(); }
+});
 
 test("reconnection catches up a publication whose socket event was missed", async () => {
   const screen = h.newStore({screen: true});

@@ -1,5 +1,5 @@
 import packageInfo from "../../../package.json";
-import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
+import {classworksV2Api, describeApiError, getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {onConnectionState} from "@/utils/socketClient";
 import {
   ScreenPublicationQueueError,
@@ -18,13 +18,25 @@ function isCurrentSync(store, bindingId, context) {
   return store.screenSession?.binding?.id === bindingId && screenSyncContexts.get(store) === context;
 }
 
+function screenCommandGuard(store) {
+  const bindingId = store.screenSession?.binding?.id;
+  const context = screenSyncContexts.get(store);
+  const token = getClassroomScreenToken();
+  return () => Boolean(bindingId && context && token)
+    && isCurrentSync(store, bindingId, context) && getClassroomScreenToken() === token;
+}
+
 // Mixed into the existing store: actions share its reactive state and Pinia binding.
 export const screenSyncActions = {
   initializeScreenSync() {
     this.stopScreenSync();
     const screenSyncCleanup = [];
-    const context = {cleanup: screenSyncCleanup};
+    const context = {cleanup: screenSyncCleanup, reloadTimers: new Set(), heartbeatRunning: false};
     screenSyncContexts.set(this, context);
+    screenSyncCleanup.push(() => {
+      for (const timer of context.reloadTimers) window.clearTimeout(timer);
+      context.reloadTimers.clear();
+    });
     const bindingId = this.screenSession?.binding?.id;
     this.screenPendingUploads = bindingId ? loadScreenPublicationQueue(bindingId) : [];
     context.retry = createScreenUploadRetry({
@@ -92,7 +104,10 @@ export const screenSyncActions = {
   },
 
   async sendScreenHeartbeat() {
-    if (!this.screenSession || !this.screenNetworkOnline) return;
+    const context = screenSyncContexts.get(this);
+    const isCurrent = screenCommandGuard(this);
+    if (!isCurrent() || !this.screenNetworkOnline || context.heartbeatRunning) return;
+    context.heartbeatRunning = true;
     try {
       const result = await classworksV2Api.classroomScreenHeartbeat({
         appVersion: packageInfo.version,
@@ -105,6 +120,7 @@ export const screenSyncActions = {
         lastError: this.screenError,
         displayMode: "screen",
       });
+      if (!isCurrent()) return;
       this.screenHeartbeatAt = result.receivedAt;
       recordDiagnosticSnapshot("screenSync", {
         state: this.screenSyncState,
@@ -114,8 +130,12 @@ export const screenSyncActions = {
         lastSyncedAt: this.screenLastSyncedAt,
         lastHeartbeatAt: this.screenHeartbeatAt,
       });
-      for (const command of result.commands || []) await this.executeScreenCommand(command);
+      for (const command of result.commands || []) {
+        if (!isCurrent()) return;
+        await this.executeScreenCommand(command, isCurrent);
+      }
     } catch (error) {
+      if (!isCurrent()) return;
       recordDiagnosticEvent({
         category: "SCREEN_HEARTBEAT",
         severity: "WARNING",
@@ -123,13 +143,18 @@ export const screenSyncActions = {
         message: describeApiError(error, "大屏心跳上报失败"),
         context: {lastHeartbeatAt: this.screenHeartbeatAt, syncState: this.screenSyncState},
       });
+    } finally {
+      context.heartbeatRunning = false;
     }
   },
 
-  async executeScreenCommand(command) {
+  async executeScreenCommand(command, isCurrent = screenCommandGuard(this)) {
+    if (!isCurrent()) return;
+    const context = screenSyncContexts.get(this);
     try {
       if (command.type === "REFRESH_DATA") {
-        await Promise.all([this.bootstrapClassroomScreen(), this.loadScreenFeed()]);
+        await Promise.all([this.bootstrapClassroomScreen({isCurrent}), this.loadScreenFeed({isCurrent})]);
+        if (!isCurrent()) return;
         await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
           success: true,
           result: {message: "数据已刷新"},
@@ -141,7 +166,12 @@ export const screenSyncActions = {
           success: true,
           result: {message: "页面即将重新载入"},
         });
-        window.setTimeout(() => window.location.reload(), 300);
+        if (!isCurrent()) return;
+        const timer = window.setTimeout(() => {
+          context.reloadTimers.delete(timer);
+          if (isCurrent()) window.location.reload();
+        }, 300);
+        context.reloadTimers.add(timer);
         return;
       }
       await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
@@ -149,6 +179,7 @@ export const screenSyncActions = {
         result: {message: "当前版本不支持此指令"},
       });
     } catch (error) {
+      if (!isCurrent()) return;
       try {
         await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
           success: false,
