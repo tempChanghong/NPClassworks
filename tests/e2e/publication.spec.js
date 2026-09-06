@@ -31,6 +31,42 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("remote reload preserves editing during a storage failure and runs after successful submission", async ({browser, request}) => {
+  const screen = await openRole(browser, "screen");
+  const {page} = screen;
+  try {
+    await page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    await page.getByRole("button", {name: "数学", exact: true}).click();
+    await page.evaluate(() => {
+      window.originalStorageWrite = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith("classworks-v2-screen-homework-draft:")) throw new window.DOMException("Quota full", "QuotaExceededError");
+        return window.originalStorageWrite.call(this, key, value);
+      };
+      window.reloadTestMarker = "still editing";
+    });
+    const input = page.getByRole("textbox", {name: "作业内容 作业内容", exact: true});
+    await input.fill("远程重载时必须保留的作业");
+    await expect(page.getByText(/本机草稿未能保存/)).toBeVisible();
+    await request.post(`${api}/__test/reload-command`);
+    const heartbeat = page.waitForResponse(response => response.url().endsWith("/classroom-screens/heartbeat"));
+    await page.evaluate(() => window.dispatchEvent(new window.Event("visibilitychange")));
+    await heartbeat;
+    await expect(input).toHaveValue("远程重载时必须保留的作业");
+    expect((await (await request.get(`${api}/__test/state`)).json()).data.commandAcknowledgements).toEqual([]);
+    await page.waitForTimeout(400);
+    expect(await page.evaluate(() => window.reloadTestMarker)).toBe("still editing");
+    await page.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(page.locator(".screen-composer")).not.toBeVisible();
+    const reloaded = page.waitForEvent("domcontentloaded");
+    await page.evaluate(() => window.dispatchEvent(new window.Event("visibilitychange")));
+    await reloaded;
+    await expect(page.getByText("远程重载时必须保留的作业", {exact: true})).toBeVisible();
+    expect((await (await request.get(`${api}/__test/state`)).json()).data.commandAcknowledgements).toHaveLength(1);
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("teacher publishes using the UI and a separate screen receives a real Socket.IO invalidation", async ({browser, request}) => {
   const teacher = await openRole(browser, "teacher");
   const screen = await openRole(browser, "screen");

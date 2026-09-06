@@ -1,3 +1,4 @@
+import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
 import {
   classworksV2Api,
   clearClassroomScreenToken,
@@ -152,6 +153,7 @@ export const screenSessionActions = {
     if (!publication && !this.screenNetworkOnline) {
       return this.enqueueOfflineScreenPublication(input, queueContext);
     }
+    const releaseReloadBlocker = registerScreenReloadBlocker(this, () => true);
     try {
       const saved = publication
         ? await classworksV2Api.updateScreenPublication(publication, input)
@@ -168,6 +170,8 @@ export const screenSessionActions = {
       }
       this.screenError = describeApiError(error, "保存大屏作业失败");
       throw error;
+    } finally {
+      releaseReloadBlocker();
     }
   },
 };

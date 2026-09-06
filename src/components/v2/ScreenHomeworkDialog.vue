@@ -4,7 +4,7 @@
     inset
     max-height="88vh"
     scrollable
-    @update:model-value="$emit('update:modelValue', $event)"
+    @update:model-value="requestVisibility"
   >
     <v-card class="screen-composer rounded-t-xl">
       <v-card-title class="screen-composer__title d-flex align-center pa-5 pb-3">
@@ -25,6 +25,14 @@
       </v-card-title>
 
       <v-card-text class="screen-composer__body px-5">
+        <v-alert
+          v-if="draftSaveFailed"
+          class="mb-4"
+          type="warning"
+          variant="tonal"
+        >
+          本机草稿未能保存，请保留录入窗口，联网提交或恢复存储后重试。远程重载已暂缓。
+        </v-alert>
         <v-alert
           v-if="draftRestored"
           class="mb-4"
@@ -334,7 +342,7 @@
         <v-spacer />
         <v-btn
           size="large"
-          @click="$emit('update:modelValue', false)"
+          @click="requestVisibility(false)"
         >
           取消
         </v-btn>
@@ -355,7 +363,8 @@
 </template>
 
 <script setup>
-import {computed, nextTick, reactive, ref, watch} from "vue";
+import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
+import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {todayBoardDate} from "@/utils/boardDate";
@@ -368,6 +377,7 @@ import {
   clearScreenHomeworkDraft,
   loadScreenHomeworkDraft,
   saveScreenHomeworkDraft,
+  hasMeaningfulScreenHomeworkDraft,
 } from "@/utils/screenHomeworkDraft";
 import {
   publicationConflictMessage,
@@ -402,6 +412,10 @@ const contentInput = ref(null);
 const advancedPanel = ref();
 const draftRestored = ref(false);
 const draftReady = ref(false);
+const draftSaveFailed = ref(false);
+const releaseReloadBlocker = registerScreenReloadBlocker(store, () =>
+  props.modelValue || saving.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
+onUnmounted(releaseReloadBlocker);
 const form = reactive({
   subjectId: "",
   targetWorkspaceId: "",
@@ -476,11 +490,12 @@ watch(() => form.subjectId, () => {
 watch(form, () => {
   duplicateWarning.value = null;
   if (!props.modelValue || !draftReady.value) return;
-  saveScreenHomeworkDraft(
+  const saved = saveScreenHomeworkDraft(
     store.screenSession?.binding?.id,
     basePublication.value?.id || "new",
     form,
   );
+  draftSaveFailed.value = hasMeaningfulScreenHomeworkDraft(form) && !saved;
 }, {deep: true});
 
 function localDateTime(value) {
@@ -488,6 +503,17 @@ function localDateTime(value) {
   const date = new Date(value);
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function requestVisibility(open) {
+  if (!open && (saving.value || conflictApplying.value || conflictCopying.value || conflictReloading.value)) return;
+  if (!open && draftSaveFailed.value) {
+    // Recheck storage before closing; the latest keystroke may not have reached its watcher yet.
+    const saved = saveScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", form);
+    draftSaveFailed.value = hasMeaningfulScreenHomeworkDraft(form) && !saved;
+    if (draftSaveFailed.value) return;
+  }
+  emit("update:modelValue", open);
 }
 
 async function insertQuickInput(item) {
@@ -519,6 +545,7 @@ function loadPublication(publication) {
 function restoreDraft() {
   draftReady.value = false;
   draftRestored.value = false;
+  draftSaveFailed.value = false;
   loadPublication(basePublication.value);
   const draft = loadScreenHomeworkDraft(
     store.screenSession?.binding?.id,

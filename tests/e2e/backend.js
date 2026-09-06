@@ -18,6 +18,8 @@ export function startTestBackend(port = apiPort) {
   let screenFeedRequests = 0;
   let historyRows = [];
   let historyRequests = [];
+  let commands = [];
+  let commandAcknowledgements = [];
   const server = createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Classworks-Screen-Token,If-Match");
@@ -39,10 +41,11 @@ export function startTestBackend(port = apiPort) {
       uploadsAvailable = true; uploadRequests = [];
       screenFeedRequests = 0;
       historyRows = []; historyRequests = [];
+      commands = []; commandAcknowledgements = [];
       return reply({});
     }
     if (path === "/__test/state") return reply({items, versionChecks, roomJoins, socketEvents, uploadRequests, historyRequests,
-      screenFeedRequests, connections: io.of("/").sockets.size,
+      screenFeedRequests, commandAcknowledgements, connections: io.of("/").sockets.size,
       classroomSubscribers: io.of("/").adapter.rooms.get(workspace.id)?.size || 0});
     if (path === "/__test/history") {
       const item = items[0];
@@ -89,7 +92,14 @@ export function startTestBackend(port = apiPort) {
     if (path === "/api/v2/classroom-screens/session") return reply({
       binding: {id: "screen-a", name: "测试大屏", administrativeClass: workspace}, workspaces: [workspace], subjects: [subject], homeworkSettings: {},
     });
-    if (path === "/api/v2/classroom-screens/heartbeat") return reply({receivedAt: new Date().toISOString(), commands: []});
+    if (path === "/__test/reload-command") {
+      commands = [{id: "reload-test", type: "RELOAD_APP", createdAt: new Date().toISOString()}];
+      return reply({});
+    }
+    if (path === "/api/v2/classroom-screens/heartbeat") return reply({receivedAt: new Date().toISOString(), commands});
+    if (path === "/api/v2/classroom-screens/commands/reload-test/ack") {
+      commandAcknowledgements.push(body); commands = []; return reply({});
+    }
     if (path.endsWith("/notification-deliveries")) return reply([]);
     if (path === "/api/v2/publications/action-required") return reply({items: [], total: 0, summary: {}});
     if (/^\/api\/v2\/(?:classroom-screens\/)?publications\/[^/]+\/revisions$/.test(path)) {

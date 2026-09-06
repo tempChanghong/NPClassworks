@@ -11,6 +11,7 @@ import {
 import {recordDiagnosticEvent, recordDiagnosticSnapshot} from "@/utils/localDiagnostics";
 import {isTransientScreenRequestError} from "./screenRequestError";
 import {createScreenUploadRetry} from "@/utils/screenUploadRetry";
+import {isScreenReloadBlocked} from "@/utils/screenReloadProtection";
 
 const screenSyncContexts = new WeakMap();
 
@@ -162,16 +163,24 @@ export const screenSyncActions = {
         return;
       }
       if (command.type === "RELOAD_APP") {
+        // Leave busy commands unacknowledged so the server can redeliver them.
+        if (isScreenReloadBlocked(this)) return;
         await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
           success: true,
-          result: {message: "页面即将重新载入"},
+          result: {message: "重载已接收，页面空闲后执行"},
         });
         if (!isCurrent()) return;
-        const timer = window.setTimeout(() => {
-          context.reloadTimers.delete(timer);
-          if (isCurrent()) window.location.reload();
-        }, 300);
-        context.reloadTimers.add(timer);
+        const schedule = delay => {
+          const timer = window.setTimeout(() => {
+            context.reloadTimers.delete(timer);
+            if (!isCurrent()) return;
+            // Editing or submitting may start while the acknowledgement is in flight.
+            if (isScreenReloadBlocked(this)) schedule(1000);
+            else window.location.reload();
+          }, delay);
+          context.reloadTimers.add(timer);
+        };
+        schedule(300);
         return;
       }
       await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {

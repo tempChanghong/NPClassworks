@@ -1,11 +1,71 @@
 import assert from "node:assert/strict";
 import {after, before, beforeEach, test} from "node:test";
 import {createFlowHarness, deferred, eventually} from "./helpers/flowHarness.js";
+import {nextTick} from "vue";
 
 let h;
 const heartbeat = "POST /api/v2/classroom-screens/heartbeat";
 const ack = "POST /api/v2/classroom-screens/commands/reload/ack";
 const pause = () => new Promise(resolve => setTimeout(resolve, 50));
+
+test("remote reload waits for an editor even when draft storage fails", async t => {
+  const reload = t.mock.method(window.location, "reload", () => {});
+  const store = h.newStore({screen: true});
+  const editor = await h.openComposer();
+  const write = t.mock.method(h.storage, "setItem", () => { throw new Error("quota full"); });
+  editor.state.form.content = "不能被远程重载丢掉的输入";
+  await nextTick();
+  assert.equal(editor.state.draftSaveFailed.value, true);
+  editor.state.requestVisibility(false);
+  assert.equal(editor.events.some(([name, value]) => name === "update:modelValue" && value === false), false);
+  h.routes.set(heartbeat, (_req, reply) => reply({commands: [{id: "reload", type: "RELOAD_APP"}]}));
+  h.routes.set(ack, (_req, reply) => reply({}));
+  store.initializeScreenSync();
+  await pause(); await pause();
+  assert.equal(h.requests.filter(x => x.path.includes("/commands/")).length, 0);
+  assert.equal(reload.mock.callCount(), 0);
+  assert.equal(editor.state.form.content, "不能被远程重载丢掉的输入");
+  write.mock.restore();
+  editor.state.requestVisibility(false);
+  assert.equal(editor.state.draftSaveFailed.value, false);
+  editor.props.modelValue = false;
+  await nextTick(); await store.sendScreenHeartbeat();
+  await new Promise(resolve => setTimeout(resolve, 350));
+  assert.equal(reload.mock.callCount(), 1);
+});
+
+test("remote reload remains deferred if editing begins during its acknowledgement", async t => {
+  const response = deferred(); const timers = [];
+  const realTimer = window.setTimeout;
+  t.mock.method(window, "setTimeout", (fn, ms) => {
+    if (![300, 1000].includes(ms)) return realTimer(fn, ms);
+    timers.push(fn); return fn;
+  });
+  const reload = t.mock.method(window.location, "reload", () => {});
+  h.routes.set(heartbeat, (_req, reply) => reply({commands: [{id: "reload", type: "RELOAD_APP"}]}));
+  h.routes.set(ack, async (_req, reply) => { await response.promise; reply({}); });
+  const store = h.newStore({screen: true}); store.initializeScreenSync();
+  await eventually(() => assert.ok(h.requests.some(x => x.path.includes("/commands/"))));
+  const editor = await h.openComposer();
+  response.resolve(); await eventually(() => assert.equal(timers.length, 1));
+  timers.shift()(); assert.equal(reload.mock.callCount(), 0);
+  editor.props.modelValue = false; await nextTick();
+  timers.shift()(); assert.equal(reload.mock.callCount(), 1);
+});
+
+test("an in-flight submission blocks reload even without an open editor", async () => {
+  const response = deferred();
+  h.routes.set("POST /api/v2/classroom-screens/publications", async (_req, reply) => { await response.promise; reply({id: "saved"}); });
+  h.routes.set(heartbeat, (_req, reply) => reply({commands: [{id: "reload", type: "RELOAD_APP"}]}));
+  h.routes.set(ack, (_req, reply) => reply({}));
+  const store = h.newStore({screen: true});
+  const saving = store.saveScreenPublication({content: "提交中"});
+  store.initializeScreenSync(); await pause();
+  assert.equal(h.requests.filter(x => x.path.includes("/commands/")).length, 0);
+  response.resolve(); await saving;
+  await store.sendScreenHeartbeat();
+  assert.equal(h.requests.filter(x => x.path.includes("/commands/")).length, 1);
+});
 before(async () => { h = await createFlowHarness(); });
 after(async () => { await h?.close(); });
 beforeEach(() => {

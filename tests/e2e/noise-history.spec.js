@@ -19,8 +19,8 @@ test("noise history imports legacy data once and persists incremental writes acr
   expect(await page.evaluate(async () => {
     localStorage.setItem("noise-slices-v2", JSON.stringify([window.fixtureSlice("legacy")]));
     await window.historyStore.append(window.fixtureSlice("new"));
-    return {ids: (await window.historyStore.read()).map(x => x.id), legacy: localStorage.getItem("noise-slices-v2")};
-  })).toEqual({ids: ["legacy", "new"], legacy: null});
+    return {ids: (await window.historyStore.read()).map(x => x.id), legacyRetained: Boolean(localStorage.getItem("noise-slices-v2"))};
+  })).toEqual({ids: ["legacy", "new"], legacyRetained: true});
   await page.reload();
   expect(await page.evaluate(async () => {
     const {createNoiseHistoryStore} = await import("/__test/noise-history-store.js");
@@ -56,7 +56,7 @@ test("two independent stores append concurrently and a clear cannot reimport leg
     await other.clear(); await other.close(); await window.historyStore.close();
     const reopened = window.historyModule.createNoiseHistoryStore();
     const empty = await reopened.read();
-    await reopened.append(window.fixtureSlice("after-clear"));
+    await reopened.append(window.fixtureSlice("after-clear", Date.now() + 1));
     return {count, empty, ids: (await reopened.read()).map(x => x.id)};
   })).toEqual({count: 20, empty: [], ids: ["after-clear"]});
 });
@@ -101,6 +101,65 @@ test("failed import writes retain the original source and can be retried", async
     finally { window.IDBObjectStore.prototype.put = original; }
     const retained = localStorage.getItem("noise-slices-v2") === raw;
     const ids = (await window.historyStore.read()).map(x => x.id);
-    return {failed, retained, ids, source: localStorage.getItem("noise-slices-v2")};
-  })).toEqual({failed: true, retained: true, ids: ["legacy-retry"], source: null});
+    return {failed, retained, ids};
+  })).toEqual({failed: true, retained: true, ids: ["legacy-retry"]});
+});
+
+test("an old page can keep recording after import and after the new page clears history", async ({page}) => {
+  expect(await page.evaluate(async () => {
+    const now = Date.now();
+    const old = window.fixtureSlice("before-clear", now - 1000);
+    localStorage.setItem("noise-slices-v2", JSON.stringify([old]));
+    await window.historyStore.read();
+    const late = window.fixtureSlice("late-old-page", now);
+    localStorage.setItem("noise-slices-v2", JSON.stringify([old, late]));
+    const before = (await window.historyStore.read()).map(x => x.id);
+    await window.historyStore.clear(); await window.historyStore.close();
+    const newest = window.fixtureSlice("after-clear", Date.now() + 1000);
+    // Simulate the old page rewriting its cached array, including cleared rows.
+    localStorage.setItem("noise-slices-v2", JSON.stringify([old, late, newest]));
+    const reopened = window.historyModule.createNoiseHistoryStore();
+    const after = (await reopened.read()).map(x => x.id);
+    return {before, after};
+  })).toEqual({before: ["before-clear", "late-old-page"], after: ["after-clear"]});
+});
+
+test("a legacy write during import commit is picked up by the next read", async ({page}) => {
+  expect(await page.evaluate(async () => {
+    const first = window.fixtureSlice("first", Date.now() - 1000);
+    const late = window.fixtureSlice("during-import");
+    let raw = JSON.stringify([first]);
+    let reads = 0;
+    const storage = {getItem() {
+      if (++reads === 2) raw = JSON.stringify([first, late]);
+      return raw;
+    }, removeItem() { throw new Error("must not delete a concurrent legacy write"); }};
+    const store = window.historyModule.createNoiseHistoryStore({storage});
+    await store.read();
+    await store.read();
+    return (await store.read()).map(x => x.id);
+  })).toEqual(["first", "during-import"]);
+});
+
+test("an actual second page using the old format continues importing without resurrecting cleared rows", async ({page, context}) => {
+  const oldPage = await context.newPage();
+  await oldPage.route("**/__test/old-noise", route => route.fulfill({contentType: "text/html", body: "<!doctype html><title>Old noise page</title>"}));
+  await oldPage.goto("/__test/old-noise");
+  await oldPage.evaluate(() => {
+    window.cachedNoise = [{id: "old-page-a", start: Date.now() - 30000, end: Date.now() - 1000}];
+    localStorage.setItem("noise-slices-v2", JSON.stringify(window.cachedNoise));
+  });
+  expect(await page.evaluate(async () => (await window.historyStore.read()).map(x => x.id))).toEqual(["old-page-a"]);
+  await oldPage.evaluate(() => {
+    window.cachedNoise.push({id: "old-page-b", start: Date.now() - 30000, end: Date.now()});
+    localStorage.setItem("noise-slices-v2", JSON.stringify(window.cachedNoise));
+  });
+  expect(await page.evaluate(async () => (await window.historyStore.read()).map(x => x.id))).toEqual(["old-page-a", "old-page-b"]);
+  await page.evaluate(() => window.historyStore.clear());
+  await oldPage.evaluate(() => {
+    window.cachedNoise.push({id: "old-page-c", start: Date.now() - 30000, end: Date.now() + 1});
+    localStorage.setItem("noise-slices-v2", JSON.stringify(window.cachedNoise));
+  });
+  expect(await page.evaluate(async () => (await window.historyStore.read()).map(x => x.id))).toEqual(["old-page-c"]);
+  await oldPage.close();
 });
