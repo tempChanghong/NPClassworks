@@ -1,0 +1,23 @@
+{
+  "source": "images/Logo.svg",
+  "sizes": [
+    16,
+    32,
+    48,
+    64,
+    180,
+    192,
+    256,
+    512
+  ],
+  "icoFrames": [
+    16,
+    32,
+    48,
+    256
+  ],
+  "maskableScale": 0.7160599522859199,
+  "maskableSafeCircleOutsidePixels": 0,
+  "safari": "single black path, transparent background, viewBox 0 0 16 16",
+  "liveAssetsModified": false
+}
