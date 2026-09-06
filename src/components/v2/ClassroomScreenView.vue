@@ -86,6 +86,12 @@
             </template>
             <v-list>
               <v-list-item
+                :disabled="!printTool || printTool.disabled"
+                prepend-icon="mdi-printer-outline"
+                title="打印作业清单"
+                @click="printTool.openPreview()"
+              />
+              <v-list-item
                 prepend-icon="mdi-file-cog-outline"
                 subtitle="需验证本大屏 PIN"
                 title="下载本机诊断包"
@@ -102,6 +108,13 @@
         </div>
       </v-card-text>
     </v-card>
+
+    <HomeworkPrintButton
+      ref="printTool"
+      :class-name="className"
+      hide-button
+      :scope-label="workspaceSummary"
+    />
 
     <v-alert
       v-if="store.screenError"
@@ -313,6 +326,7 @@ import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import ScreenSyncStatus from "@/components/v2/ScreenSyncStatus.vue";
+import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
 import ScreenNotificationCenter from "@/components/v2/ScreenNotificationCenter.vue";
 import {boardDateRelativeLabel, shiftBoardDate, todayBoardDate} from "@/utils/boardDate";
 import {classworksV2Api} from "@/utils/classworksV2Client";
@@ -335,6 +349,7 @@ import {
 
 defineEmits(["create", "edit", "history", "tools", "copy-board", "settings", "exit", "diagnostics"]);
 const store = useClassworksV2Store();
+const printTool = ref(null);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const notificationCenterOpen = ref(false);
 const acknowledgementRevision = ref(0);

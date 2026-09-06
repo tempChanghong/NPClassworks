@@ -144,6 +144,10 @@
               </div>
             </div>
             <div class="selection-summary__actions">
+              <HomeworkPrintButton
+                :class-name="store.selectedClassName"
+                :scope-label="selectionDescription"
+              />
               <v-btn
                 prepend-icon="mdi-tune-variant"
                 variant="tonal"
@@ -632,6 +636,7 @@ import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
 import ScreenAccountLogin from "@/components/v2/ScreenAccountLogin.vue";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
+import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import ClassworksOobe from "@/components/v2/ClassworksOobe.vue";

@@ -86,6 +86,10 @@ export function startTestBackend(port = apiPort) {
     if (path === "/api/v2/catalog/grades") return reply([{id: "grade", name: "高一"}]);
     if (path === "/api/v2/catalog/workspaces") return reply([workspace]);
     if (path === "/api/v2/catalog/subjects") return reply([subject]);
+    if (path === "/api/v2/catalog/administrative-classes/class-a/course-options") return reply({subjects: []});
+    if (path === "/api/v2/catalog/administrative-classes/class-a/student-selection/validate") {
+      return reply({normalized: {courseGroupIds: {}, declinedSubjectIds: []}, issues: [], confirmedAt: new Date().toISOString()});
+    }
     if (path.endsWith("/homework-settings")) return reply({});
     if (path === "/api/v2/me/workspaces") return reply([{role: "TEACHER", workspace}]);
     if (path === "/api/v2/me/schools") return reply([{role: "TEACHER", school}]);
