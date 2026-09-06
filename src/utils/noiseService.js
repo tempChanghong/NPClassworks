@@ -7,6 +7,7 @@ import {
 import {analyzeNoiseWindow, estimatedDbFromRms} from "@/utils/noiseScoring"
 import {classifyMicrophoneError} from "@/utils/microphonePermission"
 import {testMicrophoneInput} from "@/utils/microphoneDeviceSettings"
+import {createNoiseHistoryStore} from "@/utils/noiseHistoryStore"
 
 export {getNoiseControlSettings, resetNoiseControlSettings, saveNoiseControlSettings}
 
@@ -14,15 +15,18 @@ const FRAME_MS = 100
 const ANALYSIS_INTERVAL_MS = 500
 const SCORE_WINDOW_MS = 60_000
 const SLICE_MS = 30_000
-const HISTORY_KEY = "noise-slices-v2"
-const HISTORY_RETENTION_MS = 14 * 24 * 60 * 60 * 1000
-const MAX_HISTORY_SLICES = 5000
 
 const dbfsFromRms = rms => rms > 0 ? 20 * Math.log10(rms) : -100
 const createId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
 
 class ClassworksNoiseService {
   constructor() {
+    this.generation = 0
+    this.microphoneTest = null
+    this.historyStore = createNoiseHistoryStore()
+    this.historyGeneration = 0
+    this.historyWrite = Promise.resolve()
+    this.historyError = ""
     this.status = "paused"
     this.listeners = new Set()
     this.audioContext = null
@@ -72,6 +76,7 @@ class ClassworksNoiseService {
       signalHealth: {...this.signalHealth},
       microphone: {...this.currentMicrophone},
       thresholdDb: Number.isFinite(this.settings?.maxLevelDb) ? this.settings.maxLevelDb : 55,
+      historyError: this.historyError,
     }
   }
 
@@ -83,15 +88,21 @@ class ClassworksNoiseService {
 
   async start({deviceId} = {}) {
     if (["active", "initializing"].includes(this.status)) return
+    const generation = ++this.generation
+    this.microphoneTest?.abort()
+    this.microphoneTest = null
+    const isCurrent = () => generation === this.generation
     if (deviceId) this.preferredDeviceId = deviceId
     this.status = "initializing"
     this.emit()
+    if (!isCurrent()) return
     try {
       const AudioContextImpl = window.AudioContext || window.webkitAudioContext
       if (!navigator.mediaDevices?.getUserMedia || !AudioContextImpl) {
         throw new window.DOMException("Microphone API unavailable", "NotSupportedError")
       }
-      this.audioContext = new AudioContextImpl({latencyHint: "playback"})
+      const context = new AudioContextImpl({latencyHint: "playback"})
+      this.audioContext = context
       const audioSettings = {
         echoCancellation: false,
         noiseSuppression: false,
@@ -101,14 +112,21 @@ class ClassworksNoiseService {
       if (this.preferredDeviceId) {
         audioSettings.deviceId = {exact: this.preferredDeviceId}
       }
-      this.stream = await navigator.mediaDevices.getUserMedia({audio: audioSettings})
+      const stream = await navigator.mediaDevices.getUserMedia({audio: audioSettings})
+      if (!isCurrent()) {
+        stream.getTracks().forEach(track => track.stop())
+        return
+      }
+      this.stream = stream
       this.stream.getAudioTracks().forEach(track => {
         const trackSettings = track.getSettings?.() || {}
         this.currentMicrophone = {
           deviceId: trackSettings.deviceId || this.preferredDeviceId,
           label: track.label || (this.preferredDeviceId === "default" ? "系统默认麦克风" : "已选择的麦克风"),
         }
-        track.addEventListener("ended", () => this.handleTrackEnded(), {once: true})
+        track.addEventListener("ended", () => {
+          if (isCurrent()) this.handleTrackEnded()
+        }, {once: true})
       })
       this.sourceNode = this.audioContext.createMediaStreamSource(this.stream)
       const highPass = this.audioContext.createBiquadFilter()
@@ -121,18 +139,28 @@ class ClassworksNoiseService {
       highPass.connect(lowPass)
 
       if (this.audioContext.audioWorklet && typeof window.AudioWorkletNode !== "undefined") {
-        await this.startWorklet(lowPass)
+        await this.startWorklet(lowPass, context, isCurrent)
       } else {
         this.startFallback(lowPass)
       }
-      if (this.audioContext.state === "suspended") await this.audioContext.resume()
+      if (!isCurrent()) return
+      if (context.state === "suspended") await context.resume()
+      if (!isCurrent()) return
+      this.ringBuffer = []
+      this.windowFrames = []
+      this.sliceFrames = []
+      this.currentScore = null
+      this.currentScoreDetail = null
+      this.signalHealth = {quality: "no-signal", confidence: 0, coverage: 0}
       this.sliceStart = Date.now()
       this.lastAnalysisAt = 0
       this.status = "active"
       this.emit()
     } catch (error) {
+      if (!isCurrent()) return
       console.error("噪声监测启动失败", error)
       await this.releaseAudioResources()
+      if (!isCurrent()) return
       const errorCode = classifyMicrophoneError(error, {secureContext: window.isSecureContext})
       this.status = errorCode === "permission-denied"
         ? "permission-denied"
@@ -144,11 +172,14 @@ class ClassworksNoiseService {
     }
   }
 
-  async startWorklet(inputNode) {
+  async startWorklet(inputNode, context, isCurrent) {
     const workletUrl = new URL("/noise-meter-worklet.js", window.location.origin).href
-    await this.audioContext.audioWorklet.addModule(workletUrl)
+    await context.audioWorklet.addModule(workletUrl)
+    if (!isCurrent()) return
     this.processorNode = new window.AudioWorkletNode(this.audioContext, "classworks-noise-meter")
-    this.processorNode.port.onmessage = event => this.consumeFeature(event.data)
+    this.processorNode.port.onmessage = event => {
+      if (isCurrent()) this.consumeFeature(event.data)
+    }
     this.silentGain = this.audioContext.createGain()
     this.silentGain.gain.value = 0
     inputNode.connect(this.processorNode)
@@ -253,7 +284,10 @@ class ClassworksNoiseService {
   async setMicrophoneDevice(deviceId = "default", {restart = false, label = ""} = {}) {
     const normalized = typeof deviceId === "string" && deviceId.trim() ? deviceId.trim() : "default"
     const shouldRestart = restart && ["active", "initializing"].includes(this.status)
-    if (shouldRestart) await this.stop()
+    const stopping = shouldRestart ? this.stop() : null
+    const generation = this.generation
+    await stopping
+    if (generation !== this.generation) return
     this.preferredDeviceId = normalized
     this.currentMicrophone = {
       deviceId: normalized,
@@ -267,11 +301,17 @@ class ClassworksNoiseService {
 
   async testMicrophoneDevice(deviceId = "default") {
     const shouldResume = ["active", "initializing"].includes(this.status)
-    if (shouldResume) await this.stop()
+    const stopping = this.stop()
+    const generation = this.generation
+    await stopping
+    if (generation !== this.generation) throw new window.DOMException("Microphone test cancelled", "AbortError")
+    const controller = new AbortController()
+    this.microphoneTest = controller
     try {
-      return await testMicrophoneInput(deviceId)
+      return await testMicrophoneInput(deviceId, {signal: controller.signal})
     } finally {
-      if (shouldResume) await this.start({deviceId: this.preferredDeviceId})
+      if (this.microphoneTest === controller) this.microphoneTest = null
+      if (shouldResume && generation === this.generation) await this.start({deviceId: this.preferredDeviceId})
     }
   }
 
@@ -303,58 +343,64 @@ class ClassworksNoiseService {
       model: "relative-activity-v2",
     }
     this.lastCompletedSlice = summary
-    this.saveSlice(summary)
+    void this.saveSlice(summary)
     this.sliceFrames = []
     this.sliceStart = end
   }
 
   saveSlice(slice) {
-    try {
-      const existing = this.getHistory()
-      const now = Date.now()
-      const retained = [...existing, slice]
-        .filter(item => Number.isFinite(item?.end) && now - item.end < HISTORY_RETENTION_MS)
-        .slice(-MAX_HISTORY_SLICES)
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(retained))
-    } catch (error) {
-      console.warn("无法保存噪声统计", error)
-    }
+    const generation = this.historyGeneration
+    this.historyWrite = this.historyWrite.then(async () => {
+      if (generation !== this.historyGeneration) return
+      try {
+        await this.historyStore.append(slice)
+        this.historyError = ""
+      } catch (error) {
+        this.historyError = "噪声统计未能保存，请检查浏览器存储空间。"
+        console.warn("无法保存噪声统计", error)
+      }
+      this.emit()
+    })
+    return this.historyWrite
   }
 
-  getHistory() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]")
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
+  async getHistory() {
+    await this.historyWrite
+    return this.historyStore.read()
   }
 
-  clearHistory() {
-    localStorage.removeItem(HISTORY_KEY)
-    this.lastCompletedSlice = null
+  async clearHistory() {
+    ++this.historyGeneration
+    const previousSlice = this.lastCompletedSlice
+    // Order the clear after an already-started write, before any subsequent append.
+    const clearing = this.historyWrite.then(() => this.historyStore.clear())
+    this.historyWrite = clearing.catch(() => {})
+    await clearing
+    if (this.lastCompletedSlice === previousSlice) this.lastCompletedSlice = null
+    this.historyError = ""
     this.emit()
   }
 
   async stop() {
-    if (this.status === "paused") return
+    // Even a paused service can have a pending permission or device-test result.
+    ++this.generation
+    this.microphoneTest?.abort()
+    this.microphoneTest = null
     if (this.status === "active" && this.sliceFrames.length) this.finalizeSlice(Date.now())
     this.status = "paused"
     this.calibration = null
-    await this.releaseAudioResources()
+    const releasing = this.releaseAudioResources()
     this.emit()
+    await releasing
   }
 
   async releaseAudioResources() {
+    // Detach synchronously so a slow close never clears a newer session's resources.
+    const context = this.audioContext
     window.clearInterval(this.fallbackTimer)
     this.fallbackTimer = null
     if (this.processorNode) this.processorNode.port.onmessage = null
     this.stream?.getTracks().forEach(track => track.stop())
-    try {
-      await this.audioContext?.close()
-    } catch {
-      // AudioContext 可能已经由浏览器关闭。
-    }
     this.audioContext = null
     this.stream = null
     this.sourceNode = null
@@ -362,10 +408,16 @@ class ClassworksNoiseService {
     this.silentGain = null
     this.fallbackAnalyser = null
     this.fallbackBuffer = null
+    try {
+      await context?.close()
+    } catch {
+      // AudioContext 可能已经由浏览器关闭。
+    }
   }
 
   handleTrackEnded() {
-    if (this.status !== "active") return
+    if (!["active", "initializing"].includes(this.status)) return
+    ++this.generation
     this.status = "error"
     void this.releaseAudioResources()
     this.emit()

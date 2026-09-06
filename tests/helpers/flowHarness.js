@@ -80,6 +80,7 @@ export async function createFlowHarness() {
     ]},
     server: {middlewareMode: true, hmr: false, watch: null}, appType: "custom",
     optimizeDeps: {noDiscovery: true, include: []},
+    ssr: {noExternal: ["@wydev/noise-core"]},
   });
   const api = await vite.ssrLoadModule("/src/utils/classworksV2Client.js");
   const {useClassworksV2Store} = await vite.ssrLoadModule("/src/stores/classworksV2.js");
@@ -142,6 +143,29 @@ export async function createFlowHarness() {
   reset();
   return {
     api, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    async openNoiseCard() {
+      const {default: component} = await vite.ssrLoadModule("/src/components/NoiseMonitorCard.vue");
+      const {noiseService} = await vite.ssrLoadModule("/src/utils/noiseService.js");
+      const app = renderer.createApp({...component, render: () => null}, {bindingId: "screen-a"});
+      app.provide(ssrContextKey, {});
+      const state = app.mount({}); mounted.push(app);
+      return {state, noiseService, unmount() {
+        mounted.splice(mounted.indexOf(app), 1); app.unmount();
+      }};
+    },
+    async openNoiseScheduler() {
+      const {default: component} = await vite.ssrLoadModule("/src/components/v2/NoiseScheduleManager.vue");
+      const {noiseService} = await vite.ssrLoadModule("/src/utils/noiseService.js");
+      const app = renderer.createApp({setup() {
+        component.setup({}, {expose() {}});
+        return () => null;
+      }});
+      app.use(currentPinia); app.provide(ssrContextKey, {});
+      app.mount({}); mounted.push(app);
+      return {noiseService, unmount() {
+        mounted.splice(mounted.indexOf(app), 1); app.unmount();
+      }};
+    },
     async openHistory(publication, mode = "teacher") {
       const {default: component} = await vite.ssrLoadModule("/src/components/v2/PublicationHistoryDialog.vue");
       const props = reactive({modelValue: true, publication, mode});

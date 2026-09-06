@@ -47,7 +47,7 @@ export async function listMicrophoneDevices({requestPermission = false} = {}) {
   }
 }
 
-export async function testMicrophoneInput(deviceId = "default", {durationMs = 1400, intervalMs = 70} = {}) {
+export async function testMicrophoneInput(deviceId = "default", {durationMs = 1400, intervalMs = 70, signal} = {}) {
   const AudioContextApi = window.AudioContext || window.webkitAudioContext;
   if (!navigator.mediaDevices?.getUserMedia || !AudioContextApi) {
     throw new window.DOMException("Microphone API unavailable", "NotSupportedError");
@@ -56,7 +56,16 @@ export async function testMicrophoneInput(deviceId = "default", {durationMs = 14
   let stream;
   let context;
   let source;
+  const assertActive = () => {
+    if (signal?.aborted) throw new window.DOMException("Microphone test cancelled", "AbortError");
+  };
+  const cancel = () => {
+    stream?.getTracks().forEach(track => track.stop());
+    void context?.close().catch(() => {});
+  };
+  signal?.addEventListener("abort", cancel, {once: true});
   try {
+    assertActive();
     const audio = {
       echoCancellation: false,
       noiseSuppression: false,
@@ -65,6 +74,7 @@ export async function testMicrophoneInput(deviceId = "default", {durationMs = 14
     };
     if (deviceId) audio.deviceId = {exact: deviceId};
     stream = await navigator.mediaDevices.getUserMedia({audio, video: false});
+    assertActive();
     context = new AudioContextApi({latencyHint: "interactive"});
     const analyser = context.createAnalyser();
     analyser.fftSize = 1024;
@@ -72,12 +82,14 @@ export async function testMicrophoneInput(deviceId = "default", {durationMs = 14
     source = context.createMediaStreamSource(stream);
     source.connect(analyser);
     if (context.state === "suspended") await context.resume();
+    assertActive();
 
     const samples = [];
     const buffer = new Float32Array(analyser.fftSize);
     const count = Math.max(4, Math.ceil(durationMs / intervalMs));
     for (let index = 0; index < count; index += 1) {
       await new Promise(resolve => window.setTimeout(resolve, intervalMs));
+      assertActive();
       analyser.getFloatTimeDomainData(buffer);
       let sumSquares = 0;
       for (const sample of buffer) sumSquares += sample * sample;
@@ -97,6 +109,7 @@ export async function testMicrophoneInput(deviceId = "default", {durationMs = 14
       label: stream.getAudioTracks()[0]?.label || "麦克风",
     };
   } finally {
+    signal?.removeEventListener("abort", cancel);
     try {
       source?.disconnect();
     } catch {

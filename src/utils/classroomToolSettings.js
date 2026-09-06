@@ -1,4 +1,5 @@
 export const CLASSROOM_TOOL_IDS = Object.freeze(["attendance", "noise"]);
+export const CLASSROOM_TOOLS_SETTINGS_EVENT = "classworks-v2-classroom-tools-changed";
 
 export const CLASSROOM_TOOL_DEFAULTS = Object.freeze({
   enabledToolIds: [...CLASSROOM_TOOL_IDS],
@@ -26,5 +27,8 @@ export function loadClassroomToolSettings(bindingId, storage = localStorage) {
 export function saveClassroomToolSettings(bindingId, settings, storage = localStorage) {
   const sanitized = sanitizeClassroomToolSettings(settings);
   storage.setItem(classroomToolSettingsKey(bindingId), JSON.stringify(sanitized));
+  if (typeof window !== "undefined" && storage === localStorage) {
+    window.dispatchEvent(new window.CustomEvent(CLASSROOM_TOOLS_SETTINGS_EVENT, {detail: {bindingId}}));
+  }
   return sanitized;
 }

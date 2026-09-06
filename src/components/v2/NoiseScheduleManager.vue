@@ -9,7 +9,7 @@
 import {onMounted, onUnmounted, watch} from "vue";
 import {noiseService} from "@/utils/noiseService";
 import {useClassworksV2Store} from "@/stores/classworksV2";
-import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
+import {loadClassroomToolSettings, classroomToolSettingsKey, CLASSROOM_TOOLS_SETTINGS_EVENT} from "@/utils/classroomToolSettings";
 import {loadMicrophoneDeviceSettings} from "@/utils/microphoneDeviceSettings";
 import {
   isWithinNoiseSchedule,
@@ -25,41 +25,35 @@ let unsubscribe = null;
 let serviceStatus = "paused";
 let scheduleOwnsService = false;
 let attemptedWindowKey = "";
-let evaluationPending = false;
 
 function currentBindingId() {
   return store.screenSession?.binding?.id || "";
 }
 
-async function evaluateSchedule({retry = false} = {}) {
-  if (evaluationPending) return;
-  evaluationPending = true;
-  try {
-    const bindingId = currentBindingId();
-    const schedule = loadNoiseScheduleSettings(bindingId);
-    const noiseToolEnabled = bindingId
-      && loadClassroomToolSettings(bindingId).enabledToolIds.includes("noise");
-    const shouldRun = Boolean(noiseToolEnabled && isWithinNoiseSchedule(schedule));
+function evaluateSchedule({retry = false} = {}) {
+  const bindingId = currentBindingId();
+  const schedule = loadNoiseScheduleSettings(bindingId);
+  const noiseToolEnabled = bindingId
+    && loadClassroomToolSettings(bindingId).enabledToolIds.includes("noise");
+  const shouldRun = Boolean(noiseToolEnabled && isWithinNoiseSchedule(schedule));
 
-    if (!shouldRun) {
-      attemptedWindowKey = "";
-      if (scheduleOwnsService && serviceStatus !== "paused") noiseService.stop();
-      scheduleOwnsService = false;
-      return;
-    }
-
-    scheduleOwnsService = true;
-    if (["active", "initializing"].includes(serviceStatus)) return;
-
-    const windowKey = noiseScheduleWindowKey(schedule);
-    if (!retry
-      && attemptedWindowKey === windowKey
-      && ["permission-denied", "error"].includes(serviceStatus)) return;
-    attemptedWindowKey = windowKey;
-    await noiseService.start({deviceId: loadMicrophoneDeviceSettings(bindingId).deviceId});
-  } finally {
-    evaluationPending = false;
+  if (!shouldRun) {
+    attemptedWindowKey = "";
+    if (scheduleOwnsService) void noiseService.stop();
+    scheduleOwnsService = false;
+    return;
   }
+
+  scheduleOwnsService = true;
+  if (["active", "initializing"].includes(serviceStatus)) return;
+
+  const windowKey = noiseScheduleWindowKey(schedule);
+  if (!retry
+    && attemptedWindowKey === windowKey
+    && ["permission-denied", "error"].includes(serviceStatus)) return;
+  attemptedWindowKey = windowKey;
+  // start changes status synchronously. Do not block cancellation on a permission prompt.
+  void noiseService.start({deviceId: loadMicrophoneDeviceSettings(bindingId).deviceId});
 }
 
 function handleScheduleChange(event) {
@@ -70,12 +64,14 @@ function handleScheduleChange(event) {
 
 function handleStorage(event) {
   const bindingId = currentBindingId();
-  if (!bindingId || event.key !== noiseScheduleSettingsKey(bindingId)) return;
+  if (!bindingId || (event.key !== null && ![noiseScheduleSettingsKey(bindingId), classroomToolSettingsKey(bindingId)].includes(event.key))) return;
   attemptedWindowKey = "";
   void evaluateSchedule({retry: true});
 }
 
 watch(() => store.screenSession?.binding?.id, () => {
+  void noiseService.stop();
+  scheduleOwnsService = false;
   attemptedWindowKey = "";
   void evaluateSchedule({retry: true});
 });
@@ -85,6 +81,7 @@ onMounted(() => {
     serviceStatus = snapshot.status;
   });
   window.addEventListener(NOISE_SCHEDULE_SETTINGS_EVENT, handleScheduleChange);
+  window.addEventListener(CLASSROOM_TOOLS_SETTINGS_EVENT, handleScheduleChange);
   window.addEventListener("storage", handleStorage);
   timer = window.setInterval(evaluateSchedule, 15 * 1000);
   void evaluateSchedule();
@@ -93,8 +90,10 @@ onMounted(() => {
 onUnmounted(() => {
   unsubscribe?.();
   window.removeEventListener(NOISE_SCHEDULE_SETTINGS_EVENT, handleScheduleChange);
+  window.removeEventListener(CLASSROOM_TOOLS_SETTINGS_EVENT, handleScheduleChange);
   window.removeEventListener("storage", handleStorage);
   window.clearInterval(timer);
+  void noiseService.stop();
 });
 </script>
 

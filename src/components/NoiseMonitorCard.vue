@@ -1,4 +1,13 @@
 <template>
+  <v-alert
+    v-if="historyError || historyReadError"
+    type="warning"
+    variant="tonal"
+    density="compact"
+    class="mb-2"
+  >
+    {{ historyError || historyReadError }}
+  </v-alert>
   <v-card
     v-if="!expanded"
     class="noise-monitor-card"
@@ -173,6 +182,10 @@ export default {
       ringBuffer: [],
       lastSlice: null,
       history: [],
+      historyError: '',
+      historyReadError: '',
+      historyRequest: 0,
+      historyMounted: false,
       unsubscribe: null,
       scheduleTimer: null,
       scheduledActive: false,
@@ -245,13 +258,16 @@ export default {
     },
   },
   mounted() {
-    this.history = noiseService.getHistory()
+    this.historyMounted = true
+    void this.refreshHistory()
     this.refreshMicrophonePermission()
     this.updateScheduledState()
     this.scheduleTimer = window.setInterval(this.updateScheduledState, 15 * 1000)
     this.subscribeToService()
   },
   beforeUnmount() {
+    this.historyMounted = false
+    ++this.historyRequest
     window.clearInterval(this.scheduleTimer)
     const scheduleKeepsRunning = Boolean(this.bindingId
       && isWithinNoiseSchedule(loadNoiseScheduleSettings(this.bindingId)))
@@ -261,6 +277,17 @@ export default {
     }
   },
   methods: {
+    async refreshHistory() {
+      const request = ++this.historyRequest
+      try {
+        const history = await noiseService.getHistory()
+        if (!this.historyMounted || request !== this.historyRequest) return
+        this.history = history
+        this.historyReadError = ''
+      } catch {
+        if (this.historyMounted && request === this.historyRequest) this.historyReadError = '噪声历史读取失败，请重新打开重试。'
+      }
+    },
     async refreshMicrophonePermission() {
       this.micPermissionState = await queryMicrophonePermission()
     },
@@ -289,6 +316,7 @@ export default {
       this.unsubscribe = noiseService.subscribe((snapshot) => {
         const statusChanged = snapshot.status !== this.status
         this.status = snapshot.status
+        this.historyError = snapshot.historyError || ''
         this.isMonitoring = ['initializing', 'active'].includes(snapshot.status)
         if (snapshot.status === 'permission-denied') this.micPermissionState = 'denied'
         const now = Date.now()
@@ -311,7 +339,7 @@ export default {
         const sliceId = snapshot.lastSlice?.id || ''
         if (sliceId && sliceId !== this.lastHistorySliceId) {
           this.lastHistorySliceId = sliceId
-          this.history = noiseService.getHistory()
+          void this.refreshHistory()
         }
       })
     },
@@ -346,9 +374,14 @@ export default {
         console.log(success ? '校准成功' : `校准失败: ${msg}`)
       })
     },
-    handleClearHistory() {
-      noiseService.clearHistory()
-      this.history = []
+    async handleClearHistory() {
+      ++this.historyRequest
+      try {
+        await noiseService.clearHistory()
+        if (this.historyMounted) await this.refreshHistory()
+      } catch {
+        if (this.historyMounted) this.historyReadError = '噪声历史清除失败，请重试。'
+      }
     },
     barColor(val) {
       if (val < 30) return 'success'
