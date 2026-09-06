@@ -1,5 +1,6 @@
 import {test, expect} from "@playwright/test";
 import {origin, api} from "./environment.js";
+import {readFile} from "node:fs/promises";
 
 const date = "2026-09-06";
 async function openBoard(browser, role) {
@@ -43,6 +44,79 @@ async function preview(page, role) {
 test.beforeEach(async ({request}) => {
   expect((await request.post(`${origin}/__test/release`, {data: {release: "previous"}})).ok()).toBe(true);
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
+});
+
+test("image export draws every line across PNG pages, downloads a real image and frees closed previews", async ({browser, request}, testInfo) => {
+  const content = "<script>literal text</script>\n" + Array.from({length: 95}, (_, index) => `完整作业第${index + 1}行`).join("\n") + "\n最后一行😀";
+  await seed(request, {content});
+  await seed(request, {title: "今日无作业", content: "本日该科目无作业。", contentJson: {kind: "NO_HOMEWORK", version: 1}});
+  const board = await openBoard(browser, "student");
+  try {
+    await preview(board.page, "student");
+    await board.page.evaluate(() => {
+      window.drawnHomeworkText = [];
+      const draw = window.CanvasRenderingContext2D.prototype.fillText;
+      window.CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+        window.drawnHomeworkText.push(text); return draw.call(this, text, ...args);
+      };
+    });
+    await board.page.getByRole("button", {name: "生成清单图片", exact: true}).click();
+    const results = board.page.locator(".homework-image-results");
+    await expect(results).toBeVisible();
+    const images = results.locator("img");
+    expect(await images.count()).toBeGreaterThan(2);
+    await expect(images.first()).toHaveJSProperty("naturalWidth", 1200);
+    const text = await board.page.evaluate(() => window.drawnHomeworkText);
+    for (const line of content.split("\n")) expect(text).toContain(line);
+    expect(text.some(line => line.includes("今日无作业"))).toBe(true);
+    expect(text.some(line => line.includes("1 项作业 · 1 项无作业标记"))).toBe(true);
+    const downloaded = board.page.waitForEvent("download");
+    await results.getByRole("link", {name: /保存第 1 张 PNG/}).click();
+    const download = await downloaded;
+    const output = testInfo.outputPath("homework-image-1.png");
+    await download.saveAs(output);
+    expect((await readFile(output)).subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    const last = results.getByRole("link").last();
+    const downloadedLast = board.page.waitForEvent("download");
+    await last.click();
+    await (await downloadedLast).saveAs(testInfo.outputPath("homework-image-last.png"));
+    const url = await images.first().getAttribute("src");
+    await board.page.getByRole("button", {name: "关闭", exact: true}).click();
+    await expect(results).toHaveCount(0);
+    expect(await board.page.evaluate(url => fetch(url).then(() => true).catch(() => false), url)).toBe(false);
+    expect(board.errors).toEqual([]);
+  } finally { await board.context.close(); }
+});
+
+test("screen first generates images offline with cached status and can cancel a pending render", async ({browser, request}) => {
+  await seed(request, {content: "离线保存的图片正文"});
+  const board = await openBoard(browser, "screen");
+  try {
+    await expect(board.page.getByText("离线保存的图片正文", {exact: true})).toBeVisible();
+    await board.page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await expect.poll(() => board.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await board.context.setOffline(true);
+    await board.page.getByRole("button", {name: "刷新", exact: true}).first().click();
+    await expect(board.page.getByText("当前无法连接服务器，正在显示这台大屏上次同步的内容")).toBeVisible();
+    await preview(board.page, "screen");
+    await board.page.getByRole("button", {name: "生成清单图片", exact: true}).click();
+    await expect(board.page.locator(".homework-image-results img")).toHaveCount(1);
+    await board.page.evaluate(() => {
+      window.originalHomeworkToBlob = window.HTMLCanvasElement.prototype.toBlob;
+      window.HTMLCanvasElement.prototype.toBlob = function (callback, ...args) {
+        window.releaseHomeworkImage = () => window.originalHomeworkToBlob.call(this, callback, ...args);
+      };
+    });
+    await board.page.getByRole("button", {name: "重新生成图片", exact: true}).click();
+    await expect.poll(() => board.page.evaluate(() => typeof window.releaseHomeworkImage)).toBe("function");
+    await board.page.getByRole("button", {name: "关闭", exact: true}).click();
+    await board.page.evaluate(() => { window.releaseHomeworkImage(); window.HTMLCanvasElement.prototype.toBlob = window.originalHomeworkToBlob; });
+    await preview(board.page, "screen");
+    await expect(board.page.locator(".homework-image-results")).toHaveCount(0);
+    await board.page.getByRole("button", {name: "生成清单图片", exact: true}).click();
+    await expect(board.page.locator(".homework-image-results img")).toHaveCount(1);
+    expect(board.errors).toEqual([]);
+  } finally { await board.context.close(); }
 });
 
 test("student previews selected assignments, prints the same document and paginates long text to PDF", async ({browser, request}, testInfo) => {

@@ -1,3 +1,5 @@
+import {isNoHomework} from "./noHomework.js";
+
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[char]);
@@ -27,6 +29,7 @@ export function homeworkPrintSnapshot({publications, workspaceIds, boardDate, cl
     targets: [...new Set(item.targets.filter(target => targets.has(target.workspaceId))
       .map(target => target.workspace?.name || "所选教学班"))].join("、"),
     title: item.title || "", content: item.content || "",
+    noHomework: isNoHomework(item),
     deadline: item.dueAt ? dateTime(item.dueAt) : "未设置",
     priority: ({URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通"})[item.priority] || "普通",
     certification: item.isCertified ? "教师已确认" : "待教师确认",

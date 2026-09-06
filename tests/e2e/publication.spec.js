@@ -31,6 +31,43 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("screen highlights real corrections, coalesces consecutive edits and resets on date switch", async ({browser, request}, testInfo) => {
+  const response = await request.post(`${api}/api/v2/publications`, {data: {type: "ASSIGNMENT", subjectId: "math", boardDate: "2026-09-07",
+    content: "练习册第10页", title: "数学练习", targetWorkspaceIds: ["class-a"]}});
+  const item = (await response.json()).data;
+  const screen = await openRole(browser, "screen");
+  try {
+    await screen.page.getByLabel("选择日期").fill("2026-09-07");
+    await expect(screen.page.getByText("练习册第10页", {exact: true})).toBeVisible();
+    const banner = screen.page.locator(".screen-homework-changes");
+    await expect(banner).toHaveCount(0);
+    const update = async (revision, data) => {
+      const result = await request.patch(`${api}/api/v2/publications/${item.id}`, {headers: {"If-Match": `"${revision}"`}, data});
+      expect(result.ok()).toBe(true);
+    };
+    await update(1, {content: "练习册第12页"});
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText("正文：练习册第10页 → 练习册第12页");
+    await update(2, {content: "练习册第14页", dueAt: "2026-09-08T10:00:00Z"});
+    await expect(banner).toContainText("正文：练习册第10页 → 练习册第14页");
+    await banner.locator("summary").click();
+    await expect(banner.getByText("原来：练习册第10页", {exact: true})).toBeVisible();
+    await expect(banner.getByText("现在：练习册第14页", {exact: true})).toBeVisible();
+    await screen.page.screenshot({path: testInfo.outputPath("homework-correction.png")});
+    await banner.getByRole("button", {name: "收起提示"}).click();
+    await screen.page.getByRole("button", {name: "刷新", exact: true}).first().click();
+    await expect(banner).toHaveCount(0);
+    await screen.page.getByLabel("选择日期").fill("2026-09-08");
+    await screen.page.getByLabel("选择日期").fill("2026-09-07");
+    await expect(screen.page.getByText("练习册第14页", {exact: true})).toBeVisible();
+    await expect(banner).toHaveCount(0);
+    await update(3, {isCertified: false});
+    await expect.poll(async () => (await (await request.get(`${api}/__test/state`)).json()).data.items[0].revision).toBe(4);
+    await expect(banner).toHaveCount(0);
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("draft read failure preserves original text until explicit retry restores the editor", async ({browser}) => {
   const screen = await openRole(browser, "screen");
   const key = "classworks-v2-screen-homework-draft:screen-a:new";

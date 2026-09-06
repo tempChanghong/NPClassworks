@@ -181,6 +181,7 @@
     />
 
     <HomeworkSubjectStatus />
+    <ScreenHomeworkChanges :font-scale="settings.fontScale" />
 
     <v-progress-linear
       v-if="store.feedLoading && store.feed.length"
@@ -335,6 +336,7 @@ import {computed, onMounted, onUnmounted, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
+import ScreenHomeworkChanges from "@/components/v2/ScreenHomeworkChanges.vue";
 import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
