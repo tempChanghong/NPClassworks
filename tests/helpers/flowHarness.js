@@ -143,6 +143,22 @@ export async function createFlowHarness() {
   reset();
   return {
     api, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    async openSchoolHomeworkSettings() {
+      const {useSchoolHomeworkSettings} = await vite.ssrLoadModule("/src/composables/admin/useSchoolHomeworkSettings.js");
+      const {default: inputs} = await vite.ssrLoadModule("/src/components/admin/AdminHomeworkQuickInputs.vue");
+      const {default: deadlines} = await vite.ssrLoadModule("/src/components/admin/AdminHomeworkQuickDeadlines.vue");
+      const selectedSchoolId = ref("school"), errorMessage = ref(""), successMessage = ref("");
+      let state, inputPanel, deadlinePanel;
+      const app = renderer.createApp({setup() {
+        state = useSchoolHomeworkSettings({selectedSchoolId, errorMessage, successMessage});
+        inputPanel = inputs.setup({manager: state}, {expose() {}});
+        deadlinePanel = deadlines.setup({manager: state}, {expose() {}});
+        return () => null;
+      }});
+      app.provide(ssrContextKey, {});
+      app.mount({}); mounted.push(app);
+      return {state, inputPanel, deadlinePanel, selectedSchoolId, errorMessage, successMessage};
+    },
     async openScreenAccountManager() {
       const {useScreenAccountManager} = await vite.ssrLoadModule("/src/composables/admin/useScreenAccountManager.js");
       const {default: panel} = await vite.ssrLoadModule("/src/components/admin/AdminScreenAccountPanel.vue");
