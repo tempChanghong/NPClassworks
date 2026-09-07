@@ -35,7 +35,11 @@ pnpm test:e2e:fullstack
 
 后端检出必须包含新增的单会话数据库测试；未包含时明确失败，不静默跳过。手动运行工作流可以指定后端分支、标签或 SHA，以便在配套变更合入前检查。
 
-`test-results/fullstack-metadata/versions.json` 记录前后端完整 HEAD SHA 和 dirty 状态；失败时保留 Playwright trace、截图，CI 上传测试目录并保留 7 天。本地 dirty 时，SHA 仅标识基线。它不保证服务器部署代理最终选中的版本恰好等于这对 SHA，也不为后端单独推送新增跨仓部署门槛。
+后端 `.github/workflows/production-deploy.yml` 也设置独立的 `fullstack` 任务，部署必须同时等待 `verify`（普通测试及完整数据库测试）和 `fullstack` 成功。后端单独推送 main 或手动运行部署时，显式检出前端 main 和触发本次运行的后端 `github.sha`；契约测试及三个真实浏览器场景共享这两份检出。任务不访问生产环境密钥。此处复用前端测试命令，不跨仓直接调用默认检出调用者仓库的工作流。
+
+在安装依赖之前，任务校验后端 HEAD 与触发 SHA 相同，并将两端完整 SHA 写入 Actions 摘要和 `test-results/fullstack-metadata/checkout-versions.json`；即使随后安装依赖或测试失败，也尝试上传该记录。前端 main 在检出时确定，运行中不再拉取更新。无需新增 secrets，也不修改服务器部署代理；前端 main 必须已包含全链路测试脚本及其修正，缺失时检查失败并阻止部署。
+
+`test-results/fullstack-metadata/versions.json` 由测试脚本记录前后端完整 HEAD SHA 和 dirty 状态；失败时保留 Playwright trace、截图，CI 上传测试目录并保留 7 天。后端任务的附件名为 `backend-fullstack-test-results`。本地 dirty 时，SHA 仅标识基线。这些记录证明所测试的版本组合，不保证服务器部署代理最终选中的版本恰好等于这对 SHA。
 
 ## 首次编写时的验证状态（2026-09-07）
 
