@@ -1,5 +1,10 @@
 const DEFAULT_RETRY_DELAY = 10_000;
 
+export function notificationDeliveryStorageKey(serverUrl, binding) {
+  if (!binding?.id) return "";
+  return `classworks-v2-notification-delivery:${encodeURIComponent(serverUrl)}:${encodeURIComponent(binding.id)}:${binding.credentialVersion || 1}`;
+}
+
 export function createNotificationDeliveryQueue({
   send,
   schedule = (callback, delay) => setTimeout(callback, delay),
@@ -8,6 +13,8 @@ export function createNotificationDeliveryQueue({
   maxRetryDelay = 5 * 60_000,
   isOnline = () => typeof navigator === "undefined" || navigator.onLine !== false,
   onStateChange = () => {},
+  storage = null,
+  storageKey = "",
 } = {}) {
   if (typeof send !== "function") throw new TypeError("send must be a function");
 
@@ -17,6 +24,39 @@ export function createNotificationDeliveryQueue({
   let disposed = false;
   let failures = 0;
   let blockedStatus = null;
+  let storageError = null;
+  let lastSaved = null;
+
+  function persist() {
+    if (!storage || !storageKey || disposed || storageError === "read") return;
+    const value = JSON.stringify({version: 1, items: [...pending.values()], blockedStatus});
+    if (value === lastSaved && !storageError) return;
+    try {
+      storage.setItem(storageKey, value);
+      lastSaved = value;
+      storageError = null;
+    } catch { storageError = "write"; }
+  }
+
+  function restore() {
+    if (!storage || !storageKey) return;
+    try {
+      const raw = storage.getItem(storageKey);
+      const value = raw === null ? {version: 1, items: [], blockedStatus: null} : JSON.parse(raw);
+      if (value?.version !== 1 || !Array.isArray(value.items) || value.items.some(item =>
+        !item || typeof item.publicationId !== "string" || !item.publicationId || !Number.isInteger(item.revision) || item.revision < 1 ||
+        typeof item.displayed !== "boolean" || typeof item.acknowledged !== "boolean") ||
+        (value.blockedStatus !== null && (!Number.isInteger(value.blockedStatus) || value.blockedStatus < 400 ||
+          value.blockedStatus >= 500 || [408, 429].includes(value.blockedStatus)))) throw new Error("Invalid receipt queue");
+      // Merge known memory entries after disk entries when storage recovers.
+      const known = [...pending.values()];
+      value.items.forEach(merge);
+      known.forEach(merge);
+      blockedStatus = blockedStatus || value.blockedStatus;
+      storageError = null;
+      lastSaved = raw;
+    } catch { storageError = "read"; }
+  }
 
   function getState() {
     return {
@@ -25,6 +65,7 @@ export function createNotificationDeliveryQueue({
       pendingCount: pending.size,
       failures,
       blockedStatus,
+      storageError,
     };
   }
 
@@ -47,9 +88,9 @@ export function createNotificationDeliveryQueue({
   }
 
   async function flush() {
-    if (disposed || blockedStatus || !isOnline() || inFlight || retryTimer !== null || !pending.size) return false;
+    if (disposed || blockedStatus || storageError === "read" || !isOnline() || inFlight || retryTimer !== null || !pending.size) return false;
 
-    const batch = [...pending.values()];
+    const batch = [...pending.values()].slice(0, 100);
     inFlight = true;
     report();
     let succeeded = false;
@@ -77,6 +118,7 @@ export function createNotificationDeliveryQueue({
       }
     } finally {
       inFlight = false;
+      persist();
       report();
     }
 
@@ -84,38 +126,47 @@ export function createNotificationDeliveryQueue({
     return succeeded;
   }
 
-  function enqueue(items) {
-    if (disposed) return;
-    for (const item of Array.isArray(items) ? items : []) {
-      if (!item?.publicationId || !Number.isInteger(item.revision)) continue;
+  function merge(item) {
+      if (typeof item?.publicationId !== "string" || !item.publicationId || !Number.isInteger(item.revision) || item.revision < 1) return;
       const previous = pending.get(item.publicationId);
-      if (previous && previous.revision > item.revision) continue;
+      if (previous && previous.revision > item.revision) return;
       const sameRevision = previous?.revision === item.revision;
       const acknowledged = item.acknowledged === true || (sameRevision && previous.acknowledged);
       pending.set(item.publicationId, {
         publicationId: item.publicationId,
         revision: item.revision,
-        displayed: item.displayed === true || acknowledged || (sameRevision && previous.displayed),
+        displayed: Boolean(item.displayed === true || acknowledged || (sameRevision && previous.displayed)),
         acknowledged: Boolean(acknowledged),
       });
-    }
+  }
+
+  function enqueue(items) {
+    if (disposed) return;
+    (Array.isArray(items) ? items : []).forEach(merge);
+    persist();
     report();
     void flush();
   }
 
   function retryNow() {
+    if (disposed) return false;
+    if (storageError === "read") restore();
+    persist();
     pause();
     failures = 0;
     return flush();
   }
 
   function dispose() {
+    persist();
     disposed = true;
     if (retryTimer !== null) cancel(retryTimer);
     retryTimer = null;
     pending.clear();
   }
 
+  restore();
+  report();
   return {
     dispose,
     enqueue,

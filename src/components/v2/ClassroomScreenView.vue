@@ -3,6 +3,23 @@
     class="classroom-screen-view"
     :style="burnInStyle"
   >
+    <v-alert
+      v-if="deliveryState.storageError || deliveryState.status === 'blocked'"
+      class="mb-3"
+      type="warning"
+      variant="tonal"
+    >
+      {{ deliveryState.storageError
+        ? '通知回执的本机存储异常，待发送记录可能无法在刷新后恢复。请保持页面打开并重试。'
+        : '通知回执被服务器拒绝，已保留待处理记录并停止自动重试。请联系管理员检查大屏权限。' }}
+      <v-btn
+        v-if="deliveryState.storageError"
+        variant="text"
+        @click="retryNotificationDelivery"
+      >
+        重试回执存储
+      </v-btn>
+    </v-alert>
     <v-card
       class="screen-toolbar rounded-xl"
       color="primary"
@@ -351,8 +368,9 @@ import ScreenSyncStatus from "@/components/v2/ScreenSyncStatus.vue";
 import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
 import ScreenNotificationCenter from "@/components/v2/ScreenNotificationCenter.vue";
 import {boardDateRelativeLabel, shiftBoardDate, todayBoardDate} from "@/utils/boardDate";
-import {classworksV2Api} from "@/utils/classworksV2Client";
-import {createNotificationDeliveryQueue} from "@/utils/notificationDeliveryQueue";
+import {classworksV2Api, getClassroomScreenToken} from "@/utils/classworksV2Client";
+import {createNotificationDeliveryQueue, notificationDeliveryStorageKey} from "@/utils/notificationDeliveryQueue";
+import {getServerUrl} from "@/utils/socketClient";
 import {recordDiagnosticEvent, recordDiagnosticSnapshot} from "@/utils/localDiagnostics";
 import {
   alertableScreenNotifications,
@@ -381,11 +399,22 @@ const acknowledgedNoticeKeys = ref(readAcknowledgedNotificationKeys(store.screen
 const burnInStep = ref(0);
 let burnInTimer = null;
 let notificationAlertController = createNotificationAlertController({scopeId: store.screenSession?.binding?.id});
+const deliveryState = ref({});
 function createDeliveryQueue() {
   let reportedBlock = false;
+  const binding = store.screenSession?.binding;
+  const token = getClassroomScreenToken();
   return createNotificationDeliveryQueue({
-    send: (items) => classworksV2Api.acknowledgeScreenNotifications(items),
+    storageKey: notificationDeliveryStorageKey(getServerUrl(), binding),
+    storage: {getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value)},
+    send: (items) => {
+      if (!binding?.id || binding.id !== store.screenSession?.binding?.id || token !== getClassroomScreenToken()) {
+        throw {status: 401};
+      }
+      return classworksV2Api.acknowledgeScreenNotifications(items);
+    },
     onStateChange: (state) => {
+      deliveryState.value = state;
       recordDiagnosticSnapshot("notificationDelivery", state);
       if (state.status === "blocked" && !reportedBlock) {
         reportedBlock = true;
@@ -439,13 +468,14 @@ function updatePerformanceClass() {
   );
 }
 
-watch(bindingId, (id) => {
+watch([bindingId, () => store.screenSession?.binding?.credentialVersion], ([id]) => {
   notificationDeliveryQueue.dispose();
   notificationDeliveryQueue = createDeliveryQueue();
   settings.value = loadScreenDisplaySettings(id);
   acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(id);
   notificationCenterOpen.value = false;
   notificationAlertController = createNotificationAlertController({scopeId: id});
+  retryNotificationDelivery();
 }, {immediate: true});
 
 watch(() => settings.value.performanceMode, updatePerformanceClass);
@@ -526,6 +556,7 @@ onMounted(() => {
   window.addEventListener("keydown", handleShortcut);
   window.addEventListener("online", retryNotificationDelivery);
   window.addEventListener("offline", pauseNotificationDelivery);
+  retryNotificationDelivery();
   burnInTimer = window.setInterval(() => {
     burnInStep.value += 1;
   }, 5 * 60 * 1000);

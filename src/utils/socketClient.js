@@ -1,5 +1,5 @@
 // Lightweight reusable Socket.IO client singleton
-// - Uses server domain from settings when available
+// - Uses the explicit development/build API origin, or the current origin
 // - Exposes join/leave helpers and event on/off wrappers
 
 import {io} from 'socket.io-client';
@@ -26,7 +26,7 @@ function notifyConnectionListeners() {
 export function getServerUrl() {
   const envUrl = import.meta.env.VITE_SERVER_URL;
   // 本地联调必须服从显式开发地址，避免浏览器历史 localStorage 把请求
-  // 继续发送到官方服务器。生产构建仍允许学校设置覆盖默认值。
+  // 继续发送到官方服务器。生产模式使用构建时指定的地址。
   if (import.meta.env.DEV && envUrl) {
     return envUrl;
   }

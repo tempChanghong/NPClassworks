@@ -1,9 +1,130 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createNotificationDeliveryQueue} from "../src/utils/notificationDeliveryQueue.js";
+import {createNotificationDeliveryQueue, notificationDeliveryStorageKey} from "../src/utils/notificationDeliveryQueue.js";
 
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 const receipt = {publicationId: "notice-a", revision: 1, displayed: true};
+
+function persistentStorage() {
+  const values = new Map();
+  return {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)};
+}
+
+test("offline confirmation survives reload even when the notice is absent from the new feed", async () => {
+  const storage = persistentStorage();
+  const original = queueHarness(async () => {}, {storage, storageKey: "binding-a", isOnline: () => false});
+  original.queue.enqueue([{...receipt, acknowledged: true}]);
+  original.queue.dispose();
+  const sent = [];
+  const restored = queueHarness(async items => sent.push(items), {storage, storageKey: "binding-a"});
+  assert.equal(restored.queue.pendingCount(), 1);
+  await restored.queue.retryNow();
+  assert.equal(sent[0][0].acknowledged, true);
+  assert.equal(restored.queue.pendingCount(), 0);
+  restored.queue.dispose();
+});
+
+test("receipt scope separates backend, binding and credential version without storing credentials", () => {
+  const key = notificationDeliveryStorageKey("https://api.example", {id: "a", credentialVersion: 1});
+  assert.notEqual(key, notificationDeliveryStorageKey("https://other.example", {id: "a", credentialVersion: 1}));
+  assert.notEqual(key, notificationDeliveryStorageKey("https://api.example", {id: "b", credentialVersion: 1}));
+  assert.notEqual(key, notificationDeliveryStorageKey("https://api.example", {id: "a", credentialVersion: 2}));
+  assert.equal(notificationDeliveryStorageKey("https://api.example", null), "");
+});
+
+test("a different binding cannot drain persisted receipts and a blocked queue remains blocked after reload", async () => {
+  const storage = persistentStorage();
+  const first = queueHarness(async () => { throw {status: 403}; }, {storage, storageKey: "a"});
+  first.queue.enqueue([receipt]);
+  await settled();
+  first.queue.dispose();
+  let calls = 0;
+  const other = queueHarness(async () => calls++, {storage, storageKey: "b"});
+  assert.equal(other.queue.pendingCount(), 0);
+  const restored = queueHarness(async () => calls++, {storage, storageKey: "a"});
+  await restored.queue.retryNow();
+  assert.equal(restored.queue.getState().blockedStatus, 403);
+  assert.equal(restored.queue.pendingCount(), 1);
+  assert.equal(calls, 0);
+  other.queue.dispose(); restored.queue.dispose();
+});
+
+test("corrupt/unreadable storage is not overwritten and recovery merges known acknowledgements", async () => {
+  for (const broken of ["read", "json"]) {
+    const disk = persistentStorage();
+    const initial = queueHarness(async () => {}, {storage: disk, storageKey: "a", isOnline: () => false});
+    initial.queue.enqueue([receipt]); initial.queue.dispose();
+    const original = disk.getItem("a");
+    let failed = true, writes = 0;
+    const storage = {getItem: key => {
+      if (failed && broken === "read") throw new Error("blocked");
+      return failed ? "{bad" : disk.getItem(key);
+    }, setItem: (key, value) => { writes++; disk.setItem(key, value); }};
+    const sent = [];
+    const h = queueHarness(async items => sent.push(items), {storage, storageKey: "a"});
+    h.queue.enqueue([{publicationId: "other", revision: 1, acknowledged: true}]);
+    assert.equal(h.queue.getState().storageError, "read");
+    assert.equal(writes, 0);
+    assert.equal(disk.getItem("a"), original);
+    failed = false;
+    await h.queue.retryNow();
+    assert.equal(sent[0].length, 2);
+    assert.equal(h.queue.getState().storageError, null);
+    h.queue.dispose();
+  }
+});
+
+test("quota failure keeps memory receipts and reports that persistence failed until retried", async () => {
+  let fail = true;
+  const disk = persistentStorage();
+  const storage = {getItem: disk.getItem, setItem: (key, value) => {
+    if (fail) throw new Error("quota");
+    disk.setItem(key, value);
+  }};
+  const h = queueHarness(async () => {}, {storage, storageKey: "a", isOnline: () => false});
+  h.queue.enqueue([{...receipt, acknowledged: true}]);
+  assert.equal(h.queue.getState().storageError, "write");
+  assert.equal(h.queue.pendingCount(), 1);
+  fail = false;
+  await h.queue.retryNow();
+  assert.equal(h.queue.getState().storageError, null);
+  h.queue.dispose();
+  const restored = queueHarness(async () => {}, {storage, storageKey: "a", isOnline: () => false});
+  assert.equal(restored.queue.pendingCount(), 1);
+  restored.queue.dispose();
+});
+
+test("restored receipts drain in batches of at most 100 and cannot confirm a newer revision", async () => {
+  const storage = persistentStorage();
+  const h = queueHarness(async () => {}, {storage, storageKey: "a", isOnline: () => false});
+  h.queue.enqueue(Array.from({length: 205}, (_, index) => ({publicationId: `notice-${index}`, revision: 1, acknowledged: true})));
+  h.queue.dispose();
+  let online = false;
+  const batches = [];
+  const restored = queueHarness(async items => batches.push(items), {storage, storageKey: "a", isOnline: () => online});
+  restored.queue.enqueue([{publicationId: "notice-0", revision: 2, displayed: true}]);
+  online = true;
+  await restored.queue.retryNow();
+  await settled();
+  assert.deepEqual(batches.map(items => items.length), [100, 100, 5]);
+  assert.equal(batches[0][0].revision, 2);
+  assert.equal(batches[0][0].acknowledged, false);
+  assert.equal(JSON.parse(storage.getItem("a")).items.length, 0);
+  restored.queue.dispose();
+});
+
+test("an old in-flight response after disposal cannot clear restored persisted receipts", async () => {
+  let complete;
+  const storage = persistentStorage();
+  const original = queueHarness(() => new Promise(resolve => { complete = resolve; }), {storage, storageKey: "a"});
+  original.queue.enqueue([receipt]);
+  original.queue.dispose();
+  const restored = queueHarness(async () => {}, {storage, storageKey: "a", isOnline: () => false});
+  restored.queue.enqueue([{...receipt, acknowledged: true}]);
+  complete(); await settled();
+  assert.equal(JSON.parse(storage.getItem("a")).items[0].acknowledged, true);
+  restored.queue.dispose();
+});
 
 function queueHarness(send, options = {}) {
   const timers = new Map();

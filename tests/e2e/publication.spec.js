@@ -31,6 +31,33 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("notification acknowledgement persists across offline reload and replays after the notice leaves the feed", async ({browser, request}) => {
+  await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", title: "回执恢复测试", content: "离线时确认的通知"}});
+  const screen = await openRole(browser, "screen");
+  const key = `classworks-v2-notification-delivery:${encodeURIComponent(api)}:screen-a:1`;
+  try {
+    await expect(screen.page.getByText("离线时确认的通知", {exact: true}).first()).toBeVisible();
+    await screen.page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await expect.poll(() => screen.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await screen.context.setOffline(true);
+    await screen.page.getByRole("button", {name: "通知", exact: true}).first().click();
+    await screen.page.getByRole("dialog").getByRole("button", {name: "知道了", exact: true}).click();
+    const read = () => screen.page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
+    expect((await read()).items.some(item => item.acknowledged)).toBe(true);
+    const reload = await screen.page.reload({waitUntil: "domcontentloaded"});
+    expect(reload.fromServiceWorker()).toBe(true);
+    await expect(screen.page.getByRole("button", {name: "录入作业", exact: true}).first()).toBeVisible();
+    expect((await read()).items.some(item => item.acknowledged)).toBe(true);
+    await request.post(`${api}/__test/reset`);
+    const delivered = screen.page.waitForResponse(response => response.url().endsWith("/notification-deliveries") &&
+      response.request().method() === "POST" && response.request().postDataJSON().items.some(item => item.acknowledged));
+    await screen.context.setOffline(false);
+    expect((await delivered).ok()).toBe(true);
+    await expect.poll(async () => (await read()).items.length).toBe(0);
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("screen enlarges complete homework, preserves scroll/focus and follows live corrections", async ({browser, request}, testInfo) => {
   const original = "放大正文第一行\n" + "保留完整正文和换行\n".repeat(90) + "放大正文最后一行";
   const response = await request.post(`${api}/api/v2/publications`, {data: {type: "ASSIGNMENT", subjectId: "math", boardDate: "2026-09-07",
