@@ -31,6 +31,8 @@ pnpm test:e2e:fullstack
 
 ## CI 与版本记录
 
+嵌套检出的 `.contract-backend` 必须使用 `pnpm install --frozen-lockfile --ignore-workspace` 安装依赖。普通安装会发现父目录的前端 `pnpm-workspace.yaml`，即使成功退出，也可能没有安装后端依赖，随后契约测试会报 `dotenv` 无法解析。前后端部署工作流均需要此隔离参数；不能用已安装依赖的同级后端代替此场景的验证。
+
 现有可复用 `.github/workflows/contracts.yml` 先执行契约测试，再安装 Chromium 并运行全链路命令。两步使用同一份后端检出。前端 PR 检查和生产部署都已引用该工作流；生产 deploy 等待整个任务成功，无需改部署代理。
 
 后端检出必须包含新增的单会话数据库测试；未包含时明确失败，不静默跳过。手动运行工作流可以指定后端分支、标签或 SHA，以便在配套变更合入前检查。
@@ -69,3 +71,11 @@ pnpm test:e2e:fullstack
 通过时的代码基线：前端 `01fd6557d0e4376d67ecca2fb01d29b5f20e45a9` 加本轮未提交的测试环境修正（dirty=true）；后端 `1bbb1e11fac90faeb415b24c947ef07a193b0d28`（dirty=false）。记录位于 test-results/fullstack-metadata/versions.json；输出日志为 fullstack-actual.log。版本冲突日志中的 409 为预期断言，不是遗漏的失败。
 
 全部临时测试容器和网络已清理。此次未执行后端完整 test:database 清单，也未在 GitHub 远程触发工作流；未推送、部署或连接生产数据库，没有业务逻辑或数据库结构变更。
+
+## Actions 故障修复复核（2026-09-07）
+
+- 使用无 node_modules 的两仓源码归档，在 Linux 容器中按 CI 目录结构嵌套检出，运行 Node 22.23.2 和 pnpm 10.33.0：原安装命令复现后端 dotenv 缺失；加入 `--ignore-workspace` 后，两项真实路由/Socket 契约测试通过。
+- 后端周总览数据库测试的种子缺少必填 content。补齐测试正文后，完整 PostgreSQL 套件 69 项通过、0 跳过，包含周总览查询及分页；未放宽数据库字段约束。
+- 本地真实全链路重新执行：单会话数据库回归及三个 Playwright 场景通过。此项使用本机 Node 24.14.1，Linux Node 22 的独立验证覆盖上述依赖安装和契约测试。
+- 后端 Docker 镜像本地构建通过。发布工作流默认使用当前仓库的 GHCR 路径，仅在 Docker Hub 用户名与令牌均配置时增加 Docker Hub 登录和镜像目标；本地未验证远程仓库推送权限。
+- 验证日志保存在被 Git 忽略的 test-results/ci-clean.log、ci-database.log、ci-fullstack.log、ci-backend-unit.log、ci-docker-build.log。未触发远程 Actions、推送或部署；部署仍必须等待全部既有门槛通过。

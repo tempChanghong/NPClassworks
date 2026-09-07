@@ -9,6 +9,14 @@ const pagesDeploy = fs.readFileSync(new URL("../.github/workflows/deploy.yml", i
 const storeDeploy = fs.readFileSync(new URL("../.github/workflows/store-pwa.yml", import.meta.url), "utf8");
 const sentryConfig = fs.readFileSync(new URL("../src/utils/sentry.js", import.meta.url), "utf8");
 
+test("cross-repository checks install backend dependencies outside the parent pnpm workspace", () => {
+  const workflow = fs.readFileSync(new URL("../.github/workflows/contracts.yml", import.meta.url), "utf8");
+  assert.match(workflow, /run: pnpm install --frozen-lockfile --ignore-workspace\r?\n\s*working-directory: \.contract-backend/);
+  assert.match(workflow, /run: pnpm test:contracts/);
+  assert.match(workflow, /run: pnpm test:e2e:fullstack/);
+  assert.doesNotMatch(workflow, /continue-on-error: true/);
+});
+
 test("production image builds the PWA and serves only its static output", () => {
   assert.match(dockerfile, /FROM node:22-alpine AS build/);
   assert.match(dockerfile, /ARG VITE_DEFAULT_KV_SERVER=/);
