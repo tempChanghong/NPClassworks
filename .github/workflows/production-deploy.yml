@@ -13,6 +13,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  contracts:
+    uses: ./.github/workflows/contracts.yml
+
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -52,7 +55,7 @@ jobs:
           retention-days: 7
 
   deploy:
-    needs: [verify, browser]
+    needs: [verify, browser, contracts]
     runs-on: ubuntu-latest
     environment: production
     steps:

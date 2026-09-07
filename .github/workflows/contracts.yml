@@ -1,0 +1,40 @@
+name: Frontend and backend contracts
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      backend_ref:
+        description: Backend branch, tag or commit to check
+        default: main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: tempChanghong/NPClassworksKV
+          ref: ${{ inputs.backend_ref || 'main' }}
+          path: .contract-backend
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+        working-directory: .contract-backend
+      - name: Test actual consumer and producer modules
+        run: pnpm test:contracts
+        env:
+          CLASSWORKS_BACKEND_ROOT: ${{ github.workspace }}/.contract-backend

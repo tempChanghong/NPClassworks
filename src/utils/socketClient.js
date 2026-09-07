@@ -83,6 +83,15 @@ export function getSocket() {
         context: {serverOrigin: (() => { try { return new URL(serverUrl).origin; } catch { return ""; } })()},
       });
     });
+    socket.on("workspaces-join-error", (error) => {
+      recordDiagnosticEvent({category: "REALTIME", severity: "WARNING", code: "WORKSPACE_JOIN_FAILED",
+        message: "实时订阅未完成，请尝试刷新页面", context: {reason: error?.reason || "unknown"}});
+    });
+    socket.on("workspaces-joined", (result) => {
+      if (result?.rejectedWorkspaceIds?.length) recordDiagnosticEvent({category: "REALTIME", severity: "WARNING",
+        code: "WORKSPACE_JOIN_REJECTED", message: "部分班级未能订阅实时更新",
+        context: {rejectedCount: result.rejectedWorkspaceIds.length}});
+    });
 
     // Re-attach previously registered event handlers on new socket instance
     listeners.forEach(({event, handler}) => {
@@ -111,9 +120,14 @@ export function off(event, handler) {
 }
 
 export function joinWorkspaces(workspaceIds) {
-  const s = getSocket();
   if (!Array.isArray(workspaceIds) || workspaceIds.length === 0) return;
-  s.emit('join-workspaces', {workspaceIds});
+  const ids = [...new Set(workspaceIds.filter(id => typeof id === 'string').map(id => id.trim()).filter(Boolean))];
+  if (!ids.length) return;
+  const s = getSocket();
+  // The server limits each join request to 20, not the total subscribed rooms.
+  for (let offset = 0; offset < ids.length; offset += 20) {
+    s.emit('join-workspaces', {workspaceIds: ids.slice(offset, offset + 20)});
+  }
 }
 
 export function leaveWorkspaces(workspaceIds = null) {

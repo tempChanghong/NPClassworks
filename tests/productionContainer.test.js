@@ -36,7 +36,9 @@ test("production deployment requires frontend and browser checks before requesti
   assert.match(productionDeploy, /push:[\s\S]*branches: \["main"\]/);
   assert.match(productionDeploy, /pnpm test/);
   assert.match(productionDeploy, /pnpm run build/);
-  assert.match(productionDeploy, /deploy:\s*\n\s*needs: \[verify, browser\]/);
+  const dependencies = productionDeploy.match(/deploy:\s*\n\s*needs: \[([^\]]+)\]/)?.[1].split(",").map(value => value.trim());
+  for (const job of ["verify", "browser", "contracts"]) assert.ok(dependencies?.includes(job), `deploy must wait for ${job}`);
+  assert.match(productionDeploy, /contracts:\s*\n\s*uses: \.\/\.github\/workflows\/contracts.yml/);
   const browserJob = productionDeploy.replaceAll("\r\n", "\n").split("\n  browser:\n")[1]?.split("\n  deploy:\n")[0];
   assert.ok(browserJob, "production must define its own browser gate for main pushes");
   assert.match(browserJob, /pnpm exec playwright install --with-deps chromium/);
