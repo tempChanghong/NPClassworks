@@ -104,7 +104,7 @@ export async function createFlowHarness() {
     const store = useClassworksV2Store(pinia);
     if (screen) {
       api.saveClassroomScreenToken("screen-a-token");
-      store.screenSession = {binding: {id: "screen-a"}, workspaces: [workspace]};
+      store.screenSession = {binding: {id: "screen-a"}, workspaces: [workspace], subjects: [{id: "math", name: "数学"}]};
       store.feedAudience = "screen";
       store.studentSubjects = [{id: "math", name: "数学"}];
     }

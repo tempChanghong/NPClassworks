@@ -453,7 +453,7 @@ const priorities = [
   {title: "重要", value: "IMPORTANT"},
   {title: "紧急", value: "URGENT"},
 ];
-const eligibleSubjects = computed(() => store.studentSubjects.filter(
+const eligibleSubjects = computed(() => (store.screenSession?.subjects || []).filter(
   (subject) => store.eligibleScreenWorkspaces(subject.id).length > 0,
 ));
 const eligibleTargets = computed(() => store.eligibleScreenWorkspaces(form.subjectId));

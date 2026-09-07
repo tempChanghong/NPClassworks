@@ -182,7 +182,10 @@ export const screenSyncActions = {
     const context = screenSyncContexts.get(this);
     try {
       if (command.type === "REFRESH_DATA") {
-        await Promise.all([this.bootstrapClassroomScreen({isCurrent}), this.loadScreenFeed({isCurrent})]);
+        // Configuration may change the workspace scope used by the feed request.
+        await this.bootstrapClassroomScreen({isCurrent});
+        if (!isCurrent()) return;
+        await this.loadScreenFeed({isCurrent});
         if (!isCurrent()) return;
         await classworksV2Api.acknowledgeClassroomScreenCommand(command.id, {
           success: true,

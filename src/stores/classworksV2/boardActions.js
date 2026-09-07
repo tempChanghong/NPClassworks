@@ -1,4 +1,4 @@
-import {classworksV2Api, clearClassroomScreenToken, describeApiError} from "@/utils/classworksV2Client";
+import {classworksV2Api, clearClassroomScreenToken, describeApiError, getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {joinWorkspaces, leaveWorkspaces, on as socketOn, onConnect} from "@/utils/socketClient";
 import {publicationTransitionDelay, sanitizeCourseGroupIds} from "@/utils/classworksSelection";
 import {sanitizeBoardDate, todayBoardDate} from "@/utils/boardDate";
@@ -213,20 +213,28 @@ export const boardActions = {
   async loadScreenFeed({isCurrent = () => true} = {}) {
     if (!this.screenSession || !isCurrent()) return;
     const requestId = ++feedRequest;
+    const bindingId = this.screenSession.binding.id;
+    const boardDate = this.boardDate;
+    const token = getClassroomScreenToken();
+    const workspaceScope = () => JSON.stringify([...this.activeWorkspaceIds].sort());
+    const workspaceIds = workspaceScope();
+    const current = () => requestId === feedRequest && this.feedAudience === "screen" && isCurrent()
+      && this.screenSession?.binding?.id === bindingId && this.boardDate === boardDate
+      && getClassroomScreenToken() === token && workspaceScope() === workspaceIds;
     this.feedLoading = true;
     this.feedLoadError = "";
     this.feedUsingCache = false;
     try {
-      const result = await classworksV2Api.classroomScreenFeed(this.boardDate);
-      if (requestId !== feedRequest || this.feedAudience !== "screen" || !isCurrent()) return;
+      const result = await classworksV2Api.classroomScreenFeed(boardDate);
+      if (!current()) return;
       this.feed = result.items || [];
       this.feedGeneratedAt = result.generatedAt;
-      saveCachedScreenFeed(this.screenSession.binding.id, this.boardDate, result);
+      saveCachedScreenFeed(bindingId, boardDate, result);
       this.scheduleFeedTransition(result.nextTransitionAt);
     } catch (error) {
-      if (requestId !== feedRequest || this.feedAudience !== "screen" || !isCurrent()) return;
+      if (!current()) return;
       const cached = isTransientScreenRequestError(error)
-        ? loadCachedScreenFeed(this.screenSession?.binding?.id, this.boardDate)
+        ? loadCachedScreenFeed(bindingId, boardDate)
         : null;
       if (cached) {
         this.feed = cached.items || [];

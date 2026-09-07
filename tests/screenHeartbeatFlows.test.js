@@ -127,7 +127,7 @@ for (const replacement of ["binding", "same-binding-restart", "token", "stop"]) 
   });
 }
 
-test("refresh command's late session and feed responses cannot overwrite a replacement binding", async () => {
+test("refresh command's late session cannot overwrite a replacement binding or start its feed request", async () => {
   const response = deferred();
   h.routes.set(heartbeat, (_req, reply) => reply({receivedAt: "old", commands: [{id: "refresh", type: "REFRESH_DATA"}]}));
   h.routes.set("GET /api/v2/classroom-screens/session", async (_req, reply) => {
@@ -139,7 +139,7 @@ test("refresh command's late session and feed responses cannot overwrite a repla
   const store = h.newStore({screen: true});
   store.initializeScreenSync();
   try {
-    await eventually(() => assert.equal(h.requests.length, 3));
+    await eventually(() => assert.equal(h.requests.length, 2));
     store.screenSession = {binding: {id: "screen-b"}, workspaces: []};
     store.feed = [{id: "new-content"}];
     store.screenLoading = false; store.feedLoading = false;
@@ -151,6 +151,7 @@ test("refresh command's late session and feed responses cannot overwrite a repla
     assert.equal(store.screenLoading, false);
     assert.equal(store.feedLoading, false);
     assert.equal(h.storage.getItem("classworks-v2-screen-session-cache"), null);
+    assert.equal(h.requests.filter(req => req.path.endsWith("/feed")).length, 0);
     assert.equal(h.requests.filter(req => req.path.includes("/commands/")).length, 0);
   } finally { store.stopScreenSync(); response.resolve(); await pause(); }
 });
@@ -204,6 +205,10 @@ test("healthy refresh command updates configuration and content before acknowled
   h.routes.set("GET /api/v2/classroom-screens/session", (_req, reply) => reply({binding: {id: "screen-a"}, workspaces: [], marker: "updated"}));
   h.publications.push({id: "latest"});
   const store = h.newStore({screen: true});
+  h.routes.set("GET /api/v2/classroom-screens/feed", (_req, reply) => {
+    assert.equal(store.screenSession.marker, "updated", "feed must start after applying the new configuration");
+    reply({items: h.publications, generatedAt: new Date().toISOString()});
+  });
   h.routes.set("POST /api/v2/classroom-screens/commands/refresh/ack", (req, reply) => {
     assert.equal(store.screenSession.marker, "updated");
     assert.equal(store.feed[0].id, "latest");
@@ -237,11 +242,11 @@ test("a reload acknowledgement arriving after stop cannot schedule a page reload
   } finally { response.resolve(); store.stopScreenSync(); }
 });
 
-test("stopping a pending refresh command clears its loading state without applying late content", async () => {
+test("stopping a refresh during its feed step clears loading without applying late content", async () => {
   const response = deferred();
   h.routes.set(heartbeat, (_req, reply) => reply({receivedAt: "now", commands: [{id: "refresh", type: "REFRESH_DATA"}]}));
-  h.routes.set("GET /api/v2/classroom-screens/session", async (_req, reply) => {
-    await response.promise; reply({binding: {id: "screen-a"}, marker: "late"});
+  h.routes.set("GET /api/v2/classroom-screens/session", (_req, reply) => {
+    reply({binding: {id: "screen-a"}, workspaces: [h.workspace], marker: "updated"});
   });
   h.routes.set("GET /api/v2/classroom-screens/feed", async (_req, reply) => {
     await response.promise; reply({items: [{id: "late"}]});
@@ -249,17 +254,19 @@ test("stopping a pending refresh command clears its loading state without applyi
   const store = h.newStore({screen: true});
   store.initializeScreenSync();
   try {
-    await eventually(() => assert.equal(h.requests.length, 3));
-    assert.equal(store.screenLoading, true);
+    await eventually(() => assert.equal(h.requests.filter(req => req.path.endsWith("/feed")).length, 1));
+    const requestCount = h.requests.length;
+    assert.equal(store.screenLoading, false);
     assert.equal(store.feedLoading, true);
     store.stopScreenSync(); response.resolve();
     await eventually(() => {
       assert.equal(store.screenLoading, false);
       assert.equal(store.feedLoading, false);
     });
-    assert.equal(store.screenSession.marker, undefined);
+    assert.equal(store.screenSession.marker, "updated");
     assert.equal(store.feed.length, 0);
-    assert.equal(h.requests.length, 3);
+    assert.equal(h.requests.length, requestCount);
+    assert.equal(h.requests.filter(req => req.path.includes("/commands/")).length, 0);
   } finally { response.resolve(); store.stopScreenSync(); }
 });
 

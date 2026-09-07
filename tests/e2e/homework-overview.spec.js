@@ -64,6 +64,18 @@ test("real-shaped screen session resolves missing subject names; new homework is
     await board.context.setOffline(true);
     await board.page.reload();
     await expect(board.page.getByText("数学 · 高一一班：1 项作业", {exact: true})).toBeVisible();
+    await board.page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    const composer = board.page.locator(".screen-composer");
+    await composer.getByRole("button", {name: "数学", exact: true}).click();
+    await composer.getByRole("textbox", {name: "作业内容 作业内容", exact: true}).fill("断网刷新后继续录入的作业");
+    await composer.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(composer).not.toBeVisible();
+    await expect.poll(() => board.page.evaluate(() => {
+      const queued = JSON.parse(localStorage.getItem("classworks-v2-screen-publication-queue:screen-a") || "[]");
+      return queued.some(item => item.input.content === "断网刷新后继续录入的作业");
+    })).toBe(true);
+    await board.context.setOffline(false);
+    await expect(board.page.getByText("断网刷新后继续录入的作业", {exact: true})).toBeVisible();
     expect(board.errors).toEqual([]);
   } finally { await board.context.close(); }
 });

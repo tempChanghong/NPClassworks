@@ -37,6 +37,22 @@ test("offline composer saves durably, closes only after success, and uploads onc
   assert.equal(upload.headers["x-classworks-screen-token"], "screen-a-token");
 });
 
+test("offline composer uses the screen catalog even when the student catalog is missing or belongs to another school", async () => {
+  const store = h.newStore({screen: true});
+  store.screenNetworkOnline = false;
+  store.studentSubjects = [];
+  const {state} = await fillComposer();
+  assert.deepEqual(state.eligibleSubjects.value.map(item => item.name), ["数学"]);
+  store.studentSubjects = [{id: "unrelated", name: "其他学校的科目"}];
+  await nextTick();
+  assert.deepEqual(state.eligibleSubjects.value.map(item => item.name), ["数学"]);
+  await state.save();
+  assert.equal(h.queue.loadScreenPublicationQueue("screen-a")[0].context.subjectName, "数学");
+  store.screenSession = {binding: {id: "screen-b"}, workspaces: []};
+  await nextTick();
+  assert.deepEqual(state.eligibleSubjects.value, []);
+});
+
 test("storage failure leaves the composer open, retains input and draft, and emits no success", async () => {
   const store = h.newStore({screen: true});
   store.screenNetworkOnline = false;
