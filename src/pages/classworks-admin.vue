@@ -1048,274 +1048,13 @@
                 </div>
               </v-card-text>
             </v-card>
-
-            <v-row>
-              <v-col
-                cols="12"
-                lg="4"
-              >
-                <v-card class="rounded-xl">
-                  <v-card-title class="pa-5 pb-2">
-                    创建大屏账号
-                  </v-card-title>
-                  <v-card-text class="px-5 pb-5">
-                    <v-text-field
-                      v-model.trim="newScreenName"
-                      label="设备名称"
-                      placeholder="例如：高二1班一体机"
-                      variant="outlined"
-                    />
-                    <v-text-field
-                      v-model.trim="newScreenLoginCode"
-                      hint="3～32位字母、数字、点、横线或下划线"
-                      label="大屏短账号"
-                      persistent-hint
-                      variant="outlined"
-                    />
-                    <v-text-field
-                      v-model="newScreenPin"
-                      hint="4～8位数字；请交给班主任或管理员保管"
-                      label="大屏 PIN"
-                      persistent-hint
-                      type="password"
-                      variant="outlined"
-                    />
-                    <v-select
-                      v-model="newScreenAdministrativeClassId"
-                      :items="administrativeClassOptions"
-                      item-title="title"
-                      item-value="value"
-                      label="绑定行政班"
-                      variant="outlined"
-                    />
-                    <v-btn
-                      block
-                      color="primary"
-                      :loading="screenBusy"
-                      prepend-icon="mdi-monitor-plus"
-                      @click="createScreenAccount"
-                    >
-                      创建账号
-                    </v-btn>
-                  </v-card-text>
-                </v-card>
-              </v-col>
-              <v-col
-                cols="12"
-                lg="8"
-              >
-                <v-card class="rounded-xl">
-                  <v-card-title class="d-flex align-center pa-5">
-                    已分配大屏
-                    <v-spacer />
-                    <v-btn
-                      :loading="screenBusy"
-                      icon="mdi-refresh"
-                      variant="text"
-                      @click="loadScreenAccounts"
-                    />
-                  </v-card-title>
-                  <v-card-text class="account-filter-bar px-5 pb-2 pt-0">
-                    <v-text-field
-                      v-model.trim="screenSearch"
-                      clearable
-                      hide-details
-                      label="搜索设备、账号或班级"
-                      prepend-inner-icon="mdi-magnify"
-                      variant="outlined"
-                    />
-                    <v-select
-                      v-model="screenStatusFilter"
-                      hide-details
-                      :items="screenStatusOptions"
-                      item-title="title"
-                      item-value="value"
-                      label="值守状态"
-                      variant="outlined"
-                    />
-                  </v-card-text>
-                  <v-list
-                    class="admin-entity-list"
-                    lines="three"
-                  >
-                    <template
-                      v-for="screen in filteredScreenAccounts"
-                      :key="screen.id"
-                    >
-                      <v-list-item
-                        :subtitle="screenAccountSummary(screen)"
-                        :title="screen.name"
-                      >
-                        <template #prepend>
-                          <v-avatar :color="screenDutyColor(screen.dutyState)">
-                            <v-icon icon="mdi-monitor-dashboard" />
-                          </v-avatar>
-                        </template>
-                        <template #append>
-                          <div class="admin-row-actions admin-row-actions--desktop">
-                            <v-chip
-                              :color="screenDutyColor(screen.dutyState)"
-                              size="small"
-                              variant="tonal"
-                            >
-                              {{ screenDutyName(screen.dutyState) }}
-                            </v-chip>
-                            <v-btn
-                              :disabled="!['ONLINE', 'DEGRADED'].includes(screen.dutyState)"
-                              size="small"
-                              variant="text"
-                              @click="issueScreenCommand(screen, 'REFRESH_DATA')"
-                            >
-                              刷新数据
-                            </v-btn>
-                            <v-btn
-                              :disabled="!['ONLINE', 'DEGRADED'].includes(screen.dutyState)"
-                              size="small"
-                              variant="text"
-                              @click="issueScreenCommand(screen, 'RELOAD_APP')"
-                            >
-                              重载页面
-                            </v-btn>
-                            <v-btn
-                              size="small"
-                              variant="text"
-                              @click="openScreenEdit(screen)"
-                            >
-                              编辑
-                            </v-btn>
-                            <v-btn
-                              color="warning"
-                              size="small"
-                              variant="text"
-                              @click="resetScreenDevice(screen)"
-                            >
-                              重置设备
-                            </v-btn>
-                            <v-btn
-                              :color="screen.isActive ? 'error' : 'success'"
-                              size="small"
-                              variant="text"
-                              @click="setScreenActive(screen, !screen.isActive)"
-                            >
-                              {{ screen.isActive ? "停用" : "启用" }}
-                            </v-btn>
-                          </div>
-                          <div class="admin-row-actions admin-row-actions--mobile">
-                            <v-chip
-                              :color="screenDutyColor(screen.dutyState)"
-                              size="small"
-                              variant="tonal"
-                            >
-                              {{ screenDutyName(screen.dutyState) }}
-                            </v-chip>
-                            <v-menu>
-                              <template #activator="{ props: menuProps }">
-                                <v-btn
-                                  v-bind="menuProps"
-                                  icon="mdi-dots-vertical"
-                                  title="大屏操作"
-                                  variant="text"
-                                />
-                              </template>
-                              <v-list density="comfortable">
-                                <v-list-item
-                                  :disabled="!['ONLINE', 'DEGRADED'].includes(screen.dutyState)"
-                                  prepend-icon="mdi-refresh"
-                                  title="刷新数据"
-                                  @click="issueScreenCommand(screen, 'REFRESH_DATA')"
-                                />
-                                <v-list-item
-                                  :disabled="!['ONLINE', 'DEGRADED'].includes(screen.dutyState)"
-                                  prepend-icon="mdi-reload"
-                                  title="重载页面"
-                                  @click="issueScreenCommand(screen, 'RELOAD_APP')"
-                                />
-                                <v-list-item
-                                  prepend-icon="mdi-pencil-outline"
-                                  title="编辑账号"
-                                  @click="openScreenEdit(screen)"
-                                />
-                                <v-list-item
-                                  class="text-warning"
-                                  prepend-icon="mdi-monitor-off"
-                                  title="重置设备绑定"
-                                  @click="resetScreenDevice(screen)"
-                                />
-                                <v-list-item
-                                  :class="screen.isActive ? 'text-error' : 'text-success'"
-                                  :prepend-icon="screen.isActive ? 'mdi-cancel' : 'mdi-check-circle-outline'"
-                                  :title="screen.isActive ? '停用账号' : '启用账号'"
-                                  @click="setScreenActive(screen, !screen.isActive)"
-                                />
-                              </v-list>
-                            </v-menu>
-                          </div>
-                        </template>
-                      </v-list-item>
-                      <v-divider />
-                    </template>
-                  </v-list>
-                  <v-empty-state
-                    v-if="!filteredScreenAccounts.length && !screenBusy"
-                    icon="mdi-monitor-off"
-                    :text="screenSearch || screenStatusFilter !== 'ALL' ? '没有符合筛选条件的大屏' : '当前学校还没有大屏账号'"
-                  />
-                </v-card>
-              </v-col>
-            </v-row>
           </template>
 
-          <v-dialog
-            v-model="screenEditDialog"
-            max-width="560"
-          >
-            <v-card class="rounded-xl">
-              <v-card-title class="pa-5 pb-2">
-                编辑大屏账号
-              </v-card-title>
-              <v-card-text class="px-5">
-                <v-text-field
-                  v-model.trim="screenEdit.name"
-                  label="设备名称"
-                  variant="outlined"
-                />
-                <v-text-field
-                  v-model.trim="screenEdit.loginCode"
-                  label="大屏短账号"
-                  variant="outlined"
-                />
-                <v-select
-                  v-model="screenEdit.administrativeClassId"
-                  :items="administrativeClassOptions"
-                  item-title="title"
-                  item-value="value"
-                  label="绑定行政班"
-                  variant="outlined"
-                />
-                <v-text-field
-                  v-model="screenEdit.pin"
-                  hint="留空则保留当前 PIN"
-                  label="新 PIN（可选）"
-                  persistent-hint
-                  type="password"
-                  variant="outlined"
-                />
-              </v-card-text>
-              <v-card-actions class="px-5 pb-5">
-                <v-spacer />
-                <v-btn @click="screenEditDialog = false">
-                  取消
-                </v-btn>
-                <v-btn
-                  color="primary"
-                  :loading="screenBusy"
-                  @click="saveScreenAccount"
-                >
-                  保存
-                </v-btn>
-              </v-card-actions>
-            </v-card>
-          </v-dialog>
+          <AdminScreenAccountPanel
+            :accounts-visible="!(adminMembershipsStatus === 'loaded' && !managerMemberships.length)"
+            :administrative-class-options="administrativeClassOptions"
+            :manager="screenManager"
+          />
         </v-window-item>
 
         <v-window-item value="migration">
@@ -1661,6 +1400,8 @@ import {onBeforeRouteLeave, useRoute, useRouter} from "vue-router";
 import ValidationReport from "@/components/v2/ValidationReport.vue";
 import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
 import AdminNavigationPanel from "@/components/admin/AdminNavigationPanel.vue";
+import AdminScreenAccountPanel from "@/components/admin/AdminScreenAccountPanel.vue";
+import {useScreenAccountManager} from "@/composables/admin/useScreenAccountManager";
 import AdminAccountPanel from "@/components/admin/AdminAccountPanel.vue";
 import AcademicStructureManager from "@/components/admin/AcademicStructureManager.vue";
 import TeachingRelationshipOverview from "@/components/admin/TeachingRelationshipOverview.vue";
@@ -1765,25 +1506,14 @@ const newAdminUsername = ref("");
 const newAdminName = ref("");
 const newAdminPin = ref("");
 const newAdminRole = ref("ADMIN");
-const screenAccounts = ref([]);
-const screenBusy = ref(false);
-const screenSearch = ref("");
-const screenStatusFilter = ref("ALL");
 const homeworkSettingsBusy = ref(false);
 const homeworkQuickDeadlines = ref(DEFAULT_HOMEWORK_QUICK_DEADLINES.map((item) => ({...item})));
 const homeworkQuickInputs = ref(DEFAULT_HOMEWORK_QUICK_INPUTS.map((item) => ({...item, subjectIds: []})));
 const homeworkQuickInputSubjects = ref([]);
-const newScreenName = ref("");
-const newScreenLoginCode = ref("");
-const newScreenPin = ref("");
-const newScreenAdministrativeClassId = ref("");
-const screenEditDialog = ref(false);
-const editingScreenId = ref("");
-const screenEdit = ref({name: "", loginCode: "", pin: "", administrativeClassId: ""});
-const screenEditSnapshot = ref("");
 const homeworkSettingsSnapshot = ref("");
-let screenDutyTimer = null;
 const {undoOffer, undoBusy, remainingSeconds, offerUndo, executeUndo, clearUndo} = useTimedUndo();
+const screenManager = useScreenAccountManager({selectedSchoolId, errorMessage, successMessage, offerUndo});
+const {loadScreenAccounts, hasUnsavedChanges: screenHasUnsavedChanges, startDutyPolling, stopDutyPolling} = screenManager;
 
 const adminNavigationGroups = [
   {
@@ -1822,15 +1552,6 @@ const accountStatusOptions = [
   {title: "管理员", value: "ADMIN"},
   {title: "教师", value: "TEACHER"},
 ];
-const screenStatusOptions = [
-  {title: "全部状态", value: "ALL"},
-  {title: "在线", value: "ONLINE"},
-  {title: "需关注", value: "DEGRADED"},
-  {title: "离线", value: "OFFLINE"},
-  {title: "未激活", value: "NOT_ACTIVATED"},
-  {title: "已停用", value: "DISABLED"},
-];
-
 const termBusy = ref(false);
 const cloneSourceTermId = ref("");
 const cloneTermName = ref("");
@@ -1971,12 +1692,7 @@ const currentSectionHasUnsavedChanges = computed(() => {
   if (tab.value === "accounts") {
     return Boolean(newAdminUsername.value || newAdminName.value || newAdminPin.value);
   }
-  if (tab.value === "screens") {
-    return Boolean(
-      newScreenName.value || newScreenLoginCode.value || newScreenPin.value || newScreenAdministrativeClassId.value ||
-      screenEditDialog.value && JSON.stringify(screenEdit.value) !== screenEditSnapshot.value
-    );
-  }
+  if (tab.value === "screens") return screenHasUnsavedChanges.value;
   return false;
 });
 
@@ -2014,19 +1730,6 @@ const guardedTermId = computed({
     selectedTermId.value = value;
   },
 });
-const filteredScreenAccounts = computed(() => {
-  const keyword = screenSearch.value.toLowerCase();
-  return screenAccounts.value.filter((screen) => {
-    const matchesText = !keyword || [
-      screen.name,
-      screen.loginCode,
-      screen.administrativeClass?.name,
-      screen.administrativeClass?.code,
-    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(keyword));
-    return matchesText && (screenStatusFilter.value === "ALL" || screen.dutyState === screenStatusFilter.value);
-  });
-});
-
 function roleName(role) {
   return {OWNER: "所有者", ADMIN: "管理员", MANAGER: "管理", TEACHER: "教师", ASSISTANT: "助教", VIEWER: "只读"}[role] || role;
 }
@@ -2427,22 +2130,6 @@ async function loadLocalAccounts() {
   }
 }
 
-async function loadScreenAccounts() {
-  if (!selectedSchoolId.value) {
-    screenAccounts.value = [];
-    return;
-  }
-  screenBusy.value = true;
-  try {
-    screenAccounts.value = await classworksV2Api.classroomScreens(selectedSchoolId.value);
-  } catch (error) {
-    screenAccounts.value = [];
-    errorMessage.value = describeApiError(error, "加载大屏账号失败");
-  } finally {
-    screenBusy.value = false;
-  }
-}
-
 async function loadSchoolHomeworkSettings() {
   if (!selectedSchoolId.value) {
     resetHomeworkQuickDeadlines();
@@ -2544,163 +2231,6 @@ async function saveSchoolHomeworkSettings() {
     errorMessage.value = describeApiError(error, "保存作业快捷时间失败");
   } finally {
     homeworkSettingsBusy.value = false;
-  }
-}
-
-async function createScreenAccount() {
-  screenBusy.value = true;
-  errorMessage.value = "";
-  try {
-    const created = await classworksV2Api.createClassroomScreenAccount(selectedSchoolId.value, {
-      name: newScreenName.value,
-      loginCode: newScreenLoginCode.value,
-      pin: newScreenPin.value,
-      administrativeClassId: newScreenAdministrativeClassId.value,
-    });
-    newScreenName.value = "";
-    newScreenLoginCode.value = "";
-    newScreenPin.value = "";
-    newScreenAdministrativeClassId.value = "";
-    successMessage.value = `大屏账号 ${created.loginCode} 已创建，请在对应一体机上完成首次登录。`;
-    await loadScreenAccounts();
-  } catch (error) {
-    errorMessage.value = describeApiError(error, "创建大屏账号失败");
-  } finally {
-    screenBusy.value = false;
-  }
-}
-
-function openScreenEdit(screen) {
-  editingScreenId.value = screen.id;
-  screenEdit.value = {
-    name: screen.name,
-    loginCode: screen.loginCode || "",
-    pin: "",
-    administrativeClassId: screen.administrativeClassId,
-  };
-  screenEditSnapshot.value = JSON.stringify(screenEdit.value);
-  screenEditDialog.value = true;
-}
-
-async function saveScreenAccount() {
-  if (!editingScreenId.value) return;
-  screenBusy.value = true;
-  errorMessage.value = "";
-  try {
-    const input = {
-      name: screenEdit.value.name,
-      loginCode: screenEdit.value.loginCode,
-      administrativeClassId: screenEdit.value.administrativeClassId,
-    };
-    if (screenEdit.value.pin) input.pin = screenEdit.value.pin;
-    await classworksV2Api.updateClassroomScreenAccount(
-      selectedSchoolId.value,
-      editingScreenId.value,
-      input,
-    );
-    screenEditDialog.value = false;
-    successMessage.value = "大屏账号已更新。";
-    await loadScreenAccounts();
-  } catch (error) {
-    errorMessage.value = describeApiError(error, "更新大屏账号失败");
-  } finally {
-    screenBusy.value = false;
-  }
-}
-
-async function resetScreenDevice(screen) {
-  if (!await confirmAction({
-    title: "重置大屏设备绑定？",
-    message: `将重置“${screen.name}”的设备绑定。`,
-    details: ["原浏览器会立即退出", "需要使用原账号和 PIN 在设备上重新登录"],
-    confirmText: "重置绑定",
-    color: "error",
-  })) return;
-  screenBusy.value = true;
-  try {
-    await classworksV2Api.resetClassroomScreenDevice(selectedSchoolId.value, screen.id);
-    successMessage.value = "旧设备登录已失效，可以在新设备上重新登录。";
-    await loadScreenAccounts();
-  } catch (error) {
-    errorMessage.value = describeApiError(error, "重置大屏设备失败");
-  } finally {
-    screenBusy.value = false;
-  }
-}
-
-async function setScreenActive(screen, isActive) {
-  const action = isActive ? "启用" : "停用";
-  if (!await confirmAction({
-    title: `${action}大屏账号？`,
-    message: `将${action}“${screen.name}”。`,
-    details: isActive ? [] : ["设备将无法读取或修改作业", "班级和账号配置仍会保留"],
-    confirmText: action,
-    color: isActive ? "success" : "warning",
-  })) return;
-  const schoolId = selectedSchoolId.value;
-  screenBusy.value = true;
-  try {
-    await classworksV2Api.updateClassroomScreenAccount(schoolId, screen.id, {isActive});
-    successMessage.value = `大屏账号已${action}，可在下方短时撤销。`;
-    await loadScreenAccounts();
-    offerUndo({
-      message: `已${action}大屏“${screen.name}”`,
-      undo: async () => {
-        await classworksV2Api.updateClassroomScreenAccount(schoolId, screen.id, {isActive: !isActive});
-        successMessage.value = `已撤销“大屏${action}”。`;
-        await loadScreenAccounts();
-      },
-    });
-  } catch (error) {
-    errorMessage.value = describeApiError(error, `${action}大屏账号失败`);
-  } finally {
-    screenBusy.value = false;
-  }
-}
-
-function screenAccountSummary(screen) {
-  const login = screen.loginCode ? `账号 ${screen.loginCode}` : "旧版绑定（需设置账号）";
-  const device = screen.deviceFingerprint ? "设备已激活" : "等待设备首次登录";
-  const status = screen.isActive ? "已启用" : "已停用";
-  const heartbeat = screen.lastHeartbeatAt
-    ? `心跳 ${new Date(screen.lastHeartbeatAt).toLocaleString("zh-CN")}`
-    : "尚无值守心跳";
-  const runtime = screen.runtimeStatus
-    ? `v${screen.runtimeStatus.appVersion || "?"} · ${screen.runtimeStatus.syncState || "unknown"}${screen.runtimeStatus.pendingUploads ? ` · 待同步 ${screen.runtimeStatus.pendingUploads}` : ""}`
-    : "无运行状态";
-  return `${screen.administrativeClass?.name || "未绑定班级"} · ${login} · ${device} · ${status} · ${heartbeat} · ${runtime}`;
-}
-
-function screenDutyName(state) {
-  return {
-    ONLINE: "在线",
-    DEGRADED: "需关注",
-    OFFLINE: "离线",
-    NOT_ACTIVATED: "未激活",
-    DISABLED: "已停用",
-  }[state] || "未知";
-}
-
-function screenDutyColor(state) {
-  return {ONLINE: "success", DEGRADED: "warning", OFFLINE: "error", NOT_ACTIVATED: "info", DISABLED: "grey"}[state] || "grey";
-}
-
-async function issueScreenCommand(screen, type) {
-  const action = type === "RELOAD_APP" ? "重新载入页面" : "立即刷新数据";
-  if (!await confirmAction({
-    title: `向大屏下发“${action}”？`,
-    message: `指令将在“${screen.name}”下一次心跳时执行。`,
-    confirmText: "下发指令",
-  })) return;
-  screenBusy.value = true;
-  try {
-    await classworksV2Api.issueClassroomScreenCommand(selectedSchoolId.value, screen.id, type);
-    successMessage.value = `已向 ${screen.name} 下发“${action}”指令。`;
-    await loadScreenAccounts();
-  } catch (error) {
-    errorMessage.value = describeApiError(error, "下发值守指令失败");
-  } finally {
-    screenBusy.value = false;
   }
 }
 
@@ -3015,11 +2545,9 @@ watch(tab, (value) => {
     loadRoster();
     loadScreenAccounts();
     loadSchoolHomeworkSettings();
-    window.clearInterval(screenDutyTimer);
-    screenDutyTimer = window.setInterval(loadScreenAccounts, 30_000);
+    startDutyPolling();
   } else {
-    window.clearInterval(screenDutyTimer);
-    screenDutyTimer = null;
+    stopDutyPolling();
   }
 });
 watch([tab, selectedSchoolId, selectedTermId], ([section, schoolId, termId]) => {
@@ -3085,7 +2613,6 @@ onMounted(() => {
   bootstrap();
 });
 onUnmounted(() => {
-  window.clearInterval(screenDutyTimer);
   window.removeEventListener("beforeunload", warnBeforeUnload);
 });
 </script>
@@ -3111,19 +2638,6 @@ onUnmounted(() => {
   margin-bottom: 12px;
 }
 .quick-deadline-row__delete { justify-self: end; }
-.account-filter-bar {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
-}
-.admin-row-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  justify-content: flex-end;
-}
-.admin-row-actions--mobile { display: none; }
 
 @media (max-width: 959px) {
   .admin-navigation-panel {
@@ -3140,16 +2654,9 @@ onUnmounted(() => {
     z-index: 5;
   }
   .admin-content-with-navigation { margin-left: 0; }
-  .admin-row-actions--desktop { display: none; }
-  .admin-row-actions--mobile {
-    align-items: center;
-    display: inline-flex;
-    flex-wrap: nowrap;
-  }
 }
 
 @media (max-width: 600px) {
-  .account-filter-bar { grid-template-columns: 1fr; }
   .quick-deadline-row {
     gap: 8px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3163,10 +2670,6 @@ onUnmounted(() => {
     position: absolute;
     right: 0;
     top: 0;
-  }
-  .admin-entity-list :deep(.v-list-item) {
-    align-items: flex-start;
-    padding-inline: 12px;
   }
 }
 </style>

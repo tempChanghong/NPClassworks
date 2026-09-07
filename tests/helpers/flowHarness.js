@@ -3,7 +3,7 @@ import {fileURLToPath} from "node:url";
 import {createServer} from "vite";
 import vue from "@vitejs/plugin-vue";
 import {createPinia, setActivePinia} from "pinia";
-import {createRenderer, nextTick, reactive, ssrContextKey} from "vue";
+import {createRenderer, nextTick, reactive, ref, ssrContextKey} from "vue";
 // Initialize Axios's Node adapter before installing the minimal browser globals.
 import "axios";
 
@@ -143,6 +143,24 @@ export async function createFlowHarness() {
   reset();
   return {
     api, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    async openScreenAccountManager() {
+      const {useScreenAccountManager} = await vite.ssrLoadModule("/src/composables/admin/useScreenAccountManager.js");
+      const {default: panel} = await vite.ssrLoadModule("/src/components/admin/AdminScreenAccountPanel.vue");
+      const selectedSchoolId = ref("school"), errorMessage = ref(""), successMessage = ref("");
+      const undoOffers = [];
+      let state, panelState;
+      const app = renderer.createApp({setup() {
+        state = useScreenAccountManager({selectedSchoolId, errorMessage, successMessage,
+          offerUndo: offer => undoOffers.push(offer)});
+        panelState = panel.setup({manager: state, accountsVisible: true, administrativeClassOptions: []}, {expose() {}});
+        return () => null;
+      }});
+      app.provide(ssrContextKey, {});
+      app.mount({}); mounted.push(app);
+      return {state, panelState, selectedSchoolId, errorMessage, successMessage, undoOffers, unmount() {
+        mounted.splice(mounted.indexOf(app), 1); app.unmount();
+      }};
+    },
     async openNoiseCard() {
       const {default: component} = await vite.ssrLoadModule("/src/components/NoiseMonitorCard.vue");
       const {noiseService} = await vite.ssrLoadModule("/src/utils/noiseService.js");
