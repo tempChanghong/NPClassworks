@@ -1,7 +1,13 @@
-name: Frontend and backend contracts
+name: Frontend and backend contracts and fullstack smoke
 
 on:
   workflow_call:
+    inputs:
+      backend_ref:
+        description: Backend branch, tag or commit to check
+        default: main
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       backend_ref:
@@ -16,7 +22,7 @@ permissions:
 jobs:
   contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -38,3 +44,14 @@ jobs:
         run: pnpm test:contracts
         env:
           CLASSWORKS_BACKEND_ROOT: ${{ github.workspace }}/.contract-backend
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Test production PWA with real backend and disposable PostgreSQL
+        run: pnpm test:e2e:fullstack
+        env:
+          CLASSWORKS_BACKEND_ROOT: ${{ github.workspace }}/.contract-backend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fullstack-test-results
+          path: test-results/
+          retention-days: 7

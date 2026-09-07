@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: npclassworks_test
+      POSTGRES_PASSWORD: fullstack_test_only
+      POSTGRES_DB: npclassworks_test_fullstack
+    ports:
+      - "127.0.0.1:${FULLSTACK_POSTGRES_PORT:-55434}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U npclassworks_test -d npclassworks_test_fullstack"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
