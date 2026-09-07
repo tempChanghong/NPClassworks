@@ -1,9 +1,10 @@
 import {test, expect} from "@playwright/test";
+import {readFile} from "node:fs/promises";
 import {origin, api} from "./environment.js";
 
 // Production Vue page and real buttons, with explicit admin API fixtures.
 // Backend authorization remains covered by the separate backend integration tests.
-async function openAdmin(browser, width, role = "ADMIN", settings = {}) {
+async function openAdmin(browser, width, role = "ADMIN", settings = {}, section = "screens") {
   const context = await browser.newContext({viewport: {width, height: 1000}, serviceWorkers: "block",
     storageState: {cookies: [], origins: [{origin, localStorage: [
       {name: "classworks-v2-access-token", value: "admin-token"},
@@ -15,6 +16,10 @@ async function openAdmin(browser, width, role = "ADMIN", settings = {}) {
   const classroom = {id: "class-a", name: "一班", code: "C1", type: "ADMIN_CLASS", members: [], pendingInvitations: []};
   let devices = [{id: "screen-a", name: "一班大屏", loginCode: "class-a", administrativeClassId: "class-a",
     administrativeClass: classroom, isActive: true, dutyState: "ONLINE"}];
+  const accounts = section === "accounts" ? [
+    {id: "teacher", name: "本人", username: "self", schoolRole: role, disabled: false, workspaces: []},
+    {id: "other", name: "教师甲", username: "teacher-a", disabled: false, workspaces: []},
+  ] : [];
   const reply = (route, data) => route.fulfill({json: {data}});
   await context.route(`${api}/accounts/local/status`, r => reply(r, {bootstrapRequired: false}));
   await context.route(url => url.origin === api && url.pathname === "/api/v2/me/schools", r => reply(r, [{role, school}]));
@@ -23,6 +28,14 @@ async function openAdmin(browser, width, role = "ADMIN", settings = {}) {
     if (req.method() !== "GET") {
       const body = req.postDataJSON(); writes.push({path, method: req.method(), body});
       if (path.endsWith("/homework-settings")) { settings = body; return reply(route, settings); }
+      if (path.endsWith("/local-admins")) {
+        accounts.push({id: "new-admin", ...body, schoolRole: body.role, disabled: false, workspaces: []});
+        return reply(route, accounts.at(-1));
+      }
+      if (path.includes("/local-accounts/") && req.method() === "PATCH") {
+        Object.assign(accounts.find(account => path.endsWith(`/${account.id}`)), body);
+        return reply(route, {});
+      }
       if (path.endsWith("classroom-screen-accounts")) {
         devices.push({id: "new-screen", ...body, administrativeClass: classroom, isActive: true, dutyState: "NOT_ACTIVATED"});
         return reply(route, devices.at(-1));
@@ -32,16 +45,77 @@ async function openAdmin(browser, width, role = "ADMIN", settings = {}) {
     }
     if (path.endsWith("/classroom-screens")) return reply(route, devices);
     if (path.endsWith("/workspace-memberships")) return reply(route, {workspaces: [classroom]});
-    if (path.endsWith("/local-accounts")) return reply(route, []);
+    if (path.endsWith("/local-accounts")) return reply(route, accounts);
     if (path.endsWith("/homework-settings")) return reply(route, settings);
     if (path.endsWith("/staff-responsibilities")) return reply(route, {policy: {}, people: [], grades: [], administrativeClasses: []});
     return route.fulfill({status: 404, json: {message: `Unconfigured admin fixture: ${path}`}});
   });
   const page = await context.newPage();
   page.on("pageerror", error => errors.push(error.message));
-  await page.goto(`${origin}/classworks-admin?section=screens&school=school&term=term`);
+  await page.goto(`${origin}/classworks-admin?section=${section}&school=school&term=term`);
   return {context, page, writes, errors};
 }
+
+for (const [width, role] of [[1440, "OWNER"], [540, "ADMIN"]]) {
+  test(`account management preserves role options, credentials and undo at ${width}px`, async ({browser}) => {
+    const {context, page, writes, errors} = await openAdmin(browser, width, role, {}, "accounts");
+    try {
+      const row = username => page.locator(".admin-entity-list .v-list-item").filter({hasText: `@${username}`});
+      await expect(row("self")).toBeVisible();
+      await expect(row("self").getByRole("button")).toHaveCount(0);
+      await page.locator(".v-select").filter({hasText: "学校角色"}).getByRole("combobox").first().click();
+      if (role === "OWNER") await page.getByRole("option", {name: "学校所有者", exact: true}).click();
+      else {
+        await expect(page.getByRole("option", {name: "学校所有者", exact: true})).toHaveCount(0);
+        await page.getByRole("option", {name: "管理员", exact: true}).click();
+      }
+      await page.getByLabel("管理员短账号", {exact: true}).fill("new-admin");
+      await page.getByLabel("管理员姓名", {exact: true}).fill("新管理员");
+      await page.getByLabel("初始 PIN", {exact: true}).fill("1234");
+      await page.getByRole("button", {name: "返回教师工作台"}).click();
+      await expect(page.getByRole("dialog")).toContainText("放弃未保存的修改？");
+      await page.getByRole("dialog").getByRole("button", {name: "取消", exact: true}).click();
+      await page.getByRole("button", {name: "创建管理员", exact: true}).click();
+      await expect(row("new-admin")).toBeVisible();
+      expect(writes[0].body).toEqual({username: "new-admin", name: "新管理员", pin: "1234", role});
+      await expect(page.getByLabel("初始 PIN", {exact: true})).toHaveValue("");
+      const downloaded = page.waitForEvent("download");
+      await page.getByRole("button", {name: "下载本次初始凭据", exact: true}).click();
+      const download = await downloaded;
+      const csv = await readFile(await download.path(), "utf8");
+      expect(csv).toContain("new-admin"); expect(csv).toContain("1234");
+      const action = async (desktop, mobile) => {
+        if (width > 959) await row("teacher-a").getByRole("button", {name: desktop, exact: true}).click();
+        else {
+          await row("teacher-a").getByRole("button", {name: "账号操作"}).click();
+          await page.locator(".v-menu.v-overlay--active").getByText(mobile, {exact: true}).click();
+        }
+      };
+      await action("重置 PIN", "重置 PIN");
+      await expect(page.getByRole("dialog")).toContainText("重置账号 PIN");
+      await page.getByRole("dialog").getByRole("button", {name: "取消", exact: true}).click();
+      expect(writes).toHaveLength(1);
+      await action("停用", "停用账号");
+      await page.getByRole("dialog").getByRole("button", {name: "停用", exact: true}).click();
+      await expect(row("teacher-a")).toContainText("已停用");
+      await page.getByRole("button", {name: "撤销", exact: true}).click();
+      await expect(row("teacher-a")).toContainText("可登录");
+      expect(writes.slice(1).map(req => req.body)).toEqual([{disabled: true}, {disabled: false}]);
+      await page.getByLabel("搜索姓名或账号", {exact: true}).fill("new-admin");
+      await expect(page.locator(".admin-entity-list .v-list-item")).toHaveCount(1);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+}
+
+test("account management retains the non-manager UI boundary", async ({browser}) => {
+  const {context, page, writes, errors} = await openAdmin(browser, 1440, "TEACHER", {}, "accounts");
+  try {
+    await expect(page.getByText("请先完成学校初始化或取得 OWNER/ADMIN 权限。", {exact: true})).toBeVisible();
+    await expect(page.getByRole("button", {name: "创建管理员", exact: true})).toHaveCount(0);
+    expect(writes).toEqual([]); expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
 
 for (const width of [1440, 540]) {
   test(`screen admin preserves create, edit, guard and responsive actions at ${width}px`, async ({browser}) => {

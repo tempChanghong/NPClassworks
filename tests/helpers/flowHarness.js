@@ -4,6 +4,7 @@ import {createServer} from "vite";
 import vue from "@vitejs/plugin-vue";
 import {createPinia, setActivePinia} from "pinia";
 import {createRenderer, nextTick, reactive, ref, ssrContextKey} from "vue";
+import {createMemoryHistory, createRouter, matchedRouteKey} from "vue-router";
 // Initialize Axios's Node adapter before installing the minimal browser globals.
 import "axios";
 
@@ -143,6 +144,21 @@ export async function createFlowHarness() {
   reset();
   return {
     api, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    async openAdminAccounts() {
+      const {default: page} = await vite.ssrLoadModule("/src/pages/classworks-admin.vue");
+      const router = createRouter({history: createMemoryHistory(), routes: [{path: "/classworks-admin", component: {}}]});
+      await router.push("/classworks-admin?section=accounts&school=school&term=term");
+      let state;
+      const app = renderer.createApp({setup() {
+        state = page.setup({}, {expose() {}});
+        return () => null;
+      }});
+      app.use(router);
+      app.provide(matchedRouteKey, ref(router.currentRoute.value.matched[0]));
+      app.provide(ssrContextKey, {});
+      app.mount({}); mounted.push(app);
+      return {state, unmount() { mounted.splice(mounted.indexOf(app), 1); app.unmount(); }};
+    },
     async openSchoolHomeworkSettings() {
       const {useSchoolHomeworkSettings} = await vite.ssrLoadModule("/src/composables/admin/useSchoolHomeworkSettings.js");
       const {default: inputs} = await vite.ssrLoadModule("/src/components/admin/AdminHomeworkQuickInputs.vue");
