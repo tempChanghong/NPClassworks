@@ -281,3 +281,54 @@ test("a newer session bootstrap owns its state even if an older request complete
     assert.equal(store.screenLoading, false);
   } finally { response.resolve(); await old; }
 });
+
+test("screen bootstrap fills and caches the bound school's catalog without requiring subjects in the session response", async () => {
+  const session = {binding: {id: "screen-a", schoolId: "school-a"}, workspaces: []};
+  h.routes.set("GET /api/v2/classroom-screens/session", (_req, reply) => reply(session));
+  h.routes.set("GET /api/v2/catalog/subjects", (req, reply) => {
+    assert.equal(req.query.get("schoolId"), "school-a");
+    reply([{id: "physics", name: "物理"}]);
+  });
+  const store = h.newStore({screen: true});
+  await store.bootstrapClassroomScreen();
+  assert.deepEqual(store.screenSession.subjects, [{id: "physics", name: "物理"}]);
+  h.routes.set("GET /api/v2/classroom-screens/session", (_req, reply) => reply({message: "offline"}, 503));
+  await store.bootstrapClassroomScreen();
+  assert.equal(store.screenSession.subjects[0].name, "物理");
+});
+
+test("catalog failures retain only the same binding's names and never reject a valid screen session", async () => {
+  let id = "screen-a";
+  h.routes.set("GET /api/v2/classroom-screens/session", (_req, reply) => reply({binding: {id, schoolId: "school-a"}}));
+  h.routes.set("GET /api/v2/catalog/subjects", (_req, reply) => reply({message: "temporarily unavailable"}, 503));
+  const store = h.newStore({screen: true});
+  store.screenSession = {binding: {id, schoolId: "school-a"}, subjects: [{id: "physics", name: "物理"}]};
+  await store.bootstrapClassroomScreen();
+  assert.equal(store.screenSession.subjects[0].name, "物理");
+  assert.equal(store.screenError, "");
+  id = "screen-b";
+  await store.bootstrapClassroomScreen();
+  assert.equal(store.screenSession.binding.id, "screen-b");
+  assert.deepEqual(store.screenSession.subjects, []);
+});
+
+test("a late catalog response cannot overwrite a newer screen binding", async () => {
+  const gate = deferred();
+  let id = "school-a", waiting = false;
+  h.routes.set("GET /api/v2/classroom-screens/session", (_req, reply) => reply({binding: {id, schoolId: id}}));
+  h.routes.set("GET /api/v2/catalog/subjects", async (req, reply) => {
+    const school = req.query.get("schoolId");
+    if (school === "school-a") { waiting = true; await gate.promise; }
+    reply([{id: school, name: school}]);
+  });
+  const store = h.newStore({screen: true});
+  const old = store.bootstrapClassroomScreen();
+  try {
+    await eventually(() => assert.equal(waiting, true));
+    id = "school-b";
+    await store.bootstrapClassroomScreen();
+    gate.resolve(); await old;
+    assert.equal(store.screenSession.binding.id, "school-b");
+    assert.equal(store.screenSession.subjects[0].name, "school-b");
+  } finally { gate.resolve(); await old; }
+});

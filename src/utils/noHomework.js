@@ -18,7 +18,14 @@ export function hasNoHomeworkConflict(items, workspaceIds) {
 }
 
 export function dailyHomeworkStatuses(publications, workspaces, subjects, date) {
-  const names = new Map(subjects.map(subject => [subject.id, subject.name]));
+  const names = new Map();
+  for (const subject of [
+    ...publications.map(item => ({id: item.subjectId, ...item.subject})),
+    ...workspaces.flatMap(workspace => [workspace.subject, ...(workspace.subjectRules || []).map(rule => rule.subject)]),
+    ...subjects,
+  ]) {
+    if (subject?.id && subject.name?.trim()) names.set(subject.id, subject.name);
+  }
   return workspaces.flatMap(workspace => {
     const ids = workspace.type === "COURSE_GROUP" ? [workspace.subjectId] : (workspace.subjectRules || [])
       .filter(rule => rule.deliveryMode === "ADMIN_CLASS").map(rule => rule.subjectId);
@@ -28,7 +35,7 @@ export function dailyHomeworkStatuses(publications, workspaces, subjects, date) 
         && item.targets?.some(target => target.workspaceId === workspace.id));
       const work = items.filter(item => !isNoHomework(item));
       const markers = items.filter(isNoHomework);
-      return {key: `${workspace.id}:${subjectId}`, subject: names.get(subjectId) || subjectId, workspace: workspace.name,
+      return {key: `${workspace.id}:${subjectId}`, subject: names.get(subjectId) || "科目名称暂不可用", workspace: workspace.name,
         state: work.length ? (markers.length ? "conflict" : "assigned") : markers.length ? "none" : "unknown",
         count: work.length, confirmed: markers.some(item => item.isCertified)};
     });

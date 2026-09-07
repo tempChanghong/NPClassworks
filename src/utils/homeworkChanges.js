@@ -36,8 +36,9 @@ export function createHomeworkChangeTracker() {
       for (const item of items) {
         const previous = baseline.get(item.id);
         if (previous && item.revision < previous.revision) continue;
-        if (homeworkChangedFields(previous, item).length) {
-          const before = pending.has(item.id) ? pending.get(item.id).before : previous || null;
+        // First appearance is new homework, not a correction to previously displayed text.
+        if (previous && homeworkChangedFields(previous, item).length) {
+          const before = pending.has(item.id) ? pending.get(item.id).before : previous;
           const changes = homeworkChangedFields(before, item);
           if (changes.length) pending.set(item.id, {id: item.id, before, after: item, changes, expiresAt: now + HOMEWORK_CHANGE_DURATION});
           else pending.delete(item.id);

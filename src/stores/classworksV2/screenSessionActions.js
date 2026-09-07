@@ -10,6 +10,9 @@ import {clearCachedScreenSession, loadCachedScreenSession, saveCachedScreenSessi
 import {isTransientScreenRequestError} from "./screenRequestError";
 
 const bootstrapRequests = new WeakMap();
+const screenSchoolId = (session) => session?.binding?.schoolId || session?.binding?.school?.id
+  || session?.binding?.administrativeClass?.term?.schoolId || session?.binding?.administrativeClass?.term?.school?.id
+  || session?.workspaces?.[0]?.term?.schoolId || session?.workspaces?.[0]?.term?.school?.id;
 
 // Mixed into the existing store: actions share its reactive state and Pinia binding.
 export const screenSessionActions = {
@@ -31,6 +34,18 @@ export const screenSessionActions = {
     let applied = false;
     try {
       const session = await classworksV2Api.classroomScreenSession();
+      if (!current()) return;
+      const schoolId = screenSchoolId(session);
+      if (!Array.isArray(session.subjects) && schoolId) {
+        try {
+          session.subjects = await classworksV2Api.subjects(schoolId);
+        } catch {
+          // A catalog failure must not discard a successfully authenticated binding.
+          const cached = initialSession || loadCachedScreenSession();
+          session.subjects = cached?.binding?.id === session.binding?.id && screenSchoolId(cached) === schoolId
+            ? cached.subjects || [] : [];
+        }
+      }
       if (!current()) return;
       applied = true;
       this.screenSession = session;

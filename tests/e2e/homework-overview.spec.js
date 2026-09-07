@@ -39,6 +39,35 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("real-shaped screen session resolves missing subject names; new homework is silent until edited", async ({browser, request}) => {
+  const board = await openBoard(browser, "screen");
+  try {
+    await board.page.getByLabel("选择日期").fill("2026-09-07");
+    await expect(board.page.getByText("数学 · 高一一班：尚未录入", {exact: true})).toBeVisible();
+    const session = (await (await request.get(`${api}/api/v2/classroom-screens/session`, {
+      headers: {"X-Classworks-Screen-Token": "screen-token"},
+    })).json()).data;
+    expect(session).not.toHaveProperty("subjects");
+    const item = await seed(request, {content: "刚录入的作业"});
+    await expect(board.page.getByText("数学 · 高一一班：1 项作业", {exact: true})).toBeVisible();
+    await expect(board.page.getByText("刚录入的作业", {exact: true})).toBeVisible();
+    const banner = board.page.locator(".screen-homework-changes");
+    await expect(banner).toHaveCount(0);
+    const response = await request.patch(`${api}/api/v2/publications/${item.id}`, {
+      headers: {"If-Match": '"1"'}, data: {content: "老师更正后的作业"},
+    });
+    expect(response.ok()).toBe(true);
+    await expect(banner).toContainText("正文：刚录入的作业 → 老师更正后的作业");
+    await expect(banner).toContainText("数学 · 作业更正");
+    await board.page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await expect.poll(() => board.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await board.context.setOffline(true);
+    await board.page.reload();
+    await expect(board.page.getByText("数学 · 高一一班：1 项作业", {exact: true})).toBeVisible();
+    expect(board.errors).toEqual([]);
+  } finally { await board.context.close(); }
+});
+
 test("teacher explicitly declares no homework, screen distinguishes missing and warns about later conflicting homework", async ({browser, request}) => {
   const teacher = await openBoard(browser, "teacher"), screen = await openBoard(browser, "screen");
   try {

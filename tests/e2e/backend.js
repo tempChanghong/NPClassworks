@@ -97,7 +97,7 @@ export function startTestBackend(port = apiPort) {
     if (path === "/api/v2/me/workspaces") return reply([{role: "TEACHER", workspace}]);
     if (path === "/api/v2/me/schools") return reply([{role: "TEACHER", school}]);
     if (path === "/api/v2/classroom-screens/session") return reply({
-      binding: {id: "screen-a", name: "测试大屏", administrativeClass: workspace}, workspaces: [workspace], subjects: [subject], homeworkSettings: {},
+      binding: {id: "screen-a", schoolId: school.id, name: "测试大屏", administrativeClass: workspace}, workspaces: [workspace], homeworkSettings: {},
     });
     if (path === "/__test/reload-command") {
       commands = [{id: "reload-test", type: "RELOAD_APP", createdAt: new Date().toISOString()}];

@@ -43,6 +43,14 @@ test("no-homework declarations never create or count local completion records", 
   assert.deepEqual(studentHomeworkCompletionStats([work, marker], {work: {revision: 1}}), {total: 1, completed: 1, updated: 0});
 });
 
+test("subject status uses available names and never exposes database IDs when the catalog is absent", () => {
+  const namedWork = {...work, subject: {name: "数学"}};
+  assert.equal(dailyHomeworkStatuses([namedWork], workspaces, [], "2026-09-07")[0].subject, "数学");
+  assert.equal(dailyHomeworkStatuses([], [{...workspaces[1], subject: {id: "math", name: "走班数学"}}], [], "2026-09-07")[0].subject, "走班数学");
+  assert.equal(dailyHomeworkStatuses([namedWork], workspaces, [{id: "math", name: "数学新名称"}], "2026-09-07")[0].subject, "数学新名称");
+  assert.equal(dailyHomeworkStatuses([], workspaces, [], "2026-09-07")[0].subject, "科目名称暂不可用");
+});
+
 test("weeks start on Monday across years and deadlines use Beijing midnight", () => {
   assert.equal(homeworkWeekStart("2027-01-03"), "2026-12-28");
   assert.equal(homeworkWeekStart("2026-09-07"), "2026-09-07");

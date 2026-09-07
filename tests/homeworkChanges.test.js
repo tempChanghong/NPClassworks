@@ -43,14 +43,29 @@ test("offline fallback and older revisions do not overwrite baseline; reconnect 
   assert.equal(tracker.update(snapshot([{...publication, content: "切换班级后初次加载"}]), {now: 5}).length, 0);
 });
 
-test("new homework following a no-homework marker is highlighted and unrelated dates/scopes are excluded", () => {
+test("new homework after a no-homework marker is silent; later edits compare with its first displayed text", () => {
   const tracker = createHomeworkChangeTracker();
   const marker = {...publication, contentJson: {kind: "NO_HOMEWORK", version: 1}, title: "今日无作业", content: "本日该科目无作业。"};
   tracker.update(snapshot([marker]), {now: 0});
-  const [event] = tracker.update(snapshot([marker, {...publication, id: "new"}]), {now: 1});
-  assert.equal(event.before, null); assert.equal(event.after.content, publication.content);
+  const added = {...publication, id: "new"};
+  assert.deepEqual(tracker.update(snapshot([marker, added]), {now: 1}), []);
+  const [event] = tracker.update(snapshot([marker, {...added, revision: 2, content: "完成第12页"}]), {now: 2});
+  assert.equal(event.before.content, publication.content); assert.equal(event.after.content, "完成第12页");
   assert.equal(snapshot([{...publication, boardDate: "2026-09-08"}, {...publication, type: "NOTICE"},
     {...publication, status: "DRAFT"}, {...publication, targets: [{workspaceId: "elsewhere"}]}]).length, 0);
+});
+
+test("new arrivals after an empty board or reconnect do not add to existing correction notices", () => {
+  const tracker = createHomeworkChangeTracker();
+  tracker.update([], {now: 0});
+  assert.deepEqual(tracker.update(snapshot([publication]), {now: 1}), []);
+  const edited = {...publication, revision: 2, content: "更正正文"};
+  tracker.update(snapshot([edited]), {now: 2});
+  const added = {...publication, id: "new"};
+  tracker.update(snapshot([publication]), {cached: true, now: 3});
+  const events = tracker.update(snapshot([edited, added]), {now: 4});
+  assert.deepEqual(events.map(item => item.id), [publication.id]);
+  assert.equal(events[0].expiresAt, 2 + HOMEWORK_CHANGE_DURATION);
 });
 
 test("snapshot detaches mutable publications and summary reveals changes after a long shared prefix", () => {

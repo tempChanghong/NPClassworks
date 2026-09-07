@@ -34,10 +34,10 @@
           @toggle="reschedule"
         >
           <summary>
-            <strong>{{ item.after.subject }} · {{ item.before ? '作业更正' : '新增内容' }}</strong>
+            <strong>{{ item.after.subject }} · 作业更正</strong>
             · {{ item.after.targets }} · {{ item.after.isCertified ? '教师已确认' : '待教师确认' }}
             <span
-              v-for="field in summaryFields(item)"
+              v-for="field in item.changes"
               :key="field.key"
               class="change-summary"
             >
@@ -91,10 +91,6 @@ function display(key, value) {
 function summary(field) {
   const excerpt = homeworkChangeExcerpt(display(field.key, field.before), display(field.key, field.after));
   return `${field.label}：${excerpt.before} → ${excerpt.after}`;
-}
-function summaryFields(item) {
-  return item.before ? item.changes : item.changes.filter(field => field.key === "content"
-    || (field.key === "dueAt" && field.after) || (field.key === "noHomework" && field.after === "今日无作业"));
 }
 onUnmounted(() => clearTimeout(timer));
 </script>
