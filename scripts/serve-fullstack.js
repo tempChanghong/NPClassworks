@@ -1,7 +1,7 @@
 import {createServer} from "node:http";
 import {readFile, stat} from "node:fs/promises";
 import {resolve, extname, sep} from "node:path";
-import {build} from "vite";
+import {spawnSync} from "node:child_process";
 import {api, apiPort, origin, webPort} from "../tests/e2e/environment.js";
 import {backendModule, configureRuntime} from "../tests/fullstack/environment.js";
 
@@ -14,9 +14,12 @@ if (await prisma.school.count() || await prisma.account.count()) throw new Error
 process.env.VITE_DEFAULT_KV_SERVER = api;
 process.env.VITE_ENABLE_ANALYTICS = "false";
 const root = resolve("dist-e2e/fullstack");
-process.env.NODE_ENV = "production";
-await build({mode: "production", build: {outDir: root}, logLevel: "error"});
-process.env.NODE_ENV = "test";
+// Prisma's generated client sets global __dirname. Build in a fresh process so
+// backend globals cannot alter frontend plugins' package-relative resolution.
+const build = spawnSync(process.execPath, [resolve("node_modules/vite/bin/vite.js"), "build", "--outDir", root, "--logLevel", "error"], {
+  env: {...process.env, NODE_ENV: "production"}, stdio: "inherit",
+});
+if (build.error || build.status !== 0) throw build.error || new Error(`Fullstack frontend build failed (${build.status})`);
 const backend = createServer(app);
 const io = initSocket(backend);
 const mime = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",

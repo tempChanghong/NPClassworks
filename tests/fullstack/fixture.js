@@ -14,7 +14,7 @@ export const test = base.extend({
     try {
       const suffix = randomUUID();
       const school = await prisma.school.create({data: {code: `FULLSTACK-${suffix}`, name: "全链路测试学校"}});
-      const account = await prisma.account.create({data: {provider: "integration-test", providerId: suffix, name: "测试教师"}});
+      const account = await prisma.account.create({data: {provider: "school-local", providerId: suffix, name: "测试教师"}});
       await prisma.schoolMember.create({data: {schoolId: school.id, accountId: account.id, role: "VIEWER"}});
       const term = await prisma.academicTerm.create({data: {schoolId: school.id, name: "测试学期", academicYear: 2099, semester: 1, status: "ACTIVE"}});
       const grade = await prisma.grade.create({data: {termId: term.id, code: "G1", name: "高一"}});
@@ -53,6 +53,7 @@ export const test = base.extend({
         });
         await page.goto(origin);
         await expect(page.getByRole("button", {name: role === "screen" ? "录入作业" : "退出", exact: true}).first()).toBeVisible();
+        if (role === "teacher") await expect(page.getByText("已授权 1 个教学空间", {exact: true})).toBeVisible();
         return {page, context, errors, frames};
       }
       await use({prisma, school, account, workspace, subject, binding, screenToken, credentials, open,

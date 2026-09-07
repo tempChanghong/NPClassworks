@@ -1,5 +1,7 @@
 # 真实前后端与 PostgreSQL 冒烟测试
 
+最新实测（2026-09-07）：三个浏览器全链路场景及单会话 PostgreSQL 回归均通过，0 失败、0 跳过。具体结果与测试环境修正见文末。
+
 `pnpm test:e2e:fullstack` 将前端生产 PWA、后端实际 `app.js` / Socket.IO 和独立 PostgreSQL 17 组合运行。没有替换 API 响应、Prisma 方法或 Socket 实现，也没有给生产应用添加测试接口。
 
 ## 场景与断言
@@ -35,7 +37,7 @@ pnpm test:e2e:fullstack
 
 `test-results/fullstack-metadata/versions.json` 记录前后端完整 HEAD SHA 和 dirty 状态；失败时保留 Playwright trace、截图，CI 上传测试目录并保留 7 天。本地 dirty 时，SHA 仅标识基线。它不保证服务器部署代理最终选中的版本恰好等于这对 SHA，也不为后端单独推送新增跨仓部署门槛。
 
-## 本轮验证状态（2026-09-07）
+## 首次编写时的验证状态（2026-09-07）
 
 - 前端普通测试：293 项通过；跨仓契约测试：2 项通过。
 - Lint、脚本语法检查及三项 Playwright 用例发现通过。数据库目标校验测试覆盖远程地址、非测试库名及连接参数绕过拒绝。
@@ -43,3 +45,23 @@ pnpm test:e2e:fullstack
 - GitHub 未查到本轮开始时两仓本地 HEAD 对应的 Actions 运行记录，新增 CI 接线也尚未远程执行。没有推送或触发部署。
 
 这些测试覆盖实际 Express 应用及 Socket，不启动 `bin/www` 的后台清理任务，也不覆盖生产反向代理、HTTPS、真实设备休眠或历史版本 PWA 升级；原有分层测试继续保留。
+
+## Docker 启动后的完整实测（2026-09-07）
+
+使用本机 Node 24.14.1、Chromium、临时 PostgreSQL 17，运行 `pnpm test:e2e:fullstack` 对应的 `node scripts/run-fullstack.js`，前端/API 端口分别设为 15182/15183。
+
+- 已有数据库迁移全部应用成功。
+- 单会话退出 PostgreSQL 回归：1 项通过，0 跳过。
+- 教师页面正式发布 → 数据库作业及首份修订 → 大屏收到真实 Socket 事件并显示：通过。
+- 离线录入 → Service Worker 重载 → 恢复补传 → 同请求 ID 重放仍仅一条作业、一份修订：通过。
+- 两端编辑 → 旧 If-Match 返回 409 且保留输入 → 明确确认保存版本 3、三份历史正文匹配：通过。
+- Playwright 最终结果：3 项通过，0 失败、0 跳过；Lint、数据库目标安全校验和 git diff --check 通过。
+
+实测修正了两处测试环境问题：
+
+1. 后端 Prisma 生成代码会设置全局 `__dirname`，导致同进程中的 PWA 插件误读后端 generated/package.json。改用独立 Node 进程构建前端，后端全局变量不再污染构建插件。
+2. 原教师夹具 provider 为 integration-test，而学校默认只允许本地教师登录。后端正确过滤了该账号的工作区。夹具改为 school-local，并在页面打开后先断言已授权一个教学空间；未放宽生产权限规则。
+
+通过时的代码基线：前端 `01fd6557d0e4376d67ecca2fb01d29b5f20e45a9` 加本轮未提交的测试环境修正（dirty=true）；后端 `1bbb1e11fac90faeb415b24c947ef07a193b0d28`（dirty=false）。记录位于 test-results/fullstack-metadata/versions.json；输出日志为 fullstack-actual.log。版本冲突日志中的 409 为预期断言，不是遗漏的失败。
+
+全部临时测试容器和网络已清理。此次未执行后端完整 test:database 清单，也未在 GitHub 远程触发工作流；未推送、部署或连接生产数据库，没有业务逻辑或数据库结构变更。
