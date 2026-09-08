@@ -136,6 +136,16 @@ export const boardActions = {
     } catch (error) {
       this.selectionIssues = error.response?.data?.data?.issues || [];
       this.selectionNeedsConfirmation = true;
+      if (error.response?.data?.code === "STUDENT_SELECTION_INVALID") {
+        const optionsRequest = ++courseOptionsRequest;
+        try {
+          const options = await classworksV2Api.courseOptions(administrativeClassId);
+          if (optionsRequest === courseOptionsRequest
+            && this.courseOptions?.administrativeClass?.id === administrativeClassId) {
+            this.courseOptions = options;
+          }
+        } catch { /* Keep the submitted choices when the catalog cannot be read. */ }
+      }
       throw error;
     }
     const sanitizedCourseGroupIds = validation.normalized.courseGroupIds;
@@ -193,14 +203,46 @@ export const boardActions = {
     this.feedLoadError = "";
     this.feedUsingCache = false;
     this.studentError = "";
+    const boardDate = this.boardDate;
+    let selectionSnapshot = JSON.stringify(this.selection);
+    const current = () => requestId === feedRequest && this.feedAudience === "student" && isCurrent()
+      && this.boardDate === boardDate && JSON.stringify(this.selection) === selectionSnapshot;
     try {
-      const result = await classworksV2Api.feed(this.selectedWorkspaceIds, this.boardDate);
-      if (requestId !== feedRequest || this.feedAudience !== "student" || !isCurrent()) return;
+      let result;
+      try {
+        result = await classworksV2Api.feed(this.selectedWorkspaceIds, boardDate);
+      } catch (error) {
+        if (!current()) return;
+        if (error.response?.data?.code !== "WORKSPACE_NOT_FOUND" || !this.selection.administrativeClassId) throw error;
+        const optionsRequest = courseOptionsRequest;
+        let options;
+        try {
+          options = await classworksV2Api.courseOptions(this.selection.administrativeClassId);
+        } catch { throw error; }
+        if (!current() || optionsRequest !== courseOptionsRequest) return;
+        if (options?.administrativeClass?.id !== this.selection.administrativeClassId) throw error;
+        const sanitized = sanitizeCourseGroupIds(options, this.selection.courseGroupIds);
+        if (JSON.stringify(sanitized) === JSON.stringify(this.selection.courseGroupIds || {})) throw error;
+        const oldWorkspaceIds = this.selectedWorkspaceIds;
+        this.selection = {...this.selection, courseGroupIds: sanitized, confirmedAt: null};
+        selectionSnapshot = JSON.stringify(this.selection);
+        saveSelection(this.selection);
+        this.courseOptions = options;
+        this.selectionNeedsConfirmation = true;
+        this.selectionIssues = [];
+        this.studentNotice = "班级配置已经更新，已移除失效的走班选择；其他班级作业仍可查看，请重新确认选班。";
+        this.selectionDialog = true;
+        leaveWorkspaces(oldWorkspaceIds);
+        joinWorkspaces(this.realtimeWorkspaceIds);
+        // Retry once with the remaining valid spaces; never loop on catalog/feed disagreement.
+        result = await classworksV2Api.feed(this.selectedWorkspaceIds, boardDate);
+      }
+      if (!current()) return;
       this.feed = result.items || [];
       this.feedGeneratedAt = result.generatedAt;
       this.scheduleFeedTransition(result.nextTransitionAt);
     } catch (error) {
-      if (requestId === feedRequest && this.feedAudience === "student" && isCurrent()) {
+      if (current()) {
         this.feed = [];
         this.feedGeneratedAt = null;
         this.feedLoadError = describeApiError(error, "加载作业失败");

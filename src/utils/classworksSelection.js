@@ -4,7 +4,8 @@ export function sanitizeCourseGroupIds(courseOptions, candidate = {}) {
     if (!item?.requiresCourseGroupSelection || !item.subject?.id) continue;
     const selectedId = candidate?.[item.subject.id];
     if (!selectedId) continue;
-    const isAvailable = (item.courseGroups || []).some((group) => group.id === selectedId);
+    const isAvailable = (item.courseGroups || []).some((group) => group.id === selectedId
+      && group.isActive !== false && group.isStudentSelectable !== false);
     if (isAvailable) sanitized[item.subject.id] = selectedId;
   }
   return sanitized;

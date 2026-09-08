@@ -178,14 +178,26 @@ const streamedSubjects = computed(() =>
 );
 const generalIssues = computed(() => (store.selectionIssues || []).filter((item) => !item.subjectId));
 const selectionComplete = computed(() => streamedSubjects.value.every(
-  (item) => Boolean(courseDecisions[item.subject.id]),
+  (item) => decisionOptions(item).some(option => option.value === courseDecisions[item.subject.id]),
 ));
 
 function decisionOptions(item) {
-  const groups = (item.courseGroups || []).map((group) => ({title: group.name, value: group.id}));
+  const groups = (item.courseGroups || [])
+    .filter(group => group.isActive !== false && group.isStudentSelectable !== false)
+    .map((group) => ({title: group.name, value: group.id}));
   if (!item.isCompulsory) groups.push({title: "我不修读该科", value: "__NOT_TAKING__"});
   return groups;
 }
+
+watch(() => store.courseOptions, () => {
+  if (!props.modelValue || store.courseOptions?.administrativeClass?.id !== administrativeClassId.value) return;
+  for (const subjectId of Object.keys(courseDecisions)) {
+    const item = streamedSubjects.value.find(subject => subject.subject.id === subjectId);
+    if (!item || !decisionOptions(item).some(option => option.value === courseDecisions[subjectId])) {
+      delete courseDecisions[subjectId];
+    }
+  }
+});
 
 function issueMessages(subjectId) {
   return (store.selectionIssues || [])
