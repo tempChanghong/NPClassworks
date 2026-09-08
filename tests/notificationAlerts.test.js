@@ -11,8 +11,35 @@ import {
   readAcknowledgedNotificationKeys,
   rememberAcknowledgedNotification,
   screenNotificationSoundProfile,
+  screenNotificationPopupEnabled,
   selectNotificationForAlert,
 } from "../src/utils/notificationAlerts.js";
+
+test("only minor notices can opt out of screen popups, and their sound is Teams default", () => {
+  for (const priority of ["NORMAL", "IMPORTANT", "URGENT"]) {
+    assert.equal(screenNotificationPopupEnabled({type: "NOTICE", priority, contentJson: {popupEnabled: false}}), true);
+  }
+  assert.equal(screenNotificationPopupEnabled({type: "NOTICE", priority: "MINOR"}), false);
+  assert.equal(screenNotificationPopupEnabled({type: "NOTICE", priority: "MINOR", contentJson: {popupEnabled: false}}), false);
+  assert.equal(screenNotificationPopupEnabled({type: "NOTICE", priority: "MINOR", contentJson: {popupEnabled: true}}), true);
+  assert.equal(screenNotificationPopupEnabled({type: "ASSIGNMENT", priority: "URGENT"}), false);
+  assert.equal(screenNotificationSoundProfile({priority: "MINOR"}, {singleSound: "custom.mp3"}).filename, "Teams 默认.mp3");
+});
+
+test("minor notice opting out still sounds but does not create a background system popup", async () => {
+  const played = [], notifications = [];
+  class NotificationApi {
+    static permission = "granted";
+    constructor(title) { notifications.push(title); }
+  }
+  const controller = createNotificationAlertController({scopeId: "minor", storage: memoryStorage(),
+    documentRef: {hidden: true}, navigatorRef: {}, NotificationApi, play: filename => played.push(filename)});
+  await controller.alert([{id: "minor", revision: 1, type: "NOTICE", priority: "MINOR", contentJson: {popupEnabled: false}}], {soundProfile: screenNotificationSoundProfile});
+  assert.deepEqual(played, ["Teams 默认.mp3"]);
+  assert.deepEqual(notifications, []);
+  await controller.alert([{id: "minor", revision: 2, type: "NOTICE", priority: "MINOR", contentJson: {popupEnabled: true}}], {soundProfile: screenNotificationSoundProfile});
+  assert.deepEqual(notifications, ["NPClassworks 次要通知"]);
+});
 
 function memoryStorage() {
   const values = new Map();

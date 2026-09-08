@@ -1,4 +1,4 @@
-const PRIORITY_RANK = {URGENT: 0, IMPORTANT: 1, NORMAL: 2};
+const PRIORITY_RANK = {URGENT: 0, IMPORTANT: 1, NORMAL: 2, MINOR: 3};
 
 export function screenNotificationCenterItems(publications, acknowledgedKeys = new Set()) {
   return (publications || [])

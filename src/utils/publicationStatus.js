@@ -29,6 +29,7 @@ export const PUBLICATION_STATUS_TABLE = Object.freeze([
 ]);
 
 export const PUBLICATION_PRIORITY = Object.freeze({
+  MINOR: Object.freeze({label: "次要", color: "secondary", icon: "mdi-bell-outline"}),
   NORMAL: Object.freeze({label: "普通", color: "primary", icon: "mdi-information-outline"}),
   IMPORTANT: Object.freeze({label: "重要", color: "warning", icon: "mdi-alert-outline"}),
   URGENT: Object.freeze({label: "紧急", color: "error", icon: "mdi-alert-octagon-outline"}),

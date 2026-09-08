@@ -152,7 +152,7 @@ export function startTestBackend(port = apiPort) {
       if (existing) return reply(existing);
       const now = new Date().toISOString();
       const publication = {...body, id: `pub-${items.length + 1}`, type: body.type || "ASSIGNMENT", status: "PUBLISHED", revision: 1,
-        isCertified: path === "/api/v2/publications", author: account, subject, priority: "NORMAL",
+        isCertified: path === "/api/v2/publications", author: account, subject, priority: body.priority || "NORMAL",
         publishAt: body.publishAt || now, updatedAt: now, createdAt: now,
         targets: [{workspaceId: workspace.id, workspace}]};
       items.push(publication);

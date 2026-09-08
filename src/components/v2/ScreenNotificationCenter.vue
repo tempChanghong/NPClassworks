@@ -17,7 +17,7 @@
           <div class="min-width-0">
             <div>大屏通知中心</div>
             <div class="text-body-2 text-medium-emphasis font-weight-regular">
-              横幅确认后仍可在这里重新查看当前有效通知
+              弹窗确认后仍可在这里重新查看当前有效通知
             </div>
           </div>
         </div>
@@ -191,7 +191,7 @@ function acknowledgeAll() {
 }
 
 function priorityColor(priority) {
-  return {URGENT: "error", IMPORTANT: "warning", NORMAL: "primary"}[priority] || "primary";
+  return {URGENT: "error", IMPORTANT: "warning", NORMAL: "primary", MINOR: "secondary"}[priority] || "primary";
 }
 
 function priorityIcon(priority) {
@@ -199,7 +199,7 @@ function priorityIcon(priority) {
 }
 
 function priorityLabel(priority) {
-  return {URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通"}[priority] || "普通";
+  return {URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通", MINOR: "次要"}[priority] || "普通";
 }
 
 function targetNames(notice) {

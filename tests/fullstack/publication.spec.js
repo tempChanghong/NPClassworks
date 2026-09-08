@@ -1,6 +1,59 @@
 import {test, expect, enterHomework} from "./fixture.js";
 import {api} from "../e2e/environment.js";
 
+test("teacher notice priorities and popup choices reach the screen and acknowledgement database", async ({classroom}) => {
+  test.setTimeout(90000);
+  const teacher = await classroom.open("teacher");
+  const screen = await classroom.open("screen");
+  const composer = teacher.page.locator(".publication-composer");
+  for (const [label, priority, popup] of [["次要", "MINOR", false], ["次要", "MINOR", true], ["普通", "NORMAL", true], ["重要", "IMPORTANT", true], ["紧急", "URGENT", true]]) {
+    await composer.getByRole("button", {name: "通知", exact: true}).click();
+    await composer.getByRole("combobox", {name: "发布到 发布到", exact: true}).click();
+    await teacher.page.getByRole("option", {name: /高一一班/}).click();
+    await teacher.page.keyboard.press("Escape");
+    await composer.locator(".v-select").filter({hasText: "优先级"}).click();
+    await teacher.page.getByRole("option", {name: label, exact: true}).click();
+    const toggle = composer.getByRole("checkbox", {name: "大屏弹窗提示", exact: true});
+    if (priority === "MINOR") {
+      await expect(toggle).toBeEnabled();
+      await toggle.setChecked(popup);
+    } else {
+      await expect(toggle).toBeDisabled();
+      await expect(toggle).toBeChecked();
+    }
+    const content = `${label}通知弹窗=${popup}`;
+    await composer.getByRole("textbox", {name: "正文 正文", exact: true}).fill(content);
+    const created = teacher.page.waitForResponse(response => response.url() === `${api}/api/v2/publications` && response.request().method() === "POST");
+    await composer.getByRole("button", {name: "正式发布", exact: true}).click();
+    const response = await created;
+    expect(response.status()).toBe(201);
+    const row = (await response.json()).data;
+    expect(row.priority).toBe(priority);
+    expect(row.contentJson.popupEnabled).toBe(popup);
+    await teacher.page.getByRole("button", {name: "完成", exact: true}).click();
+    await expect.poll(() => screen.frames.some(frame => frame.includes(row.id))).toBe(true);
+    const dialog = screen.page.locator(".screen-notice-popup");
+    if (popup) {
+      await expect(dialog.locator(".notice-popup-content")).toHaveText(content);
+      await screen.page.keyboard.press("Escape");
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", {name: "知道了", exact: true}).click();
+      await expect(dialog).not.toBeVisible();
+      await expect.poll(async () => Boolean((await classroom.prisma.notificationScreenDelivery.findUnique({where: {
+        publicationId_screenBindingId: {publicationId: row.id, screenBindingId: classroom.binding.id},
+      }}))?.acknowledgedAt)).toBe(true);
+    } else {
+      await expect(screen.page.getByText(content, {exact: true})).toBeVisible();
+      await expect(dialog).not.toBeVisible();
+    }
+  }
+  await screen.page.reload();
+  await expect(screen.page.getByRole("button", {name: "录入作业", exact: true}).first()).toBeVisible();
+  await expect(screen.page.locator(".screen-notice-popup")).not.toBeVisible();
+  expect(teacher.errors).toEqual([]);
+  expect(screen.errors).toEqual([]);
+});
+
 test("teacher publish commits a revision and reaches the screen through real Socket.IO", async ({classroom}) => {
   const teacher = await classroom.open("teacher");
   const screen = await classroom.open("screen");

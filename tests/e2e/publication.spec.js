@@ -31,6 +31,52 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("notice popups prioritize urgent arrivals, preserve long text and reopen on revision changes", async ({browser, request}, testInfo) => {
+  const screen = await openRole(browser, "screen");
+  try {
+    const normal = await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content: "普通通知"}});
+    const normalItem = (await normal.json()).data;
+    const popup = screen.page.locator(".screen-notice-popup");
+    await expect(popup).toContainText("普通通知");
+    const long = "紧急首行\n" + "所有通知正文必须完整展示\n".repeat(90) + "紧急最后一行";
+    await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", priority: "URGENT", content: long}});
+    await expect(popup.locator(".notice-popup-content")).toHaveText(long);
+    const scroll = popup.locator(".notice-popup-scroll");
+    expect(await scroll.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    await scroll.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await expect(popup.getByRole("button", {name: "知道了", exact: true})).toBeVisible();
+    await screen.page.screenshot({path: testInfo.outputPath("notice-popup.png")});
+    await popup.getByRole("button", {name: "知道了", exact: true}).click();
+    await expect(popup.locator(".notice-popup-content")).toHaveText("普通通知");
+    await popup.getByRole("button", {name: "知道了", exact: true}).click();
+    await expect(popup).not.toBeVisible();
+    await request.patch(`${api}/api/v2/publications/${normalItem.id}`, {headers: {"If-Match": '"1"'}, data: {content: "普通通知更正"}});
+    await expect(popup.locator(".notice-popup-content")).toHaveText("普通通知更正");
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
+test("unacknowledged notification popup survives offline PWA reload and confirmation suppresses repeats", async ({browser, request}) => {
+  await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", priority: "MINOR", contentJson: {popupEnabled: true}, content: "次要离线通知"}});
+  const screen = await openRole(browser, "screen");
+  try {
+    const popup = screen.page.locator(".screen-notice-popup");
+    await expect(popup).toContainText("次要离线通知");
+    await screen.page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await expect.poll(() => screen.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await screen.context.setOffline(true);
+    await screen.page.reload({waitUntil: "domcontentloaded"});
+    await expect(popup).toContainText("次要离线通知");
+    await popup.getByRole("button", {name: "知道了", exact: true}).click();
+    await screen.page.reload({waitUntil: "domcontentloaded"});
+    await expect(screen.page.getByRole("button", {name: "录入作业", exact: true}).first()).toBeVisible();
+    await expect(popup).not.toBeVisible();
+    await screen.page.getByRole("button", {name: "通知", exact: true}).first().click();
+    await expect(screen.page.locator(".notification-center")).toContainText("次要离线通知");
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("notification acknowledgement persists across offline reload and replays after the notice leaves the feed", async ({browser, request}) => {
   await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", title: "回执恢复测试", content: "离线时确认的通知"}});
   const screen = await openRole(browser, "screen");
@@ -40,7 +86,6 @@ test("notification acknowledgement persists across offline reload and replays af
     await screen.page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await expect.poll(() => screen.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
     await screen.context.setOffline(true);
-    await screen.page.getByRole("button", {name: "通知", exact: true}).first().click();
     await screen.page.getByRole("dialog").getByRole("button", {name: "知道了", exact: true}).click();
     const read = () => screen.page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
     expect((await read()).items.some(item => item.acknowledged)).toBe(true);

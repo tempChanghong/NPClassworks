@@ -173,11 +173,10 @@
       </template>
     </v-alert>
 
-    <UrgentNoticeBanner
-      :key="`${bindingId}:${acknowledgementRevision}`"
-      :binding-id="bindingId"
-      :notices="urgentNotices"
-      :sound-enabled="settings.urgentNoticeSound"
+    <ScreenNoticePopup
+      :key="bindingId"
+      :notices="activeNotices"
+      :acknowledged-keys="acknowledgedNoticeKeys"
       @acknowledge="acknowledgeNotice"
     />
 
@@ -362,7 +361,7 @@ import ScreenHomeworkChanges from "@/components/v2/ScreenHomeworkChanges.vue";
 import ScreenHomeworkFocus from "@/components/v2/ScreenHomeworkFocus.vue";
 import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
-import UrgentNoticeBanner from "@/components/v2/UrgentNoticeBanner.vue";
+import ScreenNoticePopup from "@/components/v2/ScreenNoticePopup.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import ScreenSyncStatus from "@/components/v2/ScreenSyncStatus.vue";
 import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
@@ -395,7 +394,6 @@ const printTool = ref(null);
 const weekTool = ref(null);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const notificationCenterOpen = ref(false);
-const acknowledgementRevision = ref(0);
 const acknowledgedNoticeKeys = ref(readAcknowledgedNotificationKeys(store.screenSession?.binding?.id));
 const burnInStep = ref(0);
 let burnInTimer = null;
@@ -441,9 +439,6 @@ function pauseNotificationDelivery() {
 
 const bindingId = computed(() => store.screenSession?.binding?.id || "");
 const activeNotices = computed(() => store.feed.filter((publication) => publication.type === "NOTICE"));
-const urgentNotices = computed(() => activeNotices.value.filter((publication) =>
-  publication.type === "NOTICE" && publication.priority === "URGENT",
-));
 const pendingNoticeCount = computed(() => activeNotices.value.filter((notice) =>
   !acknowledgedNoticeKeys.value.has(notificationAlertKey(notice))).length);
 const className = computed(() => store.screenSession?.binding?.administrativeClass?.name || "班级大屏");
@@ -519,7 +514,6 @@ function acknowledgeNotices(publications) {
   for (const publication of valid) {
     acknowledgedNoticeKeys.value = rememberAcknowledgedNotification(publication, bindingId.value);
   }
-  acknowledgementRevision.value += 1;
   notificationDeliveryQueue.enqueue(valid.map((publication) => ({
     publicationId: publication.id,
     revision: publication.revision,

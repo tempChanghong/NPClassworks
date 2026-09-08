@@ -207,6 +207,18 @@
         </v-col>
       </v-row>
 
+      <v-switch
+        v-if="form.type === 'NOTICE'"
+        :model-value="form.priority !== 'MINOR' || form.popupEnabled"
+        :disabled="form.priority !== 'MINOR'"
+        color="primary"
+        label="大屏弹窗提示"
+        :hint="form.priority === 'MINOR' ? '次要通知使用 Teams 默认提示音，可选择是否弹窗' : '普通、重要、紧急通知必须弹窗提示'"
+        persistent-hint
+        class="mb-4"
+        @update:model-value="form.popupEnabled = $event"
+      />
+
       <v-card
         class="publication-preview mb-4"
         color="primary"
@@ -509,13 +521,15 @@ const form = reactive({
   dueAt: "",
   expiresAt: "",
   priority: "NORMAL",
+  popupEnabled: false,
 });
 
-const priorities = [
+const priorities = computed(() => [
+  ...(form.type === "NOTICE" ? [{title: "次要", value: "MINOR"}] : []),
   {title: "普通", value: "NORMAL"},
   {title: "重要", value: "IMPORTANT"},
   {title: "紧急", value: "URGENT"},
-];
+]);
 
 const eligibleTargets = computed(() =>
   store.eligibleTeacherWorkspaces(form.type, form.subjectId),
@@ -596,6 +610,7 @@ const targetShortcuts = computed(() => {
 });
 
 watch([() => form.type, () => form.subjectId], () => {
+  if (form.type !== "NOTICE" && form.priority === "MINOR") form.priority = "NORMAL";
   const allowed = new Set(eligibleTargets.value.map((item) => item.id));
   form.targetWorkspaceIds = form.targetWorkspaceIds.filter((id) => allowed.has(id));
   if (form.type === "NOTICE") {
@@ -631,6 +646,7 @@ watch(() => props.editingPublication, (publication) => {
   form.dueAt = publication.dueAt ? localDateTime(new Date(publication.dueAt)) : "";
   form.expiresAt = publication.expiresAt ? localDateTime(new Date(publication.expiresAt)) : "";
   form.priority = publication.priority;
+  form.popupEnabled = publication.contentJson?.popupEnabled === true;
 }, {immediate: true});
 
 function targetSubtitle(workspace) {
@@ -662,6 +678,7 @@ async function insertQuickInput(item) {
 }
 
 function reset() {
+  form.popupEnabled = false;
   form.noHomework = false;
   previousHomework = null;
   originalContentJson = null;
@@ -699,7 +716,9 @@ async function submit(status, allowDuplicate = false) {
       targetWorkspaceIds: form.targetWorkspaceIds,
       title: form.title,
       content: form.content,
-      contentJson: form.noHomework && form.type === "ASSIGNMENT" ? {...NO_HOMEWORK_META} : originalContentJson,
+      contentJson: form.type === "NOTICE"
+        ? {...originalContentJson, popupEnabled: form.priority !== "MINOR" || form.popupEnabled}
+        : form.noHomework ? {...NO_HOMEWORK_META} : originalContentJson,
       boardDate: form.type === "ASSIGNMENT" ? form.boardDate : null,
       publishAt: new Date(form.publishAt).toISOString(),
       dueAt: form.type === "ASSIGNMENT" && form.dueAt ? new Date(form.dueAt).toISOString() : null,

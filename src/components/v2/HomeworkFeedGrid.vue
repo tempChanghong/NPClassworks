@@ -335,11 +335,11 @@ function formatDateTime(value) {
 }
 
 function priorityColor(priority) {
-  return {URGENT: "error", IMPORTANT: "warning", NORMAL: "primary"}[priority] || "primary";
+  return {URGENT: "error", IMPORTANT: "warning", NORMAL: "primary", MINOR: "secondary"}[priority] || "primary";
 }
 
 function priorityLabel(priority) {
-  return {URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通"}[priority] || "普通";
+  return {URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通", MINOR: "次要"}[priority] || "普通";
 }
 
 function dueState(publication) {

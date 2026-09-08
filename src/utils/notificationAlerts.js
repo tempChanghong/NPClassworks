@@ -1,4 +1,5 @@
 import {defaultSingleSound, defaultUrgentSound} from "./soundList.js";
+import {publicationPriorityMeta} from "./publicationStatus.js";
 import {
   GENTLE_NOTIFICATION_GAIN,
   playProminentNotificationSound,
@@ -16,17 +17,25 @@ export function alertableScreenNotifications(publications = []) {
   return publications.filter((publication) => publication?.type === "NOTICE");
 }
 
+export function screenNotificationPopupEnabled(notice) {
+  return notice?.type === "NOTICE"
+    && (notice.priority !== "MINOR" || notice.contentJson?.popupEnabled === true);
+}
+
 export function screenNotificationSoundProfile(notice, {
   singleSound = defaultSingleSound,
   urgentSound = defaultUrgentSound,
 } = {}) {
+  if (notice?.priority === "MINOR") {
+    return {filename: "Teams 默认.mp3", gainValue: GENTLE_NOTIFICATION_GAIN};
+  }
   return notice?.priority === "URGENT"
     ? {filename: urgentSound, gainValue: PROMINENT_NOTIFICATION_GAIN}
     : {filename: singleSound, gainValue: GENTLE_NOTIFICATION_GAIN};
 }
 
 export function selectNotificationForAlert(notices = []) {
-  const rank = {URGENT: 3, IMPORTANT: 2, NORMAL: 1};
+  const rank = {URGENT: 3, IMPORTANT: 2, NORMAL: 1, MINOR: 0};
   return notices.reduce((selected, notice) => (
     !selected || (rank[notice?.priority] || 0) > (rank[selected?.priority] || 0)
       ? notice
@@ -101,8 +110,9 @@ function pageIsBackgrounded(documentRef) {
 
 export function showSystemNotification(notice, NotificationApi = globalThis.Notification, windowRef = globalThis.window) {
   if (!NotificationApi || NotificationApi.permission !== "granted") return null;
-  const notification = new NotificationApi(notice.title || "NPClassworks 紧急通知", {
-    body: notice.content || "收到一条新的紧急通知",
+  const label = publicationPriorityMeta(notice.priority).label;
+  const notification = new NotificationApi(notice.title || `NPClassworks ${label}通知`, {
+    body: notice.content || `收到一条新的${label}通知`,
     icon: "/pwa/image/pwa-192x192.png",
     badge: "/pwa/image/pwa-64x64.png",
     tag: `classworks-notice-${notificationAlertKey(notice)}`,
@@ -156,7 +166,8 @@ export function createNotificationAlertController({
           : {filename: soundFile};
         play(profile?.filename || soundFile, {gainValue: profile?.gainValue});
       }
-      if (systemNotificationEnabled && pageIsBackgrounded(documentRef)) {
+      if (systemNotificationEnabled && pageIsBackgrounded(documentRef)
+        && (notice.priority !== "MINOR" || notice.contentJson?.popupEnabled === true)) {
         showSystemNotification(notice, NotificationApi, windowRef);
       }
       return true;
