@@ -78,7 +78,7 @@
             大屏已临时退出 · 剩余 {{ screenUnlockRemainingLabel }}
           </div>
           <div class="text-caption">
-            到时或刷新页面后会自动返回大屏；定时噪声监测仍保持运行。
+            到时、刷新或手动返回后，会退出本机教师账号并返回大屏；定时噪声监测仍保持运行。
           </div>
         </div>
         <v-spacer />
@@ -343,7 +343,7 @@
               登录
             </v-btn>
             <div class="text-caption text-medium-emphasis text-center mt-3">
-              登录状态默认在本设备保留 180 天。连续输错时，请稍后再试。
+              {{ screenTemporarilyUnlocked ? "本次登录会在临时退出结束时退出。" : "登录状态默认在本设备保留 180 天。" }}连续输错时，请稍后再试。
             </div>
           </template>
           <v-alert
@@ -646,6 +646,8 @@ import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import ClassworksOobe from "@/components/v2/ClassworksOobe.vue";
 import ScreenOobeChecklist from "@/components/v2/ScreenOobeChecklist.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
+import {useCurrentBoardDate} from "@/composables/useCurrentBoardDate";
+import {beginScreenTemporaryExit, endScreenTemporaryExit, readScreenTemporaryExit, screenExitState} from "@/utils/screenTemporaryExit";
 import {
   screenHomeworkSaveFeedback,
   teacherPublicationSaveFeedback,
@@ -715,10 +717,9 @@ const screenExitPin = ref("");
 const screenExitError = ref("");
 const screenExitBusy = ref(false);
 const screenProtectedAction = ref("exit");
-const screenTemporarilyUnlocked = ref(false);
-const screenUnlockRemainingSeconds = ref(0);
-let screenUnlockDeadline = 0;
-let screenUnlockTimer = null;
+const screenTemporarilyUnlocked = computed(() => screenExitState.value.unlocked);
+const screenUnlockRemainingSeconds = computed(() => screenExitState.value.remainingSeconds);
+const currentBoardDay = useCurrentBoardDate();
 
 function showFeedback({
   title,
@@ -773,7 +774,7 @@ const selectionDescription = computed(() => {
     .filter(Boolean);
   return groups.length ? `已选走班：${groups.join("、")}` : "全部课程随行政班，或尚未选择走班课程";
 });
-const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate));
+const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate, currentBoardDay.value));
 const screenUnlockRemainingLabel = computed(() => {
   const minutes = Math.floor(screenUnlockRemainingSeconds.value / 60);
   const seconds = screenUnlockRemainingSeconds.value % 60;
@@ -828,6 +829,12 @@ watch(mode, async (value) => {
 watch(() => store.schools, (schools) => {
   if (!loginSchoolId.value && schools.length) loginSchoolId.value = schools[0].id;
 }, {deep: true, immediate: true});
+watch(screenTemporarilyUnlocked, (unlocked) => {
+  if (!unlocked && store.screenSession) {
+    mode.value = "screen";
+    store.selectionDialog = false;
+  }
+});
 watch(() => store.screenSession, (session) => {
   if (session && mode.value !== "screen" && !screenTemporarilyUnlocked.value) mode.value = "screen";
   if (session && !screenTemporarilyUnlocked.value) {
@@ -854,7 +861,7 @@ onMounted(async () => {
   const hasStudentSelection = Boolean(store.selection.administrativeClassId);
   const forceOobe = route.query.oobe === "1";
   if (store.screenSession) {
-    mode.value = "screen";
+    mode.value = screenTemporarilyUnlocked.value ? "student" : "screen";
     oobeLanding.value = false;
     screenOobePending.value = forceOobe || !isScreenOobeComplete(store.screenSession.binding.id);
   } else if (forceOobe) {
@@ -891,7 +898,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   store.stopRealtime();
-  clearInterval(screenUnlockTimer);
 });
 
 function openScreenExitDialog() {
@@ -908,19 +914,6 @@ function openScreenDiagnosticDialog() {
   screenExitDialog.value = true;
 }
 
-function updateScreenUnlockRemaining() {
-  screenUnlockRemainingSeconds.value = Math.max(0, Math.ceil((screenUnlockDeadline - Date.now()) / 1000));
-  if (screenUnlockRemainingSeconds.value === 0) returnToScreen();
-}
-
-function endScreenTemporaryExit() {
-  screenTemporarilyUnlocked.value = false;
-  screenUnlockDeadline = 0;
-  screenUnlockRemainingSeconds.value = 0;
-  clearInterval(screenUnlockTimer);
-  screenUnlockTimer = null;
-}
-
 function returnToScreen() {
   endScreenTemporaryExit();
   mode.value = "screen";
@@ -934,14 +927,11 @@ async function unlockScreenTemporarily() {
   screenExitBusy.value = true;
   screenExitError.value = "";
   try {
+    const context = readScreenTemporaryExit();
     await classworksV2Api.unlockClassroomScreen(screenExitPin.value);
+    beginScreenTemporaryExit(context.token, context.server, context.epoch);
     screenExitDialog.value = false;
     screenExitPin.value = "";
-    screenTemporarilyUnlocked.value = true;
-    screenUnlockDeadline = Date.now() + 15 * 60 * 1000;
-    updateScreenUnlockRemaining();
-    clearInterval(screenUnlockTimer);
-    screenUnlockTimer = window.setInterval(updateScreenUnlockRemaining, 1000);
     mode.value = "student";
     store.selectionDialog = false;
   } catch (error) {

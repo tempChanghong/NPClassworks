@@ -17,6 +17,7 @@ import {
 } from '@/utils/setupStatusCache'
 import {recordDiagnosticEvent} from '@/utils/localDiagnostics'
 import {showAppRecovery} from '@/utils/appRecovery'
+import {readScreenTemporaryExit} from '@/utils/screenTemporaryExit'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -24,6 +25,10 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  const screen = readScreenTemporaryExit()
+  if (screen.bound && !screen.unlocked && !['/', '/settings', '/setup'].includes(to.path)) {
+    return {path: '/', replace: true}
+  }
   if (isRetiredClassworksPath(to.path)) {
     return {path: '/', replace: true}
   }

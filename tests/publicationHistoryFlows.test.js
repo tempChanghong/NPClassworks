@@ -12,7 +12,7 @@ beforeEach(() => h.reset());
 
 for (const mode of ["teacher", "screen"]) for (const legacy of [false, true]) {
   test(`${mode} history pages with ${legacy ? "legacy" : "paged"} API, preserving loaded rows on retry`, async () => {
-    h.newStore({screen: true});
+    h.newStore({screen: mode === "screen"});
     const path = `/api/v2/${mode === "screen" ? "classroom-screens/" : ""}publications/work/revisions`;
     let fail = false;
     h.routes.set(`GET ${path}`, (req, reply) => {
@@ -42,7 +42,7 @@ for (const mode of ["teacher", "screen"]) for (const legacy of [false, true]) {
 }
 
 test("late history pages cannot populate a different publication or reopened dialog", async () => {
-  h.newStore({screen: true});
+  h.newStore();
   const response = deferred();
   h.routes.set("GET /api/v2/publications/old/revisions", async (_req, reply) => {
     await response.promise; reply({items: rows.slice(0, 20), nextBeforeRevision: 26});

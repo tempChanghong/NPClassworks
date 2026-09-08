@@ -20,6 +20,7 @@
       >
         <component
           :is="Component"
+          v-if="!hideLockedManagement"
           :key="route.path"
         />
       </transition>
@@ -42,6 +43,17 @@ import PwaLifecyclePrompt from "@/components/v2/PwaLifecyclePrompt.vue";
 import NoiseScheduleManager from "@/components/v2/NoiseScheduleManager.vue";
 import ActionDialogHost from "@/components/common/ActionDialogHost.vue";
 import AppRecoveryDialog from "@/components/common/AppRecoveryDialog.vue";
+import {useRoute, useRouter} from "vue-router";
+import {useClassworksV2Store} from "@/stores/classworksV2";
+import {installScreenSessionLifecycle} from "@/utils/screenSessionLifecycle";
+import {screenExitState} from "@/utils/screenTemporaryExit";
+
+const currentRoute = useRoute();
+const router = useRouter();
+const store = useClassworksV2Store();
+const hideLockedManagement = computed(() => currentRoute.path === "/classworks-admin"
+  && screenExitState.value.bound && !screenExitState.value.unlocked);
+let stopScreenLifecycle;
 
 const theme = useTheme();
 
@@ -92,6 +104,7 @@ const onAppInstalled = () => {
 };
 
 onMounted(() => {
+  stopScreenLifecycle = installScreenSessionLifecycle({router, store});
   // 应用保存的主题设置
   const savedTheme = getSetting("theme.mode");
   theme.global.name.value = savedTheme;
@@ -112,6 +125,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  stopScreenLifecycle?.();
   if (unwatchSettings) unwatchSettings();
   window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
   window.removeEventListener('appinstalled', onAppInstalled);

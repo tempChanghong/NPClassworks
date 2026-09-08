@@ -368,6 +368,7 @@ import ScreenSyncStatus from "@/components/v2/ScreenSyncStatus.vue";
 import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
 import ScreenNotificationCenter from "@/components/v2/ScreenNotificationCenter.vue";
 import {boardDateRelativeLabel, shiftBoardDate, todayBoardDate} from "@/utils/boardDate";
+import {useCurrentBoardDate} from "@/composables/useCurrentBoardDate";
 import {classworksV2Api, getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {createNotificationDeliveryQueue, notificationDeliveryStorageKey} from "@/utils/notificationDeliveryQueue";
 import {getServerUrl} from "@/utils/socketClient";
@@ -446,7 +447,8 @@ const urgentNotices = computed(() => activeNotices.value.filter((publication) =>
 const pendingNoticeCount = computed(() => activeNotices.value.filter((notice) =>
   !acknowledgedNoticeKeys.value.has(notificationAlertKey(notice))).length);
 const className = computed(() => store.screenSession?.binding?.administrativeClass?.name || "班级大屏");
-const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate));
+const currentBoardDay = useCurrentBoardDate();
+const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate, currentBoardDay.value));
 const workspaceSummary = computed(() => {
   const groups = store.screenWorkspaces.filter((workspace) => workspace.type === "COURSE_GROUP");
   return groups.length ? `行政班及 ${groups.length} 个相关走班` : "全科随行政班";

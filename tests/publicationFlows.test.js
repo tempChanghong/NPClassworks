@@ -308,10 +308,10 @@ test("teacher publication reaches an independent screen store through invalidati
   const teacher = h.newStore();
   h.api.saveAccountTokens({accessToken: "teacher-a"});
   await teacher.bootstrapTeacher();
+  const publication = await teacher.publish({content: "明天交数学练习", status: "PUBLISHED"});
   const screen = h.newStore({screen: true});
   screen.startRealtime();
   try {
-    const publication = await teacher.publish({content: "明天交数学练习", status: "PUBLISHED"});
     assert.equal(screen.feed.length, 0);
     assert.ok(h.realtime.rooms.has("class-a"));
     h.realtime.emitServerEvent("publication.created", {workspaceIds: ["class-a"], publicationId: publication.id});

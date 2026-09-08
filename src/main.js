@@ -15,11 +15,18 @@ import GlobalMessage from '@/components/GlobalMessage.vue'
 import { createApp } from 'vue'
 
 import messageService from './utils/message'
-import { captureOAuthCallback } from './utils/classworksV2Client'
+import { captureOAuthCallback, getAccountTokens } from './utils/classworksV2Client'
+import {endScreenTemporaryExit, readScreenTemporaryExit} from './utils/screenTemporaryExit'
 import { initializeAnalytics } from 'virtual:npclassworks-analytics'
 import { installLocalDiagnostics } from './utils/localDiagnostics'
 import { markApplicationMounted, startPerformanceBaseline } from './utils/performanceBaseline'
 
+// A deliberate browser reload ends temporary access; OAuth navigation keeps its fixed deadline.
+if (readScreenTemporaryExit().bound && window.performance.getEntriesByType('navigation')[0]?.type === 'reload') {
+  endScreenTemporaryExit()
+  window.history.replaceState({}, '', import.meta.env.BASE_URL || '/')
+}
+getAccountTokens()
 captureOAuthCallback()
 startPerformanceBaseline()
 

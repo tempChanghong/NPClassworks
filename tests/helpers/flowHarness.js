@@ -84,6 +84,7 @@ export async function createFlowHarness() {
     ssr: {noExternal: ["@wydev/noise-core"]},
   });
   const api = await vite.ssrLoadModule("/src/utils/classworksV2Client.js");
+  const screenExit = await vite.ssrLoadModule("/src/utils/screenTemporaryExit.js");
   const {useClassworksV2Store} = await vite.ssrLoadModule("/src/stores/classworksV2.js");
   const realtime = await vite.ssrLoadModule("/tests/helpers/realtimeFixture.js");
   const {default: composer} = await vite.ssrLoadModule("/src/components/v2/ScreenHomeworkDialog.vue");
@@ -143,7 +144,11 @@ export async function createFlowHarness() {
   }
   reset();
   return {
-    api, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    api, screenExit, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    unlockScreen() {
+      const state = screenExit.readScreenTemporaryExit();
+      screenExit.beginScreenTemporaryExit(state.token, state.server, state.epoch);
+    },
     async openAdminAccounts() {
       const {default: page} = await vite.ssrLoadModule("/src/pages/classworks-admin.vue");
       const router = createRouter({history: createMemoryHistory(), routes: [{path: "/classworks-admin", component: {}}]});

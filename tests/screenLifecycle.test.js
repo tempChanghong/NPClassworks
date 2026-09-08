@@ -38,6 +38,7 @@ for (const stop of [false, true]) {
 
 test("refresh batches wait for slow teacher requests even when another request fails", async (t) => {
   const screen = h.newStore({screen: true});
+  h.unlockScreen();
   screen.account = {id: "teacher"};
   h.api.saveAccountTokens({accessToken: "teacher", refreshToken: "refresh"});
   const response = deferred();

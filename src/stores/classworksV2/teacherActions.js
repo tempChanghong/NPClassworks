@@ -5,6 +5,7 @@ import {
   describeApiError,
   getAccountTokens,
   getOAuthProviders,
+  endLocalAccountSession,
 } from "@/utils/classworksV2Client";
 import {joinWorkspaces, leaveWorkspaces} from "@/utils/socketClient";
 import {todayBoardDate} from "@/utils/boardDate";
@@ -299,16 +300,14 @@ export const teacherActions = {
   },
 
   async signOutTeacher() {
-    // Invalidate outstanding account requests before waiting for the logout API.
-    const sessionVersion = ++this.teacherSessionVersion;
+    const pending = endLocalAccountSession();
+    this.clearTeacherSessionState();
+    await pending;
+  },
+
+  clearTeacherSessionState() {
+    this.teacherSessionVersion += 1;
     const teacherWorkspaceIds = this.teacherWorkspaces.map((workspace) => workspace.id);
-    try {
-      if (getAccountTokens().accessToken) await classworksV2Api.logout();
-    } catch {
-      // 本地登出不能被临时网络故障阻塞；服务端会话仍会自然过期。
-    }
-    if (sessionVersion !== this.teacherSessionVersion) return;
-    clearAccountTokens();
     this.account = null;
     this.memberships = [];
     this.teacherSubjects = [];

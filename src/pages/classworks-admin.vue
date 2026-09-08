@@ -1168,6 +1168,7 @@
 <script setup>
 import {computed, onMounted, onUnmounted, ref, watch} from "vue";
 import {onBeforeRouteLeave, useRoute, useRouter} from "vue-router";
+import {screenAccountAccessAllowed} from "@/utils/screenTemporaryExit";
 import ValidationReport from "@/components/v2/ValidationReport.vue";
 import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
 import AdminNavigationPanel from "@/components/admin/AdminNavigationPanel.vue";
@@ -2095,7 +2096,7 @@ function warnBeforeUnload(event) {
   event.returnValue = "";
 }
 
-onBeforeRouteLeave(() => confirmDiscardCurrentSection());
+onBeforeRouteLeave(() => !screenAccountAccessAllowed() || confirmDiscardCurrentSection());
 onMounted(() => {
   window.addEventListener("beforeunload", warnBeforeUnload);
   bootstrap();

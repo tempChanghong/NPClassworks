@@ -62,6 +62,7 @@
 
 <script setup>
 import {computed} from "vue";
+import {useCurrentBoardDate} from "@/composables/useCurrentBoardDate";
 import {
   boardDateRelativeLabel,
   shiftBoardDate,
@@ -74,9 +75,9 @@ const props = defineProps({
   copying: Boolean,
 });
 const emit = defineEmits(["change", "copy-to-today"]);
-const today = todayBoardDate();
-const safeDate = computed(() => props.date || today);
-const relativeLabel = computed(() => boardDateRelativeLabel(safeDate.value, today));
+const today = useCurrentBoardDate();
+const safeDate = computed(() => props.date || today.value);
+const relativeLabel = computed(() => boardDateRelativeLabel(safeDate.value, today.value));
 const formattedDate = computed(() => new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
   month: "long",

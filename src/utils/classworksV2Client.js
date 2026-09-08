@@ -1,11 +1,13 @@
 import axios from "axios";
 import {getServerUrl} from "@/utils/socketClient";
 import {recordDiagnosticEvent, sanitizeDiagnosticEndpoint} from "@/utils/localDiagnostics";
+import {endScreenTemporaryExit, readScreenTemporaryExit, screenAccountAccessAllowed, screenAccountContext} from "@/utils/screenTemporaryExit";
 
 const ACCESS_TOKEN_KEY = "classworks-v2-access-token";
 const REFRESH_TOKEN_KEY = "classworks-v2-refresh-token";
 const OAUTH_RETURN_KEY = "classworks-v2-oauth-return";
 const OAUTH_ERROR_KEY = "classworks-v2-oauth-error";
+const OAUTH_SCREEN_CONTEXT_KEY = "classworks-v2-oauth-screen-context";
 const SCREEN_TOKEN_KEY = "classworks-v2-screen-token";
 const SETUP_TOKEN_KEY = "classworks-v2-setup-token";
 
@@ -39,14 +41,40 @@ function unwrap(response) {
   return response.data?.data ?? response.data;
 }
 
-export function getAccountTokens() {
+function rawAccountTokens() {
   return {
     accessToken: localStorage.getItem(ACCESS_TOKEN_KEY) || "",
     refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) || "",
   };
 }
 
+export function getAccountTokens() {
+  if (!screenAccountAccessAllowed()) {
+    if (rawAccountTokens().accessToken || rawAccountTokens().refreshToken) void endLocalAccountSession();
+    return {accessToken: "", refreshToken: ""};
+  }
+  return rawAccountTokens();
+}
+
+function assertScreenAccountContext(context = screenAccountContext()) {
+  if (!screenAccountAccessAllowed() || context !== screenAccountContext()) {
+    throw new axios.CanceledError("大屏临时退出已结束，请重新验证 PIN 后登录");
+  }
+}
+
+export function endLocalAccountSession() {
+  const tokens = rawAccountTokens();
+  const server = baseUrl();
+  clearAccountTokens();
+  if (!tokens.accessToken) return Promise.resolve();
+  // Captured credentials only: local locking must not wait for the network, or revoke a later login.
+  return axios.post(`${server}/accounts/logout`, {}, {
+    headers: {Authorization: `Bearer ${tokens.accessToken}`}, timeout: 5000,
+  }).catch(() => {});
+}
+
 export function saveAccountTokens({accessToken, refreshToken}) {
+  assertScreenAccountContext();
   // A token pair represents a login; access-token renewal keeps the same session.
   if (refreshToken) accountSessionVersion += 1;
   if (accessToken) localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
@@ -64,10 +92,16 @@ export function getClassroomScreenToken() {
 }
 
 export function saveClassroomScreenToken(token) {
-  if (token) localStorage.setItem(SCREEN_TOKEN_KEY, token);
+  if (token && token !== getClassroomScreenToken()) {
+    endScreenTemporaryExit();
+    void endLocalAccountSession();
+    localStorage.setItem(SCREEN_TOKEN_KEY, token);
+  }
 }
 
 export function clearClassroomScreenToken() {
+  endScreenTemporaryExit();
+  void endLocalAccountSession();
   localStorage.removeItem(SCREEN_TOKEN_KEY);
 }
 
@@ -87,6 +121,8 @@ export async function getInstanceSetupStatus({timeout} = {}) {
 
 export async function createInstanceSetupSession(setupKey) {
   const result = unwrap(await client.post("/api/v2/setup/session", {setupKey}));
+  // A validated setup session belongs to a new/uninitialized instance, not the old screen binding.
+  if (getClassroomScreenToken()) clearClassroomScreenToken();
   sessionStorage.setItem(SETUP_TOKEN_KEY, result.token);
   return result;
 }
@@ -182,13 +218,17 @@ export function captureOAuthCallback() {
   const refreshToken = url.searchParams.get("refresh_token");
   if (success !== "true" && success !== "false" && !accessToken) return false;
 
-  if (success === "true" && accessToken) {
+  const expectedScreenContext = sessionStorage.getItem(OAUTH_SCREEN_CONTEXT_KEY);
+  sessionStorage.removeItem(OAUTH_SCREEN_CONTEXT_KEY);
+  const screenAllowed = screenAccountAccessAllowed()
+    && (!readScreenTemporaryExit().bound || expectedScreenContext === screenAccountContext());
+  if (success === "true" && accessToken && screenAllowed) {
     saveAccountTokens({accessToken, refreshToken});
     sessionStorage.removeItem(OAUTH_ERROR_KEY);
   } else {
     sessionStorage.setItem(
       OAUTH_ERROR_KEY,
-      url.searchParams.get("error") || "教师账户登录失败",
+      !screenAllowed ? "大屏临时退出已结束，请重新验证 PIN 后登录" : url.searchParams.get("error") || "教师账户登录失败",
     );
   }
 
@@ -232,13 +272,22 @@ client.interceptors.request.use((config) => {
   config.baseURL = baseUrl();
   config._diagnosticStartedAt = Date.now();
   const {accessToken} = getAccountTokens();
+  const screenRequest = config.headers?.["X-Classworks-Screen-Token"];
+  const publicRequest = config.url?.startsWith("/api/v2/catalog/") || config.url?.startsWith("/api/v2/setup/") || [
+    "/api/v2/publications/feed", "/accounts/oauth/providers", "/accounts/local/status",
+    "/api/v2/setup/status", "/api/v2/classroom-screens/login",
+  ].includes(config.url);
+  if (!screenRequest && !publicRequest) assertScreenAccountContext();
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   else delete config.headers.Authorization;
   config._accountSession = accountSession();
+  config._screenAccountContext = screenAccountContext();
   return config;
 });
 
 client.interceptors.response.use((response) => {
+  if (!response.config.headers?.["X-Classworks-Screen-Token"]
+    && response.config._screenAccountContext !== screenAccountContext()) throw staleAccountRequest();
   const renewedToken = response.headers["x-new-access-token"];
   if (renewedToken && isCurrentAccountSession(response.config._accountSession)
     && response.config._accountSession.accessToken === getAccountTokens().accessToken) {
@@ -306,13 +355,17 @@ export async function getLocalAuthStatus() {
 }
 
 export async function loginWithSchoolAccount({schoolCode, username, password}) {
+  const context = screenAccountContext();
+  assertScreenAccountContext(context);
   const {getVisitorId} = await import("@/utils/visitorId");
   const deviceId = await getVisitorId();
+  assertScreenAccountContext(context);
   const result = unwrap(await client.post("/accounts/local/login", {
     schoolCode,
     username,
     password,
   }, {headers: {"X-Classworks-Device-ID": deviceId}}));
+  assertScreenAccountContext(context);
   saveAccountTokens({
     accessToken: result.access_token,
     refreshToken: result.refresh_token,
@@ -334,6 +387,8 @@ export async function recoverSchoolOwner(input) {
 }
 
 export function startOAuthLogin(provider, returnPath = "/") {
+  assertScreenAccountContext();
+  sessionStorage.setItem(OAUTH_SCREEN_CONTEXT_KEY, screenAccountContext());
   sessionStorage.setItem(OAUTH_RETURN_KEY, returnPath);
   const redirectUri = `${window.location.origin}${returnPath}`;
   window.location.assign(
