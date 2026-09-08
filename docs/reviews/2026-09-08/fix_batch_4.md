@@ -52,3 +52,18 @@
 真实 PWA 升级还暴露了现有资源生命周期问题：新 Service Worker 激活后，旧页面尚未加载的结果弹窗 chunk 可能失效。本批验证的是作业已成功保存后，可以通过已有资源恢复提示退出弹窗并安全刷新；没有修改旧版本资源保留策略，也没有将该问题宣称为已修复。它值得后续单独处理。
 
 本批未修改后端、数据库结构、部署脚本或 `deploy/agent/server.js`，未推送或部署。全链路只使用隔离 PostgreSQL，测试容器与网络已清理。
+
+## CI 选班测试竞争修正
+
+后续 [GitHub Actions 34236959712](https://github.com/tempChanghong/NPClassworks/actions/runs/34236959712) 的 browser 任务为 56 项通过、1 项超时。已下载其 `production-browser-test-results` 原始产物，读取 Linux Chromium trace；该次失败与前述本地并行构建目录干扰不同。
+
+trace 显示第 80 行 `save.click()` 开始后一直等待按钮恢复可用，直到 45 秒测试期限；此前唯一校验 POST 是页面初始化时的成功校验，没有发出测试预期的第二次拒绝请求。夹具在点击前将统一 `stopped` 标记设为真，后台 feed 请求先收到 404，随后目录更新和行政班 feed 恢复为 200。页面正常移除失效选班、禁用保存按钮，破坏了测试即将点击的前置条件。最终 `finally` 手动关闭 context 的错误覆盖了原动作的报错位置。`baseline-browser-mapping` 的数据过期提示不是此次失败原因。
+
+修正仅涉及 `tests/e2e/student-selection.spec.js`：
+
+- 将合并场景拆为两项。提交拒绝场景在校验 POST 到达时模拟停用，并在点击前主动触发后台刷新，验证后台刷新不再抢先改变本场景的前置条件；继续断言真实 422、旧选项消失、新选项出现和保存按钮禁用。
+- 独立验证 CI 实际发生的另一种先后顺序：选班窗口打开时停用走班，经真实 Socket 事件刷新后，按钮禁用、未发出额外提交、失效选择持久化清除、行政班作业恢复、手动刷新仍可用。
+- 恢复请求检查关注先请求旧走班、再仅请求行政班的顺序及最终状态，允许重连等原因产生的合法额外刷新。
+- 使用 Playwright 自带 page/context fixture 管理关闭，保留原失败动作的诊断。没有增加全局超时、启用失败重试或跳过断言。
+
+最终本地验证：三个选班场景连续五轮共 15 次通过（`selection-ci-final-repeat.log`）；完整浏览器回归 58 项通过（`selection-ci-full.log`）；ESLint 通过（`selection-ci-lint.log`）。未重跑远端 Actions，远端结果需在推送本次测试修改后验证。本次没有调整应用业务逻辑、后端或部署门槛。
