@@ -1,4 +1,5 @@
 import {reactive, readonly} from "vue";
+import {appReloadBlockReason, requestAppReload} from "./appReloadProtection.js";
 
 const RESOURCE_CACHE_PATTERN = /(workbox|precache|assets-cache|pwa-cache|other-resources|sound-cache|uaf-cache|^(?:js|css|html|images|cdn-cgi)-cache$|external-resources)/i;
 
@@ -39,10 +40,12 @@ export async function clearApplicationResourceCaches(cacheStorage = globalThis.c
 }
 
 export function reloadApplication(location = globalThis.location) {
-  location?.reload?.();
+  const reason = requestAppReload(location);
+  if (reason) showAppRecovery({title: "暂时不能刷新", message: reason});
 }
 
 export async function clearResourcesAndReload({cacheStorage = globalThis.caches, location = globalThis.location} = {}) {
+  if (appReloadBlockReason()) { reloadApplication(location); return []; }
   const cleared = await clearApplicationResourceCaches(cacheStorage);
   reloadApplication(location);
   return cleared;

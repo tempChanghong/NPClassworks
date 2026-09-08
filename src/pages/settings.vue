@@ -735,6 +735,7 @@
 
 <script setup>
 import {computed, onMounted, onUnmounted, reactive, ref, watch} from "vue";
+import {requestAppReload} from "@/utils/appReloadProtection";
 import {useRoute, useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
@@ -987,7 +988,8 @@ async function syncTeacherPreferences() {
 }
 
 function reloadApp() {
-  window.location.reload();
+  const reason = requestAppReload(window.location);
+  if (reason) notify(reason);
 }
 
 function restartOobe() {

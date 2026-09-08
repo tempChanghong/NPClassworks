@@ -1,3 +1,5 @@
+import {withBrowserStorageLock} from "./browserStorageLock.js";
+
 const PREFIX = "classworks-v2-screen-publication-queue:";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ITEMS = 50;
@@ -12,6 +14,10 @@ export class ScreenPublicationQueueError extends Error {
 
 export function screenPublicationQueueKey(bindingId) {
   return `${PREFIX}${bindingId || "unbound"}`;
+}
+
+export function mutateScreenPublicationQueue(bindingId, operation) {
+  return withBrowserStorageLock(screenPublicationQueueKey(bindingId), operation);
 }
 
 function storageOrNull(storage) {

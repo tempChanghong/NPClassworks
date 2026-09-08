@@ -5,6 +5,8 @@ import {
   ScreenPublicationQueueError,
   enqueueScreenPublication,
   loadScreenPublicationQueue,
+  mutateScreenPublicationQueue,
+  screenPublicationQueueKey,
   removeScreenPublicationQueueItem,
   updateScreenPublicationQueueItem,
 } from "@/utils/screenPublicationQueue";
@@ -68,6 +70,13 @@ export const screenSyncActions = {
     });
     const bindingId = this.screenSession?.binding?.id;
     this.readScreenPublicationQueue();
+    const queueChanged = event => {
+      if (event.key !== screenPublicationQueueKey(bindingId) || !isCurrentSync(this, bindingId, context)) return;
+      this.readScreenPublicationQueue();
+      context.retry?.request();
+    };
+    window.addEventListener("storage", queueChanged);
+    screenSyncCleanup.push(() => window.removeEventListener("storage", queueChanged));
     context.retry = createScreenUploadRetry({
       run: () => this.flushScreenPublicationQueue(),
       isOnline: () => isCurrentSync(this, bindingId, context) && this.screenNetworkOnline,
@@ -239,11 +248,17 @@ export const screenSyncActions = {
     this.screenSyncing = false;
   },
 
-  enqueueOfflineScreenPublication(input, context = {}) {
+  async enqueueOfflineScreenPublication(input, context = {}) {
     const bindingId = this.screenSession?.binding?.id;
     if (!bindingId) throw new Error("大屏尚未绑定，无法保存离线作业");
     try {
-      this.screenPendingUploads = enqueueScreenPublication(bindingId, input, context);
+      const token = getClassroomScreenToken();
+      const items = await mutateScreenPublicationQueue(bindingId, () => {
+        if (this.screenSession?.binding?.id !== bindingId || getClassroomScreenToken() !== token) throw new Error("大屏绑定已变化，请重新打开录入窗口。");
+        return enqueueScreenPublication(bindingId, input, context);
+      });
+      if (this.screenSession?.binding?.id !== bindingId || getClassroomScreenToken() !== token) throw new Error("大屏绑定已变化，原绑定的作业已保存在本机队列。");
+      this.screenPendingUploads = items;
       this.screenQueueBindingId = bindingId;
       this.screenQueueReadError = "";
     } catch (error) {
@@ -286,14 +301,16 @@ export const screenSyncActions = {
         try {
           await classworksV2Api.createScreenPublication(item.input);
           if (!isCurrentSync(this, bindingId, context)) return;
-          this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, item.id);
+          const remaining = await mutateScreenPublicationQueue(bindingId, () => removeScreenPublicationQueueItem(bindingId, item.id));
+          if (!isCurrentSync(this, bindingId, context)) return;
+          this.screenPendingUploads = remaining;
           context?.retry.succeeded();
           savedAny = true;
         } catch (error) {
           if (!isCurrentSync(this, bindingId, context)) return;
           if (error instanceof ScreenPublicationQueueError) throw error;
           if (isTransientScreenRequestError(error)) { context?.retry.failed(); break; }
-          this.screenPendingUploads = updateScreenPublicationQueueItem(bindingId, item.id, {
+          const remaining = await mutateScreenPublicationQueue(bindingId, () => updateScreenPublicationQueueItem(bindingId, item.id, {
             attempts: item.attempts + 1,
             status: "needs_review",
             error: {
@@ -301,7 +318,9 @@ export const screenSyncActions = {
               message: error.response?.data?.message || error.message || "提交失败",
               details: error.response?.data?.details || null,
             },
-          });
+          }));
+          if (!isCurrentSync(this, bindingId, context)) return;
+          this.screenPendingUploads = remaining;
           recordDiagnosticEvent({
             category: "SCREEN_SYNC",
             severity: "ERROR",
@@ -344,7 +363,9 @@ export const screenSyncActions = {
         ...(allowDuplicate ? {allowDuplicate: true} : {}),
       });
       if (!isCurrentSync(this, bindingId, context)) return false;
-      this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, item.id);
+      const remaining = await mutateScreenPublicationQueue(bindingId, () => removeScreenPublicationQueueItem(bindingId, item.id));
+      if (!isCurrentSync(this, bindingId, context)) return false;
+      this.screenPendingUploads = remaining;
       context?.retry.succeeded();
       this.screenLastSyncedAt = new Date().toISOString();
       await this.loadActiveFeed();
@@ -358,7 +379,7 @@ export const screenSyncActions = {
       }
       if (isTransientScreenRequestError(error)) context?.retry.failed();
       try {
-        this.screenPendingUploads = updateScreenPublicationQueueItem(bindingId, item.id, {
+        const remaining = await mutateScreenPublicationQueue(bindingId, () => updateScreenPublicationQueueItem(bindingId, item.id, {
           attempts: item.attempts + 1,
           status: isTransientScreenRequestError(error) ? "pending" : "needs_review",
           error: {
@@ -366,7 +387,9 @@ export const screenSyncActions = {
             message: error.response?.data?.message || error.message || "提交失败",
             details: error.response?.data?.details || null,
           },
-        });
+        }));
+        if (!isCurrentSync(this, bindingId, context)) return false;
+        this.screenPendingUploads = remaining;
       } catch (storageError) {
         if (!isTransientScreenRequestError(error)) context?.retry.failed();
         this.reportScreenQueueError(storageError);
@@ -388,11 +411,13 @@ export const screenSyncActions = {
     }
   },
 
-  removeScreenQueuedPublication(itemId) {
+  async removeScreenQueuedPublication(itemId) {
     const bindingId = this.screenSession?.binding?.id;
     if (!bindingId || this.screenSyncing || !this.recoverScreenPublicationQueue()) return;
     try {
-      this.screenPendingUploads = removeScreenPublicationQueueItem(bindingId, itemId);
+      const remaining = await mutateScreenPublicationQueue(bindingId, () => removeScreenPublicationQueueItem(bindingId, itemId));
+      if (this.screenSession?.binding?.id !== bindingId) return;
+      this.screenPendingUploads = remaining;
       screenSyncContexts.get(this)?.retry.request();
     } catch (error) {
       this.reportScreenQueueError(error);

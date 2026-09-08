@@ -1167,6 +1167,7 @@
 
 <script setup>
 import {computed, onMounted, onUnmounted, ref, watch} from "vue";
+import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import {onBeforeRouteLeave, useRoute, useRouter} from "vue-router";
 import {screenAccountAccessAllowed} from "@/utils/screenTemporaryExit";
 import ValidationReport from "@/components/v2/ValidationReport.vue";
@@ -1431,6 +1432,9 @@ async function confirmDiscardCurrentSection() {
     color: "warning",
   });
 }
+const releaseReloadProtection = registerAppReloadBlocker(() => currentSectionHasUnsavedChanges.value
+  && "学校管理页面有未保存的更改，请先保存或取消编辑，再刷新。");
+onUnmounted(releaseReloadProtection);
 
 async function navigateAdminTab(value) {
   if (!ADMIN_TABS.has(String(value)) || value === tab.value) return true;

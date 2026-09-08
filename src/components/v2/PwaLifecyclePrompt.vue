@@ -34,7 +34,7 @@
     location="bottom"
     :timeout="-1"
   >
-    新版本已经准备好，刷新后立即使用。
+    {{ reloadError || "新版本已经准备好，刷新后立即使用。" }}
     <template #actions>
       <v-btn
         variant="text"
@@ -48,10 +48,12 @@
 
 <script setup>
 import {onMounted, onUnmounted, ref} from "vue";
+import {requestAppReload} from "@/utils/appReloadProtection";
 
 const INSTALL_DISMISS_KEY = "classworks-pwa-install-dismissed-at";
 const installVisible = ref(false);
 const updateVisible = ref(false);
+const reloadError = ref("");
 let hadController = false;
 
 function installPromptReady() {
@@ -89,7 +91,7 @@ function controllerChanged() {
 }
 
 function reload() {
-  window.location.reload();
+  reloadError.value = requestAppReload(window.location);
 }
 
 onMounted(() => {

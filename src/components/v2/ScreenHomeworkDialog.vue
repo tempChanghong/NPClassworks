@@ -45,6 +45,7 @@
       <v-card-text
         v-else
         class="screen-composer__body px-5"
+        :inert="!draftReady"
       >
         <v-alert
           v-if="draftSaveFailed"
@@ -386,6 +387,7 @@
 <script setup>
 import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
+import {openScreenDraftStorage} from "@/utils/screenDraftSession";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {todayBoardDate} from "@/utils/boardDate";
@@ -435,6 +437,9 @@ const draftRestored = ref(false);
 const draftReady = ref(false);
 const draftSaveFailed = ref(false);
 const draftReadError = ref("");
+let draftStorage;
+let draftLoadVersion = 0;
+onUnmounted(() => { draftLoadVersion += 1; draftReady.value = false; });
 const releaseReloadBlocker = registerScreenReloadBlocker(store, () =>
   props.modelValue || saving.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 onUnmounted(releaseReloadBlocker);
@@ -464,6 +469,7 @@ const quickInputs = computed(() => sanitizeHomeworkQuickInputs(
   store.screenSession?.homeworkSettings?.quickInputs,
 ));
 const canSave = computed(() => Boolean(
+  draftReady.value &&
   !draftReadError.value && !conflict.value &&
   form.subjectId &&
   form.targetWorkspaceId &&
@@ -504,7 +510,7 @@ watch(() => props.publication, (publication) => {
 }, {immediate: true});
 watch(() => props.modelValue, (open) => {
   if (open) restoreDraft();
-  else draftReady.value = false;
+  else { draftReady.value = false; draftLoadVersion += 1; }
 }, {immediate: true});
 watch(() => form.subjectId, () => {
   if (!eligibleTargets.value.some((workspace) => workspace.id === form.targetWorkspaceId)) {
@@ -518,6 +524,7 @@ watch(form, () => {
     store.screenSession?.binding?.id,
     basePublication.value?.id || "new",
     draftSnapshot(),
+    draftStorage,
   );
   draftSaveFailed.value = hasMeaningfulScreenHomeworkDraft(form) && !saved;
 }, {deep: true});
@@ -538,7 +545,7 @@ function requestVisibility(open) {
   if (!open && (saving.value || conflictApplying.value || conflictCopying.value || conflictReloading.value)) return;
   if (!open && draftSaveFailed.value) {
     // Recheck storage before closing; the latest keystroke may not have reached its watcher yet.
-    const saved = saveScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftSnapshot());
+    const saved = saveScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftSnapshot(), draftStorage);
     draftSaveFailed.value = hasMeaningfulScreenHomeworkDraft(form) && !saved;
     if (draftSaveFailed.value) return;
   }
@@ -571,20 +578,29 @@ function loadPublication(publication) {
   form.priority = publication?.priority || "NORMAL";
 }
 
-function restoreDraft() {
+async function restoreDraft() {
+  const version = ++draftLoadVersion;
   draftReady.value = false;
   basePublication.value = props.publication;
   conflict.value = null;
   draftRestored.value = false;
   draftSaveFailed.value = false;
   let draft;
+  const bindingId = store.screenSession?.binding?.id;
+  const publicationId = basePublication.value?.id || "new";
   try {
+    const storage = await openScreenDraftStorage(bindingId, publicationId);
+    if (version !== draftLoadVersion || !props.modelValue) return;
+    if (bindingId !== store.screenSession?.binding?.id || publicationId !== (basePublication.value?.id || "new")) return;
+    draftStorage = storage;
     draft = loadScreenHomeworkDraft(
       store.screenSession?.binding?.id,
       basePublication.value?.id || "new",
+      draftStorage,
     );
   } catch (error) {
-    draftReadError.value = error.message;
+    if (version !== draftLoadVersion || !props.modelValue) return;
+    draftReadError.value = `无法读取本机草稿，原数据已保留。请恢复本机存储后重试。${error.message || ""}`;
     return;
   }
   draftReadError.value = "";
@@ -612,6 +628,7 @@ function discardRecoveredDraft() {
   clearScreenHomeworkDraft(
     store.screenSession?.binding?.id,
     basePublication.value?.id || "new",
+    draftStorage,
   );
   draftReady.value = false;
   draftRestored.value = false;
@@ -637,7 +654,7 @@ function setQuickDeadline(preset) {
 }
 
 async function save(allowDuplicate = false) {
-  if (draftReadError.value || conflict.value) return;
+  if (!draftReady.value || draftReadError.value || conflict.value) return;
   localError.value = "";
   if (!form.subjectId || !form.targetWorkspaceId) {
     localError.value = "请选择科目和具体班级";
@@ -668,6 +685,7 @@ async function save(allowDuplicate = false) {
     clearScreenHomeworkDraft(
       store.screenSession?.binding?.id,
       basePublication.value?.id || "new",
+      draftStorage,
     );
     draftReady.value = false;
     draftRestored.value = false;
@@ -718,7 +736,7 @@ async function applyLocalOnLatest() {
       operation: "updated",
     };
     const saved = await store.saveScreenPublication(screenConflictInput.value, latest, context);
-    clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new");
+    clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftStorage);
     conflict.value = null;
     emit("saved", saved, context);
     emit("update:modelValue", false);
@@ -779,7 +797,7 @@ async function saveConflictCopy() {
       publishAt: new Date().toISOString(),
       allowDuplicate: true,
     }, null, savedContext);
-    clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new");
+    clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftStorage);
     conflict.value = null;
     emit("saved", saved, savedContext);
     emit("update:modelValue", false);

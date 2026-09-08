@@ -439,7 +439,8 @@
 </template>
 
 <script setup>
-import {computed, nextTick, reactive, ref, watch} from "vue";
+import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
+import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {todayBoardDate} from "@/utils/boardDate";
@@ -523,6 +524,14 @@ const form = reactive({
   priority: "NORMAL",
   popupEnabled: false,
 });
+const cleanForm = ref("");
+const releaseReloadProtection = registerAppReloadBlocker(() => {
+  if (saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value) {
+    return "正在保存或载入发布内容，请等待完成后再刷新。";
+  }
+  return JSON.stringify(form) !== cleanForm.value ? "教师编辑器中有未保存的内容，请先保存草稿或完成发布，再刷新。" : "";
+});
+onUnmounted(releaseReloadProtection);
 
 const priorities = computed(() => [
   ...(form.type === "NOTICE" ? [{title: "次要", value: "MINOR"}] : []),
@@ -647,6 +656,7 @@ watch(() => props.editingPublication, (publication) => {
   form.expiresAt = publication.expiresAt ? localDateTime(new Date(publication.expiresAt)) : "";
   form.priority = publication.priority;
   form.popupEnabled = publication.contentJson?.popupEnabled === true;
+  cleanForm.value = JSON.stringify(form);
 }, {immediate: true});
 
 function targetSubtitle(workspace) {
@@ -689,6 +699,7 @@ function reset() {
   form.dueAt = "";
   form.expiresAt = "";
   form.publishAt = localDateTime();
+  cleanForm.value = JSON.stringify(form);
 }
 
 async function submit(status, allowDuplicate = false) {

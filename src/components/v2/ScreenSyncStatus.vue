@@ -180,7 +180,7 @@ async function remove(item) {
     confirmText: "确认移除",
     color: "error",
   })) return;
-  store.removeScreenQueuedPublication(item.id);
+  await store.removeScreenQueuedPublication(item.id);
 }
 
 onMounted(() => store.initializeScreenSync());

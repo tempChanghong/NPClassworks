@@ -20,6 +20,7 @@ import {endScreenTemporaryExit, readScreenTemporaryExit} from './utils/screenTem
 import { initializeAnalytics } from 'virtual:npclassworks-analytics'
 import { installLocalDiagnostics } from './utils/localDiagnostics'
 import { markApplicationMounted, startPerformanceBaseline } from './utils/performanceBaseline'
+import { installAppReloadProtection } from './utils/appReloadProtection'
 
 // A deliberate browser reload ends temporary access; OAuth navigation keeps its fixed deadline.
 if (readScreenTemporaryExit().bound && window.performance.getEntriesByType('navigation')[0]?.type === 'reload') {
@@ -29,6 +30,7 @@ if (readScreenTemporaryExit().bound && window.performance.getEntriesByType('navi
 getAccountTokens()
 captureOAuthCallback()
 startPerformanceBaseline()
+installAppReloadProtection()
 
 const app = createApp(App)
 

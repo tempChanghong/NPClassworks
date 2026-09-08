@@ -42,7 +42,7 @@ test("initial unreadable queue is not synced and automatically uploads after sto
 
 test("failed initialization and flush retain the last known list without submitting from it", async t => {
   const store = h.newStore({screen: true});
-  store.enqueueOfflineScreenPublication({content: "保留内存副本"});
+  await store.enqueueOfflineScreenPublication({content: "保留内存副本"});
   const original = store.screenPendingUploads[0].id;
   const read = failReads(t);
   store.initializeScreenSync();
@@ -52,7 +52,7 @@ test("failed initialization and flush retain the last known list without submitt
   assert.equal(store.screenSyncing, false);
   assert.equal(h.publications.length, 0);
   assert.equal(await store.retryScreenQueuedPublication(original), false);
-  store.removeScreenQueuedPublication(original);
+  await store.removeScreenQueuedPublication(original);
   assert.equal(store.screenPendingUploads[0].id, original);
   read.mock.restore();
   await store.flushScreenPublicationQueue();
@@ -107,7 +107,7 @@ test("malformed or non-array queue remains untouched and can recover manually wh
 
 test("rebinding clears only the previous binding's memory even when the new queue is unreadable", async t => {
   const store = h.newStore({screen: true});
-  store.enqueueOfflineScreenPublication({content: "A 班作业"});
+  await store.enqueueOfflineScreenPublication({content: "A 班作业"});
   const raw = h.storage.getItem(key);
   failReads(t, "classworks-v2-screen-publication-queue:screen-b");
   store.screenSession = {binding: {id: "screen-b"}};
@@ -124,7 +124,7 @@ test("rebinding clears only the previous binding's memory even when the new queu
 
 test("a read failure after the server saves preserves the queue and retries the same request ID", async t => {
   const store = h.newStore({screen: true});
-  store.enqueueOfflineScreenPublication({content: "已保存但无法更新本机"});
+  await store.enqueueOfflineScreenPublication({content: "已保存但无法更新本机"});
   const id = store.screenPendingUploads[0].input.clientRequestId;
   let read;
   const ids = [];
@@ -146,7 +146,7 @@ test("a read failure after the server saves preserves the queue and retries the 
 
 test("final read failure does not restore an already removed item or leave syncing stuck", async t => {
   const store = h.newStore({screen: true});
-  store.enqueueOfflineScreenPublication({content: "已完成上传"});
+  await store.enqueueOfflineScreenPublication({content: "已完成上传"});
   h.routes.set("GET /api/v2/classroom-screens/feed", (_req, reply) => {
     failReads(t);
     reply({items: h.publications});

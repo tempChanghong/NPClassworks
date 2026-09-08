@@ -7,10 +7,13 @@ import {createRenderer, nextTick, reactive, ref, ssrContextKey} from "vue";
 import {createMemoryHistory, createRouter, matchedRouteKey} from "vue-router";
 // Initialize Axios's Node adapter before installing the minimal browser globals.
 import "axios";
+import {createBrowserLocks} from "./browserLocks.js";
 
 export function memoryStorage() {
   const values = new Map();
   return {
+    get length() { return values.size; },
+    key: index => [...values.keys()][index] ?? null,
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, String(value)),
     removeItem: (key) => values.delete(key),
@@ -44,7 +47,7 @@ export async function createFlowHarness() {
   });
   for (const [key, value] of Object.entries({
     window: browser, localStorage: storage, sessionStorage: memoryStorage(),
-    document: {visibilityState: "visible"}, navigator: {onLine: true},
+    document: {visibilityState: "visible"}, navigator: {onLine: true, locks: createBrowserLocks()},
   })) {
     originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, {configurable: true, writable: true, value});
@@ -145,6 +148,13 @@ export async function createFlowHarness() {
   reset();
   return {
     api, screenExit, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    loadDraft(bindingId, publicationId) {
+      const id = sessionStorage.getItem("classworks-v2-draft-tab");
+      return drafts.loadScreenHomeworkDraft(bindingId, publicationId, id ? {
+        getItem: key => storage.getItem(`${key}:tab:${id}`),
+        removeItem: key => storage.removeItem(`${key}:tab:${id}`),
+      } : storage);
+    },
     unlockScreen() {
       const state = screenExit.readScreenTemporaryExit();
       screenExit.beginScreenTemporaryExit(state.token, state.server, state.epoch);
@@ -265,6 +275,7 @@ export async function createFlowHarness() {
       app.mount({}); mounted.push(app);
       props.modelValue = true;
       await nextTick(); await nextTick();
+      await eventually(() => { if (!state.draftReady.value && !state.draftReadError.value) throw new Error("draft still loading"); });
       return {state, events, props};
     },
     async close() {

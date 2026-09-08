@@ -24,7 +24,7 @@ test("offline composer saves durably, closes only after success, and uploads onc
   assert.equal(events.find(([name]) => name === "saved")[1].offlineQueued, true);
   assert.deepEqual(events.at(-1), ["update:modelValue", false]);
   assert.equal(h.queue.loadScreenPublicationQueue("screen-a").length, 1);
-  assert.equal(h.drafts.loadScreenHomeworkDraft("screen-a", "new"), null);
+  assert.equal(h.loadDraft("screen-a", "new"), null);
   // A new store must recover the persisted queue, rather than relying on memory.
   const reloaded = h.newStore({screen: true});
   await Promise.all([reloaded.flushScreenPublicationQueue(), reloaded.flushScreenPublicationQueue()]);
@@ -67,7 +67,7 @@ test("storage failure leaves the composer open, retains input and draft, and emi
     assert.deepEqual(events, []);
     assert.match(state.localError.value, /未能保存/);
     assert.equal(state.form.content, "完成练习册第 10 页");
-    assert.equal(h.drafts.loadScreenHomeworkDraft("screen-a", "new").content, state.form.content);
+    assert.equal(h.loadDraft("screen-a", "new").content, state.form.content);
     assert.equal(store.screenPendingUploads.length, 0);
     assert.equal(state.saving.value, false);
   } finally { h.storage.setItem = write; }
@@ -161,7 +161,7 @@ test("revision conflict retains local edits and loads the server version without
   assert.equal(state.form.content, "完成练习册第 10 页");
   assert.deepEqual(events, []);
   assert.equal(h.queue.loadScreenPublicationQueue("screen-a").length, 0);
-  assert.equal(h.drafts.loadScreenHomeworkDraft("screen-a", old.id).content, state.form.content);
+  assert.equal(h.loadDraft("screen-a", old.id).content, state.form.content);
   // Explicitly accepting local edits must use the latest revision, never force-overwrite v1.
   h.routes.set("PATCH /api/v2/classroom-screens/publications/publication-1", (req, reply) => {
     assert.equal(req.headers["if-match"], '"2"');
@@ -173,7 +173,7 @@ test("revision conflict retains local edits and loads the server version without
   await apply;
   assert.equal(events.find(([name]) => name === "saved")[1].revision, 3);
   assert.deepEqual(events.at(-1), ["update:modelValue", false]);
-  assert.equal(h.drafts.loadScreenHomeworkDraft("screen-a", old.id), null);
+  assert.equal(h.loadDraft("screen-a", old.id), null);
 });
 
 test("offline edits of existing work keep the editor open and never create a new queued copy", async () => {
@@ -186,7 +186,7 @@ test("offline edits of existing work keep the editor open and never create a new
   assert.equal(h.requests.length, 0);
   assert.equal(store.screenPendingUploads.length, 0);
   assert.deepEqual(events, []);
-  assert.equal(h.drafts.loadScreenHomeworkDraft("screen-a", "existing").content, state.form.content);
+  assert.equal(h.loadDraft("screen-a", "existing").content, state.form.content);
 });
 
 test("expired work waits for explicit retry and does not block newer automatic uploads", async () => {

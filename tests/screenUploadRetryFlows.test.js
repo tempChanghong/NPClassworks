@@ -8,7 +8,7 @@ before(async () => { h = await createFlowHarness(); });
 after(async () => { await h?.close(); });
 beforeEach(() => { h.reset(); navigator.onLine = true; });
 
-function scheduledScreen(t, contents = ["待补传作业"]) {
+async function scheduledScreen(t, contents = ["待补传作业"]) {
   const timers = new Map();
   const realTimeout = globalThis.setTimeout;
   const realClear = globalThis.clearTimeout;
@@ -27,7 +27,7 @@ function scheduledScreen(t, contents = ["待补传作业"]) {
   });
   const store = h.newStore({screen: true});
   t.mock.method(store, "sendScreenHeartbeat", async () => {});
-  for (const content of contents) store.enqueueOfflineScreenPublication({content});
+  for (const content of contents) await store.enqueueOfflineScreenPublication({content});
   store.initializeScreenSync();
   t.after(() => store.stopScreenSync());
   return {store, timers,
@@ -46,7 +46,7 @@ function scheduledScreen(t, contents = ["待补传作业"]) {
 test("real store retries throttle/server failures with backoff, pauses offline and drains on recovery", async (t) => {
   const healthy = h.routes.get(uploadPath);
   h.routes.set(uploadPath, (_req, reply) => reply({message: "busy"}, 429));
-  const s = scheduledScreen(t);
+  const s = await scheduledScreen(t);
   assert.equal(s.delay(), 2000);
   s.fire();
   await eventually(() => assert.equal(s.delay(), 30000));
@@ -78,7 +78,7 @@ test("real store retries throttle/server failures with backoff, pauses offline a
 
 test("permission errors stay in manual review without any further automatic timer", async (t) => {
   h.routes.set(uploadPath, (_req, reply) => reply({code: "SCREEN_TOKEN_INVALID", message: "已停用"}, 401));
-  const s = scheduledScreen(t);
+  const s = await scheduledScreen(t);
   s.fire();
   await eventually(() => assert.equal(s.store.screenPendingUploads[0].status, "needs_review"));
   h.realtime.emitServerEvent("connection-state", {connected: true});
@@ -91,7 +91,7 @@ test("late uploads cannot change a replacement session or send the remaining old
   const response = deferred();
   const entered = deferred();
   h.routes.set(uploadPath, async (_req, reply) => { entered.resolve(); await response.promise; reply({id: "old"}); });
-  const s = scheduledScreen(t, ["旧班第一项", "旧班第二项"]);
+  const s = await scheduledScreen(t, ["旧班第一项", "旧班第二项"]);
   // Keep the promise to explicitly wait for the stale batch to finish.
   const flushing = s.store.flushScreenPublicationQueue();
   try {
@@ -112,7 +112,7 @@ test("late uploads cannot change a replacement session or send the remaining old
 });
 
 test("failed persistence after a successful upload retains the request ID and also backs off", async (t) => {
-  const s = scheduledScreen(t);
+  const s = await scheduledScreen(t);
   const id = s.store.screenPendingUploads[0].input.clientRequestId;
   const write = h.storage.setItem;
   t.mock.method(h.storage, "setItem", (key, value) => {

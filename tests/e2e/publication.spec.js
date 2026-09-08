@@ -31,6 +31,151 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+async function fillUnsubmittedScreenHomework(page, text) {
+  await page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+  await page.getByRole("button", {name: "数学", exact: true}).click();
+  await page.getByRole("textbox", {name: "作业内容 作业内容", exact: true}).fill(text);
+}
+
+test("batch four: duplicated tabs own independent drafts and one save cannot delete the other's input", async ({browser}) => {
+  const a = await openRole(browser, "screen");
+  try {
+    await fillUnsubmittedScreenHomework(a.page, "甲标签的作业");
+    const opened = a.page.waitForEvent("popup");
+    await a.page.evaluate(() => { window.open(window.location.href, "_blank"); });
+    const b = await opened;
+    await fillUnsubmittedScreenHomework(b, "乙标签尚未提交");
+    const owner = page => page.evaluate(() => sessionStorage.getItem("classworks-v2-draft-tab"));
+    expect(await owner(a.page)).not.toBe(await owner(b));
+    await b.getByRole("button", {name: "取消", exact: true}).click();
+    await a.page.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(a.page.locator(".screen-composer")).not.toBeVisible();
+    await b.reload();
+    await b.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    await expect(b.getByRole("textbox", {name: "作业内容 作业内容", exact: true})).toHaveValue("乙标签尚未提交");
+    await b.getByRole("button", {name: "取消", exact: true}).click();
+    await b.close();
+    // A fresh tab can recover abandoned input without taking a live tab's draft.
+    const c = await a.context.newPage();
+    await c.goto(origin);
+    await c.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    await expect(c.getByRole("textbox", {name: "作业内容 作业内容", exact: true})).toHaveValue("乙标签尚未提交");
+    expect(a.errors).toEqual([]);
+  } finally { await a.context.close(); }
+});
+
+test("batch four: same-origin queue additions and remove-plus-add wait for the shared lock without lost items", async ({browser}) => {
+  const a = await openRole(browser, "screen");
+  const key = "classworks-v2-screen-publication-queue:screen-a";
+  try {
+    const b = await a.context.newPage();
+    await b.goto(origin);
+    await fillUnsubmittedScreenHomework(a.page, "并发甲");
+    await fillUnsubmittedScreenHomework(b, "并发乙");
+    await a.context.setOffline(true);
+    const hold = async () => {
+      await a.page.evaluate(key => {
+        window.queueLockAcquired = false;
+        void navigator.locks.request(key, async () => {
+          window.queueLockAcquired = true;
+          await new Promise(resolve => { window.releaseQueueLock = resolve; });
+        });
+      }, key);
+      await expect.poll(() => a.page.evaluate(() => window.queueLockAcquired)).toBe(true);
+    };
+    const release = () => a.page.evaluate(() => window.releaseQueueLock());
+    const read = () => a.page.evaluate(key => JSON.parse(localStorage.getItem(key) || "[]"), key);
+    const waiting = () => a.page.evaluate(async key => (await navigator.locks.query()).pending.filter(lock => lock.name === key).length, key);
+    await hold();
+    await Promise.all([a.page, b].map(page => page.getByRole("button", {name: "保存作业", exact: true}).click()));
+    await expect.poll(waiting).toBe(2);
+    expect(await read()).toEqual([]);
+    await release();
+    await expect.poll(async () => (await read()).length).toBe(2);
+    await expect(a.page.locator(".screen-composer")).not.toBeVisible();
+    await expect(b.locator(".screen-composer")).not.toBeVisible();
+    await a.page.locator(".screen-sync-chip").click();
+    await a.page.locator(".queued-publication").filter({hasText: "并发甲"}).getByRole("button", {name: "移除本机待提交作业"}).click();
+    await fillUnsubmittedScreenHomework(b, "并发丙");
+    await hold();
+    await Promise.all([
+      a.page.getByRole("button", {name: "确认移除", exact: true}).click(),
+      b.getByRole("button", {name: "保存作业", exact: true}).click(),
+    ]);
+    await expect.poll(waiting).toBe(2);
+    await release();
+    await expect.poll(async () => (await read()).map(item => item.input.content).sort()).toEqual(["并发丙", "并发乙"].sort());
+    expect(new Set((await read()).map(item => item.input.clientRequestId)).size).toBe(2);
+    expect(a.errors).toEqual([]);
+  } finally { await a.context.close(); }
+});
+
+async function activateNextRelease(page, request) {
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  await request.post(`${origin}/__test/release`, {data: {release: "next"}});
+  await page.evaluate(async () => { await (await navigator.serviceWorker.ready).update(); });
+  await expect(page.getByRole("button", {name: "立即刷新", exact: true})).toBeVisible();
+}
+
+test("batch four: actual PWA update refuses dirty teacher input and a pending save, then refreshes after completion", async ({browser, request}) => {
+  const teacher = await openRole(browser, "teacher");
+  try {
+    const page = teacher.page;
+    await page.locator(".v-select").filter({hasText: "科目"}).first().click();
+    await page.getByRole("option", {name: "数学", exact: true}).click();
+    await page.getByRole("combobox", {name: "发布到 发布到", exact: true}).click();
+    await page.getByRole("option", {name: /高一一班/}).click();
+    await page.keyboard.press("Escape");
+    const input = page.getByRole("textbox", {name: "正文 正文", exact: true});
+    await input.fill("刷新也不能丢失的教师输入");
+    await activateNextRelease(page, request);
+    await page.getByRole("button", {name: "立即刷新", exact: true}).click();
+    await expect(page.getByText(/教师编辑器中有未保存的内容/)).toBeVisible();
+    await expect(input).toHaveValue("刷新也不能丢失的教师输入");
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    await page.route(`${api}/api/v2/publications`, async route => {
+      if (route.request().method() === "POST") await gate;
+      await route.continue();
+    });
+    await page.getByRole("button", {name: "正式发布", exact: true}).click();
+    await page.getByRole("button", {name: "立即刷新", exact: true}).click();
+    await expect(page.getByText(/正在保存或载入发布内容/)).toBeVisible();
+    release();
+    await expect(input).toHaveValue("");
+    // Activation can retire a not-yet-imported old result-dialog chunk. The
+    // existing resource recovery UI must also allow refresh after durable save.
+    const dismiss = page.getByRole("dialog").getByRole("button", {name: /^(完成|暂时关闭)$/});
+    await dismiss.click();
+    await Promise.all([page.waitForNavigation(), page.getByRole("button", {name: "立即刷新", exact: true}).click()]);
+    await expect(page.getByText("刷新也不能丢失的教师输入", {exact: true})).toBeVisible();
+    expect(teacher.errors).toEqual([]);
+  } finally { await teacher.context.close(); }
+});
+
+test("batch four: PWA update does not discard an unwritable screen draft", async ({browser, request}) => {
+  const screen = await openRole(browser, "screen");
+  try {
+    await fillUnsubmittedScreenHomework(screen.page, "原输入");
+    await screen.page.evaluate(() => {
+      const write = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith("classworks-v2-screen-homework-draft:")) throw new Error("Storage full");
+        return write.call(this, key, value);
+      };
+    });
+    const input = screen.page.getByRole("textbox", {name: "作业内容 作业内容", exact: true});
+    await input.fill("无法落盘的当前输入");
+    await expect(screen.page.getByText(/本机草稿未能保存/)).toBeVisible();
+    await activateNextRelease(screen.page, request);
+    await screen.page.getByRole("button", {name: "立即刷新", exact: true}).click();
+    await expect(screen.page.getByText(/大屏正在编辑或保存作业/)).toBeVisible();
+    await expect(input).toHaveValue("无法落盘的当前输入");
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("notice popups prioritize urgent arrivals, preserve long text and reopen on revision changes", async ({browser, request}, testInfo) => {
   const screen = await openRole(browser, "screen");
   try {
@@ -542,7 +687,7 @@ for (const legacy of [false, true]) test(`reopened ${legacy ? "legacy" : "versio
     await screen.page.getByRole("textbox", {name: "作业内容 作业内容", exact: true}).fill("未提交的旧草稿");
     await screen.page.getByRole("button", {name: "取消", exact: true}).click();
     if (legacy) await screen.page.evaluate(() => {
-      const key = "classworks-v2-screen-homework-draft:screen-a:pub-1";
+      const key = `classworks-v2-screen-homework-draft:screen-a:pub-1:tab:${sessionStorage.getItem("classworks-v2-draft-tab")}`;
       const draft = JSON.parse(localStorage.getItem(key));
       delete draft.baseRevision;
       delete draft.basePublishAt;
