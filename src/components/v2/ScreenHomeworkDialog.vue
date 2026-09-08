@@ -464,7 +464,7 @@ const quickInputs = computed(() => sanitizeHomeworkQuickInputs(
   store.screenSession?.homeworkSettings?.quickInputs,
 ));
 const canSave = computed(() => Boolean(
-  !draftReadError.value &&
+  !draftReadError.value && !conflict.value &&
   form.subjectId &&
   form.targetWorkspaceId &&
   (form.title.trim() || form.content.trim()),
@@ -496,6 +496,7 @@ const dueAtLabel = computed(() => form.dueAt
   : "");
 
 watch(() => props.publication, (publication) => {
+  if (props.modelValue && draftReady.value) return;
   basePublication.value = publication;
   conflict.value = null;
   duplicateWarning.value = null;
@@ -516,7 +517,7 @@ watch(form, () => {
   const saved = saveScreenHomeworkDraft(
     store.screenSession?.binding?.id,
     basePublication.value?.id || "new",
-    form,
+    draftSnapshot(),
   );
   draftSaveFailed.value = hasMeaningfulScreenHomeworkDraft(form) && !saved;
 }, {deep: true});
@@ -528,11 +529,16 @@ function localDateTime(value) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
+function draftSnapshot() {
+  return {...form, baseRevision: basePublication.value?.revision ?? null,
+    basePublishAt: basePublication.value?.publishAt ?? null};
+}
+
 function requestVisibility(open) {
   if (!open && (saving.value || conflictApplying.value || conflictCopying.value || conflictReloading.value)) return;
   if (!open && draftSaveFailed.value) {
     // Recheck storage before closing; the latest keystroke may not have reached its watcher yet.
-    const saved = saveScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", form);
+    const saved = saveScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftSnapshot());
     draftSaveFailed.value = hasMeaningfulScreenHomeworkDraft(form) && !saved;
     if (draftSaveFailed.value) return;
   }
@@ -567,6 +573,8 @@ function loadPublication(publication) {
 
 function restoreDraft() {
   draftReady.value = false;
+  basePublication.value = props.publication;
+  conflict.value = null;
   draftRestored.value = false;
   draftSaveFailed.value = false;
   let draft;
@@ -582,7 +590,16 @@ function restoreDraft() {
   draftReadError.value = "";
   loadPublication(basePublication.value);
   if (draft) {
-    Object.assign(form, draft);
+    for (const key of Object.keys(form)) if (key in draft) form[key] = draft[key];
+    const latest = basePublication.value;
+    if (latest) {
+      basePublication.value = {...latest, revision: draft.baseRevision,
+        publishAt: draft.basePublishAt ?? latest.publishAt};
+      if (draft.baseRevision !== latest.revision) {
+        conflict.value = {expectedRevision: draft.baseRevision, latestRevision: latest.revision,
+          latestPublication: latest, latestCertified: latest.isCertified, sourceRevisionUnknown: draft.baseRevision === null};
+      }
+    }
     draftRestored.value = true;
   }
   nextTick(() => {
@@ -598,6 +615,8 @@ function discardRecoveredDraft() {
   );
   draftReady.value = false;
   draftRestored.value = false;
+  basePublication.value = props.publication;
+  conflict.value = null;
   loadPublication(basePublication.value);
   nextTick(() => {
     draftReady.value = true;
@@ -618,7 +637,7 @@ function setQuickDeadline(preset) {
 }
 
 async function save(allowDuplicate = false) {
-  if (draftReadError.value) return;
+  if (draftReadError.value || conflict.value) return;
   localError.value = "";
   if (!form.subjectId || !form.targetWorkspaceId) {
     localError.value = "请选择科目和具体班级";

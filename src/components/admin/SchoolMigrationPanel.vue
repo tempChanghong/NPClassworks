@@ -14,6 +14,7 @@
         variant="tonal"
       >
         导出当前学校的加密迁移包，可在新服务器的初始化页面中导入。
+        迁移包包含账号凭据，仅学校所有者（OWNER）可以导出。
       </v-alert>
 
       <v-alert
@@ -183,7 +184,7 @@ const countItems = computed(() => {
     {label: "审计记录", value: counts.auditLogs || 0},
   ];
 });
-const canExport = computed(() => acknowledged.value && passphrase.value.length >= 12 && (
+const canExport = computed(() => readiness.value?.role === "OWNER" && acknowledged.value && passphrase.value.length >= 12 && (
   readiness.value?.reauthMethod === "PIN"
     ? Boolean(currentPin.value)
     : confirmationSchoolCode.value.toUpperCase() === readiness.value?.school?.code?.toUpperCase()

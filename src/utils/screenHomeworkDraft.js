@@ -21,6 +21,9 @@ export function sanitizeScreenHomeworkDraft(value = {}) {
     boardDate: typeof value.boardDate === "string" ? value.boardDate : "",
     dueAt: typeof value.dueAt === "string" ? value.dueAt : "",
     priority: ["NORMAL", "IMPORTANT", "URGENT"].includes(value.priority) ? value.priority : "NORMAL",
+    // Missing metadata belongs to an older draft, never to the latest revision.
+    baseRevision: Number.isInteger(value.baseRevision) && value.baseRevision > 0 ? value.baseRevision : null,
+    basePublishAt: typeof value.basePublishAt === "string" ? value.basePublishAt : null,
     updatedAt: Number.isFinite(Number(value.updatedAt)) ? Number(value.updatedAt) : 0,
   };
 }

@@ -42,13 +42,14 @@ test.beforeEach(async ({request}) => {
 test("real-shaped screen session resolves missing subject names; new homework is silent until edited", async ({browser, request}) => {
   const board = await openBoard(browser, "screen");
   try {
-    await board.page.getByLabel("选择日期").fill("2026-09-07");
+    // Reload starts on today; seed that date instead of a historical fixed day.
+    const boardDate = await board.page.getByLabel("选择日期").inputValue();
     await expect(board.page.getByText("数学 · 高一一班：尚未录入", {exact: true})).toBeVisible();
     const session = (await (await request.get(`${api}/api/v2/classroom-screens/session`, {
       headers: {"X-Classworks-Screen-Token": "screen-token"},
     })).json()).data;
     expect(session).not.toHaveProperty("subjects");
-    const item = await seed(request, {content: "刚录入的作业"});
+    const item = await seed(request, {content: "刚录入的作业", boardDate});
     await expect(board.page.getByText("数学 · 高一一班：1 项作业", {exact: true})).toBeVisible();
     await expect(board.page.getByText("刚录入的作业", {exact: true})).toBeVisible();
     const banner = board.page.locator(".screen-homework-changes");

@@ -17,6 +17,16 @@ function memoryStorage() {
   };
 }
 
+test("draft persistence preserves its source revision and treats legacy metadata as unknown", () => {
+  const storage = memoryStorage();
+  saveScreenHomeworkDraft("screen", "pub", {content: "旧草稿", baseRevision: 1, basePublishAt: "2026-09-08T00:00:00Z"}, storage, 1000);
+  const draft = loadScreenHomeworkDraft("screen", "pub", storage, 2000);
+  assert.equal(draft.baseRevision, 1);
+  assert.equal(draft.basePublishAt, "2026-09-08T00:00:00Z");
+  storage.setItem(screenHomeworkDraftKey("screen", "pub"), JSON.stringify({content: "旧格式", updatedAt: 1000}));
+  assert.equal(loadScreenHomeworkDraft("screen", "pub", storage, 2000).baseRevision, null);
+});
+
 test("screen homework drafts are isolated per screen and publication", () => {
   const storage = memoryStorage();
   saveScreenHomeworkDraft("screen-a", "new", {content: "练习册第10页"}, storage, 1000);

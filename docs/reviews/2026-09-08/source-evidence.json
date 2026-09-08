@@ -1,0 +1,1086 @@
+{
+  "documentType": "source-verified-evidence-supplement",
+  "scanId": "cf3e2d89-23d7-432c-9d76-c823df2a2057",
+  "sourceRoot": "D:/WebstormProjects/NPClassworksKV",
+  "revision": "0b4d8e1a6f844ac8e18c302b607018abff1926fc",
+  "note": "补充完整未压缩论证及 UTF-8 源码片段；工具封存的四个 canonical 文件保持原样，不覆盖或重新封存。",
+  "findings": [
+    {
+      "ruleId": "sensitive-credential-export",
+      "title": "ADMIN 整校迁移导出暴露 OWNER 的 PIN 校验哈希",
+      "summary": "POST /api/v2/admin/schools/:schoolId/migration/export accepts the caller's chosen passphrase and authenticates only assertSchoolManager (OWNER or ADMIN). Reauthentication checks the caller's own PIN. collectSchoolData includes every schoolMember account, selects localPasswordHash, and copies it unchanged into the encrypted export. The ADMIN knows the encryption passphrase, can recover the OWNER bcrypt verifier and try all 10,000 allowed four-digit values offline, then use normal local login as OWNER.",
+      "severity": {
+        "level": "medium",
+        "rationale": "可跨越 ADMIN 到 OWNER 的凭据边界；需已登录本校 ADMIN，实际接管还要求恢复本地 OWNER PIN。4 位 PIN 是受支持配置，但未测恢复耗时，按中危处理。"
+      },
+      "confidence": {
+        "level": "high",
+        "rationale": "父审查已核对入口、控制、结果及已有对照防护；未作运行时复现。"
+      },
+      "taxonomy": {
+        "category": "Credential Exposure",
+        "cwe": [
+          "CWE-522"
+        ]
+      },
+      "locations": [
+        {
+          "path": "services/schoolMigrationService.js",
+          "startLine": 127,
+          "endLine": 128,
+          "role": "root_control"
+        },
+        {
+          "path": "routes/v2/academic-admin.js",
+          "startLine": 114,
+          "endLine": 129,
+          "role": "evidence"
+        },
+        {
+          "path": "services/schoolMigrationService.js",
+          "startLine": 127,
+          "endLine": 137,
+          "role": "evidence"
+        },
+        {
+          "path": "services/schoolMigrationService.js",
+          "startLine": 197,
+          "endLine": 208,
+          "role": "evidence"
+        },
+        {
+          "path": "domain/localAccount.js",
+          "startLine": 17,
+          "endLine": 19,
+          "role": "evidence"
+        },
+        {
+          "path": "services/schoolOwnerPolicy.js",
+          "startLine": 14,
+          "endLine": 16,
+          "role": "evidence"
+        }
+      ],
+      "codeEvidence": [
+        {
+          "id": "e1",
+          "label": "源码证据 1",
+          "language": "javascript",
+          "path": "routes/v2/academic-admin.js",
+          "startLine": 114,
+          "endLine": 129,
+          "code": "router.post(\"/schools/:schoolId/migration/export\", localAuthLimiter, errors.catchAsync(async (req, res) => {\n    req.setTimeout(180000);\n    res.setTimeout(180000);\n    const result = await createSchoolMigrationPackage({\n        managerAccountId: res.locals.account.id,\n        schoolId: req.params.schoolId,\n        currentPin: req.body?.currentPin,\n        confirmationSchoolCode: req.body?.confirmationSchoolCode,\n        passphrase: req.body?.passphrase,\n    });\n    res.set({\n        \"Content-Type\": \"application/vnd.npclassworks.transfer+json\",\n        \"Content-Disposition\": `attachment; filename=\"${result.filename}\"`,\n        \"X-NPClassworks-Migration-Id\": result.manifest.migrationId,\n    });\n    return res.send(result.buffer);",
+          "explanation": "Credential exports must respect the OWNER versus ADMIN privilege boundary；完整源码区间保留。"
+        },
+        {
+          "id": "e2",
+          "label": "源码证据 2",
+          "language": "javascript",
+          "path": "services/schoolMigrationService.js",
+          "startLine": 127,
+          "endLine": 137,
+          "code": "async function verifyManagerConfirmation({managerAccountId, schoolId, currentPin, confirmationSchoolCode}) {\n    await assertSchoolManager(managerAccountId, schoolId);\n    const [account, school] = await Promise.all([\n        prisma.account.findUnique({where: {id: managerAccountId}}),\n        prisma.school.findUnique({where: {id: schoolId}}),\n    ]);\n    if (!school) throw migrationError(\"学校不存在\", \"SCHOOL_NOT_FOUND\", 404);\n    if (account?.localPasswordHash) {\n        const matches = await bcrypt.compare(String(currentPin || \"\"), account.localPasswordHash || DUMMY_HASH);\n        if (!matches) throw migrationError(\"管理员 PIN 不正确\", \"MIGRATION_REAUTH_FAILED\", 401);\n        return {school, reauthMethod: \"PIN\"};",
+          "explanation": "Credential exports must respect the OWNER versus ADMIN privilege boundary；完整源码区间保留。"
+        },
+        {
+          "id": "e3",
+          "label": "源码证据 3",
+          "language": "javascript",
+          "path": "services/schoolMigrationService.js",
+          "startLine": 197,
+          "endLine": 208,
+          "code": "    const accounts = await client.account.findMany({\n        where: {id: {in: accountIds}},\n        orderBy: {id: \"asc\"},\n        select: {\n            id: true, provider: true, providerId: true, email: true, name: true, avatarUrl: true,\n            createdAt: true, updatedAt: true, tokenVersion: true, localUsername: true,\n            localPasswordHash: true, localDisabled: true, lastLoginAt: true,\n        },\n    });\n    return {\n        accounts: accounts.map((account) => ({\n            ...account,",
+          "explanation": "Credential exports must respect the OWNER versus ADMIN privilege boundary"
+        },
+        {
+          "id": "e4",
+          "label": "源码证据 4",
+          "language": "javascript",
+          "path": "domain/localAccount.js",
+          "startLine": 17,
+          "endLine": 19,
+          "code": "export function validateTeacherPin(value) {\n    return typeof value === \"string\" && /^\\d{4,8}$/.test(value);\n}",
+          "explanation": "Credential exports must respect the OWNER versus ADMIN privilege boundary"
+        },
+        {
+          "id": "e5",
+          "label": "源码证据 5",
+          "language": "javascript",
+          "path": "services/schoolOwnerPolicy.js",
+          "startLine": 14,
+          "endLine": 16,
+          "code": "    if ((target?.role === \"OWNER\" || nextRole === \"OWNER\") && manager.role !== \"OWNER\") {\n        throw authorizationError(\"只有学校所有者可以管理 OWNER\", \"SCHOOL_OWNER_REQUIRED\");\n    }",
+          "explanation": "Credential exports must respect the OWNER versus ADMIN privilege boundary；完整源码区间保留。"
+        }
+      ],
+      "rootCause": {
+        "summary": "ADMIN users cannot manage OWNER credentials or grant themselves OWNER. Owner credential material must not be available to ADMIN for unrestricted offline guessing. 当前入口未统一执行对应控制。",
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5"
+        ]
+      },
+      "validation": {
+        "method": "static source trace",
+        "summary": "POST /api/v2/admin/schools/:schoolId/migration/export accepts the caller's chosen passphrase and authenticates only assertSchoolManager (OWNER or ADMIN). Reauthentication checks the caller's own PIN. collectSchoolData includes every schoolMember account, selects localPasswordHash, and copies it unchanged into the encrypted export. The ADMIN knows the encryption passphrase, can recover the OWNER bcrypt verifier and try all 10,000 allowed four-digit values offline, then use normal local login as OWNER.",
+        "assertions": [
+          "ADMIN users cannot manage OWNER credentials or grant themselves OWNER. Owner credential material must not be available to ADMIN for unrestricted offline guessing.",
+          "Bypasses explicit OWNER protections and online login throttling; successful PIN recovery grants OWNER operations, including managing other OWNER accounts. Offline recovery timing was not measured. Longer PINs increase recovery work but do not fix the verifier disclosure."
+        ],
+        "limitations": [
+          "未运行程序、发送攻击请求或执行 PIN 恢复。",
+          "Export requires a valid manager account, caller reauthentication, and an encrypted package. Those controls protect against outsiders and incidental disclosure, but the malicious ADMIN is an authorized exporter and chooses the decryption passphrase. Ordinary local-account management and school-role management explicitly deny ADMIN access to OWNER changes, establishing a separate boundary. Sessions and OAuth tokens are correctly excluded from exports."
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5"
+        ]
+      },
+      "attackPath": {
+        "summary": "POST /api/v2/admin/schools/:schoolId/migration/export accepts the caller's chosen passphrase and authenticates only assertSchoolManager (OWNER or ADMIN). Reauthentication checks the caller's own PIN. collectSchoolData includes every schoolMember account, selects localPasswordHash, and copies it unchanged into the encrypted export. The ADMIN knows the encryption passphrase, can recover the OWNER bcrypt verifier and try all 10,000 allowed four-digit values offline, then use normal local login as OWNER.",
+        "dataflow": {
+          "summary": "POST /api/v2/admin/schools/:schoolId/migration/export accepts the caller's chosen passphrase and authenticates only assertSchoolManager (OWNER or ADMIN). Reauthentication checks the caller's own PIN. collectSchoolData includes every schoolMember account, selects localPasswordHash, and copies it unchanged into the encrypted export. The ADMIN knows the encryption passphrase, can recover the OWNER bcrypt verifier and try all 10,000 allowed four-digit values offline, then use normal local login as OWNER.",
+          "source": "routes/v2/academic-admin.js",
+          "sink": "services/schoolMigrationService.js",
+          "outcome": "Bypasses explicit OWNER protections and online login throttling; successful PIN recovery grants OWNER operations, including managing other OWNER accounts. Offline recovery timing was not measured. Longer PINs increase recovery work but do not fix the verifier disclosure.",
+          "evidenceRefs": [
+            "e1",
+            "e2",
+            "e3",
+            "e4",
+            "e5"
+          ]
+        },
+        "reachability": {
+          "summary": "An authenticated school ADMIN who knows their own PIN, or an OAuth ADMIN who knows the public school code. The shortest takeover chain requires a local OWNER using a permitted four-digit PIN.",
+          "attacker": "An authenticated school ADMIN who knows their own PIN, or an OAuth ADMIN who knows the public school code. The shortest takeover chain requires a local OWNER using a permitted four-digit PIN.",
+          "entrypoint": "routes/v2/academic-admin.js",
+          "outcome": "Bypasses explicit OWNER protections and online login throttling; successful PIN recovery grants OWNER operations, including managing other OWNER accounts. Offline recovery timing was not measured. Longer PINs increase recovery work but do not fix the verifier disclosure."
+        },
+        "impact": {
+          "level": "high",
+          "why": "Bypasses explicit OWNER protections and online login throttling; successful PIN recovery grants OWNER operations, including managing other OWNER accounts. Offline recovery timing was not measured. Longer PINs increase recovery work but do not fix the verifier disclosure."
+        },
+        "likelihood": {
+          "level": "medium",
+          "why": "可跨越 ADMIN 到 OWNER 的凭据边界；需已登录本校 ADMIN，实际接管还要求恢复本地 OWNER PIN。4 位 PIN 是受支持配置，但未测恢复耗时，按中危处理。"
+        },
+        "limitations": [
+          "Export requires a valid manager account, caller reauthentication, and an encrypted package. Those controls protect against outsiders and incidental disclosure, but the malicious ADMIN is an authorized exporter and chooses the decryption passphrase. Ordinary local-account management and school-role management explicitly deny ADMIN access to OWNER changes, establishing a separate boundary. Sessions and OAuth tokens are correctly excluded from exports."
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5"
+        ]
+      },
+      "remediation": "Require OWNER authorization for migration packages that contain credential verifiers, or provide an ADMIN export that omits credential hashes and forces credential reset at import. Apply the stronger authorization to the actual export service, not only the UI.",
+      "remediationTests": [
+        "普通 ADMIN 导出不得包含任何 OWNER 凭据校验材料。",
+        "OWNER 授权导出与 ADMIN 无凭据导出分别验证；目标导入后使用重新设置的凭据。"
+      ],
+      "preventiveControls": [
+        "对同一安全不变量的所有入口执行统一策略，并以权限矩阵和实际数据库回归约束。"
+      ],
+      "provenance": {
+        "source": "local_plugin",
+        "candidateId": "BASELINE-MIGRATION-OWNER-HASH"
+      },
+      "extensions": {
+        "baselineOriginalSeverity": "high",
+        "parentSeverityRationale": "可跨越 ADMIN 到 OWNER 的凭据边界；需已登录本校 ADMIN，实际接管还要求恢复本地 OWNER PIN。4 位 PIN 是受支持配置，但未测恢复耗时，按中危处理。"
+      }
+    },
+    {
+      "ruleId": "unverified-email-authorization",
+      "title": "未验证的 OAuth 邮箱被用于认领教师工作区邀请",
+      "summary": "OAuth userinfo email and email_verified flow into normalizedUser. Both STCN and Dlass branches preserve userData.email even when email_verified is false or absent. The value is persisted to Account.email, then passed unconditionally to claimWorkspaceInvitations. That function selects all unclaimed invitations by normalized email and upserts the requesting OAuth account into each invited workspace with the invitation role.",
+      "severity": {
+        "level": "medium",
+        "rationale": "可能获得他人的教师空间权限；需启用 STCN/Dlass、服务商允许可控未验证邮箱、存在同邮箱邀请且学校允许 OAuth。外部服务商策略未确认，保留条件并降为中危。"
+      },
+      "confidence": {
+        "level": "medium",
+        "rationale": "源码数据流确定；外部服务商是否允许攻击者设置未验证邮箱未核实。"
+      },
+      "taxonomy": {
+        "category": "Improper Authentication",
+        "cwe": [
+          "CWE-287"
+        ]
+      },
+      "locations": [
+        {
+          "path": "routes/accounts.js",
+          "startLine": 397,
+          "endLine": 409,
+          "role": "root_control"
+        },
+        {
+          "path": "routes/accounts.js",
+          "startLine": 397,
+          "endLine": 410,
+          "role": "evidence"
+        },
+        {
+          "path": "routes/accounts.js",
+          "startLine": 463,
+          "endLine": 464,
+          "role": "evidence"
+        },
+        {
+          "path": "services/workspaceAssignmentImportService.js",
+          "startLine": 153,
+          "endLine": 173,
+          "role": "evidence"
+        }
+      ],
+      "codeEvidence": [
+        {
+          "id": "e1",
+          "label": "源码证据 1",
+          "language": "javascript",
+          "path": "routes/accounts.js",
+          "startLine": 397,
+          "endLine": 410,
+          "code": "        } else if (provider === \"stcn\") {\n            // STCN（Casdoor）标准OIDC用户信息\n            normalizedUser = {\n                providerId: userData.sub,\n                email: userData.email_verified ? userData.email : userData.email || null,\n                name: userData.name || userData.preferred_username || userData.nickname,\n                avatarUrl: userData.picture,\n            };\n        } else if (provider === \"dlass\") {\n            // Dlass（Casdoor）标准OIDC用户信息\n            normalizedUser = {\n                providerId: userData.sub,\n                email: userData.email_verified ? userData.email : userData.email || null,\n                name: userData.name || userData.preferred_username || userData.nickname,",
+          "explanation": "Email-based authorization requires verified ownership of the asserted address；完整源码区间保留。"
+        },
+        {
+          "id": "e2",
+          "label": "源码证据 2",
+          "language": "javascript",
+          "path": "routes/accounts.js",
+          "startLine": 463,
+          "endLine": 464,
+          "code": "        // 5. 认领管理员在教师首次登录前按邮箱预分配的教学空间。\n        await claimWorkspaceInvitations({accountId: account.id, email: account.email});",
+          "explanation": "Email-based authorization requires verified ownership of the asserted address；完整源码区间保留。"
+        },
+        {
+          "id": "e3",
+          "label": "源码证据 3",
+          "language": "javascript",
+          "path": "services/workspaceAssignmentImportService.js",
+          "startLine": 153,
+          "endLine": 173,
+          "code": "export async function claimWorkspaceInvitations({accountId, email}) {\n    const normalizedEmail = normalizeAssignmentEmail(email);\n    if (!normalizedEmail) return {claimed: 0};\n    const invitations = await prisma.workspaceMemberInvite.findMany({\n        where: {normalizedEmail, claimedAt: null},\n    });\n    if (invitations.length === 0) return {claimed: 0};\n\n    await prisma.$transaction(async (tx) => {\n        for (const invitation of invitations) {\n            await tx.workspaceMember.upsert({\n                where: {\n                    workspaceId_accountId: {workspaceId: invitation.workspaceId, accountId},\n                },\n                update: {role: invitation.role},\n                create: {workspaceId: invitation.workspaceId, accountId, role: invitation.role},\n            });\n            await tx.workspaceMemberInvite.update({\n                where: {id: invitation.id},\n                data: {claimedAt: new Date(), claimedByAccountId: accountId},\n            });",
+          "explanation": "Email-based authorization requires verified ownership of the asserted address"
+        }
+      ],
+      "rootCause": {
+        "summary": "A pending workspace invitation belongs only to the person proven to control its email address. 当前入口未统一执行对应控制。",
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3"
+        ]
+      },
+      "validation": {
+        "method": "static source trace",
+        "summary": "OAuth userinfo email and email_verified flow into normalizedUser. Both STCN and Dlass branches preserve userData.email even when email_verified is false or absent. The value is persisted to Account.email, then passed unconditionally to claimWorkspaceInvitations. That function selects all unclaimed invitations by normalized email and upserts the requesting OAuth account into each invited workspace with the invitation role.",
+        "assertions": [
+          "A pending workspace invitation belongs only to the person proven to control its email address.",
+          "An unverified email claim can acquire TEACHER, ASSISTANT or OWNER workspace membership intended for another teacher. In a school permitting OAuth teacher access, the attacker can read drafts and create or modify class publications. This does not establish takeover of the victim's existing OAuth account."
+        ],
+        "limitations": [
+          "未运行程序、发送攻击请求或执行 PIN 恢复。",
+          "The token exchange and userinfo URLs are fixed trusted provider URLs; the attacker must actually control an account at that provider. ZeroCat and HLY discard unverified email claims. Provider registration and email-change policies are external and were not inspected; exploitability for the two configured production providers remains conditional. Workspace access also checks the school's OAuth login policy. Account creation/update contains no separate email verification state, and invitation claiming checks none."
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3"
+        ]
+      },
+      "attackPath": {
+        "summary": "OAuth userinfo email and email_verified flow into normalizedUser. Both STCN and Dlass branches preserve userData.email even when email_verified is false or absent. The value is persisted to Account.email, then passed unconditionally to claimWorkspaceInvitations. That function selects all unclaimed invitations by normalized email and upserts the requesting OAuth account into each invited workspace with the invitation role.",
+        "dataflow": {
+          "summary": "OAuth userinfo email and email_verified flow into normalizedUser. Both STCN and Dlass branches preserve userData.email even when email_verified is false or absent. The value is persisted to Account.email, then passed unconditionally to claimWorkspaceInvitations. That function selects all unclaimed invitations by normalized email and upserts the requesting OAuth account into each invited workspace with the invitation role.",
+          "source": "routes/accounts.js",
+          "sink": "routes/accounts.js",
+          "outcome": "An unverified email claim can acquire TEACHER, ASSISTANT or OWNER workspace membership intended for another teacher. In a school permitting OAuth teacher access, the attacker can read drafts and create or modify class publications. This does not establish takeover of the victim's existing OAuth account.",
+          "evidenceRefs": [
+            "e1",
+            "e2",
+            "e3"
+          ]
+        },
+        "reachability": {
+          "summary": "An account holder at an enabled STCN or Dlass OAuth provider whose userinfo response can contain a chosen, unverified teacher email. Requires that provider to permit such a claim and an existing invitation for that address, or a later administrator assignment by that address.",
+          "attacker": "An account holder at an enabled STCN or Dlass OAuth provider whose userinfo response can contain a chosen, unverified teacher email. Requires that provider to permit such a claim and an existing invitation for that address, or a later administrator assignment by that address.",
+          "entrypoint": "routes/accounts.js",
+          "outcome": "An unverified email claim can acquire TEACHER, ASSISTANT or OWNER workspace membership intended for another teacher. In a school permitting OAuth teacher access, the attacker can read drafts and create or modify class publications. This does not establish takeover of the victim's existing OAuth account."
+        },
+        "impact": {
+          "level": "high",
+          "why": "An unverified email claim can acquire TEACHER, ASSISTANT or OWNER workspace membership intended for another teacher. In a school permitting OAuth teacher access, the attacker can read drafts and create or modify class publications. This does not establish takeover of the victim's existing OAuth account."
+        },
+        "likelihood": {
+          "level": "medium",
+          "why": "可能获得他人的教师空间权限；需启用 STCN/Dlass、服务商允许可控未验证邮箱、存在同邮箱邀请且学校允许 OAuth。外部服务商策略未确认，保留条件并降为中危。"
+        },
+        "limitations": [
+          "The token exchange and userinfo URLs are fixed trusted provider URLs; the attacker must actually control an account at that provider. ZeroCat and HLY discard unverified email claims. Provider registration and email-change policies are external and were not inspected; exploitability for the two configured production providers remains conditional. Workspace access also checks the school's OAuth login policy. Account creation/update contains no separate email verification state, and invitation claiming checks none."
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3"
+        ]
+      },
+      "remediation": "Persist email verification separately, accept the address for authorization only when email_verified is strictly true or when an equivalent provider-specific verified-email endpoint proves ownership, and pass that verified address to invitation claiming. Clear or quarantine previously stored unverified addresses rather than retaining them through normalizedUser.email || account.email.",
+      "remediationTests": [
+        "对 STCN/Dlass 的 email_verified=false 或缺失字段，断言不会认领邀请。",
+        "严格 true 的合法邮箱可以认领；既有未验证邮箱不得通过旧 Account.email 回填认领。"
+      ],
+      "preventiveControls": [
+        "对同一安全不变量的所有入口执行统一策略，并以权限矩阵和实际数据库回归约束。"
+      ],
+      "provenance": {
+        "source": "local_plugin",
+        "candidateId": "BASELINE-OAUTH-UNVERIFIED-EMAIL"
+      },
+      "extensions": {
+        "baselineOriginalSeverity": "high",
+        "parentSeverityRationale": "可能获得他人的教师空间权限；需启用 STCN/Dlass、服务商允许可控未验证邮箱、存在同邮箱邀请且学校允许 OAuth。外部服务商策略未确认，保留条件并降为中危。"
+      }
+    },
+    {
+      "ruleId": "client-controlled-auth-throttling",
+      "title": "自选设备 ID 可绕过本地 PIN 登录的 8 次失败限制",
+      "summary": "POST /accounts/local/login runs localAuthLimiter and localLoginSourceLimiter. The latter's key uses X-Classworks-Device-Id instead of the source IP when present. Sending a new syntactically valid device ID every eight failures resets that bucket. localAccountService no longer enforces account-level failed-login lockouts. The remaining IP limiter allows 300 failed attempts per 15 minutes.",
+      "severity": {
+        "level": "medium",
+        "rationale": "匿名调用者可稳定轮换设备头绕过细粒度限制；仍受每 IP 300 次/15 分钟限制。短 PIN 包括管理员凭据，存在可实际持续尝试的账号接管风险，非无限速。"
+      },
+      "confidence": {
+        "level": "high",
+        "rationale": "父审查已核对入口、控制、结果及已有对照防护；未作运行时复现。"
+      },
+      "taxonomy": {
+        "category": "Excessive Authentication Attempts",
+        "cwe": [
+          "CWE-307"
+        ]
+      },
+      "locations": [
+        {
+          "path": "middleware/rateLimiter.js",
+          "startLine": 89,
+          "endLine": 94,
+          "role": "root_control"
+        },
+        {
+          "path": "routes/accounts.js",
+          "startLine": 74,
+          "endLine": 80,
+          "role": "evidence"
+        },
+        {
+          "path": "middleware/rateLimiter.js",
+          "startLine": 89,
+          "endLine": 94,
+          "role": "evidence"
+        },
+        {
+          "path": "middleware/rateLimiter.js",
+          "startLine": 99,
+          "endLine": 107,
+          "role": "evidence"
+        },
+        {
+          "path": "middleware/rateLimiter.js",
+          "startLine": 73,
+          "endLine": 79,
+          "role": "evidence"
+        },
+        {
+          "path": "domain/localAccount.js",
+          "startLine": 17,
+          "endLine": 19,
+          "role": "evidence"
+        }
+      ],
+      "codeEvidence": [
+        {
+          "id": "e1",
+          "label": "源码证据 1",
+          "language": "javascript",
+          "path": "routes/accounts.js",
+          "startLine": 74,
+          "endLine": 80,
+          "code": "router.post(\"/local/login\", localAuthLimiter, localLoginSourceLimiter, async (req, res, next) => {\n    try {\n        const result = await loginLocalAccount({\n            schoolCode: req.body?.schoolCode,\n            username: req.body?.username,\n            password: req.body?.password,\n        });",
+          "explanation": "An unauthenticated client must not choose a fresh authentication throttling identity"
+        },
+        {
+          "id": "e2",
+          "label": "源码证据 2",
+          "language": "javascript",
+          "path": "middleware/rateLimiter.js",
+          "startLine": 89,
+          "endLine": 94,
+          "code": "export function getLocalLoginSourceKey(req) {\n    const deviceId = normalizeLocalAuthKeyPart(req.headers?.[\"x-classworks-device-id\"], \"\");\n    const source = deviceId || `ip-${getClientIp(req)}`;\n    const schoolCode = normalizeLocalAuthKeyPart(req.body?.schoolCode, \"unknown-school\");\n    const username = normalizeLocalAuthKeyPart(req.body?.username, \"unknown-account\");\n    return `local-login:${source}:${schoolCode}:${username}`;",
+          "explanation": "An unauthenticated client must not choose a fresh authentication throttling identity"
+        },
+        {
+          "id": "e3",
+          "label": "源码证据 3",
+          "language": "javascript",
+          "path": "middleware/rateLimiter.js",
+          "startLine": 99,
+          "endLine": 107,
+          "code": "export const localLoginSourceLimiter = rateLimit({\n    windowMs: 15 * 60 * 1000,\n    limit: 8,\n    standardHeaders: \"draft-7\",\n    legacyHeaders: false,\n    message: {success: false, code: \"LOCAL_LOGIN_SOURCE_RATE_LIMITED\", message: \"此设备对该账号的尝试过于频繁，请15分钟后再试\"},\n    keyGenerator: getLocalLoginSourceKey,\n    skipSuccessfulRequests: true,\n    skipFailedRequests: false,",
+          "explanation": "An unauthenticated client must not choose a fresh authentication throttling identity；完整源码区间保留。"
+        },
+        {
+          "id": "e4",
+          "label": "源码证据 4",
+          "language": "javascript",
+          "path": "middleware/rateLimiter.js",
+          "startLine": 73,
+          "endLine": 79,
+          "code": "export const localAuthLimiter = rateLimit({\n    windowMs: 15 * 60 * 1000,\n    limit: 300,\n    standardHeaders: \"draft-7\",\n    legacyHeaders: false,\n    message: {success: false, code: \"LOCAL_AUTH_NETWORK_RATE_LIMITED\", message: \"本网络登录请求异常频繁，请稍后再试\"},\n    keyGenerator: getClientIp,",
+          "explanation": "An unauthenticated client must not choose a fresh authentication throttling identity；完整源码区间保留。"
+        },
+        {
+          "id": "e5",
+          "label": "源码证据 5",
+          "language": "javascript",
+          "path": "domain/localAccount.js",
+          "startLine": 17,
+          "endLine": 19,
+          "code": "export function validateTeacherPin(value) {\n    return typeof value === \"string\" && /^\\d{4,8}$/.test(value);\n}",
+          "explanation": "An unauthenticated client must not choose a fresh authentication throttling identity"
+        }
+      ],
+      "rootCause": {
+        "summary": "The short numeric PIN authentication path must enforce its per-account/source guessing limit independently of attacker-controlled device identifiers. 当前入口未统一执行对应控制。",
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5"
+        ]
+      },
+      "validation": {
+        "method": "static source trace",
+        "summary": "POST /accounts/local/login runs localAuthLimiter and localLoginSourceLimiter. The latter's key uses X-Classworks-Device-Id instead of the source IP when present. Sending a new syntactically valid device ID every eight failures resets that bucket. localAccountService no longer enforces account-level failed-login lockouts. The remaining IP limiter allows 300 failed attempts per 15 minutes.",
+        "assertions": [
+          "The short numeric PIN authentication path must enforce its per-account/source guessing limit independently of attacker-controlled device identifiers.",
+          "The advertised eight-attempt protection becomes 300 attempts per 15 minutes per IP. A single source can exhaust a four-digit PIN in 34 windows (about 8.5 hours), and different source IPs multiply the rate. A recovered administrator PIN can grant school administration rights. This is a partial throttling bypass, not an unlimited same-IP bypass."
+        ],
+        "limitations": [
+          "未运行程序、发送攻击请求或执行 PIN 恢复。",
+          "A separate request-IP limiter remains and caps failures at 300/15 minutes. The implementation intentionally avoids global lockouts to prevent teachers being locked out by other people, as tests/localAuthRateLimit.test.js confirms. That is a legitimate usability concern, but a caller-selected identifier does not provide a reliable security limit."
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5"
+        ]
+      },
+      "attackPath": {
+        "summary": "POST /accounts/local/login runs localAuthLimiter and localLoginSourceLimiter. The latter's key uses X-Classworks-Device-Id instead of the source IP when present. Sending a new syntactically valid device ID every eight failures resets that bucket. localAccountService no longer enforces account-level failed-login lockouts. The remaining IP limiter allows 300 failed attempts per 15 minutes.",
+        "dataflow": {
+          "summary": "POST /accounts/local/login runs localAuthLimiter and localLoginSourceLimiter. The latter's key uses X-Classworks-Device-Id instead of the source IP when present. Sending a new syntactically valid device ID every eight failures resets that bucket. localAccountService no longer enforces account-level failed-login lockouts. The remaining IP limiter allows 300 failed attempts per 15 minutes.",
+          "source": "routes/accounts.js",
+          "sink": "middleware/rateLimiter.js",
+          "outcome": "The advertised eight-attempt protection becomes 300 attempts per 15 minutes per IP. A single source can exhaust a four-digit PIN in 34 windows (about 8.5 hours), and different source IPs multiply the rate. A recovered administrator PIN can grant school administration rights. This is a partial throttling bypass, not an unlimited same-IP bypass.",
+          "evidenceRefs": [
+            "e1",
+            "e2",
+            "e3",
+            "e4",
+            "e5"
+          ]
+        },
+        "reachability": {
+          "summary": "An unauthenticated remote client who knows a school code and local teacher or administrator username and can change HTTP headers.",
+          "attacker": "An unauthenticated remote client who knows a school code and local teacher or administrator username and can change HTTP headers.",
+          "entrypoint": "routes/accounts.js",
+          "outcome": "The advertised eight-attempt protection becomes 300 attempts per 15 minutes per IP. A single source can exhaust a four-digit PIN in 34 windows (about 8.5 hours), and different source IPs multiply the rate. A recovered administrator PIN can grant school administration rights. This is a partial throttling bypass, not an unlimited same-IP bypass."
+        },
+        "impact": {
+          "level": "high",
+          "why": "The advertised eight-attempt protection becomes 300 attempts per 15 minutes per IP. A single source can exhaust a four-digit PIN in 34 windows (about 8.5 hours), and different source IPs multiply the rate. A recovered administrator PIN can grant school administration rights. This is a partial throttling bypass, not an unlimited same-IP bypass."
+        },
+        "likelihood": {
+          "level": "medium",
+          "why": "匿名调用者可稳定轮换设备头绕过细粒度限制；仍受每 IP 300 次/15 分钟限制。短 PIN 包括管理员凭据，存在可实际持续尝试的账号接管风险，非无限速。"
+        },
+        "limitations": [
+          "A separate request-IP limiter remains and caps failures at 300/15 minutes. The implementation intentionally avoids global lockouts to prevent teachers being locked out by other people, as tests/localAuthRateLimit.test.js confirms. That is a legitimate usability concern, but a caller-selected identifier does not provide a reliable security limit."
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5"
+        ]
+      },
+      "remediation": "Retain a stable source-IP plus account limit even when a device ID is supplied. Use device buckets only as an additional limit. For short PINs, add bounded account-wide progressive delay or another abuse control that does not create a long global lockout, and enforce stronger credentials for administrator accounts.",
+      "remediationTests": [
+        "同一来源、学校和账号轮换设备头，累计失败仍触发稳定限流。",
+        "不同合法设备共享校园 IP 的正常登录不被单人误输长期锁定。"
+      ],
+      "preventiveControls": [
+        "对同一安全不变量的所有入口执行统一策略，并以权限矩阵和实际数据库回归约束。"
+      ],
+      "provenance": {
+        "source": "local_plugin",
+        "candidateId": "BASELINE-LOCAL-LOGIN-DEVICE-RATELIMIT"
+      },
+      "extensions": {
+        "baselineOriginalSeverity": "medium",
+        "parentSeverityRationale": "匿名调用者可稳定轮换设备头绕过细粒度限制；仍受每 IP 300 次/15 分钟限制。短 PIN 包括管理员凭据，存在可实际持续尝试的账号接管风险，非无限速。"
+      }
+    },
+    {
+      "ruleId": "credential-reset-session-persistence",
+      "title": "教师重导入和管理员 upsert 更换 PIN 后保留旧会话",
+      "summary": "POST /api/v2/admin/local-teachers/import calls importLocalTeachers and POST /api/v2/admin/schools/:schoolId/local-admins calls createLocalAdministrator. Both use Account.upsert and replace localPasswordHash for an existing account without incrementing tokenVersion or revoking AccountSession. validateAccountToken and refreshAccessToken authorize using precisely those unchanged values, so old access tokens and refresh tokens remain valid.",
+      "severity": {
+        "level": "medium",
+        "rationale": "旧令牌持有者在管理员更换 PIN 后仍可使用原账号当前权限；需要已持有会话以及命中特定重置入口，故为中危。刷新默认 180 天使影响超出 access token 生命周期。"
+      },
+      "confidence": {
+        "level": "high",
+        "rationale": "父审查已核对入口、控制、结果及已有对照防护；未作运行时复现。"
+      },
+      "taxonomy": {
+        "category": "Insufficient Session Expiration",
+        "cwe": [
+          "CWE-613"
+        ]
+      },
+      "locations": [
+        {
+          "path": "services/localAccountService.js",
+          "startLine": 174,
+          "endLine": 180,
+          "role": "root_control"
+        },
+        {
+          "path": "routes/v2/academic-admin.js",
+          "startLine": 177,
+          "endLine": 185,
+          "role": "evidence"
+        },
+        {
+          "path": "services/localAccountService.js",
+          "startLine": 168,
+          "endLine": 181,
+          "role": "evidence"
+        },
+        {
+          "path": "services/localAccountService.js",
+          "startLine": 310,
+          "endLine": 319,
+          "role": "evidence"
+        },
+        {
+          "path": "utils/tokenManager.js",
+          "startLine": 209,
+          "endLine": 215,
+          "role": "evidence"
+        }
+      ],
+      "codeEvidence": [
+        {
+          "id": "e1",
+          "label": "源码证据 1",
+          "language": "javascript",
+          "path": "routes/v2/academic-admin.js",
+          "startLine": 177,
+          "endLine": 185,
+          "code": "router.post(\"/local-teachers/import\", errors.catchAsync(async (req, res) => {\n    const dryRun = req.query.dryRun === \"true\" || req.body?.dryRun === true;\n    const result = await importLocalTeachers({\n        managerAccountId: res.locals.account.id,\n        schoolId: req.body?.schoolId,\n        termId: req.body?.termId,\n        document: req.body?.assignmentPlan || req.body,\n        dryRun,\n    });",
+          "explanation": "All credential-reset paths must invalidate the account's existing authentication sessions"
+        },
+        {
+          "id": "e2",
+          "label": "源码证据 2",
+          "language": "javascript",
+          "path": "services/localAccountService.js",
+          "startLine": 168,
+          "endLine": 181,
+          "code": "            await assertOwnerTargetChange(tx, {manager, schoolId, accountId: existing?.id});\n            const passwordHash = assignment.pin\n                ? await bcrypt.hash(assignment.pin, BCRYPT_ROUNDS)\n                : existing?.localPasswordHash || null;\n            const account = await tx.account.upsert({\n                where: {provider_providerId: {provider: LOCAL_PROVIDER, providerId}},\n                update: {\n                    name: assignment.name,\n                    localUsername: assignment.username,\n                    ...(passwordHash ? {localPasswordHash: passwordHash} : {}),\n                    localDisabled: false,\n                    localLoginFailures: 0,\n                    localLockedUntil: null,\n                },",
+          "explanation": "All credential-reset paths must invalidate the account's existing authentication sessions"
+        },
+        {
+          "id": "e3",
+          "label": "源码证据 3",
+          "language": "javascript",
+          "path": "services/localAccountService.js",
+          "startLine": 310,
+          "endLine": 319,
+          "code": "        const account = await tx.account.upsert({\n            where: {provider_providerId: {provider: LOCAL_PROVIDER, providerId}},\n            update: {\n                name: displayName,\n                localUsername: normalizedUsername,\n                localPasswordHash: passwordHash,\n                localDisabled: false,\n                localLoginFailures: 0,\n                localLockedUntil: null,\n            },",
+          "explanation": "All credential-reset paths must invalidate the account's existing authentication sessions"
+        },
+        {
+          "id": "e4",
+          "label": "源码证据 4",
+          "language": "javascript",
+          "path": "utils/tokenManager.js",
+          "startLine": 209,
+          "endLine": 215,
+          "code": "        // 验证令牌版本\n        if (account.tokenVersion !== decoded.tokenVersion) {\n            throw new Error('Token version mismatch');\n        }\n\n        // 生成新的访问令牌\n        const newAccessToken = generateAccessToken(account, sessionId);",
+          "explanation": "All credential-reset paths must invalidate the account's existing authentication sessions；完整源码区间保留。"
+        }
+      ],
+      "rootCause": {
+        "summary": "Replacing a compromised local PIN must revoke sessions obtained under the old credential, consistently with the ordinary account-update and recovery paths. 当前入口未统一执行对应控制。",
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ]
+      },
+      "validation": {
+        "method": "static source trace",
+        "summary": "POST /api/v2/admin/local-teachers/import calls importLocalTeachers and POST /api/v2/admin/schools/:schoolId/local-admins calls createLocalAdministrator. Both use Account.upsert and replace localPasswordHash for an existing account without incrementing tokenVersion or revoking AccountSession. validateAccountToken and refreshAccessToken authorize using precisely those unchanged values, so old access tokens and refresh tokens remain valid.",
+        "assertions": [
+          "Replacing a compromised local PIN must revoke sessions obtained under the old credential, consistently with the ordinary account-update and recovery paths.",
+          "An existing compromised session survives a successful PIN replacement and can continue using the account's current permissions. Refresh tokens default to 180 days, so the old holder can retain access much longer than the 15-minute access-token lifetime. Privileges removed separately are still evaluated by downstream authorization."
+        ],
+        "limitations": [
+          "未运行程序、发送攻击请求或执行 PIN 恢复。",
+          "The direct updateManagedLocalAccount, changeOwnLocalPin and recoverLocalOwner paths increment tokenVersion and revoke sessions. The newer, separate importStaffConfiguration service increments tokenVersion and is exposed only through setup; it does not fix the older ordinary-admin importLocalTeachers route. Existing OWNER target checks are present in both affected upserts, so this finding is session persistence rather than an ADMIN-to-OWNER password reset bypass."
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ]
+      },
+      "attackPath": {
+        "summary": "POST /api/v2/admin/local-teachers/import calls importLocalTeachers and POST /api/v2/admin/schools/:schoolId/local-admins calls createLocalAdministrator. Both use Account.upsert and replace localPasswordHash for an existing account without incrementing tokenVersion or revoking AccountSession. validateAccountToken and refreshAccessToken authorize using precisely those unchanged values, so old access tokens and refresh tokens remain valid.",
+        "dataflow": {
+          "summary": "POST /api/v2/admin/local-teachers/import calls importLocalTeachers and POST /api/v2/admin/schools/:schoolId/local-admins calls createLocalAdministrator. Both use Account.upsert and replace localPasswordHash for an existing account without incrementing tokenVersion or revoking AccountSession. validateAccountToken and refreshAccessToken authorize using precisely those unchanged values, so old access tokens and refresh tokens remain valid.",
+          "source": "routes/v2/academic-admin.js",
+          "sink": "services/localAccountService.js",
+          "outcome": "An existing compromised session survives a successful PIN replacement and can continue using the account's current permissions. Refresh tokens default to 180 days, so the old holder can retain access much longer than the 15-minute access-token lifetime. Privileges removed separately are still evaluated by downstream authorization.",
+          "evidenceRefs": [
+            "e1",
+            "e2",
+            "e3",
+            "e4"
+          ]
+        },
+        "reachability": {
+          "summary": "A former account holder or attacker holding an existing account access/refresh token before an administrator replaces the account PIN through reimport or administrator creation/upsert.",
+          "attacker": "A former account holder or attacker holding an existing account access/refresh token before an administrator replaces the account PIN through reimport or administrator creation/upsert.",
+          "entrypoint": "routes/v2/academic-admin.js",
+          "outcome": "An existing compromised session survives a successful PIN replacement and can continue using the account's current permissions. Refresh tokens default to 180 days, so the old holder can retain access much longer than the 15-minute access-token lifetime. Privileges removed separately are still evaluated by downstream authorization."
+        },
+        "impact": {
+          "level": "high",
+          "why": "An existing compromised session survives a successful PIN replacement and can continue using the account's current permissions. Refresh tokens default to 180 days, so the old holder can retain access much longer than the 15-minute access-token lifetime. Privileges removed separately are still evaluated by downstream authorization."
+        },
+        "likelihood": {
+          "level": "medium",
+          "why": "旧令牌持有者在管理员更换 PIN 后仍可使用原账号当前权限；需要已持有会话以及命中特定重置入口，故为中危。刷新默认 180 天使影响超出 access token 生命周期。"
+        },
+        "limitations": [
+          "The direct updateManagedLocalAccount, changeOwnLocalPin and recoverLocalOwner paths increment tokenVersion and revoke sessions. The newer, separate importStaffConfiguration service increments tokenVersion and is exposed only through setup; it does not fix the older ordinary-admin importLocalTeachers route. Existing OWNER target checks are present in both affected upserts, so this finding is session persistence rather than an ADMIN-to-OWNER password reset bypass."
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ]
+      },
+      "remediation": "Centralize PIN replacement so every existing-account password change increments tokenVersion and revokes active AccountSession rows in the same transaction. Reuse it from teacher import and administrator upsert; alternatively reject duplicate usernames in the create-administrator route and use the protected update endpoint.",
+      "remediationTests": [
+        "真实数据库中先签发会话，再分别重导教师和 upsert 管理员 PIN；旧 access/refresh 均须失败，新 PIN 可登录。",
+        "仅修改显示名称且未变更凭据时按既定会话策略处理；OWNER 保护仍需通过。"
+      ],
+      "preventiveControls": [
+        "对同一安全不变量的所有入口执行统一策略，并以权限矩阵和实际数据库回归约束。"
+      ],
+      "provenance": {
+        "source": "local_plugin",
+        "candidateId": "BASELINE-IMPORT-PIN-SESSION-REVOCATION"
+      },
+      "extensions": {
+        "baselineOriginalSeverity": "medium",
+        "parentSeverityRationale": "旧令牌持有者在管理员更换 PIN 后仍可使用原账号当前权限；需要已持有会话以及命中特定重置入口，故为中危。刷新默认 180 天使影响超出 access token 生命周期。"
+      }
+    },
+    {
+      "ruleId": "publication-certification-scope-bypass",
+      "title": "普通修改和历史恢复绕过发布认证的学科范围检查",
+      "summary": "具备行政班 TEACHER/ASSISTANT 写角色、但不任教目标科目的账户，可对大屏未认证作业发送携带当前 If-Match 的空 PATCH 或恢复请求。普通更新/恢复只查空间写权限并将 isCertified 置 true，显式 certify 却按学科拒绝。",
+      "severity": {
+        "level": "medium",
+        "rationale": "现有普通任课模型即可触发；影响同一已授权空间内的认证状态与待处理列表，不扩大学校范围、不伪造其他教师身份。"
+      },
+      "confidence": {
+        "level": "high",
+        "rationale": "父审查核对空 PATCH 合并、空间授权和认证写入；当前数据库测试明确同班非任教学科显式认证应拒绝。"
+      },
+      "taxonomy": {
+        "category": "Incorrect Authorization",
+        "cwe": [
+          "CWE-863"
+        ]
+      },
+      "locations": [
+        {
+          "path": "services/publicationService.js",
+          "startLine": 1245,
+          "endLine": 1247,
+          "role": "root_control"
+        },
+        {
+          "path": "services/publicationService.js",
+          "startLine": 669,
+          "endLine": 671,
+          "role": "root_control"
+        },
+        {
+          "path": "services/publicationService.js",
+          "startLine": 1201,
+          "endLine": 1204,
+          "role": "evidence"
+        },
+        {
+          "path": "services/publicationService.js",
+          "startLine": 1229,
+          "endLine": 1247,
+          "role": "evidence"
+        },
+        {
+          "path": "services/publicationService.js",
+          "startLine": 652,
+          "endLine": 670,
+          "role": "evidence"
+        },
+        {
+          "path": "services/publicationService.js",
+          "startLine": 587,
+          "endLine": 596,
+          "role": "evidence"
+        },
+        {
+          "path": "services/publicationAuthorizationService.js",
+          "startLine": 119,
+          "endLine": 125,
+          "role": "evidence"
+        },
+        {
+          "path": "domain/publicationActionCenter.js",
+          "startLine": 15,
+          "endLine": 23,
+          "role": "evidence"
+        }
+      ],
+      "codeEvidence": [
+        {
+          "id": "e1",
+          "label": "发布认证权限路径对照",
+          "path": "services/publicationService.js",
+          "startLine": 1201,
+          "endLine": 1204,
+          "code": "    const existing = await getPublicationOrThrow(publicationId);\n    await assertCanManagePublication(accountId, existing);\n    if (existing.status === PUBLICATION_STATUSES.WITHDRAWN) {\n        throw publicationError(\"已撤回内容不能继续修改\", \"PUBLICATION_WITHDRAWN\", 409);",
+          "language": "javascript",
+          "explanation": "普通修改仅要求内容管理权限"
+        },
+        {
+          "id": "e2",
+          "label": "发布认证权限路径对照",
+          "path": "services/publicationService.js",
+          "startLine": 1229,
+          "endLine": 1247,
+          "code": "    const workspaces = await loadPublicationWorkspaces(\n        Array.isArray(targetWorkspaceIds) ? targetWorkspaceIds : [],\n    );\n    await assertCanWriteWorkspaces(accountId, workspaces);\n    const validation = validatePublicationSnapshot({input: mergedInput, workspaces});\n    if (!validation.valid) throw validationError(validation);\n    const normalized = validation.normalized;\n    await assertSubjectMatchesTargets(normalized.subjectId, workspaces);\n    await assertNoDuplicateAssignment({normalized, input, excludePublicationId: publicationId});\n\n    const certifiedAt = new Date();\n    const publication = await prisma.$transaction(async (tx) => {\n        const updateResult = await tx.publication.updateMany({\n            where: {id: publicationId, revision: expectedRevision},\n            data: {\n                ...toPublicationData(normalized),\n                isCertified: true,\n                certifiedByAccountId: accountId,\n                certifiedAt,",
+          "language": "javascript",
+          "explanation": "空间可写后直接赋予认证"
+        },
+        {
+          "id": "e3",
+          "label": "发布认证权限路径对照",
+          "path": "services/publicationService.js",
+          "startLine": 652,
+          "endLine": 670,
+          "code": "    const targetWorkspaceIds = Array.isArray(source.snapshot?.targetWorkspaceIds)\n        ? source.snapshot.targetWorkspaceIds\n        : [];\n    const workspaces = await loadPublicationWorkspaces(targetWorkspaceIds);\n    await assertCanWriteWorkspaces(accountId, workspaces);\n    const validation = validatePublicationSnapshot({input: source.snapshot, workspaces});\n    if (!validation.valid) throw validationError(validation);\n    const normalized = validation.normalized;\n    await assertSubjectMatchesTargets(normalized.subjectId, workspaces);\n    const certifiedAt = new Date();\n\n    const publication = await prisma.$transaction(async (tx) => {\n        const result = await tx.publication.updateMany({\n            where: {id: publicationId, revision: expectedRevision},\n            data: {\n                ...toPublicationData(normalized),\n                withdrawnAt: null,\n                isCertified: true,\n                certifiedByAccountId: accountId,",
+          "language": "javascript",
+          "explanation": "恢复操作使用相同的认证捷径"
+        },
+        {
+          "id": "e4",
+          "label": "发布认证权限路径对照",
+          "path": "services/publicationService.js",
+          "startLine": 587,
+          "endLine": 596,
+          "code": "export async function certifyPublication({accountId, publicationId, expectedRevision}) {\n    if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {\n        throw publicationError(\"需要提供有效的 revision 或 If-Match\", \"PUBLICATION_REVISION_REQUIRED\", 428);\n    }\n    const existing = await getPublicationOrThrow(publicationId);\n    await assertCanCertifyPublication(accountId, existing);\n    if (existing.status !== PUBLICATION_STATUSES.PUBLISHED) {\n        throw publicationError(\"只能确认已发布内容\", \"PUBLICATION_NOT_PUBLISHED\", 409);\n    }\n    if (existing.isCertified) return existing;",
+          "language": "javascript",
+          "explanation": "显式认证调用独立范围检查"
+        },
+        {
+          "id": "e5",
+          "label": "发布认证权限路径对照",
+          "path": "services/publicationAuthorizationService.js",
+          "startLine": 119,
+          "endLine": 125,
+          "code": "export async function assertCanCertifyPublication(accountId, publication, client = prisma) {\n    const workspaces = publication.targets.map((target) => target.workspace);\n    const scope = await getPublicationCertificationScope(accountId, workspaces, client);\n    if (isPublicationWithinActionScope(publication, scope)) return;\n    throw authorizationError(\n        \"只能确认自己任教学科或管理职责范围内的内容\",\n        \"PUBLICATION_CERTIFY_FORBIDDEN\",",
+          "language": "javascript",
+          "explanation": "学科/职责拒绝策略"
+        },
+        {
+          "id": "e6",
+          "label": "发布认证权限路径对照",
+          "path": "domain/publicationActionCenter.js",
+          "startLine": 15,
+          "endLine": 23,
+          "code": "    const fullyManaged = new Set(fullWorkspaceIds);\n    const assignedForSubject = new Set(\n        teachingAssignments\n            .filter((assignment) => assignment.subjectId === publication.subjectId)\n            .map((assignment) => assignment.workspaceId),\n    );\n    return targetWorkspaceIds.every((workspaceId) =>\n        fullyManaged.has(workspaceId) || assignedForSubject.has(workspaceId));\n}",
+          "language": "javascript",
+          "explanation": "必须对全部目标具备对应科目或管理权限"
+        }
+      ],
+      "rootCause": {
+        "summary": "认证的学科授权只覆盖显式 certify，update/restore 的同一状态转换直接依赖更宽的空间写权限。",
+        "evidenceRefs": [
+          "e2",
+          "e3",
+          "e4",
+          "e5",
+          "e6"
+        ]
+      },
+      "validation": {
+        "method": "static source trace",
+        "summary": "具备行政班 TEACHER/ASSISTANT 写角色、但不任教目标科目的账户，可对大屏未认证作业发送携带当前 If-Match 的空 PATCH 或恢复请求。普通更新/恢复只查空间写权限并将 isCertified 置 true，显式 certify 却按学科拒绝。",
+        "assertions": [
+          "tests/workspaceAssignmentDatabase.integration.test.js:199-207,258-283 已包含物理教师不得认证同班语文作业的真实关系夹具。",
+          "待处理 SQL services/publicationActionQuery.js:24 仅包含未认证内容，因此此状态变化会移除该项。"
+        ],
+        "limitations": [
+          "未运行数据库或实际请求。",
+          "docs/classworks-2-phase-6.md:8 规定教师修改自动认证；该设计与较窄的显式认证策略不一致。本发现不否认调用者已有编辑权限。",
+          "If-Match 仍有效，记录真实调用者且保留历史。"
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5",
+          "e6"
+        ]
+      },
+      "attackPath": {
+        "summary": "具备行政班 TEACHER/ASSISTANT 写角色、但不任教目标科目的账户，可对大屏未认证作业发送携带当前 If-Match 的空 PATCH 或恢复请求。普通更新/恢复只查空间写权限并将 isCertified 置 true，显式 certify 却按学科拒绝。",
+        "dataflow": {
+          "summary": "具备行政班 TEACHER/ASSISTANT 写角色、但不任教目标科目的账户，可对大屏未认证作业发送携带当前 If-Match 的空 PATCH 或恢复请求。普通更新/恢复只查空间写权限并将 isCertified 置 true，显式 certify 却按学科拒绝。",
+          "source": "PATCH /api/v2/publications/:id 或 POST /:id/restore",
+          "sink": "Publication.isCertified / PublicationRevision.isCertified",
+          "outcome": "非任教学科作业成为已认证并退出待处理列表",
+          "evidenceRefs": [
+            "e2",
+            "e3"
+          ]
+        },
+        "reachability": {
+          "summary": "学校允许登录方式，普通教师具有该班写角色但缺乏对应学科/全科管理职责，目标当前版本有效。",
+          "attacker": "同班普通非任教学科教师",
+          "entrypoint": "routes/v2/publications.js:149-176",
+          "outcome": "跨越既有认证学科边界"
+        },
+        "impact": {
+          "level": "medium",
+          "why": "改变已授权班级的认证完整性和负责教师待处理状态"
+        },
+        "likelihood": {
+          "level": "high",
+          "why": "普通任课关系自动生成宽泛空间写角色，无特殊竞态或外部配置要求"
+        },
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5",
+          "e6"
+        ]
+      },
+      "remediation": "将认证状态变更集中为统一策略：按最终快照的学科和全部目标检查认证权限；无该权限时拒绝或保持未认证。覆盖创建、修改、恢复和显式认证；仅拒绝空 PATCH 不足。",
+      "remediationTests": [
+        "复用现有跨学科数据库夹具，比较 certify、PATCH 空正文、PATCH 实际变更及 restore 的认证结果。",
+        "对应学科教师和学校管理者可合法认证，过期 If-Match 仍拒绝。"
+      ],
+      "preventiveControls": [
+        "为所有将 isCertified 变为 true 的入口维护一致的认证矩阵。"
+      ],
+      "provenance": {
+        "source": "local_plugin",
+        "candidateId": "publication-permission-review"
+      }
+    },
+    {
+      "ruleId": "oauth-login-csrf",
+      "title": "OAuth 登录结果未绑定发起浏览器，可强制切换会话",
+      "summary": "后端 OAuth state 只存 provider 等流程数据，回调不校验发起浏览器；前端启动直接接受 URL 中的令牌并覆盖当前登录。攻击者可引导用户打开其登录结果，使浏览器使用攻击者账号。",
+      "severity": {
+        "level": "low",
+        "rationale": "强制账号切换可由链接触发，但未证明原账号令牌或历史数据泄露；进一步内容错投需用户继续操作且攻击者具有目标写权限，新页面还会显示其姓名。"
+      },
+      "confidence": {
+        "level": "high",
+        "rationale": "后端 state 存取和令牌重定向已核对；前端实际入口、存储及动态请求拦截器由独立审查与父审查确认。"
+      },
+      "taxonomy": {
+        "category": "Login CSRF",
+        "cwe": [
+          "CWE-352"
+        ]
+      },
+      "locations": [
+        {
+          "path": "routes/accounts.js",
+          "startLine": 293,
+          "endLine": 301,
+          "role": "root_control"
+        },
+        {
+          "path": "routes/accounts.js",
+          "startLine": 234,
+          "endLine": 240,
+          "role": "evidence"
+        },
+        {
+          "path": "routes/accounts.js",
+          "startLine": 293,
+          "endLine": 305,
+          "role": "evidence"
+        },
+        {
+          "path": "routes/accounts.js",
+          "startLine": 463,
+          "endLine": 480,
+          "role": "evidence"
+        }
+      ],
+      "codeEvidence": [
+        {
+          "id": "e1",
+          "label": "OAuth 发起、状态验证与令牌交付",
+          "path": "routes/accounts.js",
+          "startLine": 234,
+          "endLine": 240,
+          "code": "    // 保存state和redirect_uri（5分钟过期）\n    oauthStates.set(state, {\n        provider,\n        redirect_uri,\n        timestamp: Date.now(),\n        codeVerifier,\n    });",
+          "explanation": "state 记录未关联发起浏览器"
+        },
+        {
+          "id": "e2",
+          "label": "OAuth 发起、状态验证与令牌交付",
+          "path": "routes/accounts.js",
+          "startLine": 293,
+          "endLine": 305,
+          "code": "    // 验证state\n    const stateData = oauthStates.get(state);\n    if (!stateData || stateData.provider !== provider) {\n        const frontendBaseUrl = process.env.FRONTEND_URL || \"http://localhost:5173\";\n        const errorUrl = new URL(frontendBaseUrl);\n        errorUrl.searchParams.append(\"error\", \"invalid_state\");\n        errorUrl.searchParams.append(\"provider\", provider);\n        errorUrl.searchParams.append(\"success\", \"false\");\n        return res.redirect(errorUrl.toString());\n    }\n\n    // 删除已使用的state\n    oauthStates.delete(state);",
+          "explanation": "回调只凭 state/provider 接受流程"
+        },
+        {
+          "id": "e3",
+          "label": "OAuth 发起、状态验证与令牌交付",
+          "path": "routes/accounts.js",
+          "startLine": 463,
+          "endLine": 480,
+          "code": "        // 5. 认领管理员在教师首次登录前按邮箱预分配的教学空间。\n        await claimWorkspaceInvitations({accountId: account.id, email: account.email});\n\n        // 6. 生成令牌对（访问令牌 + 刷新令牌）\n        const tokens = await generateTokenPair(account);\n\n        // 7. 重定向到前端根路径，携带JWT token\n        const frontendBaseUrl = process.env.FRONTEND_URL || \"http://localhost:5173\";\n        const callbackUrl = new URL(frontendBaseUrl);\n        callbackUrl.searchParams.append(\"access_token\", tokens.accessToken);\n        callbackUrl.searchParams.append(\"refresh_token\", tokens.refreshToken);\n        callbackUrl.searchParams.append(\"expires_in\", tokens.accessTokenExpiresIn);\n        callbackUrl.searchParams.append(\"provider\", provider);\n        // 附带展示信息，便于前端显示品牌与名称\n        const pconf = oauthProviders[provider] || {};\n        callbackUrl.searchParams.append(\"providerName\", pconf.displayName || pconf.name || provider);\n        if (pconf.brandColor || pconf.color) {\n            callbackUrl.searchParams.append(\"providerColor\", pconf.brandColor || pconf.color);",
+          "explanation": "签发长期账号令牌并转交前端 URL"
+        }
+      ],
+      "rootCause": {
+        "summary": "OAuth state 防伪和一次使用记录未证明结果属于当前浏览器；前端也没有待完成登录事务的验证。",
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3"
+        ]
+      },
+      "validation": {
+        "method": "static source trace",
+        "summary": "攻击者在自身账号完成或准备完成登录，将尚未消费的回调链接交给受害者；后端接受 state 后把 token 送至前端，前端直接保存。前端还可直接接受攻击者自有的有效 token 链接，修复需覆盖双方。",
+        "assertions": [
+          "已登录浏览器的令牌可被覆盖。",
+          "没有原账号凭据读取或任意更高权限证明。"
+        ],
+        "limitations": [
+          "用户必须打开攻击链接；后续错投还受学校/空间写权限约束。",
+          "未调用外部 OAuth 或运行浏览器。"
+        ],
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3"
+        ]
+      },
+      "attackPath": {
+        "summary": "攻击者自己的有效登录结果经用户打开的链接进入受害者浏览器并替换会话。",
+        "dataflow": {
+          "summary": "未关联浏览器的 state → 回调账号 token → URL → 前端 saveAccountTokens",
+          "source": "GET /accounts/oauth/:provider",
+          "sink": "GET /accounts/oauth/:provider/callback 的 JWT URL 重定向",
+          "outcome": "浏览器登录到攻击者账号",
+          "evidenceRefs": [
+            "e1",
+            "e2",
+            "e3"
+          ]
+        },
+        "reachability": {
+          "summary": "攻击者拥有合法账号并诱导用户打开链接。",
+          "attacker": "能分享自己有效登录结果链接的用户",
+          "entrypoint": "routes/accounts.js:279",
+          "outcome": "强制会话替换"
+        },
+        "impact": {
+          "level": "medium",
+          "why": "会话完整性受损；同目标写权限下后续草稿可能提交到攻击者账号"
+        },
+        "likelihood": {
+          "level": "low",
+          "why": "需要用户操作且进一步数据影响有额外权限与交互前提"
+        },
+        "evidenceRefs": [
+          "e1",
+          "e2",
+          "e3"
+        ]
+      },
+      "remediation": "使用关联发起浏览器的一次性登录事务；回调交付短期一次性结果码，由同一浏览器证明事务绑定后交换。前端仅接受正在等待的匹配流程，禁止任意 URL token 覆盖账号，跨标签同步身份变化。",
+      "remediationTests": [
+        "其他浏览器拿到有效 state/code 也不能完成原发起端登录。",
+        "未发起流程时带 success/access_token 的前端 URL 不改变已有账号。",
+        "账号在其他标签变化时，旧界面不得用新账号无提示提交。"
+      ],
+      "preventiveControls": [
+        "将登录发起、回调兑换、账号切换作为同一会话状态机约束。"
+      ],
+      "provenance": {
+        "source": "local_plugin",
+        "candidateId": "baseline-oauth-login-csrf"
+      },
+      "extensions": {
+        "externalSupportingEvidence": [
+          "D:/WebstormProjects/NPClassworks/src/main.js:23",
+          "D:/WebstormProjects/NPClassworks/src/utils/classworksV2Client.js:49-53,178-198,230-237,336-341"
+        ],
+        "frontendSourceIsOutsideBackendInventory": true
+      }
+    }
+  ]
+}

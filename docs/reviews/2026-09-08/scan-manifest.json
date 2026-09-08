@@ -1,0 +1,421 @@
+{
+  "documentType": "codex-security.scan-manifest",
+  "scan": {
+    "artifacts": [
+      {
+        "mediaType": "application/json",
+        "path": "findings.json",
+        "sha256": "132af0a37ebf9e7e991a3fb0a4d2bcddf8afc8a51f3dbb40a574dc699e5c11bd"
+      },
+      {
+        "mediaType": "application/json",
+        "path": "coverage.json",
+        "sha256": "fd96941cbe2ca4e77deca67db60477df70675f27c285cc06a577cb855606f95c"
+      }
+    ],
+    "completedAt": "2026-09-08T11:11:25.551632Z",
+    "coverageRef": "coverage.json",
+    "findingsRef": "findings.json",
+    "id": "cf3e2d89-23d7-432c-9d76-c823df2a2057",
+    "preservedSources": {
+      "checkpoints/0200fd94cf791399400c7d9dad6aa8dd7ad7847faab79038549355d6e5af8d90.json": "69c26bd99ae73d8aab7e8d2057ba844429e5b394aa2270d1bf9b11e50c4e8175",
+      "checkpoints/26bd3e1d019b350acc4048fa1b79b999ddc3652546088d9339819cf7c9b7a0fc.json": "0821a1df3b3dec2767428855d4e8b9c83b6a7ccac5bbee62d53b9c46f368c128",
+      "checkpoints/455cedd458bb4b784a1820c42f750d54f8b6f59640c628aa249132c6fec9f632.json": "019e038fc8d464be814b2111ebe71d2549d830f63e5fa8be77cf3c99e5b03698",
+      "checkpoints/47eeb0482af7d4c3ea39d6b65f2651a5e4804c12d0a8121e63029ccdbe062b14.json": "2d01432c613b4d854a0316b553b5222161aae302d43dd819c9758224e9bc058e",
+      "checkpoints/4f9d7777c2090c4088fe532f364ac4d0e2cf616beecfc9feee306bc01c825efa.json": "34be5f956b39a2643d7c019259a304db34cede40426f2d3409b71679204cb9f0",
+      "checkpoints/830bc480d578f585f35b63b010d07e661662f95edbcaf49868851d27447b0306.json": "6b8652a10f0bd8dabc68db40de45d6e4e1311eef519abde3d79d8db268dbb253",
+      "checkpoints/9df3aa937d6f5eaaf7d48358961c422b9f86d85b502ddcaba18a35127688b7e8.json": "ce46d194594050576a7fb8b994b4f32f00a7948bbfa8c2bca9eb47b938669ef9",
+      "checkpoints/a013f5fa29ca83dbc946d253bfb946f891fe6497443c240b82e4a9fa392396eb.json": "a67925fc66077377f73de2a138633d77840c7bbb3f87e373e32e606564103a6c",
+      "checkpoints/c7c4e753e505cd47af8d53325969eb600964220b2b73acff732519aa4f197832.json": "c7c4e753e505cd47af8d53325969eb600964220b2b73acff732519aa4f197832",
+      "checkpoints/d24b6210c512708615251c4cecdbb5f414948aaafc0e0cac40bc0498885fc07e.json": "d80d70ab16f656f547b01d6f347d233053b37277bc7cbce485839dd76e9d4f14",
+      "checkpoints/d2642e60c4497dadb5ab3d9e56513365f49d542d7b0d41a78a70b2db82d1bb32.json": "97b63791a743c093e31dd065f68ba15441797e18d5c3119329442721791a4b30"
+    },
+    "producer": {
+      "name": "codex-security-plugin",
+      "version": "0.1.23"
+    },
+    "scope": {
+      "context": "\u76ee\u524d\uff0c\u62a5\u544a\u4e2d\u7684\u4e00\u90e8\u5206\u95ee\u9898\u5df2\u88ab\u4fee\u590d\u3002\u63a5\u4e0b\u6765\u8fdb\u884c\u65b0\u4e00\u8f6e\u5206\u6790\uff0c\u91cd\u70b9\u9488\u5bf9\u529f\u80fd\u6f0f\u6d1e\u548c\u5b89\u5168\u95ee\u9898\u3001\u67b6\u6784\u95ee\u9898\u7b49\u7b49\u3002",
+      "excludePaths": [],
+      "includePaths": [
+        "."
+      ],
+      "limitations": [
+        "101/279 \u4e2a\u767b\u8bb0\u6587\u4ef6\u5b8c\u6210\u9010\u6587\u4ef6\u5b89\u5168\u5ba1\u9605\uff1b\u5269\u4f59178\u8def\u5f84\u5df2\u5217\u5165\u8986\u76d6\u9644\u4ef6\uff0c\u542b\u751f\u6210\u4ee3\u7801\u3001\u8fc1\u79fb\u3001\u6d4b\u8bd5\u3001\u6587\u6863\u548c\u90e8\u5206\u8fd0\u7ef4\u914d\u7f6e\u3002",
+        "\u5916\u90e8 OAuth \u670d\u52a1\u5546\u90ae\u7bb1\u653f\u7b56\u672a\u9a8c\u8bc1\uff0cS5 \u4fdd\u7559\u76f8\u5e94\u524d\u63d0\u3002",
+        "\u672a\u68c0\u67e5\u751f\u4ea7\u670d\u52a1\u5668\u3001\u771f\u5b9e\u73af\u5883\u503c\u3001\u5b9e\u9645\u8bbf\u95ee\u63a7\u5236\u3001\u4f9d\u8d56\u6f0f\u6d1e\u5e93\u6216\u771f\u5b9e\u5bc6\u7801\u6062\u590d\u8017\u65f6\u3002"
+      ],
+      "runtimeStatus": "\u672a\u8fd0\u884c\u5e94\u7528\u3001\u6d4b\u8bd5\u6216\u653b\u51fb\u8bf7\u6c42",
+      "summary": "\u5f53\u524d NPClassworksKV \u540e\u7aef\u6574\u4f53\u6e90\u4ee3\u7801\u8303\u56f4\uff0c\u6838\u5fc3\u8fd0\u884c\u65f6\u76ee\u5f55\u5b8c\u6574\u5ba1\u9605\uff0c\u5176\u4ed6\u5e93\u5b58\u90e8\u5206\u8986\u76d6\uff1b\u524d\u7aef\u53e6\u884c\u529f\u80fd/\u67b6\u6784\u5206\u6790\u5e76\u652f\u6301\u8de8\u7aef\u9a8c\u8bc1\u3002",
+      "validationMode": "static source trace"
+    },
+    "sealedAt": "2026-09-08T11:11:25.551632Z",
+    "startedAt": "2026-09-08T10:42:31.049497Z",
+    "status": "completed",
+    "target": {
+      "displayName": "NPClassworksKV",
+      "kind": "git_revision",
+      "revision": "0b4d8e1a6f844ac8e18c302b607018abff1926fc",
+      "targetId": "target_sha256_e97b9dbca85c24fb30551f8a1e8dd466fc1f32732a6287e5f8993d2c28982f59"
+    },
+    "threatModel": {
+      "assets": [
+        "School, workspace, staff-role and publication integrity; draft/history confidentiality; publication certification and optimistic revision state (services/publicationAuthorizationService.js:74; services/publicationAuthorizationService.js:119; services/publicationService.js:954).",
+        "Account identities, PIN/shared-password hashes, access/refresh signing keys and AccountSession refresh-token hashes. Access defaults to 15 minutes, refresh to 180 days; session and account tokenVersion are checked against PostgreSQL (utils/tokenManager.js:6; utils/tokenManager.js:10; utils/tokenManager.js:149; utils/tokenManager.js:325).",
+        "Classroom screen PIN hashes, bearer token hashes, binding status/version, associated class roster and attendance. Screen login returns a random bearer token; subsequent authentication resolves its database hash and active binding/class/term (services/classroomScreenService.js:233; services/classroomScreenService.js:342; services/classroomToolsService.js:148).",
+        "BOOTSTRAP_SETUP_KEY grants setup-session issuance and local OWNER recovery, independently of ordinary JWT/account authority (utils/setupToken.js:21; utils/setupToken.js:26; services/localAccountService.js:446).",
+        "Production PostgreSQL state resides at container /var/lib/postgresql/data in the Compose postgres-data named volume; Prisma receives a credential-bearing DATABASE_URL whose default database is classworks at postgres:5432. Debug instead uses classworks_debug at host 127.0.0.1:55432 and postgres-debug-data (utils/prisma.js:5; docker-compose.yml:12; docker-compose.yml:31; docker-compose.debug.yml:16; scripts/init-debug-env.js:33).",
+        "Encrypted school migration downloads include school business records and retained credential hashes, while excluding account sessions/OAuth tokens and resetting screen device credentials. Full operator database dumps instead include complete database state at deploy/backups/npclassworks_<database>_<timestamp>_<label>.dump by default (services/schoolMigrationService.js:197; services/schoolMigrationService.js:234; services/schoolMigrationService.js:325; deploy/lib.sh:9; deploy/backup.sh:31).",
+        "Deployment HMAC secret, writable repositories, Docker authority, deployment subprocess output and backups belong to the operator/deployment-agent boundary, not school administrators (deploy/agent/server.js:92; deploy/agent/server.js:220; deploy/npclassworks-deploy-agent.service.example:9)."
+      ],
+      "assumptions": [
+        "User context: this round evaluates current functionality/security/architecture after prior fixes. Scope here is the current NPClassworksKV repository only; no history or deployed-state inspection, application execution, network contact or source changes occurred. Frontend implementation is external to this worker's scope.",
+        "Actual production environment values, Docker volume host backing paths, reverse-proxy deployment and filesystem ACLs were not inspected. Values above are resolved supported defaults/templates, not claims about a live server.",
+        "REFRESH_TOKEN_API.md:8 describes a seven-day refresh default, while its own configuration at REFRESH_TOKEN_API.md:19 and the consumer at utils/tokenManager.js:10 use 180 days. Preserve this documentation disagreement.",
+        "Without VITE_DEFAULT_KV_SERVER, Compose backend BASE_URL falls back to https://<CLASSWORKS_DOMAIN> but the frontend build argument falls back to https://api.newfires.top (docker-compose.yml:31; docker-compose.yml:65; docker-compose.shared.yml:35; docker-compose.shared.yml:69). The initializer copies an explicit split-domain configuration (scripts/init-production-env.js:18; deploy/.env.production.example:8); the beginner guide instructs an explicit same-origin value (docs/beginner-deployment-guide.md:282). Impact requires omission of the explicit override.",
+        "The deployment guide's 'low-privilege deployment user' description must not imply Docker/host isolation: its systemd example grants the docker supplementary group, and the beginner guide explicitly acknowledges Docker-group high system authority (docs/automatic-deployment.md:14; deploy/npclassworks-deploy-agent.service.example:11; docs/beginner-deployment-guide.md:224).",
+        "Migration documentation requires a migrated OWNER login test before launch, but backend completeInstanceSetup only checks owner and active-term counts; no persisted login-test result is checked there. Treat login testing as a workflow obligation unless the parent establishes a separate consumer-side control (docs/school-server-migration.md:12; services/instanceSetupService.js:408).",
+        "Host debug HTTP still binds all interfaces even though the debug database is loopback-only; production-only configuration validation is skipped outside NODE_ENV=production. Network access to a developer machine is deployment-dependent (bin/www:38; docker-compose.debug.yml:14; utils/productionConfig.js:64).",
+        "The legacy account-device HTTP code remains in the file but is blocked by an earlier router middleware; old-source presence is not evidence of exposure (routes/accounts.js:27).",
+        "Unix chmod modes in backup/environment creation are intended host controls; actual Windows ACL behavior is not established. Deployment-agent process-group termination differs on Windows, and deployment scripts require Bash (scripts/init-production-env.js:29; deploy/lib.sh:56; deploy/agent/server.js:92)."
+      ],
+      "attackerCapabilities": [
+        "An unauthenticated network client can supply HTTP/Socket payloads, public workspace IDs, login attempts and OAuth initiation inputs; it does not initially possess an account JWT, screen token, setup key, deployment HMAC secret or database access.",
+        "An ordinary authenticated teacher can act within assigned workspace/responsibility scope and supply publication content/targets/revisions; a compromised screen bearer can exercise its screen binding's existing authority. Cross-school, unassigned-workspace and administrative authority would be additional capabilities (services/publicationAuthorizationService.js:74; services/classroomScreenService.js:365).",
+        "A school OWNER/ADMIN already controls school management and authorized school exports. That authority does not inherently include host shell, Docker, deployment configuration or instance environment secrets (services/academicAuthorizationService.js:13; services/schoolMigrationService.js:127; deploy/npclassworks-deploy-agent.service.example:9).",
+        "A deployment-secret holder can trigger the fixed upgrade workflow and receive its result/output, but cannot select shell commands, filesystem paths or arbitrary Git refs through request fields. Operator control of repository scripts, environment files or Docker is preexisting privileged control (deploy/agent/server.js:60; deploy/agent/server.js:92; deploy/ci-deploy.sh:8)."
+      ],
+      "effectiveResources": [
+        {
+          "configurationChain": "Compose environment -> DATABASE_URL -> PrismaPg",
+          "consumer": "Prisma PostgreSQL adapter",
+          "deployment": "standalone/shared production",
+          "discrepancy": null,
+          "effectiveValue": "postgres:5432/classworks by default, configured user/password redacted; postgres-data mounted at /var/lib/postgresql/data",
+          "enforcingControl": "No PostgreSQL host port mapping; database credentials; host Docker controls",
+          "evidence": [
+            "utils/prisma.js:5",
+            "docker-compose.yml:12",
+            "docker-compose.yml:31",
+            "docker-compose.shared.yml:35"
+          ],
+          "recipients": [
+            "backend container",
+            "postgres container",
+            "Docker-authorized operator"
+          ]
+        },
+        {
+          "configurationChain": "debug initializer -> deploy/.env.debug -> node --env-file -> DATABASE_URL",
+          "consumer": "Prisma PostgreSQL adapter",
+          "deployment": "host debug",
+          "discrepancy": "Backend HTTP separately listens on all interfaces: bin/www:38.",
+          "effectiveValue": "127.0.0.1:55432/classworks_debug?schema=public; postgres-debug-data at /var/lib/postgresql/data",
+          "enforcingControl": "Loopback published database port; separate Compose volume",
+          "evidence": [
+            "package.json:33",
+            "scripts/init-debug-env.js:33",
+            "docker-compose.debug.yml:14",
+            "docker-compose.debug.yml:16"
+          ],
+          "recipients": [
+            "host backend",
+            "debug postgres container",
+            "local operator"
+          ]
+        },
+        {
+          "configurationChain": "PORT=3000 -> bin/www; Compose published ports; Caddy route matcher",
+          "consumer": "API listener/reverse proxy",
+          "deployment": "standalone/shared",
+          "discrepancy": null,
+          "effectiveValue": "Container 0.0.0.0:3000; standalone public Caddy 80/443; shared host backend 127.0.0.1:13000 and frontend 127.0.0.1:13080",
+          "enforcingControl": "Gateway TLS and port binding; application route authentication",
+          "evidence": [
+            "bin/www:38",
+            "docker-compose.yml:75",
+            "docker-compose.shared.yml:30",
+            "docker-compose.shared.yml:73",
+            "deploy/Caddyfile:12"
+          ],
+          "recipients": [
+            "browser/API clients via gateway",
+            "local gateway in shared deployment"
+          ]
+        },
+        {
+          "configurationChain": "VITE_DEFAULT_KV_SERVER or separate Compose fallbacks; BASE_URL callback helper; FRONTEND_URL final redirect",
+          "consumer": "OAuth callback and frontend API build destination",
+          "deployment": "production Compose",
+          "discrepancy": "Fallback destinations differ when VITE_DEFAULT_KV_SERVER is absent; explicit template/guide settings resolve their respective deployment choices.",
+          "effectiveValue": "Backend callback defaults to https://<CLASSWORKS_DOMAIN>/accounts/oauth/<provider>/callback; frontend build fallback https://api.newfires.top; final token redirect https://<CLASSWORKS_DOMAIN>/",
+          "enforcingControl": "Production HTTPS/root-URL checks; fixed provider endpoints; final redirect uses configured FRONTEND_URL",
+          "evidence": [
+            "docker-compose.yml:31",
+            "docker-compose.yml:65",
+            "config/oauth.js:90",
+            "routes/accounts.js:470",
+            "utils/productionConfig.js:72"
+          ],
+          "recipients": [
+            "configured OAuth provider",
+            "configured frontend browser origin"
+          ]
+        },
+        {
+          "configurationChain": "JWT_ALG; JWT_SECRET/REFRESH_TOKEN_SECRET or respective RS256 key references; expiration environment",
+          "consumer": "JWT signing/verification",
+          "deployment": "all app startup paths",
+          "discrepancy": "REFRESH_TOKEN_API.md:8 says 7 days; REFRESH_TOKEN_API.md:19 and code use 180d.",
+          "effectiveValue": "HS256 default; access 15m and refresh 180d; secret/key material in backend process environment; session hashes in AccountSession",
+          "enforcingControl": "Production key validation; signature/type/issuer/audience; current account tokenVersion/session validation",
+          "evidence": [
+            "utils/tokenManager.js:6",
+            "utils/tokenManager.js:10",
+            "utils/tokenManager.js:92",
+            "utils/tokenManager.js:149",
+            "utils/tokenManager.js:325",
+            "utils/productionConfig.js:78"
+          ],
+          "recipients": [
+            "backend",
+            "issued-token browser/client",
+            "database receives refresh hash"
+          ]
+        },
+        {
+          "configurationChain": "BOOTSTRAP_SETUP_KEY -> constant-time key comparison/HMAC setup token or recovery authorization",
+          "consumer": "Setup session and OWNER recovery",
+          "deployment": "initialization and later operator recovery",
+          "discrepancy": null,
+          "effectiveValue": "Backend environment secret; purpose-bound 15-minute setup token; persistent recovery capability",
+          "enforcingControl": "HMAC/time checks, setup-state checks, local OWNER lookup",
+          "evidence": [
+            "utils/setupToken.js:21",
+            "utils/setupToken.js:26",
+            "services/instanceSetupService.js:138",
+            "services/localAccountService.js:446"
+          ],
+          "recipients": [
+            "operator",
+            "setup-token client",
+            "backend"
+          ]
+        },
+        {
+          "configurationChain": "School/login code + PIN + supplied device fingerprint -> random token -> database tokenHash lookup",
+          "consumer": "Classroom screen authentication/write services",
+          "deployment": "screen client",
+          "discrepancy": null,
+          "effectiveValue": "32-byte random bearer credential held by client; token hash and credentialVersion in ClassroomScreenBinding",
+          "enforcingControl": "PIN/fingerprint checks at login, active binding/class/term checks, target relationship checks, transactional binding rechecks on inspected write paths",
+          "evidence": [
+            "services/classroomScreenService.js:233",
+            "services/classroomScreenService.js:342",
+            "services/classroomScreenService.js:365",
+            "services/screenWriteAuthorization.js:3"
+          ],
+          "recipients": [
+            "bound screen client",
+            "backend",
+            "PostgreSQL hash record"
+          ]
+        },
+        {
+          "configurationChain": "School-scoped database snapshot -> scrypt/AES-256-GCM package -> browser download -> setup-authenticated raw upload -> empty-target transaction",
+          "consumer": "School migration package export/import",
+          "deployment": "manager export and empty-instance setup import",
+          "discrepancy": "Documented post-import OWNER login test is not checked by backend completion: docs/school-server-migration.md:12; services/instanceSetupService.js:408.",
+          "effectiveValue": "Downloaded .npcw-transfer; upload limit 64 MiB; retains PIN hashes, excludes sessions/OAuth tokens, resets screen credentials",
+          "enforcingControl": "School manager + PIN/code confirmation; authenticated encryption; setup token; empty-target and package validation",
+          "evidence": [
+            "services/schoolMigrationService.js:67",
+            "services/schoolMigrationService.js:127",
+            "services/schoolMigrationService.js:197",
+            "services/schoolMigrationService.js:234",
+            "services/schoolMigrationService.js:325",
+            "services/schoolMigrationService.js:409",
+            "routes/v2/setup.js:77"
+          ],
+          "recipients": [
+            "authorized school manager",
+            "passphrase/package holder",
+            "target backend"
+          ]
+        },
+        {
+          "configurationChain": "deploy/lib.sh defaults -> sourced ENV_FILE overrides -> BACKUP_DIR + derived database/timestamp/label filename",
+          "consumer": "Full database backup/restore",
+          "deployment": "operator Bash scripts",
+          "discrepancy": "This is complete database state, unlike the sanitized school migration export.",
+          "effectiveValue": "<repo>/deploy/backups/npclassworks_<POSTGRES_DB>_<UTC timestamp>_<safe label>.dump plus .sha256/.meta; environment may override BACKUP_DIR",
+          "enforcingControl": "Directories chmod 700, completed files chmod 600; restore --yes, realpath under BACKUP_DIR, dump verification, default pre-restore backup",
+          "evidence": [
+            "deploy/lib.sh:5",
+            "deploy/lib.sh:26",
+            "deploy/lib.sh:56",
+            "deploy/backup.sh:31",
+            "deploy/backup.sh:39",
+            "deploy/backup.sh:59",
+            "deploy/restore.sh:23",
+            "deploy/restore.sh:31"
+          ],
+          "recipients": [
+            "host deployment user",
+            "Docker-authorized operator",
+            "restore postgres container"
+          ]
+        },
+        {
+          "configurationChain": "DEPLOY_AGENT_BACKEND_DIR -> realpath -> deploy/ci-deploy.sh -> upgrade.sh origin/main for each repository",
+          "consumer": "Deployment agent execution",
+          "deployment": "optional host service",
+          "discrepancy": "The documented low-privilege user still has Docker authority; request commit is metadata, not the deployed revision selector.",
+          "effectiveValue": "Default HTTP 127.0.0.1:19090; fixed repository deploy/ci-deploy.sh; environment log path resolved relative to process cwd if configured; script inherits process environment",
+          "enforcingControl": "HMAC raw-body binding, timestamp window, in-memory nonce replay check, key allowlist, fixed script, serialized queue, timeout",
+          "evidence": [
+            "deploy/agent/server.js:31",
+            "deploy/agent/server.js:60",
+            "deploy/agent/server.js:92",
+            "deploy/agent/server.js:152",
+            "deploy/agent/server.js:220",
+            "deploy/ci-deploy.sh:8",
+            "deploy/npclassworks-deploy-agent.service.example:9"
+          ],
+          "recipients": [
+            "HMAC-authorized deploy caller",
+            "host deploy/Docker user",
+            "optional log file/journal"
+          ]
+        },
+        {
+          "configurationChain": "METRICS_TOKEN -> /metrics conditional authentication; production startup validator",
+          "consumer": "Metrics endpoint",
+          "deployment": "all app startup paths",
+          "discrepancy": null,
+          "effectiveValue": "/metrics behind gateway in production; token may be supplied in Authorization or query; unset token disables endpoint authentication outside production validation",
+          "enforcingControl": "Token equality when configured; mandatory production configuration",
+          "evidence": [
+            "app.js:112",
+            "utils/productionConfig.js:72",
+            "deploy/Caddyfile:12"
+          ],
+          "recipients": [
+            "token holder",
+            "unauthenticated caller only when token omitted"
+          ]
+        },
+        {
+          "configurationChain": "AXIOM_TOKEN + AXIOM_DATASET -> OTLPTraceExporter and automatic instrumentation",
+          "consumer": "Optional telemetry exporter",
+          "deployment": "backend with both Axiom settings present",
+          "discrepancy": "Exact exported fields/redaction depend on enabled instrumentation and were not established by this architecture pass.",
+          "effectiveValue": "https://api.axiom.co/v1/traces; credential represented by AXIOM_TOKEN reference",
+          "enforcingControl": "Both settings required to enable exporter",
+          "evidence": [
+            "utils/instrumentation.js:9"
+          ],
+          "recipients": [
+            "Axiom configured dataset"
+          ]
+        }
+      ],
+      "resolvedQuestions": [
+        {
+          "evidence": [
+            "routes/accounts.js:27"
+          ],
+          "question": "Does retained legacy device code imply a reachable device API?",
+          "resolution": "No. The account router rejects legacy /devices and /device paths before those handlers. Other legacy tables remain storage compatibility assets."
+        },
+        {
+          "evidence": [
+            "utils/socket.js:32",
+            "routes/v2/publications.js:48",
+            "services/publicationService.js:496"
+          ],
+          "question": "Are public workspace Socket rooms an authenticated teacher boundary?",
+          "resolution": "No. Anonymous room membership is based on active workspace/current term; the separate public feed is intentional and applies publication visibility controls."
+        },
+        {
+          "evidence": [
+            "routes/accounts.js:234",
+            "routes/accounts.js:470"
+          ],
+          "question": "Can OAuth redirect_uri choose the final credential recipient?",
+          "resolution": "The value is stored in state, but the inspected final consumer constructs its URL from FRONTEND_URL."
+        },
+        {
+          "evidence": [
+            "services/schoolMigrationService.js:197",
+            "services/schoolMigrationService.js:234",
+            "deploy/backup.sh:39"
+          ],
+          "question": "Are migration exports equivalent to full database backups?",
+          "resolution": "No. School exports are scoped/encrypted and scrub sessions/device credentials while retaining PIN hashes; operator pg_dump captures the whole database."
+        },
+        {
+          "evidence": [
+            "docker-compose.yml:31",
+            "docker-compose.yml:65",
+            "scripts/init-production-env.js:18",
+            "deploy/.env.production.example:8",
+            "docs/beginner-deployment-guide.md:282"
+          ],
+          "question": "What resolves the frontend/backend default-origin disagreement?",
+          "resolution": "An explicit VITE_DEFAULT_KV_SERVER. The initializer's current template uses split domains; the beginner guide specifies same-origin. Missing overrides leave divergent Compose fallback values."
+        },
+        {
+          "evidence": [
+            "utils/tokenManager.js:10",
+            "REFRESH_TOKEN_API.md:8",
+            "REFRESH_TOKEN_API.md:19"
+          ],
+          "question": "What refresh lifetime should the model use?",
+          "resolution": "180 days is the effective default; retain the older seven-day prose as a documentation disagreement."
+        },
+        {
+          "evidence": [
+            "deploy/npclassworks-deploy-agent.service.example:9",
+            "deploy/agent/server.js:92",
+            "docs/automatic-deployment.md:14",
+            "docs/beginner-deployment-guide.md:224"
+          ],
+          "question": "Is the deploy service a low-authority sandbox?",
+          "resolution": "No such isolation is established. It runs as deploy with Docker-group authority, invokes trusted repository scripts and inherits environment. The guide itself separately acknowledges Docker-group high authority."
+        },
+        {
+          "evidence": [
+            "docs/school-server-migration.md:12",
+            "services/instanceSetupService.js:408"
+          ],
+          "question": "Is the migration OWNER login-test requirement a server-enforced completion gate?",
+          "resolution": "Not in the inspected backend completion consumer; that function checks owner and active-term existence. Frontend workflow enforcement remains for the parent to inspect."
+        },
+        {
+          "question": "Were source anchors verified?",
+          "resolution": "Batch-checked 99 planned anchors; corrected the sole blank README anchor to README.md:19. Additional package/template anchors were read with numbered output. No real secret files were read."
+        }
+      ],
+      "securityObjectives": [
+        "Preserve public-feed visibility while preventing account, school, workspace, draft/history and screen capabilities from crossing their intended scopes (services/publicationService.js:496; services/academicAuthorizationService.js:13; services/publicationAuthorizationService.js:74; services/classroomScreenService.js:365).",
+        "Revocation must invalidate applicable account/screen authority; concurrent writes must preserve revision integrity and check screen authority at the transaction boundary (utils/tokenManager.js:243; utils/tokenManager.js:325; services/screenWriteAuthorization.js:3; services/publicationService.js:954).",
+        "Keep credential material out of public projections and restrict powerful setup/recovery, export/import and deployment operations with their independent controls (services/publicationService.js:54; utils/setupToken.js:21; services/localAccountService.js:446; services/schoolMigrationService.js:127; deploy/agent/server.js:31).",
+        "Maintain coherent deployment destinations, restrict database exposure, and protect secrets/backups with host access controls. Import must preserve selected-school data integrity while invalidating copied sessions/device authority (docker-compose.shared.yml:30; docker-compose.yml:31; deploy/lib.sh:56; deploy/backup.sh:59; services/schoolMigrationService.js:197; services/schoolMigrationService.js:234)."
+      ],
+      "summary": "NPClassworksKV is the Express/Prisma/PostgreSQL backend for school structure, accounts, publications, classroom screens and Socket.IO invalidation (README.md:19; app.js:134). Production starts bin/www, validates production configuration, serves HTTP on 0.0.0.0:3000 and initializes Socket.IO; the container first applies Prisma migrations and runs as node (bin/www:14; bin/www:38; Dockerfile:26; Dockerfile:32). Standalone Compose exposes Caddy on 80/443; shared Compose exposes backend/frontend only at host loopback ports 13000/13080 (docker-compose.yml:75; docker-compose.shared.yml:30; docker-compose.shared.yml:73). Host development reads deploy/.env.debug, uses a separate loopback PostgreSQL container and sets development mode (package.json:10; scripts/dev-server.js:2; docker-compose.debug.yml:14). This is a source-backed architecture map, not completed vulnerability-audit coverage.",
+      "trustBoundaries": [
+        "Anonymous clients may read catalog/public publication feed and join active-workspace Socket.IO rooms. Public feed restricts requests to active same-term workspaces and published, scheduled-visible records; its author projection excludes email. Socket room joins require active workspaces/current term, not account membership (routes/v2/publications.js:48; services/publicationService.js:54; services/publicationService.js:462; services/publicationService.js:496; utils/socket.js:32).",
+        "Bearer JWT callers cross into account authority through signature/type/issuer/audience checks, database account-version/session checks, and a separately gated legacy-token compatibility path. JWT identity alone does not supply school privileges (utils/tokenManager.js:92; utils/tokenManager.js:325; middleware/jwt-auth.js:22; middleware/jwt-auth.js:62).",
+        "School management uses current OWNER/ADMIN membership for the specified school. Publication access combines school roles, workspace roles, responsibility assignments and school login-mode policy. Owner-role/provisioning mutations have a shared School row lock and explicit OWNER/last-owner checks (services/academicAuthorizationService.js:13; services/publicationAuthorizationService.js:74; services/publicationAuthorizationService.js:119; services/schoolOwnerPolicy.js:5).",
+        "A screen token is a separate capability. Binding authentication and workspace relationship checks constrain screen actions; covered publication/attendance write paths recheck active tokenHash, credentialVersion and administrativeClassId while holding a binding row lock inside the write transaction (services/classroomScreenService.js:342; services/classroomScreenService.js:365; services/screenWriteAuthorization.js:3; services/publicationService.js:761; services/publicationService.js:954; services/classroomToolsService.js:148).",
+        "Setup-key holders obtain a purpose-bound 15-minute HMAC setup token. Setup routes can create initial authority and import data; setup services check instance state. The same persistent environment key separately authorizes OWNER recovery after initialization (routes/v2/setup.js:49; utils/setupToken.js:26; services/instanceSetupService.js:138; services/localAccountService.js:446).",
+        "OAuth exchanges send credentials to fixed provider endpoints; provider identity/email is consumed for account and invitation assignment. Provider state is stored in process memory. The final access/refresh pair is redirected to configured FRONTEND_URL, not the stored request redirect_uri; backend callback URLs derive from BASE_URL (config/oauth.js:3; config/oauth.js:90; routes/accounts.js:234; routes/accounts.js:294; routes/accounts.js:470).",
+        "School migration export requires school-manager authority plus local PIN or school-code confirmation. Import requires setup token and an empty target, decrypts and validates the uploaded package, then rechecks emptiness inside the import transaction. Encryption uses scrypt and AES-256-GCM (services/schoolMigrationService.js:67; services/schoolMigrationService.js:127; services/schoolMigrationService.js:409; routes/v2/setup.js:77).",
+        "Operators may source the trusted production environment, dump/replace the full database and execute repository upgrade scripts. Restore requires --yes, a realpath beneath BACKUP_DIR and a readable dump; the deploy agent instead authenticates a timestamp/nonce/body HMAC, allows only upgrade plus metadata, serializes jobs and invokes a fixed script. That script selects both repositories' origin/main; request commit metadata does not select executable revisions (deploy/lib.sh:26; deploy/restore.sh:23; deploy/restore.sh:31; deploy/restore.sh:55; deploy/agent/server.js:31; deploy/agent/server.js:60; deploy/agent/server.js:92; deploy/agent/server.js:152; deploy/ci-deploy.sh:8).",
+        "CORS exposes responses to configured origins, allowing absent Origin; it is distinct from JWT/screen authorization. Production gateway terminates HTTPS and forwards API/Socket/metrics routes. Metrics checks METRICS_TOKEN when configured; production startup requires it. Optional Axiom tracing exports to https://api.axiom.co/v1/traces only when both AXIOM_TOKEN and AXIOM_DATASET exist (utils/corsConfig.js:14; utils/corsConfig.js:23; deploy/Caddyfile:12; app.js:112; utils/productionConfig.js:72; utils/instrumentation.js:9)."
+      ]
+    }
+  },
+  "schemaVersion": "1.0"
+}

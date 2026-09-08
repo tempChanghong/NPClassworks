@@ -1,0 +1,804 @@
+{
+  "completeness": "partial",
+  "deferred": [
+    {
+      "id": "deferred-12964612e001aad0",
+      "paths": [
+        ".claude/settings.local.json",
+        ".dockerignore",
+        ".env.oauth.example",
+        ".github/dependabot.yml",
+        ".github/workflows/docker-publish.yml",
+        ".github/workflows/production-deploy.yml",
+        ".github/workflows/quality.yml",
+        ".gitignore",
+        ".idea/.gitignore",
+        ".idea/FixClassworksKV.iml",
+        ".idea/modules.xml",
+        ".idea/vcs.xml",
+        "API_QUICK_REFERENCE.md",
+        "LICENSE",
+        "MIGRATION_CHECKLIST.md",
+        "NEW_APIS_SUMMARY.md",
+        "README.md",
+        "REFRESH_TOKEN_API.md",
+        "REFRESH_TOKEN_QUICKSTART.md",
+        "REFRESH_TOKEN_SUMMARY.md",
+        "config/examples/high-school-organization.example.json",
+        "config/examples/newfires-high-school-organization.example.json",
+        "config/examples/teacher-configuration.example.json",
+        "deploy/.env.debug.example",
+        "deploy/.env.production.example",
+        "deploy/Caddyfile",
+        "deploy/Caddyfile.shared-same-origin.example",
+        "deploy/Caddyfile.shared.example",
+        "deploy/backup.sh",
+        "deploy/compatibility.json",
+        "deploy/deploy-agent.env.example",
+        "deploy/install-backup-timer.sh",
+        "deploy/lib.sh",
+        "deploy/nginx.shared.conf.example",
+        "deploy/npclassworks-deploy-agent.service.example",
+        "deploy/restore.sh",
+        "deploy/rollback.sh",
+        "docker-compose.debug.yml",
+        "docker-compose.integration.yml",
+        "docker-compose.shared.yml",
+        "docker-compose.yml",
+        "docs/account-session-database.md",
+        "docs/automatic-deployment.md",
+        "docs/backup-restore-and-history-pagination.md",
+        "docs/beginner-deployment-guide.md",
+        "docs/classworks-2-classroom-tools.md",
+        "docs/classworks-2-local-debugging.md",
+        "docs/classworks-2-phase-1.md",
+        "docs/classworks-2-phase-2.md",
+        "docs/classworks-2-phase-3.md",
+        "docs/classworks-2-phase-5a.md",
+        "docs/classworks-2-phase-5b.md",
+        "docs/classworks-2-phase-5c.md",
+        "docs/classworks-2-phase-5d.md",
+        "docs/classworks-2-phase-5e.md",
+        "docs/deployment-gate-and-revision-cleanup.md",
+        "docs/deployment-version-pairing.md",
+        "docs/release-v1.0.0.md",
+        "docs/release-v1.0.1.md",
+        "docs/runtime-metrics-and-development.md",
+        "docs/school-server-migration.md",
+        "docs/screen-publication-idempotency.md",
+        "docs/session-revocation-database.md",
+        "generated/prisma/browser.ts",
+        "generated/prisma/client.ts",
+        "generated/prisma/commonInputTypes.ts",
+        "generated/prisma/enums.ts",
+        "generated/prisma/internal/class.ts",
+        "generated/prisma/internal/prismaNamespace.ts",
+        "generated/prisma/internal/prismaNamespaceBrowser.ts",
+        "generated/prisma/models.ts",
+        "generated/prisma/models/AcademicTerm.ts",
+        "generated/prisma/models/Account.ts",
+        "generated/prisma/models/AccountPreference.ts",
+        "generated/prisma/models/AccountSession.ts",
+        "generated/prisma/models/AdministrativeClassLeadership.ts",
+        "generated/prisma/models/AdministrativeClassStudent.ts",
+        "generated/prisma/models/AdministrativeClassSubject.ts",
+        "generated/prisma/models/AppInstall.ts",
+        "generated/prisma/models/AuditLog.ts",
+        "generated/prisma/models/AutoAuth.ts",
+        "generated/prisma/models/ClassAttendanceDay.ts",
+        "generated/prisma/models/ClassroomScreenBinding.ts",
+        "generated/prisma/models/ClassroomScreenCommand.ts",
+        "generated/prisma/models/Device.ts",
+        "generated/prisma/models/Grade.ts",
+        "generated/prisma/models/GradeLeadership.ts",
+        "generated/prisma/models/InstanceSetup.ts",
+        "generated/prisma/models/KVStore.ts",
+        "generated/prisma/models/NotificationScreenDelivery.ts",
+        "generated/prisma/models/Publication.ts",
+        "generated/prisma/models/PublicationRevision.ts",
+        "generated/prisma/models/PublicationTarget.ts",
+        "generated/prisma/models/School.ts",
+        "generated/prisma/models/SchoolMember.ts",
+        "generated/prisma/models/Subject.ts",
+        "generated/prisma/models/TeachingAssignment.ts",
+        "generated/prisma/models/Workspace.ts",
+        "generated/prisma/models/WorkspaceMember.ts",
+        "generated/prisma/models/WorkspaceMemberInvite.ts",
+        "generated/prisma/models/WorkspaceSourceClass.ts",
+        "images/\u5b98\u7f51\u7528\u661f\u706b\u52a8\u529b\u53cd\u8272.svg",
+        "images/\u661f\u706b\u52a8\u529b0702.svg",
+        "images/\u661f\u706b\u52a8\u529b\u53cd\u8272.svg",
+        "package-lock.json",
+        "package.json",
+        "pnpm-lock.yaml",
+        "prisma/migrations/20260209032205_init/migration.sql",
+        "prisma/migrations/20260809000000_academic_catalog_phase1/migration.sql",
+        "prisma/migrations/20260809010000_academic_admin_phase2/migration.sql",
+        "prisma/migrations/20260809020000_publications_phase3/migration.sql",
+        "prisma/migrations/20260809030000_account_sessions_phase5a/migration.sql",
+        "prisma/migrations/20260809040000_workspace_member_invites_phase5c/migration.sql",
+        "prisma/migrations/20260809050000_school_local_auth_phase5d/migration.sql",
+        "prisma/migrations/20260809060000_publication_revision_backups/migration.sql",
+        "prisma/migrations/20260809061000_publication_revision_cleanup/migration.sql",
+        "prisma/migrations/20260809062000_publication_relation_indexes/migration.sql",
+        "prisma/migrations/20260809070000_classroom_tools_roster_attendance/migration.sql",
+        "prisma/migrations/20260810093000_publication_board_date/migration.sql",
+        "prisma/migrations/20260810194500_notification_screen_delivery/migration.sql",
+        "prisma/migrations/20260811090000_account_preferences/migration.sql",
+        "prisma/migrations/20260815093000_notification_screen_acknowledgement/migration.sql",
+        "prisma/migrations/20260815170000_classroom_screen_accounts/migration.sql",
+        "prisma/migrations/20260815214500_school_homework_quick_deadlines/migration.sql",
+        "prisma/migrations/20260816123000_school_homework_quick_inputs/migration.sql",
+        "prisma/migrations/20260821113000_teaching_assignments/migration.sql",
+        "prisma/migrations/20260821180000_staff_responsibilities/migration.sql",
+        "prisma/migrations/20260821220000_instance_setup_oobe/migration.sql",
+        "prisma/migrations/20260822150000_audit_screen_duty/migration.sql",
+        "prisma/migrations/20260822173000_default_notice_expiry/migration.sql",
+        "prisma/migrations/20260905000000_screen_publication_idempotency/migration.sql",
+        "prisma/migrations/migration_lock.toml",
+        "public/stylesheets/style.css",
+        "scripts/init-debug-env.js",
+        "scripts/run-database-tests.js",
+        "tests/academicCatalog.test.js",
+        "tests/academicMeCachePolicy.test.js",
+        "tests/academicStructureManagement.test.js",
+        "tests/accountSessionDatabase.integration.test.js",
+        "tests/accountSessionHttp.test.js",
+        "tests/asyncPool.test.js",
+        "tests/auditDutySelection.test.js",
+        "tests/backupRestoreDatabase.integration.test.js",
+        "tests/classroomScreenAccount.test.js",
+        "tests/corsConfig.test.js",
+        "tests/deployAgent.test.js",
+        "tests/deploymentConfig.test.js",
+        "tests/localAccount.test.js",
+        "tests/managementDatabase.integration.test.js",
+        "tests/managementHttp.test.js",
+        "tests/notificationDelivery.test.js",
+        "tests/notificationDeliveryDatabase.integration.test.js",
+        "tests/operationalDatabase.integration.test.js",
+        "tests/optimisticConcurrency.test.js",
+        "tests/organizationImport.test.js",
+        "tests/productionConfig.test.js",
+        "tests/publication.test.js",
+        "tests/publicationDuplicate.test.js",
+        "tests/publicationIdempotencyDatabase.integration.test.js",
+        "tests/publicationRequest.test.js",
+        "tests/publicationRevisionCleanupDatabase.integration.test.js",
+        "tests/publicationWeek.test.js",
+        "tests/publicationWeekDatabase.integration.test.js",
+        "tests/releasePlan.test.js",
+        "tests/runtimeMetrics.test.js",
+        "tests/schoolHomeworkSettings.test.js",
+        "tests/schoolMigrationDatabase.integration.test.js",
+        "tests/schoolMigrationPackage.test.js",
+        "tests/sessionRevocationDatabase.integration.test.js",
+        "tests/sessionRevocationHttp.test.js",
+        "tests/setupToken.test.js",
+        "tests/staffAuthorization.test.js",
+        "tests/staffConfigurationImport.test.js",
+        "tests/staffResponsibilities.test.js",
+        "tests/teacherTargetPreferences.test.js",
+        "tests/teachingRelationships.test.js",
+        "tests/workspaceAssignmentDatabase.integration.test.js",
+        "tests/workspaceAssignmentImport.test.js"
+      ],
+      "reason": "\u672a\u5b8c\u6210\u9010\u6587\u4ef6\u5b89\u5168\u5ba1\u9605\u7684\u5f53\u524d\u5e93\u5b58\uff1b\u90e8\u5206\u914d\u7f6e/\u6587\u6863\u5df2\u7528\u4e8e\u67b6\u6784\u6838\u67e5\uff0c\u4f46\u4e0d\u8ba1\u5b8c\u6574\u5ba1\u9605\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "screen-scheduled-content-policy",
+        "limitations": [
+          "\u9700\u6709\u6548\u5c4f\u7aef\u7ed1\u5b9a\u53ca\u5141\u8bb8\u7a7a\u95f4\u3002",
+          "\u672a\u5efa\u7acb\u4ea7\u54c1\u662f\u5426\u6709\u610f\u5141\u8bb8\u5c4f\u7aef\u7f16\u8f91\u63d0\u524d\u63a5\u89e6\u5185\u5bb9\u7684\u7b56\u7565\u8fb9\u754c\u3002"
+        ],
+        "originalEvidence": "publicationService.js:822-828 copyScreenBoardDate \u6765\u6e90\u4ec5\u6309 PUBLISHED+boardDate\uff0c:875 \u628a publishAt \u6539\u4e3a now\uff1bgetScreenPublication/updateScreenPublication \u4e0d\u6392\u9664\u6240\u6709\u672a\u6765/DRAFT\u72b6\u6001\u3002"
+      },
+      "id": "deferred-ef041152131fff68",
+      "reason": "\u5c4f\u7aef\u8ba1\u5212\u53d1\u5e03\u53ef\u89c1\u6027\u653f\u7b56\u672a\u660e\u786e\uff0c\u4e0d\u80fd\u628a\u516c\u5f00feed\u7684\u65f6\u95f4\u95e8\u69db\u81ea\u52a8\u5957\u7528\u4e3a\u5c4f\u7aef\u7f16\u8f91\u6743\u9650\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "authorization-recheck-races",
+        "limitations": [
+          "\u672a\u8fd0\u884c\u5e76\u53d1\u6d4b\u8bd5\uff1b\u4e0d\u5217\u4e3a\u5df2\u786e\u8ba4\u6f0f\u6d1e\u3002"
+        ],
+        "originalEvidence": "\u90e8\u5206\u7ba1\u7406\u5458\u4e0e\u5c4f\u7aef\u64cd\u4f5c\u5148\u8bfb\u6743\u9650\u540e\u5199\u5165\uff1b\u53d1\u5e03\u548c\u8003\u52e4\u5df2\u6709\u4e8b\u52a1\u5185\u7ed1\u5b9a\u91cd\u68c0\uff0c\u540d\u518c/\u503c\u5b88\u7b49\u8def\u5f84\u9700\u72ec\u7acb\u5e76\u53d1\u9a8c\u8bc1\u3002"
+      },
+      "id": "deferred-4ea98449cd34921f",
+      "reason": "\u6743\u9650\u64a4\u9500/\u91cd\u7ed1\u548c\u90e8\u5206\u5199\u5165\u4e8b\u52a1\u4e4b\u95f4\u7684\u7ade\u6001\u5c1a\u672a\u5efa\u7acb\u5b8c\u6574\u53ef\u63a7\u94fe\u8def\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "baseline-pending-auth",
+        "resolved_questions": [
+          "OAuth email verification before invitation claim",
+          "Import credential changes versus existing sessions",
+          "Device-ID header as rate-limit identity"
+        ]
+      },
+      "id": "deferred-1af74eb52fcf69db",
+      "reason": "\u57fa\u7ebf\u6b63\u5728\u7ee7\u7eed\u6838\u67e5 OAuth \u90ae\u7bb1\u4fe1\u4efb\u3001\u5bfc\u5165\u6539\u5bc6\u4f1a\u8bdd\u53ca\u6765\u6e90\u9650\u6d41\uff0c\u5c1a\u65e0\u5df2\u9a8c\u8bc1\u6f0f\u6d1e\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "frontend-functional-batch",
+        "originalCandidates": [
+          {
+            "evidence": [
+              "src/utils/screenHomeworkDraft.js:15-25",
+              "src/components/v2/ScreenHomeworkDialog.vue:498-505,574-585,638-648",
+              "src/utils/classworksV2Client.js:489-492"
+            ],
+            "id": "stale-draft-revision",
+            "limitation": "\u5386\u53f2\u4fdd\u7559\uff0c\u975e\u6743\u9650\u7ed5\u8fc7",
+            "summary": "\u65e7\u8349\u7a3f\u4e0d\u4fdd\u7559\u539f revision\uff0c\u6062\u590d\u540e\u4f7f\u7528\u6700\u65b0\u57fa\u7ebf\u66f4\u65b0\uff0c\u53ef\u80fd\u8986\u76d6\u8fdc\u7aef\u65b0\u7248\u3002"
+          },
+          {
+            "evidence": [
+              "src/utils/screenPublicationQueue.js:77-102",
+              "src/utils/screenHomeworkDraft.js:11-12,53-70"
+            ],
+            "id": "multi-tab-local-state",
+            "summary": "\u5171\u4eab\u5168\u6570\u7ec4\u961f\u5217\u53ca\u8349\u7a3f\u952e\u7f3a\u5c11\u8de8\u6807\u7b7e\u4e8b\u52a1\u548c\u7248\u672c\u5f52\u5c5e\u68c0\u67e5"
+          },
+          {
+            "evidence": [
+              "src/components/v2/ClassworksHome.vue:892-895,924-945"
+            ],
+            "id": "screen-timeout-unmount",
+            "limitation": "\u9700\u5148\u5728\u5171\u4eab\u8bbe\u5907\u767b\u5f55\uff0c\u5b89\u5168\u8fb9\u754c\u9700\u4ea7\u54c1\u5b9a\u4e49",
+            "summary": "\u8def\u7531\u5378\u8f7d\u6e05\u9664\u4e34\u65f6\u9000\u51fa\u8ba1\u65f6\u5668\uff0c\u8d26\u53f7\u6301\u4e45\u4ee4\u724c\u672a\u64a4\u9500"
+          },
+          {
+            "evidence": [
+              "src/components/v2/BoardDateNavigator.vue:77-79"
+            ],
+            "id": "today-frozen",
+            "summary": "today \u53ea\u5728\u6302\u8f7d\u65f6\u8ba1\u7b97"
+          },
+          {
+            "evidence": [
+              "src/components/PwaLifecyclePrompt.vue:91-92"
+            ],
+            "id": "pwa-reload-guard",
+            "summary": "\u76f4\u63a5\u5237\u65b0\u672a\u4f7f\u7528\u73b0\u6709\u7f16\u8f91\u4fdd\u62a4"
+          }
+        ]
+      },
+      "id": "deferred-a0abe3c4be70e627",
+      "reason": "\u524d\u7aef\u72ec\u7acb\u5ba1\u67e5\u7ed3\u679c\u5df2\u8fd4\u56de\uff0c\u4f5c\u4e3a\u8de8\u7aef\u529f\u80fd\u62a5\u544a\u5019\u9009\uff1b\u4e0d\u8ba1\u5165\u540e\u7aef\u5b89\u5168\u53d1\u73b0\uff0c\u7236\u5ba1\u67e5\u5f85\u6838\u9a8c\u3002"
+    },
+    {
+      "candidate": {
+        "attacker": "An authenticated school ADMIN who knows their own PIN, or an OAuth ADMIN who knows the public school code. The shortest takeover chain requires a local OWNER using a permitted four-digit PIN.",
+        "candidateId": "ADMIN migration exports disclose the OWNER password verifier",
+        "confidence": "high",
+        "counterevidence": "Export requires a valid manager account, caller reauthentication, and an encrypted package. Those controls protect against outsiders and incidental disclosure, but the malicious ADMIN is an authorized exporter and chooses the decryption passphrase. Ordinary local-account management and school-role management explicitly deny ADMIN access to OWNER changes, establishing a separate boundary. Sessions and OAuth tokens are correctly excluded from exports.",
+        "cwe": "CWE-522",
+        "id": "BASELINE-MIGRATION-OWNER-HASH",
+        "impact": "Bypasses explicit OWNER protections and online login throttling; successful PIN recovery grants OWNER operations, including managing other OWNER accounts. Offline recovery timing was not measured. Longer PINs increase recovery work but do not fix the verifier disclosure.",
+        "invariant": "ADMIN users cannot manage OWNER credentials or grant themselves OWNER. Owner credential material must not be available to ADMIN for unrestricted offline guessing.",
+        "locations": [
+          {
+            "end_line": 129,
+            "excerpt": "router.post(\"/schools/:schoolId/migration/export\", localAuthLimiter, errors.catchAsync(async (req, res) => {\n    req.setTimeout(180000);\n    res.setTimeout(180000);\n    const result = await createSchoolMigrationPackage({\n        managerAccountId: res.locals.account.id,\n        schoolId: req.params.schoolId,\n        currentPin: req.body?.currentPin,\n        confirmationSchoolCode: req.body?.confirmationSchoolCode,\n        passphrase: req.body?.passphrase,\n    });",
+            "path": "routes/v2/academic-admin.js",
+            "start_line": 114
+          },
+          {
+            "end_line": 137,
+            "excerpt": "async function verifyManagerConfirmation({managerAccountId, schoolId, currentPin, confirmationSchoolCode}) {\n    await assertSchoolManager(managerAccountId, schoolId);\n    const [account, school] = await Promise.all([\n        prisma.account.findUnique({where: {id: managerAccountId}}),\n        prisma.school.findUnique({where: {id: schoolId}}),\n    ]);\n    if (!school) throw migrationError(\"\u5b66\u6821\u4e0d\u5b58\u5728\", \"SCHOOL_NOT_FOUND\", 404);\n    if (account?.localPasswordHash) {\n        const matches = await bcrypt.compare(String(currentPin || \"\"), account.localPasswordHash || DUMMY_HASH);\n        if (!matches) throw migrationError(\"\u7ba1\u7406\u5458 PIN \u4e0d\u6b63\u786e\", \"MIGRATION_REAUTH_FAILED\", 401);\n        return {school, reauthMethod: \"PIN\"};",
+            "path": "services/schoolMigrationService.js",
+            "start_line": 127
+          },
+          {
+            "end_line": 208,
+            "excerpt": "    const accounts = await client.account.findMany({\n        where: {id: {in: accountIds}},\n        orderBy: {id: \"asc\"},\n        select: {\n            id: true, provider: true, providerId: true, email: true, name: true, avatarUrl: true,\n            createdAt: true, updatedAt: true, tokenVersion: true, localUsername: true,\n            localPasswordHash: true, localDisabled: true, lastLoginAt: true,\n        },\n    });\n    return {\n        accounts: accounts.map((account) => ({\n            ...account,",
+            "path": "services/schoolMigrationService.js",
+            "start_line": 197
+          },
+          {
+            "end_line": 19,
+            "excerpt": "export function validateTeacherPin(value) {\n    return typeof value === \"string\" && /^\\d{4,8}$/.test(value);\n}",
+            "path": "domain/localAccount.js",
+            "start_line": 17
+          },
+          {
+            "end_line": 16,
+            "excerpt": "    if ((target?.role === \"OWNER\" || nextRole === \"OWNER\") && manager.role !== \"OWNER\") {\n        throw authorizationError(\"\u53ea\u6709\u5b66\u6821\u6240\u6709\u8005\u53ef\u4ee5\u7ba1\u7406 OWNER\", \"SCHOOL_OWNER_REQUIRED\");\n    }",
+            "path": "services/schoolOwnerPolicy.js",
+            "start_line": 14
+          }
+        ],
+        "remediation": "Require OWNER authorization for migration packages that contain credential verifiers, or provide an ADMIN export that omits credential hashes and forces credential reset at import. Apply the stronger authorization to the actual export service, not only the UI.",
+        "rule": "Credential exports must respect the OWNER versus ADMIN privilege boundary",
+        "severity": "high",
+        "source_to_sink": "POST /api/v2/admin/schools/:schoolId/migration/export accepts the caller's chosen passphrase and authenticates only assertSchoolManager (OWNER or ADMIN). Reauthentication checks the caller's own PIN. collectSchoolData includes every schoolMember account, selects localPasswordHash, and copies it unchanged into the encrypted export. The ADMIN knows the encryption passphrase, can recover the OWNER bcrypt verifier and try all 10,000 allowed four-digit values offline, then use normal local login as OWNER.",
+        "title": "ADMIN migration exports disclose the OWNER password verifier"
+      },
+      "id": "deferred-8f7a8ae85824262d",
+      "reason": "\u72ec\u7acb\u57fa\u7ebf\u5b8c\u6574\u5019\u9009\u5df2\u6301\u4e45\u5316\uff0c\u7236\u5ba1\u67e5\u9a8c\u8bc1\u548c\u8bc4\u7ea7\u6821\u51c6\u5f85\u5b8c\u6210\u3002"
+    },
+    {
+      "candidate": {
+        "attacker": "An account holder at an enabled STCN or Dlass OAuth provider whose userinfo response can contain a chosen, unverified teacher email. Requires that provider to permit such a claim and an existing invitation for that address, or a later administrator assignment by that address.",
+        "candidateId": "Unverified Casdoor email claims can acquire invited teacher permissions",
+        "confidence": "medium",
+        "counterevidence": "The token exchange and userinfo URLs are fixed trusted provider URLs; the attacker must actually control an account at that provider. ZeroCat and HLY discard unverified email claims. Provider registration and email-change policies are external and were not inspected; exploitability for the two configured production providers remains conditional. Workspace access also checks the school's OAuth login policy. Account creation/update contains no separate email verification state, and invitation claiming checks none.",
+        "cwe": "CWE-287",
+        "id": "BASELINE-OAUTH-UNVERIFIED-EMAIL",
+        "impact": "An unverified email claim can acquire TEACHER, ASSISTANT or OWNER workspace membership intended for another teacher. In a school permitting OAuth teacher access, the attacker can read drafts and create or modify class publications. This does not establish takeover of the victim's existing OAuth account.",
+        "invariant": "A pending workspace invitation belongs only to the person proven to control its email address.",
+        "locations": [
+          {
+            "end_line": 410,
+            "excerpt": "        } else if (provider === \"stcn\") {\n            // STCN\uff08Casdoor\uff09\u6807\u51c6OIDC\u7528\u6237\u4fe1\u606f\n            normalizedUser = {\n                providerId: userData.sub,\n                email: userData.email_verified ? userData.email : userData.email || null,\n                name: userData.name || userData.preferred_username || userData.nickname,\n                avatarUrl: userData.picture,\n            };\n        } else if (provider === \"dlass\") {\n            // Dlass\uff08Casdoor\uff09\u6807\u51c6OIDC\u7528\u6237\u4fe1\u606f\n            normalizedUser = {\n                providerId: userData.sub,\n                email: userData.email_verified ? userData.email : userData.email || null,\n                name: userData.name || userData.preferred_username || userData.nickname,",
+            "path": "routes/accounts.js",
+            "start_line": 397
+          },
+          {
+            "end_line": 464,
+            "excerpt": "        // 5. \u8ba4\u9886\u7ba1\u7406\u5458\u5728\u6559\u5e08\u9996\u6b21\u767b\u5f55\u524d\u6309\u90ae\u7bb1\u9884\u5206\u914d\u7684\u6559\u5b66\u7a7a\u95f4\u3002\n        await claimWorkspaceInvitations({accountId: account.id, email: account.email});",
+            "path": "routes/accounts.js",
+            "start_line": 463
+          },
+          {
+            "end_line": 173,
+            "excerpt": "export async function claimWorkspaceInvitations({accountId, email}) {\n    const normalizedEmail = normalizeAssignmentEmail(email);\n    if (!normalizedEmail) return {claimed: 0};\n    const invitations = await prisma.workspaceMemberInvite.findMany({\n        where: {normalizedEmail, claimedAt: null},\n    });\n    if (invitations.length === 0) return {claimed: 0};\n\n    await prisma.$transaction(async (tx) => {\n        for (const invitation of invitations) {\n            await tx.workspaceMember.upsert({\n                where: {\n                    workspaceId_accountId: {workspaceId: invitation.workspaceId, accountId},\n                },\n                update: {role: invitation.role},\n                create: {workspaceId: invitation.workspaceId, accountId, role: invitation.role},\n            });\n            await tx.workspaceMemberInvite.update({\n                where: {id: invitation.id},\n                data: {claimedAt: new Date(), claimedByAccountId: accountId},\n            });",
+            "path": "services/workspaceAssignmentImportService.js",
+            "start_line": 153
+          }
+        ],
+        "remediation": "Persist email verification separately, accept the address for authorization only when email_verified is strictly true or when an equivalent provider-specific verified-email endpoint proves ownership, and pass that verified address to invitation claiming. Clear or quarantine previously stored unverified addresses rather than retaining them through normalizedUser.email || account.email.",
+        "rule": "Email-based authorization requires verified ownership of the asserted address",
+        "severity": "high",
+        "source_to_sink": "OAuth userinfo email and email_verified flow into normalizedUser. Both STCN and Dlass branches preserve userData.email even when email_verified is false or absent. The value is persisted to Account.email, then passed unconditionally to claimWorkspaceInvitations. That function selects all unclaimed invitations by normalized email and upserts the requesting OAuth account into each invited workspace with the invitation role.",
+        "title": "Unverified Casdoor email claims can acquire invited teacher permissions"
+      },
+      "id": "deferred-8f7a8ae85824262d-2",
+      "reason": "\u72ec\u7acb\u57fa\u7ebf\u5b8c\u6574\u5019\u9009\u5df2\u6301\u4e45\u5316\uff0c\u7236\u5ba1\u67e5\u9a8c\u8bc1\u548c\u8bc4\u7ea7\u6821\u51c6\u5f85\u5b8c\u6210\u3002"
+    },
+    {
+      "candidate": {
+        "attacker": "An unauthenticated remote client who knows a school code and local teacher or administrator username and can change HTTP headers.",
+        "candidateId": "Client-selected device IDs bypass the eight-attempt PIN limit",
+        "confidence": "high",
+        "counterevidence": "A separate request-IP limiter remains and caps failures at 300/15 minutes. The implementation intentionally avoids global lockouts to prevent teachers being locked out by other people, as tests/localAuthRateLimit.test.js confirms. That is a legitimate usability concern, but a caller-selected identifier does not provide a reliable security limit.",
+        "cwe": "CWE-307",
+        "id": "BASELINE-LOCAL-LOGIN-DEVICE-RATELIMIT",
+        "impact": "The advertised eight-attempt protection becomes 300 attempts per 15 minutes per IP. A single source can exhaust a four-digit PIN in 34 windows (about 8.5 hours), and different source IPs multiply the rate. A recovered administrator PIN can grant school administration rights. This is a partial throttling bypass, not an unlimited same-IP bypass.",
+        "invariant": "The short numeric PIN authentication path must enforce its per-account/source guessing limit independently of attacker-controlled device identifiers.",
+        "locations": [
+          {
+            "end_line": 80,
+            "excerpt": "router.post(\"/local/login\", localAuthLimiter, localLoginSourceLimiter, async (req, res, next) => {\n    try {\n        const result = await loginLocalAccount({\n            schoolCode: req.body?.schoolCode,\n            username: req.body?.username,\n            password: req.body?.password,\n        });",
+            "path": "routes/accounts.js",
+            "start_line": 74
+          },
+          {
+            "end_line": 94,
+            "excerpt": "export function getLocalLoginSourceKey(req) {\n    const deviceId = normalizeLocalAuthKeyPart(req.headers?.[\"x-classworks-device-id\"], \"\");\n    const source = deviceId || `ip-${getClientIp(req)}`;\n    const schoolCode = normalizeLocalAuthKeyPart(req.body?.schoolCode, \"unknown-school\");\n    const username = normalizeLocalAuthKeyPart(req.body?.username, \"unknown-account\");\n    return `local-login:${source}:${schoolCode}:${username}`;",
+            "path": "middleware/rateLimiter.js",
+            "start_line": 89
+          },
+          {
+            "end_line": 107,
+            "excerpt": "export const localLoginSourceLimiter = rateLimit({\n    windowMs: 15 * 60 * 1000,\n    limit: 8,\n    standardHeaders: \"draft-7\",\n    legacyHeaders: false,\n    message: {success: false, code: \"LOCAL_LOGIN_SOURCE_RATE_LIMITED\", message: \"\u6b64\u8bbe\u5907\u5bf9\u8be5\u8d26\u53f7\u7684\u5c1d\u8bd5\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf715\u5206\u949f\u540e\u518d\u8bd5\"},\n    keyGenerator: getLocalLoginSourceKey,\n    skipSuccessfulRequests: true,\n    skipFailedRequests: false,",
+            "path": "middleware/rateLimiter.js",
+            "start_line": 99
+          },
+          {
+            "end_line": 79,
+            "excerpt": "export const localAuthLimiter = rateLimit({\n    windowMs: 15 * 60 * 1000,\n    limit: 300,\n    standardHeaders: \"draft-7\",\n    legacyHeaders: false,\n    message: {success: false, code: \"LOCAL_AUTH_NETWORK_RATE_LIMITED\", message: \"\u672c\u7f51\u7edc\u767b\u5f55\u8bf7\u6c42\u5f02\u5e38\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\"},\n    keyGenerator: getClientIp,",
+            "path": "middleware/rateLimiter.js",
+            "start_line": 73
+          },
+          {
+            "end_line": 19,
+            "excerpt": "export function validateTeacherPin(value) {\n    return typeof value === \"string\" && /^\\d{4,8}$/.test(value);\n}",
+            "path": "domain/localAccount.js",
+            "start_line": 17
+          }
+        ],
+        "remediation": "Retain a stable source-IP plus account limit even when a device ID is supplied. Use device buckets only as an additional limit. For short PINs, add bounded account-wide progressive delay or another abuse control that does not create a long global lockout, and enforce stronger credentials for administrator accounts.",
+        "rule": "An unauthenticated client must not choose a fresh authentication throttling identity",
+        "severity": "medium",
+        "source_to_sink": "POST /accounts/local/login runs localAuthLimiter and localLoginSourceLimiter. The latter's key uses X-Classworks-Device-Id instead of the source IP when present. Sending a new syntactically valid device ID every eight failures resets that bucket. localAccountService no longer enforces account-level failed-login lockouts. The remaining IP limiter allows 300 failed attempts per 15 minutes.",
+        "title": "Client-selected device IDs bypass the eight-attempt PIN limit"
+      },
+      "id": "deferred-8f7a8ae85824262d-3",
+      "reason": "\u72ec\u7acb\u57fa\u7ebf\u5b8c\u6574\u5019\u9009\u5df2\u6301\u4e45\u5316\uff0c\u7236\u5ba1\u67e5\u9a8c\u8bc1\u548c\u8bc4\u7ea7\u6821\u51c6\u5f85\u5b8c\u6210\u3002"
+    },
+    {
+      "candidate": {
+        "attacker": "A former account holder or attacker holding an existing account access/refresh token before an administrator replaces the account PIN through reimport or administrator creation/upsert.",
+        "candidateId": "Teacher import and administrator upsert reset PINs without revoking sessions",
+        "confidence": "high",
+        "counterevidence": "The direct updateManagedLocalAccount, changeOwnLocalPin and recoverLocalOwner paths increment tokenVersion and revoke sessions. The newer, separate importStaffConfiguration service increments tokenVersion and is exposed only through setup; it does not fix the older ordinary-admin importLocalTeachers route. Existing OWNER target checks are present in both affected upserts, so this finding is session persistence rather than an ADMIN-to-OWNER password reset bypass.",
+        "cwe": "CWE-613",
+        "id": "BASELINE-IMPORT-PIN-SESSION-REVOCATION",
+        "impact": "An existing compromised session survives a successful PIN replacement and can continue using the account's current permissions. Refresh tokens default to 180 days, so the old holder can retain access much longer than the 15-minute access-token lifetime. Privileges removed separately are still evaluated by downstream authorization.",
+        "invariant": "Replacing a compromised local PIN must revoke sessions obtained under the old credential, consistently with the ordinary account-update and recovery paths.",
+        "locations": [
+          {
+            "end_line": 185,
+            "excerpt": "router.post(\"/local-teachers/import\", errors.catchAsync(async (req, res) => {\n    const dryRun = req.query.dryRun === \"true\" || req.body?.dryRun === true;\n    const result = await importLocalTeachers({\n        managerAccountId: res.locals.account.id,\n        schoolId: req.body?.schoolId,\n        termId: req.body?.termId,\n        document: req.body?.assignmentPlan || req.body,\n        dryRun,\n    });",
+            "path": "routes/v2/academic-admin.js",
+            "start_line": 177
+          },
+          {
+            "end_line": 181,
+            "excerpt": "            await assertOwnerTargetChange(tx, {manager, schoolId, accountId: existing?.id});\n            const passwordHash = assignment.pin\n                ? await bcrypt.hash(assignment.pin, BCRYPT_ROUNDS)\n                : existing?.localPasswordHash || null;\n            const account = await tx.account.upsert({\n                where: {provider_providerId: {provider: LOCAL_PROVIDER, providerId}},\n                update: {\n                    name: assignment.name,\n                    localUsername: assignment.username,\n                    ...(passwordHash ? {localPasswordHash: passwordHash} : {}),\n                    localDisabled: false,\n                    localLoginFailures: 0,\n                    localLockedUntil: null,\n                },",
+            "path": "services/localAccountService.js",
+            "start_line": 168
+          },
+          {
+            "end_line": 319,
+            "excerpt": "        const account = await tx.account.upsert({\n            where: {provider_providerId: {provider: LOCAL_PROVIDER, providerId}},\n            update: {\n                name: displayName,\n                localUsername: normalizedUsername,\n                localPasswordHash: passwordHash,\n                localDisabled: false,\n                localLoginFailures: 0,\n                localLockedUntil: null,\n            },",
+            "path": "services/localAccountService.js",
+            "start_line": 310
+          },
+          {
+            "end_line": 215,
+            "excerpt": "        // \u9a8c\u8bc1\u4ee4\u724c\u7248\u672c\n        if (account.tokenVersion !== decoded.tokenVersion) {\n            throw new Error('Token version mismatch');\n        }\n\n        // \u751f\u6210\u65b0\u7684\u8bbf\u95ee\u4ee4\u724c\n        const newAccessToken = generateAccessToken(account, sessionId);",
+            "path": "utils/tokenManager.js",
+            "start_line": 209
+          }
+        ],
+        "remediation": "Centralize PIN replacement so every existing-account password change increments tokenVersion and revokes active AccountSession rows in the same transaction. Reuse it from teacher import and administrator upsert; alternatively reject duplicate usernames in the create-administrator route and use the protected update endpoint.",
+        "rule": "All credential-reset paths must invalidate the account's existing authentication sessions",
+        "severity": "medium",
+        "source_to_sink": "POST /api/v2/admin/local-teachers/import calls importLocalTeachers and POST /api/v2/admin/schools/:schoolId/local-admins calls createLocalAdministrator. Both use Account.upsert and replace localPasswordHash for an existing account without incrementing tokenVersion or revoking AccountSession. validateAccountToken and refreshAccessToken authorize using precisely those unchanged values, so old access tokens and refresh tokens remain valid.",
+        "title": "Teacher import and administrator upsert reset PINs without revoking sessions"
+      },
+      "id": "deferred-8f7a8ae85824262d-4",
+      "reason": "\u72ec\u7acb\u57fa\u7ebf\u5b8c\u6574\u5019\u9009\u5df2\u6301\u4e45\u5316\uff0c\u7236\u5ba1\u67e5\u9a8c\u8bc1\u548c\u8bc4\u7ea7\u6821\u51c6\u5f85\u5b8c\u6210\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "CATALOG-INACTIVE-COURSE",
+        "counterevidence": "feed \u62d2\u7edd\u505c\u7528\u5de5\u4f5c\u533a\u662f\u6709\u6548\u9632\u62a4\uff0c\u975e\u8bfb\u53d6\u8d8a\u6743",
+        "evidence": [
+          "services/academicCatalogService.js:77-91 sourcedCourseGroups \u65e0 isActive \u8fc7\u6ee4",
+          "domain/academicCatalog.js:30-40 \u4e22\u5f03 isActive\uff1b48-52 \u4ec5\u7b5b isStudentSelectable\uff1b109-119 \u63a5\u53d7 groupId",
+          "services/academicStructureManagementService.js:484-487,516-528 \u505c\u7528\u4fdd\u7559\u6765\u6e90\u5173\u7cfb",
+          "services/publicationService.js:471-476 \u7f3a\u4efb\u610f\u6709\u6548\u7a7a\u95f4\u8fd4\u56de404"
+        ],
+        "remediation": "\u76ee\u5f55\u53ca\u9009\u62e9\u6821\u9a8c\u7edf\u4e00\u8fc7\u6ee4\u505c\u7528\u7a7a\u95f4",
+        "title": "\u505c\u7528\u8d70\u73ed\u4ecd\u53ef\u9009\uff0c\u968f\u540e\u6574\u4e2a feed \u5931\u8d25",
+        "trigger": "\u505c\u7528\u4ecd\u53ef\u9009\u4e14\u5173\u8054\u7684\u8d70\u73ed\uff0c\u5b66\u751f\u91cd\u65b0\u9009\u4e2d"
+      },
+      "id": "deferred-95bec186bd02bdd3",
+      "reason": "\u76ee\u5f55\u548c\u5bfc\u5165\u529f\u80fd\u5019\u9009\u5df2\u8fd4\u56de\uff0c\u5f85\u7236\u5ba1\u67e5\u6838\u9a8c\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "IMPORT-WORKSPACE-INVARIANTS",
+        "counterevidence": "\u5df2\u6388\u6743\u5b66\u6821\u7ba1\u7406\u5458\u64cd\u4f5c\u3001\u4e8b\u52a1\u5b8c\u6574\uff1b\u4e0d\u662f\u63d0\u6743",
+        "evidence": [
+          "services/academicStructureManagementService.js:500-501 \u6709\u5386\u53f2\u7981\u6b62\u6539\u79d1\u76ee",
+          "services/organizationAdminService.js:189-198 upsert \u76f4\u63a5\u6539 subjectId/gradeId/type",
+          "services/organizationAdminService.js:153-160 \u540c\u7801\u6539 ADMIN_CLASS",
+          "domain/organizationImport.js:195-221 \u4ec5\u6587\u6863\u6821\u9a8c",
+          "services/organizationAdminService.js:61-69 dry-run \u4e0d\u67e5\u73b0\u6709\u7a7a\u95f4",
+          "routes/v2/academic-admin.js:132-139 \u53ef\u8fbe"
+        ],
+        "remediation": "\u5bfc\u5165\u4e0e\u5355\u9879\u7f16\u8f91\u5171\u7528\u7c7b\u578b/\u5386\u53f2\u7ea6\u675f\uff0c\u9884\u68c0\u771f\u5b9e\u5f71\u54cd",
+        "title": "\u7ec4\u7ec7\u5bfc\u5165\u7ed5\u8fc7\u5386\u53f2\u79d1\u76ee\u9501\u5b9a\u5e76\u53ef\u6539\u5de5\u4f5c\u533a\u7c7b\u578b"
+      },
+      "id": "deferred-869f251c835a3f77",
+      "reason": "\u5bfc\u5165\u4e1a\u52a1\u4e0d\u53d8\u91cf\u5019\u9009\u5df2\u8fd4\u56de\uff0c\u5f85\u7236\u5ba1\u67e5\u6838\u9a8c\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "baseline-oauth-login-csrf",
+        "originalEvidence": "Backend stores OAuth state only in a process Map, never binds to cookie/browser/session, and callback checks only state/provider before issuing access+refresh tokens via frontend URL. Frontend URL-token consumption pending.",
+        "source": "independent_baseline"
+      },
+      "id": "deferred-cf1a7f894174ec6c",
+      "reason": "\u57fa\u7ebf\u8865\u5145 OAuth \u6d4f\u89c8\u5668\u7ed1\u5b9a\u5019\u9009\uff0c\u524d\u7aef\u6d88\u8d39\u7aef\u6838\u9a8c\u4e2d\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "baseline-publication-patch-certification",
+        "originalEvidence": "services/publicationService.js updatePublication (1197+) checks assertCanManagePublication and assertCanWriteWorkspaces, then writes isCertified:true/certifiedByAccountId without assertCanCertifyPublication. Dedicated certifyPublication at 587+ does enforce subject-specific certification."
+      },
+      "id": "deferred-2d3f5ad1ed0955a9",
+      "reason": "\u72ec\u7acb\u57fa\u7ebf\u548c\u524d\u7aef\u8865\u5145\u5019\u9009\uff0c\u5c1a\u5f85\u7236\u5ba1\u67e5\u9a8c\u8bc1\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "baseline-migration-owner-pin",
+        "originalEvidence": "createSchoolMigrationPackage permits ADMIN through assertSchoolManager and exports localPasswordHash for all school members including OWNER (schoolMigrationService.js 198\u2013205); attacker chooses package passphrase. Supported 4-digit OWNER PIN could permit offline recovery despite schoolOwnerPolicy denying ADMIN owner modifications."
+      },
+      "id": "deferred-1bb9959d9eb8cad3",
+      "reason": "\u72ec\u7acb\u57fa\u7ebf\u65b0\u5019\u9009\uff0c\u5f85\u6838\u9a8c\u7ba1\u7406\u5458\u4e0e OWNER \u7684\u51ed\u636e\u8fb9\u754c\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "frontend-oauth-url-session",
+        "originalEvidence": "src/main.js:23 invokes captureOAuthCallback; classworksV2Client.js:178\u2013198 accepts success=true with access_token from arbitrary page URL; 49\u201353 overwrites stored access/refresh without initiating state/nonce/path validation."
+      },
+      "id": "deferred-dfafbde444fff53e",
+      "reason": "\u524d\u7aef OAuth \u4ee4\u724c\u63a5\u6536\u8fb9\u754c\u5019\u9009\uff0c\u540e\u7aef\u76f8\u5173\u6027\u5f85\u5224\u5b9a\u3002"
+    },
+    {
+      "candidate": {
+        "candidateId": "publication-permission-review",
+        "counterevidence": "Author withdrawal intentionally retained by list/detail policy; docs/management-permission-tests.md:17.",
+        "originalEvidence": "Explicit certify enforces subject/responsibility scope; update/restore only workspace writing and unconditional certified=true; empty PATCH can promote unchanged content. tests/publicationActionCenter.test.js:80-86 forbids same-class other subject. docs/classworks-2-phase-6.md:8 says teacher changes auto-certified."
+      },
+      "id": "deferred-4aa5d9c44ea30e14",
+      "reason": "\u53d1\u5e03\u6743\u9650\u72ec\u7acb\u8c03\u67e5\u8865\u5145\uff0c\u7236\u5ba1\u67e5\u5df2\u6838\u5bf9\u4fee\u6539\u4ee3\u7801\uff0c\u7b49\u5f85\u6062\u590d\u64cd\u4f5c\u5b8c\u6574\u8bc1\u636e\u3002"
+    }
+  ],
+  "documentType": "codex-security.coverage",
+  "excludePaths": [],
+  "explicitExclusions": [
+    {
+      "pattern": "../NPClassworks/**",
+      "reason": "\u524d\u7aef\u4e0d\u5c5e\u4e8e\u672c\u6b21\u540e\u7aef\u767b\u8bb0\u5e93\u5b58\uff1b\u53e6\u884c\u5206\u6790\u5e76\u4f5c\u4e3a\u8de8\u7aef\u652f\u6301\u8bc1\u636e\u3002"
+    }
+  ],
+  "extensions": {
+    "coreRuntimeDirectoriesFullyReviewed": [
+      "services",
+      "routes",
+      "middleware",
+      "utils",
+      "domain"
+    ],
+    "externalExclusions": [
+      "\u751f\u4ea7\u8fd0\u884c\u73af\u5883\u4e0e\u771f\u5b9e\u51ed\u636e",
+      "\u5916\u90e8 OAuth \u670d\u52a1\u5546\u7b56\u7565",
+      "\u4f9d\u8d56\u6f0f\u6d1e\u5e93\u4e0e\u7f51\u7edc\u5b89\u5168\u9a8c\u8bc1"
+    ],
+    "fullyReviewedFiles": 101,
+    "inventoryFiles": 279,
+    "unreviewedFiles": 178,
+    "usageMeasurement": "unavailable",
+    "validationMode": "static source trace"
+  },
+  "includePaths": [
+    "."
+  ],
+  "inventoryStrategy": "repository",
+  "mode": "repository",
+  "openQuestions": [
+    {
+      "effect": "S5 \u7684\u90e8\u7f72\u53ef\u5229\u7528\u6027\u524d\u63d0\u672a\u9a8c\u8bc1\uff0c\u5df2\u5728\u53d1\u73b0\u4e2d\u4fdd\u7559\uff0c\u4e0d\u58f0\u79f0\u7ebf\u4e0a\u53ef\u63a5\u7ba1\u3002",
+      "question": "\u5f53\u524d STCN/Dlass \u662f\u5426\u5141\u8bb8\u8d26\u53f7\u63d0\u4ea4\u672a\u9a8c\u8bc1\u4e14\u53ef\u81ea\u9009\u7684\u90ae\u7bb1\uff1f"
+    },
+    {
+      "effect": "\u51b3\u5b9a\u65e7\u4f5c\u8005\u64a4\u56de\u662f\u5426\u8fdd\u53cd\u6388\u6743\u7b56\u7565\u3002",
+      "question": "\u79fb\u9664\u6210\u5458\u540e\u5e94\u4fdd\u7559\u4f5c\u8005\u64a4\u56de\u6743\u5417\uff1f"
+    },
+    {
+      "effect": "\u8def\u5f84\u5dee\u5f02\u5b58\u5728\uff0c\u5177\u4f53\u6545\u969c\u672a\u5b8c\u6574\u9a8c\u8bc1\uff0c\u4e3b\u62a5\u544a\u5217\u4e3a\u540e\u7eed\u9879\u3002",
+      "question": "\u7ec4\u7ec7\u5bfc\u5165 ACTIVE \u5b66\u671f\u662f\u5426\u5fc5\u987b\u6267\u884c\u6b63\u5f0f\u5207\u6362\u7684 readiness \u548c\u5927\u5c4f\u91cd\u7ed1\uff1f"
+    },
+    {
+      "effect": "15\u5206\u949f\u8de8\u8def\u7531\u5931\u6548\u4e3a\u660e\u786e\u529f\u80fd\u7f3a\u9677\uff0c\u9644\u52a0\u5171\u4eab\u8bbe\u5907\u5b89\u5168\u540e\u679c\u53d6\u51b3\u4e8e\u6b64\u7b56\u7565\u3002",
+      "question": "\u4e34\u65f6\u9000\u51fa\u5927\u5c4f\u662f\u5426\u540c\u65f6\u627f\u8bfa\u64a4\u9500\u4e34\u65f6\u6559\u5e08\u8d26\u53f7\u4f1a\u8bdd\uff1f"
+    }
+  ],
+  "scanId": "cf3e2d89-23d7-432c-9d76-c823df2a2057",
+  "schemaVersion": "1.0",
+  "surfaces": [
+    {
+      "auditedFiles": [
+        "app.js",
+        "middleware/jwt-auth.js",
+        "middleware/rateLimiter.js",
+        "utils/jwt.js",
+        "utils/tokenManager.js",
+        "utils/productionConfig.js",
+        "bin/www",
+        "config/oauth.js",
+        "routes/accounts.js",
+        "services/workspaceAssignmentImportService.js",
+        "services/academicAuthorizationService.js",
+        "services/schoolOwnerPolicy.js",
+        "utils/socket.js",
+        "routes/v2/publications.js",
+        "routes/v2/classroom-screens.js",
+        "services/classroomScreenService.js",
+        "services/screenWriteAuthorization.js",
+        "services/staffAuthorizationService.js",
+        "services/teachingRelationshipService.js",
+        "services/schoolMembershipService.js",
+        "services/schoolProfileManagementService.js",
+        "services/optimisticConcurrencyService.js",
+        "services/academicTermTransitionService.js",
+        "routes/v2/setup.js",
+        "utils/setupToken.js",
+        "services/notificationDeliveryService.js",
+        "deploy/agent/server.js",
+        "deploy/ci-deploy.sh",
+        "deploy/release-plan.js",
+        "deploy/upgrade.sh",
+        "services/publicationAuthorizationService.js",
+        "services/classroomToolsService.js",
+        "services/accountPreferenceService.js",
+        "services/auditLogService.js",
+        "services/classroomScreenDutyService.js",
+        "services/publicationRevisionCleanupService.js",
+        "domain/auditLog.js",
+        "services/schoolHomeworkSettingsService.js",
+        "routes/v2/academic-me.js",
+        "services/publicationActionQuery.js",
+        "domain/publicationActionCenter.js",
+        "domain/localAccount.js",
+        "domain/staffConfigurationImport.js",
+        "middleware/errorHandler.js",
+        "services/localAccountService.js",
+        "services/schoolMigrationService.js",
+        "services/staffConfigurationImportService.js",
+        "services/workspaceMembershipService.js",
+        "tests/accountSession.test.js",
+        "tests/localAuthRateLimit.test.js",
+        "utils/corsConfig.js",
+        "domain/teacherTargetPreferences.js",
+        "domain/classroomScreenDuty.js",
+        "utils/errors.js",
+        "routes/index.js",
+        "classworks.js",
+        "utils/config.js",
+        "utils/metrics.js",
+        "utils/instrumentation.js",
+        "utils/prisma.js",
+        "utils/asyncPool.js",
+        "services/academicCatalogService.js",
+        "services/schoolManagementOverviewService.js",
+        "services/academicStructureManagementService.js",
+        "services/organizationAdminService.js",
+        "services/staffResponsibilityService.js",
+        "domain/academicCatalog.js",
+        "domain/academicStructureManagement.js",
+        "domain/organizationImport.js",
+        "domain/staffResponsibilities.js",
+        "routes/v2/academic-catalog.js",
+        "services/instanceSetupService.js",
+        "routes/v2/academic-admin.js",
+        "prisma/schema.prisma",
+        "docker/schema.prisma",
+        "Dockerfile",
+        "prisma.config.js",
+        "services/publicationService.js",
+        "domain/publication.js",
+        "tests/publicationAuthorizationHttp.test.js",
+        "tests/publicationActionDatabase.integration.test.js",
+        "tests/publicationActionCenter.test.js",
+        "tests/academicAuthorization.test.js",
+        "docs/classworks-2-phase-6.md",
+        "docs/management-permission-tests.md",
+        "domain/classroomScreenAccount.js",
+        "domain/notificationDelivery.js",
+        "domain/publicationDuplicate.js",
+        "domain/publicationRequest.js",
+        "domain/publicationWeek.js",
+        "domain/schoolHomeworkSettings.js",
+        "domain/teachingRelationships.js",
+        "domain/workspaceAssignmentImport.js",
+        "public/auth-success.html",
+        "public/auth-error.html",
+        "views/index.ejs",
+        "views/error.ejs",
+        "scripts/init-production-env.js",
+        "scripts/check-production-env.js",
+        "scripts/dev-server.js",
+        "scripts/prepare-debug.js"
+      ],
+      "disposition": "reported",
+      "findingCandidateIds": [
+        "BASELINE-MIGRATION-OWNER-HASH",
+        "BASELINE-OAUTH-UNVERIFIED-EMAIL",
+        "BASELINE-LOCAL-LOGIN-DEVICE-RATELIMIT",
+        "BASELINE-IMPORT-PIN-SESSION-REVOCATION",
+        "publication-permission-review",
+        "baseline-oauth-login-csrf"
+      ],
+      "id": "surface_http-/-domain",
+      "label": "\u6838\u5fc3 HTTP \u8def\u7531\u3001\u8d26\u53f7/\u5c4f\u7aef\u8eab\u4efd\u3001\u4e1a\u52a1\u670d\u52a1\u3001domain \u4e0e\u57fa\u7840\u5de5\u5177",
+      "notes": "\u5f53\u524d services\u3001routes\u3001middleware\u3001utils\u3001domain \u76ee\u5f55\u4e0b\u7684\u6e90\u6587\u4ef6\u5df2\u5b8c\u6210\u9759\u6001\u5b89\u5168\u5ba1\u9605\uff1b\u53e6\u5b8c\u6574\u5ba1\u95b1\u5165\u53e3\u3001schema\u3001\u9009\u5b9a\u811a\u672c\u3001\u9875\u9762\u548c\u56de\u5f52\u6d4b\u8bd5\u3002\u53bb\u91cd\u8def\u5f84\u6e05\u5355\u4ec5\u4ee3\u8868\u5b8c\u6574\u5b89\u5168\u5ba1\u9605\uff0c\u4e0d\u8ba1\u67b6\u6784\u6620\u5c04\u6216\u7247\u6bb5\u68c0\u7d22\u3002",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "surface_2",
+      "label": "\u521d\u59cb\u5316\u9501\u5b9a\u3001\u5b66\u6821\u89d2\u8272\u4e0e\u8de8\u6821\u8d44\u6e90\u7ed1\u5b9a",
+      "notes": "\u521d\u59cb\u5316\u670d\u52a1\u68c0\u67e5 setup \u72b6\u6001\uff1b\u7ba1\u7406\u8def\u7531\u7edf\u4e00 jwtAuth\uff0cactor \u6765\u81ea\u8ba4\u8bc1\u4e0a\u4e0b\u6587\uff1b\u8d44\u6e90\u6821\u9a8c\u7ed1\u5b9a\u6240\u5c5e\u5b66\u6821/\u5b66\u671f\u3002\u672a\u786e\u8ba4\u65b0\u7684\u672a\u8ba4\u8bc1\u521d\u59cb\u5316\u7ed5\u8fc7\u6216\u4efb\u610f\u8de8\u6821\u7ba1\u7406\u5199\u5165\u3002",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "surface_3",
+      "label": "\u533f\u540d\u76ee\u5f55\u3001\u505c\u7528\u8d70\u73ed\u4e0e\u7ec4\u7ec7\u5bfc\u5165\u4e1a\u52a1\u7ea6\u675f",
+      "notes": "\u672a\u786e\u8ba4\u65b0\u7684\u5b89\u5168\u8d8a\u6743\uff1b\u5df2\u786e\u8ba4\u4e24\u9879\u529f\u80fd/\u5386\u53f2\u4e00\u81f4\u6027\u95ee\u9898\uff0c\u8be6\u89c1\u9879\u76ee\u4e3b\u62a5\u544a F2/F3\u3002\u4e8b\u52a1\u548c\u7ba1\u7406\u5458\u6388\u6743\u5b58\u5728\uff0c\u4f46\u4e0d\u4fdd\u8bc1\u76ee\u5f55\u6709\u6548\u6027\u548c\u5386\u53f2\u8bed\u4e49\u3002",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "not_applicable",
+      "id": "surface_4",
+      "label": "\u5c4f\u7aef\u6301\u4e45\u72b6\u6001\u3001\u65e5\u671f\u548c\u7f16\u8f91\u6d41\u7a0b\uff08\u540e\u7aef\u8303\u56f4\u5916\u652f\u6301\uff09",
+      "notes": "\u524d\u7aef\u53d1\u73b0\u76847\u9879\u529f\u80fd\u95ee\u9898\u5728 docs/engineering-review-2026-09-08.md \u72ec\u7acb\u8bb0\u5f55\uff1b\u524d\u7aef\u6587\u4ef6\u4e0d\u8ba1\u5165\u540e\u7aef279\u6587\u4ef6\u8986\u76d6\u3002OAuth\u524d\u7aef\u6d88\u8d39\u7aef\u4f5c\u4e3a\u540e\u7aef\u767b\u5f55CSRF\u7684\u8de8\u7aef\u8bc1\u636e\u3002",
+      "receiptRefs": []
+    },
+    {
+      "candidateId": "baseline-pending-auth",
+      "counterevidence": "utils/tokenManager.js:325-350 \u73b0\u5df2\u68c0\u67e5 tokenVersion \u4e0e\u4f1a\u8bdd\u5f52\u5c5e\u3001\u64a4\u9500\u3001\u671f\u9650\uff1bjwt-auth \u9650\u5236\u65e7\u517c\u5bb9\u8f7d\u8377\u3002\u539f\u9000\u51fa\u7f3a\u9677\u5df2\u4fee\u590d\uff1b\u5176\u4f59\u72ec\u7acb\u63a7\u5236\u5206\u522b\u5f62\u6210 S2/S4/S5\u3002",
+      "disposition": "rejected",
+      "id": "surface_5",
+      "label": "\u539f\u4f1a\u8bdd\u9000\u51fa\u6f0f\u6d1e\u4e0e\u65b0\u4ee4\u724c\u517c\u5bb9\u964d\u7ea7\u5019\u9009",
+      "originalEvidence": "\u68c0\u67e5 OAuth \u90ae\u7bb1\u3001\u5bfc\u5165\u6539\u5bc6\u4f1a\u8bdd\u53ca\u8bbe\u5907\u6765\u6e90\u9650\u6d41\uff1b\u540c\u65f6\u590d\u6838\u5355\u4f1a\u8bdd\u64a4\u9500\u3002",
+      "receiptRefs": []
+    },
+    {
+      "candidateId": "former-author-withdraw",
+      "counterevidence": "\u6587\u6863 management-permission-tests.md:17 \u4e0e publicationAuthorizationHttp.test.js:78-84 \u660e\u786e\u4fdd\u7559\u4f5c\u8005\u81ea\u8eab\u8bfb\u53d6\u5206\u652f\uff1b\u672a\u5efa\u7acb\u6c38\u4e45\u4f5c\u8005\u64a4\u56de\u6743\u8fdd\u53cd\u4ea7\u54c1\u89c4\u5219\u7684\u8bc1\u660e\u3002\u884c\u4e3a\u786e\u5b9a\uff0c\u5b89\u5168\u5b9a\u6027\u672a\u786e\u5b9a\u3002",
+      "disposition": "rejected",
+      "id": "surface_6",
+      "label": "\u65e7\u4f5c\u8005\u64a4\u56de\u6743\u9650\u662f\u5426\u5e94\u968f\u6210\u5458\u8d44\u683c\u64a4\u9500",
+      "originalEvidence": "services/publicationAuthorizationService.js:108-109 \u4f5c\u8005\u76f4\u63a5\u901a\u8fc7\u7ba1\u7406\u6388\u6743\uff1bpublicationService.js:1302-1332 \u64a4\u56de\u4e0d\u53e6\u67e5\u5f53\u524d\u7a7a\u95f4\u5199\u6743\u9650\u3002",
+      "receiptRefs": []
+    },
+    {
+      "candidateId": "setup-staff-owner-overwrite",
+      "counterevidence": "\u5f53\u524d\u751f\u4ea7\u8c03\u7528\u53ea\u5728\u53d7 setup \u6743\u9650\u53ca\u672a\u5b8c\u6210\u72b6\u6001\u7ea6\u675f\u7684 OOBE \u4e2d\u6267\u884c\uff0c\u4f7f\u7528\u771f\u6b63 OWNER\uff1b\u666e\u901a\u7ba1\u7406\u63a5\u53e3\u8c03\u7528\u7684\u662f\u53e6\u4e00\u4e2a importLocalTeachers\u3002",
+      "disposition": "rejected",
+      "id": "surface_owner",
+      "label": "\u521d\u59cb\u5316\u4e13\u7528\u4eba\u5458\u5bfc\u5165\u7684 OWNER \u6539\u5bc6\u5019\u9009",
+      "originalEvidence": "staffConfigurationImportService \u5185\u90e8\u7f3a\u5c11\u666e\u901a ADMIN \u5230 OWNER \u7684\u76ee\u6807\u89d2\u8272\u9650\u5236\u3002",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "needs_follow_up",
+      "id": "surface_8",
+      "label": "\u90e8\u7f72\u5165\u53e3\u4e0e\u6709\u6548\u914d\u7f6e",
+      "notes": "\u90e8\u7f72\u4ee3\u7406\u3001ci-deploy\u3001release-plan\u3001upgrade \u7684\u5b8c\u6574\u6e90\u7801\u68c0\u67e5\u672a\u53d1\u73b0\u4efb\u610f\u547d\u4ee4/\u5f15\u7528\u8f93\u5165\uff1bDocker\u6743\u9650\u5c5e\u4e8e\u539f\u6709\u8fd0\u7ef4\u8fb9\u754c\u3002\u914d\u7f6e\u9ed8\u8ba4\u503c\u3001\u7cbe\u786e\u90e8\u7f72\u7ec4\u5408\u548c\u5176\u4ed6\u8fd0\u7ef4\u811a\u672c\u4ec5\u5b8c\u6210\u90e8\u5206\u67b6\u6784\u6838\u67e5\uff0c\u4e0d\u80fd\u89c6\u4e3a\u5168\u91cf\u8fd0\u7ef4\u5b89\u5168\u5ba1\u8ba1\u3002",
+      "receiptRefs": []
+    },
+    {
+      "auditedFiles": [
+        "app.js",
+        "middleware/jwt-auth.js",
+        "middleware/rateLimiter.js",
+        "utils/jwt.js",
+        "utils/tokenManager.js",
+        "utils/productionConfig.js",
+        "bin/www",
+        "config/oauth.js",
+        "routes/accounts.js",
+        "services/workspaceAssignmentImportService.js",
+        "services/academicAuthorizationService.js",
+        "services/schoolOwnerPolicy.js",
+        "utils/socket.js",
+        "routes/v2/publications.js",
+        "routes/v2/classroom-screens.js",
+        "services/classroomScreenService.js",
+        "services/screenWriteAuthorization.js"
+      ],
+      "disposition": "needs_follow_up",
+      "id": "auth_baseline_initial",
+      "label": "\u8d26\u6237\u8ba4\u8bc1\u53ca\u5165\u53e3\u63a7\u5236\u521d\u5ba1",
+      "notes": "\u57fa\u7ebf\u5ba1\u9605\u786e\u8ba4\u5f53\u524d validateAccountToken \u68c0\u67e5\u4f1a\u8bdd\u64a4\u9500\uff0c\u6b63\u5f0f\u9a8c\u8bc1\u5c1a\u672a\u7ed3\u675f\uff1b\u5df2\u5b8c\u6574\u5ba1\u67e5\u6587\u4ef6\u89c1 auditedFiles\u3002",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "reported",
+      "findingCandidateIds": [
+        "BASELINE-MIGRATION-OWNER-HASH",
+        "BASELINE-OAUTH-UNVERIFIED-EMAIL",
+        "BASELINE-LOCAL-LOGIN-DEVICE-RATELIMIT",
+        "BASELINE-IMPORT-PIN-SESSION-REVOCATION",
+        "publication-permission-review",
+        "baseline-oauth-login-csrf"
+      ],
+      "id": "validated_auth_and_publication",
+      "label": "\u8d26\u53f7\u51ed\u636e\u751f\u547d\u5468\u671f\u3001\u8fc1\u79fb\u51ed\u636e\u8fb9\u754c\u3001\u767b\u5f55\u6765\u6e90\u53ca\u53d1\u5e03\u8ba4\u8bc1",
+      "notes": "\u7236\u5ba1\u67e5\u4ee5\u5f53\u524d\u6e90\u7801\u5b8c\u62106\u9879\u9a8c\u8bc1\uff0c\u4fdd\u7559\u5916\u90e8\u670d\u52a1\u5546\u524d\u63d0\u3001\u5df2\u6709IP\u9650\u6d41\u3001\u4f5c\u8005\u6743\u9650\u548c\u81ea\u52a8\u8ba4\u8bc1\u8bbe\u8ba1\u53cd\u8bc1\u3002",
+      "receiptRefs": []
+    }
+  ]
+}

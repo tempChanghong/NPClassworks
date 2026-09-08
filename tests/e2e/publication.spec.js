@@ -469,6 +469,64 @@ test("PWA upgrade preserves pending homework through worker activation and offli
   } finally { await screen.context.close(); }
 });
 
+test("reopened draft can save normally when its original revision is still current", async ({browser, request}) => {
+  const screen = await openRole(browser, "screen");
+  try {
+    await enterScreenHomework(screen.page, "版本一");
+    await screen.page.getByRole("button", {name: "修改", exact: true}).click();
+    const content = screen.page.getByRole("textbox", {name: "作业内容 作业内容", exact: true});
+    await content.fill("同版本恢复的草稿");
+    await screen.page.getByRole("button", {name: "取消", exact: true}).click();
+    await screen.page.getByRole("button", {name: "修改", exact: true}).click();
+    await expect(content).toHaveValue("同版本恢复的草稿");
+    await expect(screen.page.getByRole("button", {name: "保存作业", exact: true})).toBeEnabled();
+    await screen.page.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(screen.page.locator(".screen-composer")).not.toBeVisible();
+    const state = (await (await request.get(`${api}/__test/state`)).json()).data;
+    expect(state.items[0].revision).toBe(2);
+    expect(state.versionChecks).toEqual(['"1"']);
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
+for (const legacy of [false, true]) test(`reopened ${legacy ? "legacy" : "versioned"} draft requires confirmation after a remote revision`, async ({browser, request}) => {
+  const screen = await openRole(browser, "screen");
+  try {
+    await enterScreenHomework(screen.page, "版本一");
+    await screen.page.getByRole("button", {name: "修改", exact: true}).click();
+    await screen.page.getByRole("textbox", {name: "作业内容 作业内容", exact: true}).fill("未提交的旧草稿");
+    await screen.page.getByRole("button", {name: "取消", exact: true}).click();
+    if (legacy) await screen.page.evaluate(() => {
+      const key = "classworks-v2-screen-homework-draft:screen-a:pub-1";
+      const draft = JSON.parse(localStorage.getItem(key));
+      delete draft.baseRevision;
+      delete draft.basePublishAt;
+      localStorage.setItem(key, JSON.stringify(draft));
+    });
+    await request.post(`${api}/__test/concurrent-edit`, {data: {id: "pub-1", content: "服务器版本二"}});
+    await request.post(`${api}/__test/invalidation-burst`);
+    await expect(screen.page.getByText("服务器版本二", {exact: true}).first()).toBeVisible();
+    await screen.page.getByRole("button", {name: "修改", exact: true}).click();
+    await expect(screen.page.getByRole("textbox", {name: "作业内容 作业内容", exact: true})).toHaveValue("未提交的旧草稿");
+    await expect(screen.page.getByText("服务器：服务器版本二", {exact: true})).toBeVisible();
+    if (legacy) await expect(screen.page.getByText(/这份本机草稿没有记录来源版本/)).toBeVisible();
+    expect((await (await request.get(`${api}/__test/state`)).json()).data.items[0].revision).toBe(2);
+    // Closing/reloading again must not silently rebase the unresolved draft.
+    await screen.page.getByRole("button", {name: "取消", exact: true}).click();
+    await screen.page.reload();
+    await screen.page.getByRole("button", {name: "修改", exact: true}).click();
+    await expect(screen.page.getByText("服务器：服务器版本二", {exact: true})).toBeVisible();
+    await screen.page.getByRole("button", {name: "以本机输入生成新版本", exact: true}).click();
+    await screen.page.getByRole("button", {name: "保存新版本", exact: true}).click();
+    await expect(screen.page.locator(".screen-composer")).not.toBeVisible();
+    const state = (await (await request.get(`${api}/__test/state`)).json()).data;
+    expect(state.items[0].content).toBe("未提交的旧草稿");
+    expect(state.items[0].revision).toBe(3);
+    expect(state.versionChecks).toEqual(['"2"']);
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
 test("revision conflict preserves typed content until explicit confirmation saves the latest revision", async ({browser, request}) => {
   const screen = await openRole(browser, "screen");
   try {

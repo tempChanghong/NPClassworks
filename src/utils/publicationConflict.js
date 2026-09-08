@@ -17,6 +17,9 @@ export function publicationConflictState(error, expectedRevision) {
 }
 
 export function publicationConflictMessage(conflict) {
+  if (conflict?.sourceRevisionUnknown) {
+    return "这份本机草稿没有记录来源版本，请先核对服务器内容。本机输入仍然保留，系统没有覆盖任何内容。";
+  }
   const versions = conflict?.expectedRevision && conflict?.latestRevision
     ? `你打开的是版本 ${conflict.expectedRevision}，服务器现在是版本 ${conflict.latestRevision}。`
     : "服务器上的内容已经发生变化。";
