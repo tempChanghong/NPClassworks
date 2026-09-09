@@ -6,6 +6,7 @@
 
 // 核心插件（Vuetify / Router / Pinia）
 import { registerPlugins } from '@/plugins'
+import router from '@/router'
 
 // Components
 import App from './App.vue'
@@ -25,7 +26,8 @@ import { installAppReloadProtection } from './utils/appReloadProtection'
 // A deliberate browser reload ends temporary access; OAuth navigation keeps its fixed deadline.
 if (readScreenTemporaryExit().bound && window.performance.getEntriesByType('navigation')[0]?.type === 'reload') {
   endScreenTemporaryExit()
-  window.history.replaceState({}, '', import.meta.env.BASE_URL || '/')
+  // The router history already exists: update its cached location as well as the browser URL.
+  router.options.history.replace('/')
 }
 getAccountTokens()
 captureOAuthCallback()

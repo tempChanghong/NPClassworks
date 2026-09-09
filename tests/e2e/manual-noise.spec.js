@@ -1,7 +1,8 @@
 import {test, expect} from "@playwright/test";
 import {origin, api} from "./environment.js";
 
-test.use({serviceWorkers: "block", permissions: ["microphone"], storageState: {cookies: [], origins: [{origin, localStorage: [
+// Keep local schedule times aligned with the +08:00 test clock, including on UTC CI runners.
+test.use({timezoneId: "Asia/Shanghai", serviceWorkers: "block", permissions: ["microphone"], storageState: {cookies: [], origins: [{origin, localStorage: [
   {name: "classworks-v2-oobe", value: JSON.stringify({version: 1, completed: true, roleHint: "screen"})},
   {name: "classworks-v2-screen-oobe:screen-a", value: JSON.stringify({version: 1, completed: true})},
   {name: "classworks-v2-screen-token", value: "screen-token"},
