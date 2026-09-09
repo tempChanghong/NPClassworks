@@ -297,30 +297,39 @@ const today = () => {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 };
 const activeToolTitle = computed(() => tools.value.find((tool) => tool.id === activeTool.value)?.title || "");
-const attendanceCounts = computed(() => ({
-  present: Math.max(0, store.classroomStudents.length
-    - attendanceDraft.value.absent.length
-    - attendanceDraft.value.late.length
-    - attendanceDraft.value.excluded.length),
-  absent: attendanceDraft.value.absent.length,
-  late: attendanceDraft.value.late.length,
-  excluded: attendanceDraft.value.excluded.length,
-}));
+const attendanceCounts = computed(() => {
+  const attendance = attendanceForCurrentRoster(attendanceDraft.value);
+  return {
+    present: Math.max(0, store.classroomStudents.length
+      - attendance.absent.length
+      - attendance.late.length
+      - attendance.excluded.length),
+    absent: attendance.absent.length,
+    late: attendance.late.length,
+    excluded: attendance.excluded.length,
+  };
+});
 watch(() => props.modelValue, async (open) => {
   if (!open) {
     activeTool.value = "";
     return;
   }
   toolSettings.value = loadClassroomToolSettings(store.screenSession?.binding?.id);
-  await store.loadClassroomTools(today());
-  attendanceDraft.value = attendanceFromStore();
-});
+  try {
+    await store.loadClassroomTools(today());
+    attendanceDraft.value = attendanceForCurrentRoster(store.classroomAttendance);
+  } catch {
+    // The store exposes the load failure in the classroom tools alert.
+  }
+}, {immediate: true});
 
-function attendanceFromStore() {
+function attendanceForCurrentRoster(attendance) {
+  const validIds = new Set(store.classroomStudents.map(student => student.id));
+  const currentIds = key => (attendance[key] || []).filter(id => validIds.has(id));
   return {
-    absent: [...(store.classroomAttendance.absent || [])],
-    late: [...(store.classroomAttendance.late || [])],
-    excluded: [...(store.classroomAttendance.excluded || [])],
+    absent: currentIds("absent"),
+    late: currentIds("late"),
+    excluded: currentIds("excluded"),
   };
 }
 
@@ -372,10 +381,7 @@ async function saveRoster() {
   savingRoster.value = true;
   try {
     await store.replaceClassroomStudents(parseRoster());
-    const validIds = new Set(store.classroomStudents.map((student) => student.id));
-    for (const key of ["absent", "late", "excluded"]) {
-      attendanceDraft.value[key] = attendanceDraft.value[key].filter((id) => validIds.has(id));
-    }
+    attendanceDraft.value = attendanceForCurrentRoster(attendanceDraft.value);
     rosterDialog.value = false;
   } finally {
     savingRoster.value = false;
@@ -385,8 +391,8 @@ async function saveRoster() {
 async function saveAttendance() {
   savingAttendance.value = true;
   try {
-    await store.saveClassroomAttendance(today(), attendanceDraft.value);
-    attendanceDraft.value = attendanceFromStore();
+    await store.saveClassroomAttendance(today(), attendanceForCurrentRoster(attendanceDraft.value));
+    attendanceDraft.value = attendanceForCurrentRoster(store.classroomAttendance);
   } finally {
     savingAttendance.value = false;
   }

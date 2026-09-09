@@ -231,6 +231,19 @@ export async function createFlowHarness() {
         mounted.splice(mounted.indexOf(app), 1); app.unmount();
       }};
     },
+    async openComponent(path, initialProps) {
+      const {default: component} = await vite.ssrLoadModule(path);
+      const props = reactive(initialProps);
+      const events = [];
+      let state;
+      const app = renderer.createApp({setup() {
+        state = component.setup(props, {expose() {}, emit: (...args) => events.push(args)});
+        return () => null;
+      }});
+      app.use(currentPinia); app.provide(ssrContextKey, {});
+      app.mount({}); mounted.push(app);
+      return {state, props, events};
+    },
     async openNotificationDelivery(publication) {
       const {default: component} = await vite.ssrLoadModule("/src/components/v2/NotificationDeliveryDialog.vue");
       const props = reactive({modelValue: true, publication});

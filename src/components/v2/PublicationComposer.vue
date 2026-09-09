@@ -451,6 +451,7 @@ import {useNow} from "@vueuse/core";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
+import {describeApiError} from "@/utils/classworksV2Client";
 import {todayBoardDate} from "@/utils/boardDate";
 import {
   teacherTargetCombinationId,
@@ -729,6 +730,18 @@ async function submit(status, allowDuplicate = false) {
     localError.value = "标题和正文不能同时为空";
     return;
   }
+  if (!form.publishAt || !Number.isFinite(new Date(form.publishAt).getTime())) {
+    localError.value = "请填写有效的发布时间";
+    return;
+  }
+  if (form.type === "ASSIGNMENT" && form.dueAt && !Number.isFinite(new Date(form.dueAt).getTime())) {
+    localError.value = "请填写有效的截止时间，或留空";
+    return;
+  }
+  if (form.type === "NOTICE" && form.expiresAt && !Number.isFinite(new Date(form.expiresAt).getTime())) {
+    localError.value = "请填写有效的自动失效时间，或留空";
+    return;
+  }
   const flag = status === "DRAFT" ? saving : publishing;
   let submittedInput = null;
   flag.value = true;
@@ -780,7 +793,7 @@ async function submit(status, allowDuplicate = false) {
         conflict.value = nextConflict;
       }
     } else {
-      localError.value = store.teacherError;
+      localError.value = describeApiError(error, "保存发布内容失败，请稍后重试");
     }
   } finally {
     flag.value = false;
