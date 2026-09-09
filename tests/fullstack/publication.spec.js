@@ -1,6 +1,34 @@
 import {test, expect, enterHomework} from "./fixture.js";
 import {api} from "../e2e/environment.js";
 
+test("teacher notice edits and history restore stay confirmed while revoked writers remain blocked", async ({classroom, request}) => {
+  const headers = {Authorization: `Bearer ${classroom.credentials.accessToken}`};
+  const create = () => request.post(`${api}/api/v2/publications`, {headers, data: {
+    type: "NOTICE", status: "PUBLISHED", content: "任课教师发布的通知", targetWorkspaceIds: [classroom.workspace.id],
+  }});
+  const created = await create();
+  expect(created.status()).toBe(201);
+  const initial = (await created.json()).data;
+  expect(initial.isCertified).toBe(true);
+  const edited = await request.patch(`${api}/api/v2/publications/${initial.id}`, {headers: {...headers, "If-Match": '"1"'}, data: {priority: "MINOR"}});
+  expect(edited.status()).toBe(200);
+  const minor = (await edited.json()).data;
+  expect(minor.priority).toBe("MINOR");
+  expect(minor.isCertified).toBe(true);
+  const restored = await request.post(`${api}/api/v2/publications/${initial.id}/restore`, {headers: {...headers, "If-Match": '"2"'}, data: {sourceRevision: 1}});
+  expect(restored.status()).toBe(200);
+  expect((await restored.json()).data.isCertified).toBe(true);
+  const revisions = await classroom.prisma.publicationRevision.findMany({where: {publicationId: initial.id}});
+  expect(revisions).toHaveLength(3);
+  expect(revisions.every(row => row.isCertified && row.certifiedByAccountId === classroom.account.id)).toBe(true);
+  await classroom.prisma.workspaceMember.deleteMany({where: {accountId: classroom.account.id}});
+  await classroom.prisma.teachingAssignment.deleteMany({where: {accountId: classroom.account.id}});
+  expect((await create()).status()).toBe(403);
+  const blocked = await request.patch(`${api}/api/v2/publications/${initial.id}`, {headers: {...headers, "If-Match": '"3"'}, data: {content: "无权限的修改"}});
+  expect(blocked.status()).toBe(403);
+  expect((await classroom.prisma.publication.findUnique({where: {id: initial.id}})).revision).toBe(3);
+});
+
 test("teacher notice priorities and popup choices reach the screen and acknowledgement database", async ({classroom}) => {
   test.setTimeout(90000);
   const teacher = await classroom.open("teacher");
@@ -29,6 +57,12 @@ test("teacher notice priorities and popup choices reach the screen and acknowled
     expect(response.status()).toBe(201);
     const row = (await response.json()).data;
     expect(row.priority).toBe(priority);
+    expect(row.isCertified).toBe(true);
+    expect(row.certifiedByAccountId).toBe(classroom.account.id);
+    const revision = await classroom.prisma.publicationRevision.findUnique({where: {
+      publicationId_revision: {publicationId: row.id, revision: row.revision},
+    }});
+    expect(revision.isCertified).toBe(true);
     expect(row.contentJson.popupEnabled).toBe(popup);
     await teacher.page.getByRole("button", {name: "完成", exact: true}).click();
     await expect.poll(() => screen.frames.some(frame => frame.includes(row.id))).toBe(true);
