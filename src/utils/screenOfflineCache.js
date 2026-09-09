@@ -94,7 +94,18 @@ export function screenFeedCacheKey(bindingId, boardDate) {
 }
 
 export function loadCachedScreenFeed(bindingId, boardDate, storage) {
-  return read(screenFeedCacheKey(bindingId, boardDate), FEED_RETENTION_MS, storage);
+  const feed = read(screenFeedCacheKey(bindingId, boardDate), FEED_RETENTION_MS, storage);
+  if (!Array.isArray(feed?.items)) return feed;
+  const now = Date.now();
+  // A fresh display cache can contain notices whose individual lifetime has ended.
+  // Keep stored data intact and leave homework/queued uploads out of this policy.
+  const items = feed.items.filter(item => item.type !== "NOTICE" || !item.expiresAt
+    || new Date(item.expiresAt).getTime() > now);
+  const transitions = items.filter(item => item.type === "NOTICE").map(item => item.expiresAt);
+  transitions.push(feed.nextTransitionAt);
+  const future = transitions.filter(Boolean).map(value => new Date(value).getTime())
+    .filter(time => Number.isFinite(time) && time > now);
+  return {...feed, items, nextTransitionAt: future.length ? new Date(Math.min(...future)).toISOString() : null};
 }
 
 export function saveCachedScreenFeed(bindingId, boardDate, feed, storage) {

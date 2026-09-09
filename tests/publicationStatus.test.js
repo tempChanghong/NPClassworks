@@ -61,3 +61,20 @@ test("multi-target publication receipt reports every transaction target", () => 
   assert.equal(receipt.targets.every((item) => item.state === "accepted"), true);
   assert.equal(receipt.isAtomic, true);
 });
+
+test("notice conflict comparison exposes popup changes using the effective priority policy", () => {
+  const minor = {type: "NOTICE", priority: "MINOR"};
+  assert.deepEqual(buildConflictComparison(
+    {...minor, contentJson: {popupEnabled: false}},
+    {...minor, contentJson: {popupEnabled: true}},
+    PUBLICATION_CONFLICT_FIELDS,
+  ), [{key: "popupEnabled", label: "大屏弹窗", localValue: "否", currentValue: "是", changed: true}]);
+  for (const priority of ["NORMAL", "IMPORTANT", "URGENT"]) {
+    assert.deepEqual(buildConflictComparison(
+      {type: "NOTICE", priority, contentJson: {popupEnabled: false}},
+      {type: "NOTICE", priority, contentJson: {popupEnabled: true}},
+      PUBLICATION_CONFLICT_FIELDS,
+    ), []);
+  }
+  assert.deepEqual(buildConflictComparison(minor, {...minor, contentJson: {popupEnabled: false}}, PUBLICATION_CONFLICT_FIELDS), []);
+});

@@ -21,6 +21,32 @@ function fakeStorage() {
   };
 }
 
+test("offline feeds expire notices individually and keep homework and future expiry transitions", t => {
+  const now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  const storage = fakeStorage();
+  const notice = {type: "NOTICE", status: "PUBLISHED", publishAt: new Date(now - 1000).toISOString()};
+  const items = [
+    {...notice, id: "expired", expiresAt: new Date(now).toISOString()},
+    {...notice, id: "soon", expiresAt: new Date(now + 1000).toISOString()},
+    {...notice, id: "later", expiresAt: new Date(now + 2000).toISOString()},
+    {...notice, id: "legacy", expiresAt: null},
+    {id: "homework", type: "ASSIGNMENT", expiresAt: new Date(now - 1000).toISOString()},
+  ];
+  saveCachedScreenFeed("screen", "date", {items, nextTransitionAt: new Date(now).toISOString()}, storage);
+  const raw = storage.getItem(screenFeedCacheKey("screen", "date"));
+  let cached = loadCachedScreenFeed("screen", "date", storage);
+  assert.deepEqual(cached.items.map(item => item.id), ["soon", "later", "legacy", "homework"]);
+  assert.equal(cached.nextTransitionAt, new Date(now + 1000).toISOString());
+  t.mock.method(Date, "now", () => now + 1000);
+  cached = loadCachedScreenFeed("screen", "date", storage);
+  assert.deepEqual(cached.items.map(item => item.id), ["later", "legacy", "homework"]);
+  assert.equal(cached.nextTransitionAt, new Date(now + 2000).toISOString());
+  t.mock.method(Date, "now", () => now + 2000);
+  assert.equal(loadCachedScreenFeed("screen", "date", storage).nextTransitionAt, null);
+  assert.equal(storage.getItem(screenFeedCacheKey("screen", "date")), raw);
+});
+
 test("screen session and feed can be restored after an offline reload", () => {
   const storage = fakeStorage();
   saveCachedScreenSession({binding: {id: "screen-a"}}, storage);

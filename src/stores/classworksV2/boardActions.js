@@ -283,6 +283,7 @@ export const boardActions = {
         this.feedGeneratedAt = cached.generatedAt;
         this.feedUsingCache = true;
         this.feedLoadError = "当前无法连接服务器，正在显示这台大屏上次同步的内容";
+        this.scheduleFeedTransition(cached.nextTransitionAt);
         return;
       }
       this.feed = [];

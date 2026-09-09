@@ -1,7 +1,7 @@
 import {test, expect} from "@playwright/test";
 import {origin, api} from "./environment.js";
 
-async function openRole(browser, role) {
+async function openRole(browser, role, {time} = {}) {
   const values = {
     "classworks-v2-oobe": JSON.stringify({version: 1, completed: true, roleHint: role}),
     "classworks-v2-screen-oobe:screen-a": JSON.stringify({version: 1, completed: true}),
@@ -11,6 +11,7 @@ async function openRole(browser, role) {
   const context = await browser.newContext({viewport: {width: 1440, height: 1000}, serviceWorkers: "allow",
     storageState: {cookies: [], origins: [{origin, localStorage: Object.entries(values).map(([name, value]) => ({name, value}))}]}});
   const page = await context.newPage();
+  if (time) await page.clock.install({time});
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(origin);
@@ -220,6 +221,64 @@ test("unacknowledged notification popup survives offline PWA reload and confirma
     await expect(screen.page.locator(".notification-center")).toContainText("次要离线通知");
     expect(screen.errors).toEqual([]);
   } finally { await screen.context.close(); }
+});
+
+test("offline notice expiry survives reload and continues removing later popups without reconnecting", async ({browser, request}) => {
+  const now = Date.parse("2026-09-09T04:00:00Z");
+  for (const [content, delay] of [["先到期通知", 3600000], ["后到期通知", 7200000]]) {
+    await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content,
+      expiresAt: new Date(now + delay).toISOString()}});
+  }
+  await request.post(`${api}/api/v2/publications`, {data: {content: "仍须保留的作业"}});
+  const screen = await openRole(browser, "screen", {time: new Date(now)});
+  try {
+    await expect(screen.page.locator(".screen-notice-popup")).toBeVisible();
+    await screen.page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await expect.poll(() => screen.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await screen.page.clock.setSystemTime(new Date(now + 3601000));
+    await screen.context.setOffline(true);
+    await screen.page.reload({waitUntil: "domcontentloaded"});
+    const popup = screen.page.locator(".screen-notice-popup");
+    await expect(popup).toContainText("后到期通知");
+    await expect(popup).not.toContainText("先到期通知");
+    await screen.page.clock.fastForward(3600000);
+    await expect(popup).not.toBeVisible();
+    await expect(screen.page.getByText("仍须保留的作业", {exact: true})).toBeVisible();
+    await screen.page.getByRole("button", {name: "通知", exact: true}).first().click();
+    await expect(screen.page.locator(".notification-center")).not.toContainText("到期通知");
+    expect(screen.errors).toEqual([]);
+  } finally { await screen.context.close(); }
+});
+
+test("teacher sees popup setting conflicts before explicitly saving the local choice", async ({browser, request}) => {
+  const created = await request.post(`${api}/api/v2/publications`, {data: {
+    type: "NOTICE", content: "弹窗开关冲突", priority: "MINOR", contentJson: {popupEnabled: false},
+  }});
+  const notice = (await created.json()).data;
+  const teacher = await openRole(browser, "teacher");
+  try {
+    const page = teacher.page;
+    const row = page.locator(".publication-list-item").filter({hasText: notice.content});
+    await row.locator("button").filter({has: page.locator(".mdi-dots-vertical")}).click();
+    await page.getByText("编辑", {exact: true}).click();
+    const composer = page.locator(".publication-composer");
+    await expect(composer).toBeVisible();
+    expect((await request.patch(`${api}/api/v2/publications/${notice.id}`, {
+      headers: {"If-Match": '"1"'}, data: {contentJson: {popupEnabled: true}},
+    })).ok()).toBe(true);
+    await composer.getByRole("button", {name: "保存修改", exact: true}).click();
+    const difference = composer.locator(".conflict-comparison__row").filter({hasText: "大屏弹窗"});
+    await expect(difference).toContainText("服务器：是");
+    await expect(difference).toContainText("我的：否");
+    await composer.getByRole("button", {name: "以我的输入生成新版本"}).click();
+    await page.getByRole("button", {name: "保存新版本", exact: true}).click();
+    await expect(composer).toContainText("新建发布");
+    await expect(composer.locator(".conflict-comparison")).toHaveCount(0);
+    const saved = (await (await request.get(`${api}/api/v2/publications/${notice.id}`)).json()).data;
+    expect(saved.revision).toBe(3);
+    expect(saved.contentJson.popupEnabled).toBe(false);
+    expect(teacher.errors).toEqual([]);
+  } finally { await teacher.context.close(); }
 });
 
 test("notification acknowledgement persists across offline reload and replays after the notice leaves the feed", async ({browser, request}) => {

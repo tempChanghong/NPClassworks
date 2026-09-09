@@ -27,6 +27,10 @@ export function buildConflictComparison(local, current, fields = []) {
   }).filter((item) => item.changed);
 }
 
+const noticePopupValue = value => value?.type === "NOTICE"
+  ? value.priority !== "MINOR" || value.contentJson?.popupEnabled === true
+  : null;
+
 export const PUBLICATION_CONFLICT_FIELDS = Object.freeze([
   {key: "title", label: "标题"},
   {key: "content", label: "正文"},
@@ -38,5 +42,6 @@ export const PUBLICATION_CONFLICT_FIELDS = Object.freeze([
   {key: "dueAt", label: "截止时间"},
   {key: "expiresAt", label: "失效时间"},
   {key: "priority", label: "优先级"},
+  {key: "popupEnabled", label: "大屏弹窗", local: noticePopupValue, current: noticePopupValue},
   {key: "status", label: "发布状态"},
 ]);
