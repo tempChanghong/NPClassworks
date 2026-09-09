@@ -49,6 +49,57 @@ function memoryStorage() {
   };
 }
 
+test("more than 100 active notices retain acknowledgements and do not alert again after reload", async () => {
+  const storage = memoryStorage();
+  const notices = Array.from({length: 150}, (_, i) => ({id: `notice-${i}`, revision: 1, type: "NOTICE",
+    expiresAt: new Date(Date.now() + 86400000).toISOString()}));
+  for (const notice of notices) rememberAcknowledgedNotification(notice, "screen-a", storage);
+  assert.equal(readAcknowledgedNotificationKeys("screen-a", storage).size, 150);
+  assert.equal(readAcknowledgedNotificationKeys("screen-b", storage).size, 0);
+  assert.equal(JSON.parse(storage.getItem(notificationAcknowledgedStorageKey("screen-a"))).every(key => typeof key === "string"), true);
+  const played = [];
+  const controller = () => createNotificationAlertController({scopeId: "screen-a", storage, navigatorRef: {},
+    documentRef: {hidden: false}, play: () => played.push("sound")});
+  await controller().alert(notices);
+  await controller().alert(notices);
+  assert.equal(played.length, 1);
+  const revised = {...notices[0], revision: 2};
+  assert.deepEqual(findUnseenNotifications([revised], "screen-a", storage), [revised]);
+  assert.equal(readAcknowledgedNotificationKeys("screen-a", storage).has(notificationAlertKey(revised)), false);
+});
+
+test("known expiry cleans only expired records while legacy and indefinite records remain", t => {
+  const now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  const storage = memoryStorage();
+  const ackKey = notificationAcknowledgedStorageKey("screen-a");
+  const seenKey = notificationSeenStorageKey("screen-a");
+  for (const key of [ackKey, seenKey]) storage.setItem(key, JSON.stringify(["legacy:1", "unknown:1"]));
+  const legacy = {id: "legacy", revision: 1, expiresAt: new Date(now + 1000).toISOString()};
+  const active = {id: "active", revision: 1, expiresAt: new Date(now + 10000).toISOString()};
+  readAcknowledgedNotificationKeys("screen-a", storage, [legacy]);
+  rememberAcknowledgedNotification(active, "screen-a", storage);
+  findUnseenNotifications([legacy, active], "screen-a", storage);
+  t.mock.method(Date, "now", () => now + 1000);
+  assert.deepEqual([...readAcknowledgedNotificationKeys("screen-a", storage)], ["unknown:1", "active:1"]);
+  assert.deepEqual(findUnseenNotifications([active], "screen-a", storage), []);
+  assert.deepEqual(JSON.parse(storage.getItem(seenKey)), ["unknown:1", "active:1"]);
+  assert.equal(Object.hasOwn(JSON.parse(storage.getItem(`${ackKey}:expires`)), "legacy:1"), false);
+  storage.setItem(`${ackKey}:expires`, "invalid-json");
+  assert.equal(readAcknowledgedNotificationKeys("screen-a", storage).has("active:1"), true);
+});
+
+test("a failed acknowledgement read never overwrites the previously stored confirmation set", () => {
+  const storage = memoryStorage();
+  const key = notificationAcknowledgedStorageKey("screen-a");
+  storage.setItem(key, '["existing:1"]');
+  const read = storage.getItem;
+  storage.getItem = name => { if (name === key) throw new Error("storage unavailable"); return read(name); };
+  rememberAcknowledgedNotification({id: "new", revision: 1}, "screen-a", storage);
+  readAcknowledgedNotificationKeys("screen-a", storage);
+  assert.equal(read(key), '["existing:1"]');
+});
+
 test("notification alert identity includes the publication revision", () => {
   assert.equal(notificationAlertKey({id: "notice-a", revision: 3}), "notice-a:3");
 });

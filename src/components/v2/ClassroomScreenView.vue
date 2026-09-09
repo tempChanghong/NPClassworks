@@ -182,7 +182,7 @@
 
     <ScreenNotificationCenter
       v-model="notificationCenterOpen"
-      :binding-id="bindingId"
+      :acknowledged-keys="acknowledgedNoticeKeys"
       :notices="activeNotices"
       @acknowledge="acknowledgeNotice"
       @acknowledge-all="acknowledgeNotices"
@@ -441,6 +441,11 @@ const bindingId = computed(() => store.screenSession?.binding?.id || "");
 const activeNotices = computed(() => store.feed.filter((publication) => publication.type === "NOTICE"));
 const pendingNoticeCount = computed(() => activeNotices.value.filter((notice) =>
   !acknowledgedNoticeKeys.value.has(notificationAlertKey(notice))).length);
+watch(notificationCenterOpen, (open) => {
+  if (open) {
+    acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(bindingId.value, localStorage, activeNotices.value);
+  }
+});
 const className = computed(() => store.screenSession?.binding?.administrativeClass?.name || "班级大屏");
 const currentBoardDay = useCurrentBoardDate();
 const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate, currentBoardDay.value));
@@ -479,7 +484,8 @@ watch(() => settings.value.performanceMode, updatePerformanceClass);
 
 watch(() => `${bindingId.value}:` + store.feed.filter((publication) => publication.type === "NOTICE")
   .map((publication) => `${publication.id}:${publication.revision}`).join(","), () => {
-  const acknowledged = readAcknowledgedNotificationKeys(bindingId.value);
+  const acknowledged = readAcknowledgedNotificationKeys(bindingId.value, localStorage, activeNotices.value);
+  acknowledgedNoticeKeys.value = acknowledged;
   const items = store.feed.filter((publication) => publication.type === "NOTICE").map((publication) => ({
     publicationId: publication.id,
     revision: publication.revision,

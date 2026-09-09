@@ -6,7 +6,6 @@ import {
   PROMINENT_NOTIFICATION_GAIN,
 } from "./prominentNotificationSound.js";
 
-const MAX_SEEN_ALERTS = 100;
 const CLAIM_TTL_MS = 30_000;
 
 export function notificationAlertKey(notice) {
@@ -51,41 +50,58 @@ export function notificationAcknowledgedStorageKey(scopeId) {
   return `classworks-v2-notification-acknowledged:${scopeId || "unbound"}`;
 }
 
-export function readAcknowledgedNotificationKeys(scopeId, storage = localStorage) {
-  return new Set(readJsonArray(storage, notificationAcknowledgedStorageKey(scopeId)));
+export function readAcknowledgedNotificationKeys(scopeId, storage = localStorage, notices = []) {
+  return notificationMemory(storage, notificationAcknowledgedStorageKey(scopeId), notices).keys;
 }
 
 export function rememberAcknowledgedNotification(notice, scopeId, storage = localStorage) {
-  const keys = readAcknowledgedNotificationKeys(scopeId, storage);
-  keys.add(notificationAlertKey(notice));
-  try {
-    storage.setItem(notificationAcknowledgedStorageKey(scopeId), JSON.stringify([...keys].slice(-MAX_SEEN_ALERTS)));
-  } catch {
-    // The server receipt can still be sent when local storage is unavailable.
-  }
-  return keys;
+  return notificationMemory(storage, notificationAcknowledgedStorageKey(scopeId), [notice], true).keys;
 }
 
-function readJsonArray(storage, key) {
+function notificationMemory(storage, storageKey, notices, remember = false) {
+  // Keep the existing string-array format readable by earlier clients. Expiry
+  // metadata is separate; missing/legacy metadata never causes eviction.
+  let saved = [], writable = true;
   try {
-    const value = JSON.parse(storage.getItem(key));
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
+    saved = JSON.parse(storage.getItem(storageKey) || "[]");
+    if (!Array.isArray(saved) || !saved.every(key => typeof key === "string")) {
+      saved = []; writable = false;
+    }
+  } catch { writable = false; }
+  const keys = new Set(saved);
+  const expiryKey = `${storageKey}:expires`;
+  let expiries, rawExpiry;
+  try { rawExpiry = storage.getItem(expiryKey); } catch { writable = false; }
+  try { expiries = JSON.parse(rawExpiry); } catch { /* Unknown lifetimes retain keys. */ }
+  const known = new Map(expiries && typeof expiries === "object" && !Array.isArray(expiries)
+    ? Object.entries(expiries).filter(([, time]) => Number.isFinite(time)) : []);
+  const unseen = notices.filter(notice => !keys.has(notificationAlertKey(notice)));
+  for (const notice of notices) {
+    const key = notificationAlertKey(notice);
+    if (remember) keys.add(key);
+    if (!keys.has(key)) continue;
+    const expiresAt = notice.expiresAt ? new Date(notice.expiresAt).getTime() : NaN;
+    if (Number.isFinite(expiresAt)) known.set(key, expiresAt);
+    else known.delete(key);
   }
+  const now = Date.now();
+  for (const [key, time] of known) {
+    if (time <= now) keys.delete(key);
+    if (!keys.has(key)) known.delete(key);
+  }
+  try {
+    if (!writable) return {keys, unseen};
+    // Metadata first: a failed write must not invent a lifetime for saved keys.
+    const metadata = JSON.stringify(Object.fromEntries(known));
+    if (storage.getItem(expiryKey) !== metadata) storage.setItem(expiryKey, metadata);
+    const encoded = JSON.stringify([...keys]);
+    if (storage.getItem(storageKey) !== encoded) storage.setItem(storageKey, encoded);
+  } catch { /* The server receipt still works when local storage is unavailable. */ }
+  return {keys, unseen};
 }
 
 export function findUnseenNotifications(notices, scopeId, storage = localStorage) {
-  const storageKey = notificationSeenStorageKey(scopeId);
-  const seen = new Set(readJsonArray(storage, storageKey));
-  const unseen = notices.filter((notice) => !seen.has(notificationAlertKey(notice)));
-  notices.forEach((notice) => seen.add(notificationAlertKey(notice)));
-  try {
-    storage.setItem(storageKey, JSON.stringify([...seen].slice(-MAX_SEEN_ALERTS)));
-  } catch {
-    // Storage can be unavailable in private or restricted browser profiles.
-  }
-  return unseen;
+  return notificationMemory(storage, notificationSeenStorageKey(scopeId), notices, true).unseen;
 }
 
 function claimStorageKey(scopeId, alertKey) {

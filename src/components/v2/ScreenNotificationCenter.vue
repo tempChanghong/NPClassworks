@@ -148,11 +148,7 @@
 </template>
 
 <script setup>
-import {computed, ref, watch} from "vue";
-import {
-  readAcknowledgedNotificationKeys,
-  rememberAcknowledgedNotification,
-} from "@/utils/notificationAlerts";
+import {computed} from "vue";
 import {
   screenNotificationCenterItems,
   screenNotificationCenterSummary,
@@ -160,33 +156,24 @@ import {
 
 const props = defineProps({
   modelValue: Boolean,
-  bindingId: {type: String, default: "unbound"},
   notices: {type: Array, default: () => []},
+  acknowledgedKeys: {type: Set, default: () => new Set()},
 });
 const emit = defineEmits(["update:modelValue", "acknowledge", "acknowledge-all"]);
 
-const acknowledgedKeys = ref(readAcknowledgedNotificationKeys(props.bindingId));
 const dialogOpen = computed({
   get: () => props.modelValue,
   set: (value) => emit("update:modelValue", value),
 });
-const items = computed(() => screenNotificationCenterItems(props.notices, acknowledgedKeys.value));
+const items = computed(() => screenNotificationCenterItems(props.notices, props.acknowledgedKeys));
 const summary = computed(() => screenNotificationCenterSummary(items.value));
 
-watch(() => [props.bindingId, props.modelValue], ([bindingId, open]) => {
-  if (open) acknowledgedKeys.value = readAcknowledgedNotificationKeys(bindingId);
-});
-
 function acknowledge(notice) {
-  acknowledgedKeys.value = rememberAcknowledgedNotification(notice, props.bindingId);
   emit("acknowledge", notice);
 }
 
 function acknowledgeAll() {
   const pending = items.value.filter((notice) => !notice.acknowledged);
-  for (const notice of pending) {
-    acknowledgedKeys.value = rememberAcknowledgedNotification(notice, props.bindingId);
-  }
   emit("acknowledge-all", pending);
 }
 

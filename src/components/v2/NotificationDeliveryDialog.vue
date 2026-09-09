@@ -71,6 +71,8 @@
       <v-card-actions class="px-5 pb-5">
         <v-spacer />
         <v-btn
+          :loading="loading"
+          :disabled="loading"
           prepend-icon="mdi-refresh"
           variant="tonal"
           @click="load"
@@ -83,7 +85,7 @@
 </template>
 
 <script setup>
-import {ref, watch} from "vue";
+import {onUnmounted, ref, watch} from "vue";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
 
 const props = defineProps({
@@ -94,21 +96,32 @@ defineEmits(["update:modelValue"]);
 const loading = ref(false);
 const error = ref("");
 const result = ref(null);
+let requestVersion = 0;
+
+onUnmounted(() => { requestVersion += 1; });
 
 watch([() => props.modelValue, () => props.publication?.id], ([open]) => {
-  if (open) load();
-}, {immediate: true});
+  requestVersion += 1;
+  loading.value = false;
+  result.value = null;
+  error.value = "";
+  if (open) void load();
+}, {immediate: true, flush: "sync"});
 
 async function load() {
-  if (!props.publication?.id) return;
+  const publicationId = props.publication?.id;
+  if (!props.modelValue || !publicationId || loading.value) return;
+  const version = ++requestVersion;
+  const isCurrent = () => version === requestVersion && props.modelValue && props.publication?.id === publicationId;
   loading.value = true;
   error.value = "";
   try {
-    result.value = await classworksV2Api.notificationScreenDeliveries(props.publication.id);
+    const response = await classworksV2Api.notificationScreenDeliveries(publicationId);
+    if (isCurrent()) result.value = response;
   } catch (caught) {
-    error.value = describeApiError(caught, "加载大屏送达状态失败");
+    if (isCurrent()) error.value = describeApiError(caught, "加载大屏送达状态失败");
   } finally {
-    loading.value = false;
+    if (isCurrent()) loading.value = false;
   }
 }
 

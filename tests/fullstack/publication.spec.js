@@ -1,5 +1,43 @@
 import {test, expect, enterHomework} from "./fixture.js";
 import {api} from "../e2e/environment.js";
+import {io} from "socket.io-client";
+
+test("restoring notice targets refreshes both the removed screen and the retained classroom", async ({classroom, request}) => {
+  const other = await classroom.prisma.workspace.create({data: {termId: classroom.workspace.termId,
+    code: "C2", name: "二班", type: "ADMIN_CLASS", members: {create: {accountId: classroom.account.id, role: "TEACHER"}}}});
+  const headers = {Authorization: `Bearer ${classroom.credentials.accessToken}`};
+  const created = await request.post(`${api}/api/v2/publications`, {headers, data: {
+    type: "NOTICE", status: "PUBLISHED", content: "恢复后只保留在二班的通知", targetWorkspaceIds: [other.id],
+  }});
+  expect(created.status()).toBe(201);
+  const original = (await created.json()).data;
+  const edited = await request.patch(`${api}/api/v2/publications/${original.id}`, {headers: {...headers, "If-Match": '"1"'},
+    data: {targetWorkspaceIds: [classroom.workspace.id, other.id]}});
+  expect(edited.status()).toBe(200);
+  const screen = await classroom.open("screen");
+  await expect(screen.page.locator(".screen-notice-popup")).toContainText(original.content);
+  const socket = io(api, {autoConnect: false});
+  let joined = false;
+  const restoredEvents = [];
+  socket.on("workspaces-joined", event => { joined ||= event.workspaceIds.includes(other.id); });
+  socket.on("publication.restored", event => restoredEvents.push(event));
+  try {
+    socket.connect();
+    await expect.poll(() => socket.connected).toBe(true);
+    socket.emit("join-workspaces", {workspaceIds: [other.id]});
+    await expect.poll(() => joined).toBe(true);
+    const restored = await request.post(`${api}/api/v2/publications/${original.id}/restore`, {
+      headers: {...headers, "If-Match": '"2"'}, data: {sourceRevision: 1},
+    });
+    expect(restored.status()).toBe(200);
+    await expect.poll(() => restoredEvents.some(event => event.content.publicationId === original.id)).toBe(true);
+    await expect.poll(() => screen.frames.some(frame => frame.includes("publication.restored") && frame.includes(original.id))).toBe(true);
+    await expect(screen.page.locator(".screen-notice-popup")).not.toBeVisible();
+    const stored = await classroom.prisma.publicationTarget.findMany({where: {publicationId: original.id}});
+    expect(stored.map(target => target.workspaceId)).toEqual([other.id]);
+    expect(screen.errors).toEqual([]);
+  } finally { socket.disconnect(); }
+});
 
 test("complete daily feeds show an older urgent notice beyond the first hundred records", async ({classroom, request}) => {
   const now = Date.now();

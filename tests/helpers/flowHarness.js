@@ -231,6 +231,20 @@ export async function createFlowHarness() {
         mounted.splice(mounted.indexOf(app), 1); app.unmount();
       }};
     },
+    async openNotificationDelivery(publication) {
+      const {default: component} = await vite.ssrLoadModule("/src/components/v2/NotificationDeliveryDialog.vue");
+      const props = reactive({modelValue: true, publication});
+      let state;
+      const app = renderer.createApp({setup() {
+        state = component.setup(props, {expose() {}, emit() {}});
+        return () => null;
+      }});
+      app.provide(ssrContextKey, {});
+      app.mount({}); mounted.push(app);
+      return {state, props, unmount() {
+        mounted.splice(mounted.indexOf(app), 1); app.unmount();
+      }};
+    },
     async openHistory(publication, mode = "teacher") {
       const {default: component} = await vite.ssrLoadModule("/src/components/v2/PublicationHistoryDialog.vue");
       const props = reactive({modelValue: true, publication, mode});

@@ -7,6 +7,119 @@ test.use({serviceWorkers: "block", storageState: {cookies: [], origins: [{origin
   {name: "classworks-v2-screen-token", value: "screen-token"},
 ]}]}});
 
+test("popup confirmation immediately updates an open notification center, including a new revision", async ({page, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  await page.goto(origin);
+  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  const center = page.locator(".notification-center");
+  await expect(center).toContainText("当前 0 条");
+  const response = await request.post(`${api}/api/v2/publications`, {data: {
+    type: "NOTICE", priority: "NORMAL", content: "通知中心打开期间收到的通知",
+  }});
+  expect(response.ok()).toBe(true);
+  const notice = (await response.json()).data;
+  const popup = page.locator(".screen-notice-popup");
+  await expect(popup).toContainText(notice.content);
+  await expect(center).toContainText("待确认 1 条");
+  await popup.getByRole("button", {name: "知道了", exact: true}).click();
+  await expect(popup).toBeHidden();
+  await expect(center).toBeVisible();
+  await expect(center).toContainText("待确认 0 条");
+  await expect(center.locator(".notification-center__item")).toContainText("已确认");
+  const updated = await request.patch(`${api}/api/v2/publications/${notice.id}`, {
+    headers: {"If-Match": `"${notice.revision}"`}, data: {content: "通知修改后的新版本"},
+  });
+  expect(updated.ok()).toBe(true);
+  await expect(popup).toContainText("通知修改后的新版本");
+  await expect(center).toContainText("待确认 1 条");
+  await popup.getByRole("button", {name: "知道了", exact: true}).click();
+  await expect(popup).toBeHidden();
+  await expect(center).toContainText("待确认 0 条");
+});
+
+test("opening the center reloads confirmations saved by another tab", async ({page, context, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  await request.post(`${api}/api/v2/publications`, {data: {
+    type: "NOTICE", priority: "MINOR", content: "其他页面已确认的通知", contentJson: {popupEnabled: false},
+  }});
+  await page.goto(origin);
+  await expect(page.getByRole("button", {name: "通知", exact: true}).first()).toBeVisible();
+  const other = await context.newPage();
+  await other.goto(origin);
+  await other.getByRole("button", {name: "通知", exact: true}).first().click();
+  await other.locator(".notification-center").getByRole("button", {name: "知道了", exact: true}).click();
+  await expect(other.locator(".notification-center")).toContainText("待确认 0 条");
+  await other.close();
+  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  await expect(page.locator(".notification-center")).toContainText("待确认 0 条");
+});
+
+test("delivery refresh is disabled while loading and recovers after a request failure", async ({browser, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content: "送达状态刷新验证"}});
+  const context = await browser.newContext({serviceWorkers: "block", storageState: {cookies: [], origins: [{origin, localStorage: [
+    {name: "classworks-v2-oobe", value: JSON.stringify({version: 1, completed: true, roleHint: "teacher"})},
+    {name: "classworks-v2-access-token", value: "teacher-token"},
+    {name: "classworks-v2-refresh-token", value: "teacher-refresh"},
+  ]}]}});
+  try {
+    const page = await context.newPage();
+    const held = [];
+    await page.route("**/publications/*/screen-deliveries", route => { held.push(route); });
+    await page.goto(origin);
+    await page.locator(".publication-list-item button").filter({has: page.locator(".mdi-dots-vertical")}).click();
+    await page.getByText("查看大屏送达状态", {exact: true}).click();
+    const dialog = page.getByRole("dialog").filter({hasText: "大屏送达状态"});
+    const refresh = dialog.getByRole("button", {name: "刷新", exact: true});
+    await expect.poll(() => held.length).toBe(1);
+    await expect(refresh).toBeDisabled();
+    await held[0].fulfill({status: 503, json: {message: "测试临时故障"}});
+    await expect(dialog).toContainText("测试临时故障");
+    await expect(refresh).toBeEnabled();
+    await refresh.click();
+    await expect.poll(() => held.length).toBe(2);
+    await expect(refresh).toBeDisabled();
+    await held[1].fulfill({json: {data: {revision: 1, screens: [{binding: {id: "screen-a", name: "测试大屏"},
+      delivery: {revision: 1, acknowledgedAt: new Date().toISOString()}}]}}});
+    await expect(dialog).toContainText("当前版本已由大屏确认");
+    await expect(refresh).toBeEnabled();
+  } finally { await context.close(); }
+});
+
+test("a batch of 105 confirmed notices stays confirmed and silent after screen reload", async ({page, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  for (let i = 0; i < 105; i++) {
+    await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", priority: "MINOR",
+      content: `批量通知 ${i}`, contentJson: {popupEnabled: false}, expiresAt: new Date(Date.now() + 3600000).toISOString()}});
+  }
+  await page.addInitScript(() => {
+    window.noticeSounds = [];
+    window.AudioContext = undefined;
+    window.webkitAudioContext = undefined;
+    window.HTMLMediaElement.prototype.play = function () { window.noticeSounds.push(this.src); return Promise.resolve(); };
+  });
+  await page.goto(origin);
+  await expect.poll(() => page.evaluate(() => window.noticeSounds.length)).toBe(1);
+  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  const center = page.locator(".notification-center");
+  await expect(center).toContainText("当前 105 条");
+  await center.getByRole("button", {name: "全部确认", exact: true}).click();
+  await expect(center).toContainText("待确认 0 条");
+  // Move beyond the separate short alert claim so it cannot hide a lost seen record.
+  await page.clock.install({time: new Date(Date.now() + 31000)});
+  await page.reload();
+  await expect(page.getByRole("button", {name: "录入作业", exact: true}).first()).toBeVisible();
+  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  await expect(center).toContainText("待确认 0 条");
+  expect(await page.evaluate(() => window.noticeSounds)).toEqual([]);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("classworks-v2-notification-acknowledged:screen-a")));
+  expect(saved).toHaveLength(105);
+});
+
 test("editing a published normal notice to minor persists the selected priority before screen startup", async ({browser, page, request}) => {
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
   await request.post(`${api}/__test/reset`);
