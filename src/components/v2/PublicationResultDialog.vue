@@ -23,11 +23,11 @@
       <v-card-text class="px-5">
         <v-alert
           class="mb-4"
-          color="success"
+          :color="receipt.status.key === 'expired' ? 'warning' : 'success'"
           icon="mdi-check-all"
           variant="tonal"
         >
-          已发布到以下班级：
+          {{ receipt.status.key === 'expired' ? receipt.status.description : '内容已写入服务器，发布目标如下：' }}
         </v-alert>
         <v-list
           border
@@ -43,11 +43,11 @@
           >
             <template #append>
               <v-chip
-                :color="target.state === 'scheduled' ? 'purple' : 'success'"
+                :color="target.state === 'expired' ? 'grey' : target.state === 'scheduled' ? 'purple' : 'success'"
                 size="small"
                 variant="tonal"
               >
-                {{ target.state === "scheduled" ? "等待显示" : "写入成功" }}
+                {{ target.state === "expired" ? "已过期" : target.state === "scheduled" ? "等待显示" : "写入成功" }}
               </v-chip>
             </template>
           </v-list-item>
@@ -83,6 +83,7 @@
 
 <script setup>
 import {computed} from "vue";
+import {useNow} from "@vueuse/core";
 import {buildPublicationReceipt} from "@/utils/publicationReceipt";
 
 const props = defineProps({
@@ -91,5 +92,6 @@ const props = defineProps({
 });
 defineEmits(["update:modelValue", "inspect-delivery"]);
 
-const receipt = computed(() => buildPublicationReceipt(props.publication));
+const now = useNow({interval: 1000});
+const receipt = computed(() => buildPublicationReceipt(props.publication, {now: now.value}));
 </script>

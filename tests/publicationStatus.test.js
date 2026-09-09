@@ -36,6 +36,20 @@ test("large screens hide ordinary confirmed indicators but retain actionable sta
   }, {screenMode: true}).showPriority, true);
 });
 
+test("expired notices are distinct from published content, without reclassifying drafts, withdrawals or homework", () => {
+  const now = new Date("2026-09-09T00:00:00Z");
+  const notice = {type: "NOTICE", status: "PUBLISHED", isCertified: true, expiresAt: now.toISOString()};
+  assert.equal(publicationDisplayState(notice, {now}).key, "expired");
+  assert.equal(publicationDisplayState({...notice, isCertified: false}, {now}).key, "expired");
+  assert.equal(publicationDisplayState({...notice, status: "DRAFT"}, {now}).key, "draft");
+  assert.equal(publicationDisplayState({...notice, status: "WITHDRAWN"}, {now}).key, "withdrawn");
+  assert.equal(publicationDisplayState({...notice, type: "ASSIGNMENT"}, {now}).key, "published");
+  assert.equal(publicationDisplayState({...notice, expiresAt: null}, {now}).key, "published");
+  const receipt = buildPublicationReceipt({...notice, targets: [{workspaceId: "class"}]}, {now});
+  assert.equal(receipt.status.key, "expired");
+  assert.match(receipt.targets[0].label, /不再显示/);
+});
+
 test("publication conflict comparison keeps only fields changed between local and server", () => {
   const rows = buildConflictComparison(
     {title: "我的标题", content: "相同", targetWorkspaceIds: ["b", "a"]},

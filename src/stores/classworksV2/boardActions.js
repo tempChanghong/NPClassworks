@@ -210,7 +210,7 @@ export const boardActions = {
     try {
       let result;
       try {
-        result = await classworksV2Api.feed(this.selectedWorkspaceIds, boardDate);
+        result = await classworksV2Api.feed(this.selectedWorkspaceIds, boardDate, {isCurrent: current});
       } catch (error) {
         if (!current()) return;
         if (error.response?.data?.code !== "WORKSPACE_NOT_FOUND" || !this.selection.administrativeClassId) throw error;
@@ -235,7 +235,7 @@ export const boardActions = {
         leaveWorkspaces(oldWorkspaceIds);
         joinWorkspaces(this.realtimeWorkspaceIds);
         // Retry once with the remaining valid spaces; never loop on catalog/feed disagreement.
-        result = await classworksV2Api.feed(this.selectedWorkspaceIds, boardDate);
+        result = await classworksV2Api.feed(this.selectedWorkspaceIds, boardDate, {isCurrent: current});
       }
       if (!current()) return;
       this.feed = result.items || [];
@@ -267,7 +267,7 @@ export const boardActions = {
     this.feedLoadError = "";
     this.feedUsingCache = false;
     try {
-      const result = await classworksV2Api.classroomScreenFeed(boardDate);
+      const result = await classworksV2Api.classroomScreenFeed(boardDate, {isCurrent: current});
       if (!current()) return;
       this.feed = result.items || [];
       this.feedGeneratedAt = result.generatedAt;

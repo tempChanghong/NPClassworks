@@ -1,6 +1,46 @@
 import {test, expect, enterHomework} from "./fixture.js";
 import {api} from "../e2e/environment.js";
 
+test("complete daily feeds show an older urgent notice beyond the first hundred records", async ({classroom, request}) => {
+  const now = Date.now();
+  const notices = Array.from({length: 105}, (_, i) => ({
+    id: `${classroom.binding.id}-${String(i).padStart(3, "0")}`,
+    type: "NOTICE", status: "PUBLISHED", isCertified: true, authorAccountId: classroom.account.id,
+    title: `分页通知 ${i}`, content: i === 104 ? "超过一百条仍必须看到的紧急通知" : `次要通知 ${i}`,
+    priority: i === 104 ? "URGENT" : "MINOR", contentJson: {popupEnabled: i === 104},
+    publishAt: new Date(now - (i + 1) * 1000), expiresAt: new Date(now + 3600000),
+  }));
+  await classroom.prisma.publication.createMany({data: notices});
+  await classroom.prisma.publicationTarget.createMany({data: notices.map(row => ({publicationId: row.id, workspaceId: classroom.workspace.id}))});
+  // The legacy API stays paginated; both new public and screen routes accept stable cursors.
+  const legacy = await request.get(`${api}/api/v2/publications/feed`, {params: {workspaceIds: classroom.workspace.id}});
+  expect((await legacy.json()).data.items).toHaveLength(50);
+  for (const screen of [false, true]) {
+    const ids = [];
+    let afterId = "";
+    do {
+      const response = await request.get(`${api}/api/v2/${screen ? "classroom-screens" : "publications"}/feed`, {
+        headers: screen ? {"X-Classworks-Screen-Token": classroom.screenToken} : {},
+        params: {afterId, limit: 50, ...(screen ? {} : {workspaceIds: classroom.workspace.id})},
+      });
+      expect(response.ok()).toBe(true);
+      const page = (await response.json()).data;
+      ids.push(...page.items.map(row => row.id));
+      afterId = page.nextAfterId;
+      expect(ids.length).toBeLessThanOrEqual(105);
+    } while (afterId !== null);
+    expect(ids).toEqual(notices.map(row => row.id));
+  }
+  const screen = await classroom.open("screen");
+  await expect(screen.page.locator(".screen-notice-popup")).toContainText(notices.at(-1).content);
+  const cachedCount = () => screen.page.evaluate(() => {
+    const key = Object.keys(localStorage).find(key => key.startsWith("classworks-v2-screen-feed-cache:"));
+    return key ? JSON.parse(localStorage.getItem(key)).value.items.length : 0;
+  });
+  await expect.poll(cachedCount).toBe(105);
+  expect(screen.errors).toEqual([]);
+});
+
 test("teacher notice edits and history restore stay confirmed while revoked writers remain blocked", async ({classroom, request}) => {
   const headers = {Authorization: `Bearer ${classroom.credentials.accessToken}`};
   const create = () => request.post(`${api}/api/v2/publications`, {headers, data: {

@@ -1,14 +1,14 @@
 import {publicationDisplayState} from "./publicationStatus.js";
 
-const STATE_ORDER = Object.freeze({pending: 0, changed: 0, draft: 1, scheduled: 2, published: 3, withdrawn: 4});
+const STATE_ORDER = Object.freeze({pending: 0, changed: 0, draft: 1, scheduled: 2, published: 3, expired: 4, withdrawn: 5});
 
-export function teacherPublicationState(publication) {
-  return publicationDisplayState(publication);
+export function teacherPublicationState(publication, options) {
+  return publicationDisplayState(publication, options);
 }
 
-export function teacherPublicationStats(publications = []) {
-  const stats = {all: publications.length, pending: 0, draft: 0, scheduled: 0, published: 0, withdrawn: 0};
-  for (const publication of publications) stats[teacherPublicationState(publication).key] += 1;
+export function teacherPublicationStats(publications = [], options) {
+  const stats = {all: publications.length, pending: 0, draft: 0, scheduled: 0, published: 0, expired: 0, withdrawn: 0};
+  for (const publication of publications) stats[teacherPublicationState(publication, options).key] += 1;
   return stats;
 }
 
@@ -52,7 +52,7 @@ function searchableText(publication) {
 export function filterTeacherPublications(publications = [], filters = {}) {
   const query = String(filters.query || "").trim().toLocaleLowerCase("zh-CN");
   return publications
-    .filter((publication) => !filters.state || teacherPublicationState(publication).key === filters.state)
+    .filter((publication) => !filters.state || teacherPublicationState(publication, filters).key === filters.state)
     .filter((publication) => !filters.type || publication.type === filters.type)
     .filter((publication) => !filters.subjectId || publication.subjectId === filters.subjectId)
     .filter((publication) => !filters.workspaceId || publication.targets?.some(
@@ -63,8 +63,8 @@ export function filterTeacherPublications(publications = [], filters = {}) {
     ))
     .filter((publication) => !query || searchableText(publication).includes(query))
     .sort((left, right) => {
-      const stateDifference = STATE_ORDER[teacherPublicationState(left).key]
-        - STATE_ORDER[teacherPublicationState(right).key];
+      const stateDifference = STATE_ORDER[teacherPublicationState(left, filters).key]
+        - STATE_ORDER[teacherPublicationState(right, filters).key];
       if (stateDifference) return stateDifference;
       return new Date(right.updatedAt || right.publishAt || 0).getTime()
         - new Date(left.updatedAt || left.publishAt || 0).getTime();

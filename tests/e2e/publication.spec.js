@@ -281,6 +281,35 @@ test("teacher sees popup setting conflicts before explicitly saving the local ch
   } finally { await teacher.context.close(); }
 });
 
+test("teacher expiry status updates while open and existing publication types are locked", async ({browser, request}) => {
+  const now = Date.parse("2026-09-09T04:00:00Z");
+  for (const [content, expiry] of [["已过期测试通知", now - 60000], ["即将到期测试通知", now + 60000]]) {
+    await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content,
+      publishAt: new Date(now - 3600000).toISOString(), expiresAt: new Date(expiry).toISOString()}});
+  }
+  const teacher = await openRole(browser, "teacher", {time: new Date(now)});
+  try {
+    const page = teacher.page;
+    const filters = page.locator(".publication-state-filters");
+    await expect(filters).toContainText("已过期 1");
+    await page.clock.fastForward(61000);
+    await expect(filters).toContainText("已过期 2");
+    await filters.getByText("已过期 2", {exact: true}).click();
+    await expect(page.locator(".publication-list-item")).toHaveCount(2);
+    const row = page.locator(".publication-list-item").filter({hasText: "已过期测试通知"});
+    await row.locator("button").filter({has: page.locator(".mdi-dots-vertical")}).click();
+    await page.getByText("编辑", {exact: true}).click();
+    const composer = page.locator(".publication-composer");
+    await expect(composer.getByRole("button", {name: "作业", exact: true})).toBeDisabled();
+    await expect(composer.getByRole("button", {name: "通知", exact: true})).toBeDisabled();
+    await expect(composer.locator(".publication-preview")).toContainText("保存后不会显示");
+    await composer.getByRole("button", {name: "保存修改", exact: true}).click();
+    await expect(page.getByRole("dialog").filter({hasText: "通知发布结果"})).toContainText("已过期");
+    await expect(composer.getByRole("button", {name: "通知", exact: true})).toBeEnabled();
+    expect(teacher.errors).toEqual([]);
+  } finally { await teacher.context.close(); }
+});
+
 test("notification acknowledgement persists across offline reload and replays after the notice leaves the feed", async ({browser, request}) => {
   await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", title: "回执恢复测试", content: "离线时确认的通知"}});
   const screen = await openRole(browser, "screen");

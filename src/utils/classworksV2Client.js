@@ -1,4 +1,5 @@
 import axios from "axios";
+import {completePublicationFeed} from "./completePublicationFeed.js";
 import {getServerUrl} from "@/utils/socketClient";
 import {recordDiagnosticEvent, sanitizeDiagnosticEndpoint} from "@/utils/localDiagnostics";
 import {endScreenTemporaryExit, readScreenTemporaryExit, screenAccountAccessAllowed, screenAccountContext} from "@/utils/screenTemporaryExit";
@@ -426,10 +427,11 @@ export const classworksV2Api = {
       input,
     ));
   },
-  async feed(workspaceIds, boardDate) {
-    return unwrap(await client.get("/api/v2/publications/feed", {
-      params: {workspaceIds: workspaceIds.join(","), boardDate},
-    }));
+  async feed(workspaceIds, boardDate, {isCurrent = () => true} = {}) {
+    const server = baseUrl();
+    return completePublicationFeed(async page => unwrap(await client.get("/api/v2/publications/feed", {
+      params: {workspaceIds: workspaceIds.join(","), boardDate, ...page},
+    })), {isCurrent: () => isCurrent() && baseUrl() === server});
   },
   async publicationWeek(workspaceIds, params, {screen = false, signal} = {}) {
     return unwrap(await client.get(screen ? "/api/v2/classroom-screens/feed" : "/api/v2/publications/feed", {
@@ -491,11 +493,12 @@ export const classworksV2Api = {
       {headers: screenHeaders()},
     ));
   },
-  async classroomScreenFeed(boardDate) {
-    return unwrap(await client.get("/api/v2/classroom-screens/feed", {
-      params: {boardDate},
+  async classroomScreenFeed(boardDate, {isCurrent = () => true} = {}) {
+    const server = baseUrl(), token = getClassroomScreenToken();
+    return completePublicationFeed(async page => unwrap(await client.get("/api/v2/classroom-screens/feed", {
+      params: {boardDate, ...page},
       headers: screenHeaders(),
-    }));
+    })), {isCurrent: () => isCurrent() && baseUrl() === server && getClassroomScreenToken() === token});
   },
   async acknowledgeScreenNotifications(items) {
     return unwrap(await client.post(

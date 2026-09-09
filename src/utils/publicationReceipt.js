@@ -6,8 +6,9 @@ export function buildPublicationReceipt(publication = {}, context = {}) {
     id: target.workspaceId || target.workspace?.id,
     name: target.workspace?.name || target.workspaceId || "未知目标",
     type: target.workspace?.type || "WORKSPACE",
-    state: state.key === "scheduled" ? "scheduled" : "accepted",
-    label: state.key === "scheduled" ? "已写入，等待定时显示" : "已写入服务器",
+    state: ["scheduled", "expired"].includes(state.key) ? state.key : "accepted",
+    label: state.key === "expired" ? "已写入，通知已过期，不再显示"
+      : state.key === "scheduled" ? "已写入，等待定时显示" : "已写入服务器",
   }));
   return {
     publicationId: publication.id,

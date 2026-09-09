@@ -289,6 +289,7 @@
 
 <script setup>
 import {computed, ref, watch} from "vue";
+import {useNow} from "@vueuse/core";
 import {
   filterTeacherPublications,
   teacherPublicationFilterOptions,
@@ -304,6 +305,7 @@ const props = defineProps({
 defineEmits(["refresh", "certify", "history", "edit", "clone", "withdraw", "delivery"]);
 
 const query = ref("");
+const now = useNow({interval: 1000});
 const stateFilter = ref("");
 const typeFilter = ref("");
 const subjectFilter = ref("");
@@ -322,13 +324,15 @@ const stateOptions = [
     PUBLICATION_STATUS.DRAFT,
     PUBLICATION_STATUS.SCHEDULED,
     PUBLICATION_STATUS.PUBLISHED,
+    PUBLICATION_STATUS.EXPIRED,
     PUBLICATION_STATUS.WITHDRAWN,
   ].map((item) => ({title: item.label, value: item.key, color: item.color, icon: item.icon})),
 ];
 
-const stats = computed(() => teacherPublicationStats(props.publications));
+const stats = computed(() => teacherPublicationStats(props.publications, {now: now.value}));
 const options = computed(() => teacherPublicationFilterOptions(props.publications));
 const filteredPublications = computed(() => filterTeacherPublications(props.publications, {
+  now: now.value,
   query: query.value,
   state: stateFilter.value,
   type: typeFilter.value,
@@ -351,7 +355,7 @@ watch(options, (value) => {
 });
 
 function state(publication) {
-  return teacherPublicationState(publication);
+  return teacherPublicationState(publication, {now: now.value});
 }
 
 function targetNames(publication) {

@@ -37,7 +37,16 @@ test("teacher publication stats count each lifecycle state", () => {
     publication({id: "published"}),
     publication({id: "withdrawn", status: "WITHDRAWN"}),
   ]);
-  assert.deepEqual(stats, {all: 4, pending: 1, draft: 1, scheduled: 0, published: 1, withdrawn: 1});
+  assert.deepEqual(stats, {all: 4, pending: 1, draft: 1, scheduled: 0, published: 1, expired: 0, withdrawn: 1});
+});
+
+test("teacher expiry filters and counts update when time passes the notice expiry", () => {
+  const item = publication({type: "NOTICE", expiresAt: "2026-09-09T00:00:00Z"});
+  const before = new Date("2026-09-08T23:59:59Z"), after = new Date("2026-09-09T00:00:00Z");
+  assert.equal(teacherPublicationStats([item], {now: before}).expired, 0);
+  assert.equal(teacherPublicationStats([item], {now: after}).expired, 1);
+  assert.deepEqual(filterTeacherPublications([item], {state: "expired", now: after}), [item]);
+  assert.deepEqual(filterTeacherPublications([item], {state: "published", now: after}), []);
 });
 
 test("teacher filters combine state, workspace, date and search text", () => {

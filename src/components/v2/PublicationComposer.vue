@@ -23,6 +23,7 @@
       </v-alert>
       <v-btn-toggle
         v-model="form.type"
+        :disabled="isEditing"
         class="mb-5"
         color="primary"
         mandatory
@@ -41,6 +42,12 @@
           通知
         </v-btn>
       </v-btn-toggle>
+      <div
+        v-if="isEditing"
+        class="text-caption text-medium-emphasis mb-4"
+      >
+        发布类型创建后不能修改；需要其他类型时请新建发布。
+      </div>
 
       <v-select
         v-if="form.type === 'ASSIGNMENT'"
@@ -440,6 +447,7 @@
 
 <script setup>
 import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
+import {useNow} from "@vueuse/core";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
@@ -449,7 +457,7 @@ import {
 } from "@/utils/teacherTargetPreferences";
 import {insertHomeworkQuickInput, sanitizeHomeworkQuickInputs} from "@/utils/homeworkQuickInputs";
 import {buildConflictComparison, PUBLICATION_CONFLICT_FIELDS} from "@/utils/conflictComparison";
-import {publicationPriorityMeta} from "@/utils/publicationStatus";
+import {isNoticeExpired, publicationPriorityMeta} from "@/utils/publicationStatus";
 import {
   publicationConflictMessage,
   publicationConflictState,
@@ -549,10 +557,14 @@ const selectedTargets = computed(() => {
 });
 const selectedSubject = computed(() => store.teacherSubjects.find((item) => item.id === form.subjectId));
 const priorityPreview = computed(() => publicationPriorityMeta(form.priority));
+const now = useNow({interval: 1000});
+const expiredNotice = computed(() => isNoticeExpired({type: form.type,
+  expiresAt: form.expiresAt || new Date(new Date(form.publishAt).getTime() + 3 * 86400000)}, now.value));
 const publishTimePreview = computed(() => {
+  if (expiredNotice.value) return "通知已过期，保存后不会显示；如需再次展示，请调整失效时间";
   const time = new Date(form.publishAt);
   if (Number.isNaN(time.getTime())) return "发布时间未填写";
-  return time.getTime() <= Date.now() + 60_000
+  return time.getTime() <= now.value.getTime() + 60_000
     ? "发布后立即显示"
     : `${formatPreviewDateTime(time)}开始显示`;
 });
@@ -564,7 +576,8 @@ const lifecyclePreview = computed(() => {
       : `${board}，未设置截止时间`;
   }
   if (form.expiresAt) {
-    return `通知将在 ${formatPreviewDateTime(new Date(form.expiresAt))} 自动停止显示`;
+    return expiredNotice.value ? `通知已于 ${formatPreviewDateTime(new Date(form.expiresAt))} 停止显示`
+      : `通知将在 ${formatPreviewDateTime(new Date(form.expiresAt))} 自动停止显示`;
   }
   const publishAt = new Date(form.publishAt);
   if (Number.isNaN(publishAt.getTime())) return "填写发布时间后，将默认显示三天";

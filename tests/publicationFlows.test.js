@@ -8,6 +8,23 @@ before(async () => { h = await createFlowHarness(); });
 after(async () => { await h?.close(); });
 beforeEach(() => h.reset());
 
+test("incomplete paginated screen feeds never replace a complete offline cache", async () => {
+  const store = h.newStore({screen: true});
+  h.publications.push({id: "previous", content: "完整旧缓存"});
+  await store.loadScreenFeed();
+  let calls = 0;
+  h.routes.set("GET /api/v2/classroom-screens/feed", (_req, reply) => {
+    if (++calls === 1) reply({items: [{id: "partial"}], nextAfterId: "partial"});
+    else reply({message: "temporary error"}, 503);
+  });
+  await store.loadScreenFeed();
+  assert.equal(calls, 2);
+  assert.equal(store.feedUsingCache, true);
+  assert.deepEqual(store.feed.map(item => item.id), ["previous"]);
+  const raw = h.storage.getItem(`classworks-v2-screen-feed-cache:screen-a:${store.boardDate}`);
+  assert.deepEqual(JSON.parse(raw).value.items.map(item => item.id), ["previous"]);
+});
+
 async function fillComposer(publication = null) {
   const editor = await h.openComposer(publication);
   Object.assign(editor.state.form, {subjectId: "math", targetWorkspaceId: "class-a", content: "完成练习册第 10 页"});

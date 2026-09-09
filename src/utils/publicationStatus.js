@@ -11,6 +11,8 @@ export const PUBLICATION_STATUS = Object.freeze({
     icon: "mdi-alert-decagram-outline", description: "教师确认后又发生修改，需要重新检查"}),
   WITHDRAWN: Object.freeze({key: "withdrawn", label: "已撤回", color: "grey", icon: "mdi-undo-variant",
     description: "不再向学生和大屏展示，历史记录仍保留"}),
+  EXPIRED: Object.freeze({key: "expired", label: "已过期", color: "grey", icon: "mdi-clock-alert-outline",
+    description: "通知已超过失效时间，不再向学生和大屏展示"}),
   OFFLINE_PENDING: Object.freeze({key: "offline", label: "等待同步", color: "warning", icon: "mdi-cloud-upload-outline",
     description: "已保存在本机，联网后自动提交"}),
   SYNC_FAILED: Object.freeze({key: "failed", label: "同步失败", color: "error", icon: "mdi-cloud-alert-outline",
@@ -26,6 +28,7 @@ export const PUBLICATION_STATUS_TABLE = Object.freeze([
   PUBLICATION_STATUS.OFFLINE_PENDING,
   PUBLICATION_STATUS.SYNC_FAILED,
   PUBLICATION_STATUS.WITHDRAWN,
+  PUBLICATION_STATUS.EXPIRED,
 ]);
 
 export const PUBLICATION_PRIORITY = Object.freeze({
@@ -39,14 +42,20 @@ export function publicationPriorityMeta(priority) {
   return PUBLICATION_PRIORITY[priority] || PUBLICATION_PRIORITY.NORMAL;
 }
 
+export function isNoticeExpired(publication, now = Date.now()) {
+  return publication?.type === "NOTICE" && Boolean(publication.expiresAt)
+    && new Date(publication.expiresAt).getTime() <= new Date(now).getTime();
+}
+
 export function publicationDisplayState(publication = {}, options = {}) {
   if (publication.syncFailed) return PUBLICATION_STATUS.SYNC_FAILED;
   if (publication.offlineQueued) return PUBLICATION_STATUS.OFFLINE_PENDING;
   if (publication.status === "WITHDRAWN") return PUBLICATION_STATUS.WITHDRAWN;
   if (publication.status === "DRAFT") return PUBLICATION_STATUS.DRAFT;
+  const now = options.now instanceof Date ? options.now : new Date(options.now ?? Date.now());
+  if (isNoticeExpired(publication, now)) return PUBLICATION_STATUS.EXPIRED;
   if (options.reason === "CHANGED_AFTER_CERTIFICATION") return PUBLICATION_STATUS.CHANGED_AFTER_CERTIFICATION;
   if (publication.isCertified === false) return PUBLICATION_STATUS.PENDING_CERTIFICATION;
-  const now = options.now instanceof Date ? options.now : new Date(options.now || Date.now());
   if (publication.publishAt && new Date(publication.publishAt).getTime() > now.getTime() + 30_000) {
     return PUBLICATION_STATUS.SCHEDULED;
   }
