@@ -274,10 +274,10 @@ import {useClassworksV2Store} from "@/stores/classworksV2";
 import NoiseMonitorCard from "@/components/NoiseMonitorCard.vue";
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 
-const props = defineProps({modelValue: Boolean});
+const props = defineProps({modelValue: Boolean, initialTool: {type: String, default: ""}});
 defineEmits(["update:modelValue"]);
 const store = useClassworksV2Store();
-const activeTool = ref("");
+const activeTool = ref(props.initialTool);
 const rosterDialog = ref(false);
 const rosterText = ref("");
 const savingRoster = ref(false);

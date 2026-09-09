@@ -46,6 +46,7 @@ class ClassworksNoiseService {
     this.currentScoreDetail = null
     this.signalHealth = {quality: "no-signal", confidence: 0, coverage: 0}
     this.lastAnalysisAt = 0
+    this.activityGuard = null
     this.calibration = null
     this.settings = getNoiseControlSettings()
     this.preferredDeviceId = this.settings.microphoneDeviceId || "default"
@@ -91,7 +92,10 @@ class ClassworksNoiseService {
     const generation = ++this.generation
     this.microphoneTest?.abort()
     this.microphoneTest = null
-    const isCurrent = () => generation === this.generation
+    const isCurrent = () => {
+      this.activityGuard?.()
+      return generation === this.generation
+    }
     if (deviceId) this.preferredDeviceId = deviceId
     this.status = "initializing"
     this.emit()
@@ -218,6 +222,7 @@ class ClassworksNoiseService {
   }
 
   consumeFeature(feature) {
+    this.activityGuard?.()
     if (this.status !== "active") return
     const timestamp = Date.now()
     const dbfs = dbfsFromRms(feature.rms)

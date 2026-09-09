@@ -47,7 +47,8 @@ export async function createFlowHarness() {
   });
   for (const [key, value] of Object.entries({
     window: browser, localStorage: storage, sessionStorage: memoryStorage(),
-    document: {visibilityState: "visible"}, navigator: {onLine: true, locks: createBrowserLocks()},
+    document: Object.assign(new globalThis.EventTarget(), {visibilityState: "visible"}),
+    navigator: {onLine: true, locks: createBrowserLocks()},
   })) {
     originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, {configurable: true, writable: true, value});

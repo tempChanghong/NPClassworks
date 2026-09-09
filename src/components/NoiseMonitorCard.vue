@@ -136,6 +136,8 @@
     :mic-permission-state="micPermissionState"
     :scheduled-active="scheduledActive"
     :scheduled-end-time="scheduledEndTime"
+    :manual-active="manualActive"
+    :manual-ends-at="manualEndsAt"
     :binding-id="bindingId"
     :microphone="currentMicrophone"
     :threshold-db="thresholdDb"
@@ -149,9 +151,8 @@
 <script>
 import { defineAsyncComponent } from 'vue'
 import { noiseService } from '@/utils/noiseService'
-import { isWithinNoiseSchedule, loadNoiseScheduleSettings } from '@/utils/noiseScheduleSettings'
+import { noiseMonitoring, noiseMonitoringState } from '@/utils/noiseMonitoring'
 import { queryMicrophonePermission } from '@/utils/microphonePermission'
-import { loadMicrophoneDeviceSettings } from '@/utils/microphoneDeviceSettings'
 
 const NoiseMonitorDetail = defineAsyncComponent(() =>
   import('@/components/NoiseMonitorDetail.vue')
@@ -187,9 +188,6 @@ export default {
       historyRequest: 0,
       historyMounted: false,
       unsubscribe: null,
-      scheduleTimer: null,
-      scheduledActive: false,
-      scheduledEndTime: '',
       micPermissionState: 'prompt',
       lastUiUpdateAt: 0,
       lastHistorySliceId: '',
@@ -197,6 +195,10 @@ export default {
     }
   },
   computed: {
+    manualActive() { return noiseMonitoringState.value.manualActive },
+    manualEndsAt() { return noiseMonitoringState.value.manualEndsAt },
+    scheduledActive() { return noiseMonitoringState.value.scheduledActive },
+    scheduledEndTime() { return noiseMonitoringState.value.scheduledEndTime },
     currentDb() {
       if (!this.isMonitoring || this.status !== 'active') return '--'
       return Math.round(this.currentDisplayDb)
@@ -261,17 +263,11 @@ export default {
     this.historyMounted = true
     void this.refreshHistory()
     this.refreshMicrophonePermission()
-    this.updateScheduledState()
-    this.scheduleTimer = window.setInterval(this.updateScheduledState, 15 * 1000)
     this.subscribeToService()
   },
   beforeUnmount() {
     this.historyMounted = false
     ++this.historyRequest
-    window.clearInterval(this.scheduleTimer)
-    const scheduleKeepsRunning = Boolean(this.bindingId
-      && isWithinNoiseSchedule(loadNoiseScheduleSettings(this.bindingId)))
-    if (this.isMonitoring && !scheduleKeepsRunning) noiseService.stop()
     if (this.unsubscribe) {
       this.unsubscribe()
     }
@@ -305,11 +301,6 @@ export default {
         return `${label} · 还需约 ${Math.ceil((80 - coverage) * 0.6)} 秒`
       }
       return `${label} · 可信度 ${this.signalHealth.confidence || 0}%`
-    },
-    updateScheduledState() {
-      const schedule = this.bindingId ? loadNoiseScheduleSettings(this.bindingId) : null
-      this.scheduledActive = Boolean(schedule && isWithinNoiseSchedule(schedule))
-      this.scheduledEndTime = schedule?.endTime || ''
     },
     subscribeToService() {
       if (this.unsubscribe) return
@@ -345,29 +336,14 @@ export default {
     },
     async startMonitoring() {
       try {
-        const deviceId = this.bindingId
-          ? loadMicrophoneDeviceSettings(this.bindingId).deviceId
-          : undefined
-        await noiseService.start({ deviceId })
+        if (!noiseMonitoring.startManual(this.bindingId)) this.status = 'error'
       } catch (e) {
         console.error('噪声监测启动失败:', e)
         this.status = 'error'
       }
     },
     stopMonitoring() {
-      this.updateScheduledState()
-      if (this.scheduledActive) return
-      if (this.unsubscribe) {
-        this.unsubscribe()
-        this.unsubscribe = null
-      }
-      noiseService.stop()
-      this.isMonitoring = false
-      this.status = 'initializing'
-      this.recentDbValues = new Array(MINI_BAR_COUNT).fill(0)
-      this.currentScore = null
-      this.scoreDetail = null
-      this.subscribeToService()
+      noiseMonitoring.stopManual()
     },
     handleCalibrate(targetDb) {
       noiseService.calibrate(targetDb, (success, msg) => {

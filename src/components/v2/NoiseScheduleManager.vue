@@ -7,93 +7,68 @@
 
 <script setup>
 import {onMounted, onUnmounted, watch} from "vue";
-import {noiseService} from "@/utils/noiseService";
+import {noiseMonitoring} from "@/utils/noiseMonitoring";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {loadClassroomToolSettings, classroomToolSettingsKey, CLASSROOM_TOOLS_SETTINGS_EVENT} from "@/utils/classroomToolSettings";
 import {loadMicrophoneDeviceSettings} from "@/utils/microphoneDeviceSettings";
+import {getClassroomScreenToken} from "@/utils/classworksV2Client";
+import {getServerUrl} from "@/utils/socketClient";
+import {screenExitState} from "@/utils/screenTemporaryExit";
 import {
-  isWithinNoiseSchedule,
-  loadNoiseScheduleSettings,
-  noiseScheduleSettingsKey,
-  noiseScheduleWindowKey,
-  NOISE_SCHEDULE_SETTINGS_EVENT,
+  loadNoiseScheduleSettings, noiseScheduleSettingsKey, noiseScheduleWindowKey, NOISE_SCHEDULE_SETTINGS_EVENT,
 } from "@/utils/noiseScheduleSettings";
 
 const store = useClassworksV2Store();
 let timer = null;
-let unsubscribe = null;
-let serviceStatus = "paused";
-let scheduleOwnsService = false;
-let attemptedWindowKey = "";
+let detach = null;
 
-function currentBindingId() {
-  return store.screenSession?.binding?.id || "";
-}
-
-function evaluateSchedule({retry = false} = {}) {
-  const bindingId = currentBindingId();
+function readContext() {
+  const binding = store.screenSession?.binding;
+  const bindingId = binding?.id || "";
   const schedule = loadNoiseScheduleSettings(bindingId);
-  const noiseToolEnabled = bindingId
-    && loadClassroomToolSettings(bindingId).enabledToolIds.includes("noise");
-  const shouldRun = Boolean(noiseToolEnabled && isWithinNoiseSchedule(schedule));
-
-  if (!shouldRun) {
-    attemptedWindowKey = "";
-    if (scheduleOwnsService) void noiseService.stop();
-    scheduleOwnsService = false;
-    return;
-  }
-
-  scheduleOwnsService = true;
-  if (["active", "initializing"].includes(serviceStatus)) return;
-
-  const windowKey = noiseScheduleWindowKey(schedule);
-  if (!retry
-    && attemptedWindowKey === windowKey
-    && ["permission-denied", "error"].includes(serviceStatus)) return;
-  attemptedWindowKey = windowKey;
-  // start changes status synchronously. Do not block cancellation on a permission prompt.
-  void noiseService.start({deviceId: loadMicrophoneDeviceSettings(bindingId).deviceId});
+  return {
+    bindingId,
+    scopeKey: `${getServerUrl()}:${bindingId}:${binding?.credentialVersion || 1}:${getClassroomScreenToken()}`,
+    enabled: Boolean(bindingId && !screenExitState.value.unlocked
+      && loadClassroomToolSettings(bindingId).enabledToolIds.includes("noise")),
+    scheduleKey: noiseScheduleWindowKey(schedule),
+    endTime: schedule.endTime,
+    deviceId: loadMicrophoneDeviceSettings(bindingId).deviceId,
+  };
 }
-
+function evaluate() { noiseMonitoring.tick(); }
 function handleScheduleChange(event) {
-  if (event.detail?.bindingId && event.detail.bindingId !== currentBindingId()) return;
-  attemptedWindowKey = "";
-  void evaluateSchedule({retry: true});
+  if (event.detail?.bindingId && event.detail.bindingId !== store.screenSession?.binding?.id) return;
+  noiseMonitoring.tick({retry: true});
 }
-
 function handleStorage(event) {
-  const bindingId = currentBindingId();
-  if (!bindingId || (event.key !== null && ![noiseScheduleSettingsKey(bindingId), classroomToolSettingsKey(bindingId)].includes(event.key))) return;
-  attemptedWindowKey = "";
-  void evaluateSchedule({retry: true});
+  const id = store.screenSession?.binding?.id;
+  if (event.key === null || [noiseScheduleSettingsKey(id), classroomToolSettingsKey(id)].includes(event.key)) {
+    noiseMonitoring.tick({retry: true});
+  }
 }
-
-watch(() => store.screenSession?.binding?.id, () => {
-  void noiseService.stop();
-  scheduleOwnsService = false;
-  attemptedWindowKey = "";
-  void evaluateSchedule({retry: true});
-});
+watch(() => [store.screenSession?.binding?.id, store.screenSession?.binding?.credentialVersion, screenExitState.value.unlocked],
+  evaluate, {flush: "sync"});
 
 onMounted(() => {
-  unsubscribe = noiseService.subscribe((snapshot) => {
-    serviceStatus = snapshot.status;
-  });
+  detach = noiseMonitoring.attach(readContext);
   window.addEventListener(NOISE_SCHEDULE_SETTINGS_EVENT, handleScheduleChange);
   window.addEventListener(CLASSROOM_TOOLS_SETTINGS_EVENT, handleScheduleChange);
   window.addEventListener("storage", handleStorage);
-  timer = window.setInterval(evaluateSchedule, 15 * 1000);
-  void evaluateSchedule();
+  window.addEventListener("focus", evaluate);
+  window.addEventListener("pageshow", evaluate);
+  document.addEventListener("visibilitychange", evaluate);
+  timer = window.setInterval(evaluate, 15 * 1000);
 });
-
 onUnmounted(() => {
-  unsubscribe?.();
   window.removeEventListener(NOISE_SCHEDULE_SETTINGS_EVENT, handleScheduleChange);
   window.removeEventListener(CLASSROOM_TOOLS_SETTINGS_EVENT, handleScheduleChange);
   window.removeEventListener("storage", handleStorage);
+  window.removeEventListener("focus", evaluate);
+  window.removeEventListener("pageshow", evaluate);
+  document.removeEventListener("visibilitychange", evaluate);
   window.clearInterval(timer);
-  void noiseService.stop();
+  detach?.();
 });
 </script>
 

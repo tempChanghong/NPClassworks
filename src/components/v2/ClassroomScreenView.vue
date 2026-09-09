@@ -131,6 +131,7 @@
       </v-card-text>
     </v-card>
 
+    <ScreenNoiseStatus @open="$emit('noise')" />
     <HomeworkPrintButton
       ref="printTool"
       :class-name="className"
@@ -362,6 +363,7 @@ import ScreenHomeworkFocus from "@/components/v2/ScreenHomeworkFocus.vue";
 import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import ScreenNoticePopup from "@/components/v2/ScreenNoticePopup.vue";
+import ScreenNoiseStatus from "@/components/v2/ScreenNoiseStatus.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import ScreenSyncStatus from "@/components/v2/ScreenSyncStatus.vue";
 import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
@@ -387,7 +389,7 @@ import {
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 
-defineEmits(["create", "edit", "history", "tools", "copy-board", "settings", "exit", "diagnostics"]);
+defineEmits(["create", "edit", "history", "tools", "noise", "copy-board", "settings", "exit", "diagnostics"]);
 const store = useClassworksV2Store();
 const focusTool = ref(null);
 const printTool = ref(null);

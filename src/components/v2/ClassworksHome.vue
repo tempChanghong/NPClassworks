@@ -252,7 +252,8 @@
         @edit="openScreenComposer"
         @history="openHistory($event, 'screen')"
         @settings="openSettings('screen')"
-        @tools="classroomToolsDialog = true"
+        @tools="openClassroomTools()"
+        @noise="openClassroomTools('noise')"
         @copy-board="copyScreenBoardToToday"
         @diagnostics="openScreenDiagnosticDialog"
         @exit="openScreenExitDialog"
@@ -484,6 +485,7 @@
   <ClassroomToolsDialog
     v-if="classroomToolsDialog"
     v-model="classroomToolsDialog"
+    :initial-tool="classroomToolsInitialTool"
   />
   <screen-homework-dialog
     v-if="screenComposerDialog"
@@ -708,6 +710,11 @@ const historyDialog = ref(false);
 const historyPublication = ref(null);
 const historyMode = ref("teacher");
 const classroomToolsDialog = ref(false);
+const classroomToolsInitialTool = ref("");
+function openClassroomTools(tool = "") {
+  classroomToolsInitialTool.value = tool;
+  classroomToolsDialog.value = true;
+}
 const notificationDeliveryDialog = ref(false);
 const deliveryPublication = ref(null);
 const publicationResultDialog = ref(false);

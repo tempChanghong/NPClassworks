@@ -492,6 +492,12 @@
 
             <v-divider />
 
+            <div class="px-4 pt-3 text-body-2 text-medium-emphasis">
+              {{ manualActive
+                ? `手动监测最晚于 ${formatTime(manualEndsAt)} 自动结束；离开此页面后继续运行。`
+                : '手动监测离开此页面后继续运行，单次最长三小时。' }}
+              <span v-if="manualActive && scheduledActive">结束手动模式后，定时监测仍会继续。</span>
+            </div>
             <!-- 操作按钮 -->
             <div class="pa-4 d-flex align-center">
               <v-btn
@@ -509,14 +515,22 @@
               <v-btn
                 v-else
                 color="error"
-                :disabled="scheduledActive"
+                :disabled="scheduledActive && !manualActive"
                 variant="tonal"
                 prepend-icon="mdi-stop"
                 size="large"
                 class="px-6"
                 @click="$emit('stop')"
               >
-                {{ scheduledActive ? `由计划托管 · ${scheduledEndTime || '结束时'}停止` : '停止监测' }}
+                {{ manualActive ? '停止手动监测' : `由计划托管 · ${scheduledEndTime || '结束时'}停止` }}
+              </v-btn>
+              <v-btn
+                v-if="isMonitoring && scheduledActive && !manualActive"
+                class="ml-2"
+                variant="tonal"
+                @click="$emit('start')"
+              >
+                同时开启手动监测
               </v-btn>
               <v-spacer />
               <v-btn
@@ -1293,6 +1307,8 @@ export default {
     isMonitoring: { type: Boolean, default: false },
     scheduledActive: { type: Boolean, default: false },
     scheduledEndTime: { type: String, default: '' },
+    manualActive: { type: Boolean, default: false },
+    manualEndsAt: { type: Number, default: 0 },
     microphone: { type: Object, default: () => ({deviceId: 'default', label: '系统默认麦克风'}) },
     thresholdDb: { type: Number, default: 55 },
     micPermissionState: { type: String, default: '' },
