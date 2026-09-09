@@ -9,6 +9,7 @@ import {
 } from "@/utils/classworksV2Client";
 import {joinWorkspaces, leaveWorkspaces} from "@/utils/socketClient";
 import {todayBoardDate} from "@/utils/boardDate";
+import {completeTeacherCollection} from "@/utils/completeTeacherCollection";
 import {
   loadTeacherTargetPreferences,
   loadTeacherTargetSyncState,
@@ -19,10 +20,18 @@ import {
   toggleFavoriteTeacherTargets,
 } from "@/utils/teacherTargetPreferences";
 
+function collectionRequest(store, key) {
+  const sessionVersion = store.teacherSessionVersion;
+  const version = ++store[key];
+  return () => sessionVersion === store.teacherSessionVersion && version === store[key];
+}
+
 // Mixed into the existing store: actions share its reactive state and Pinia binding.
 export const teacherActions = {
   async bootstrapTeacher() {
     const sessionVersion = ++this.teacherSessionVersion;
+    const publicationsCurrent = collectionRequest(this, "teacherPublicationsRequestVersion");
+    const actionsCurrent = collectionRequest(this, "teacherActionCenterRequestVersion");
     this.teacherLoading = true;
     this.teacherError = consumeOAuthError();
     try {
@@ -33,15 +42,15 @@ export const teacherActions = {
       const [account, memberships, publications, actionCenter, schoolMemberships] = await Promise.all([
         classworksV2Api.profile(),
         classworksV2Api.myWorkspaces(),
-        classworksV2Api.publications({limit: 100}),
-        classworksV2Api.actionRequiredPublications({limit: 50}),
+        completeTeacherCollection(params => classworksV2Api.publications(params), {isCurrent: publicationsCurrent}),
+        completeTeacherCollection(params => classworksV2Api.actionRequiredPublications(params), {isCurrent: actionsCurrent}),
         classworksV2Api.mySchools(),
       ]);
       if (sessionVersion !== this.teacherSessionVersion) return;
       this.account = account;
       this.memberships = memberships;
-      this.teacherPublications = publications.items || [];
-      this.teacherActionCenter = actionCenter;
+      if (publications && publicationsCurrent()) this.teacherPublications = publications.items;
+      if (actionCenter && actionsCurrent()) this.teacherActionCenter = actionCenter;
       this.schoolMemberships = schoolMemberships;
       joinWorkspaces(this.realtimeWorkspaceIds);
       await this.hydrateTeacherTargetPreferences();
@@ -228,33 +237,33 @@ export const teacherActions = {
   },
 
   async refreshTeacherPublications() {
-    const sessionVersion = this.teacherSessionVersion;
+    const isCurrent = collectionRequest(this, "teacherPublicationsRequestVersion");
     this.teacherPublicationsLoading = true;
     try {
-      const result = await classworksV2Api.publications({limit: 100});
-      if (sessionVersion !== this.teacherSessionVersion) return;
-      this.teacherPublications = result.items || [];
+      const result = await completeTeacherCollection(params => classworksV2Api.publications(params), {isCurrent});
+      if (!result || !isCurrent()) return;
+      this.teacherPublications = result.items;
     } catch (error) {
-      if (sessionVersion !== this.teacherSessionVersion) return;
+      if (!isCurrent()) return;
       this.teacherError = describeApiError(error, "刷新发布记录失败");
     } finally {
-      if (sessionVersion === this.teacherSessionVersion) this.teacherPublicationsLoading = false;
+      if (isCurrent()) this.teacherPublicationsLoading = false;
     }
   },
 
   async refreshTeacherActionCenter() {
     if (!this.isTeacherSignedIn) return;
-    const sessionVersion = this.teacherSessionVersion;
+    const isCurrent = collectionRequest(this, "teacherActionCenterRequestVersion");
     this.teacherActionCenterLoading = true;
     try {
-      const result = await classworksV2Api.actionRequiredPublications({limit: 50});
-      if (sessionVersion !== this.teacherSessionVersion) return;
+      const result = await completeTeacherCollection(params => classworksV2Api.actionRequiredPublications(params), {isCurrent});
+      if (!result || !isCurrent()) return;
       this.teacherActionCenter = result;
     } catch (error) {
-      if (sessionVersion !== this.teacherSessionVersion) return;
+      if (!isCurrent()) return;
       this.teacherError = describeApiError(error, "刷新待处理事项失败");
     } finally {
-      if (sessionVersion === this.teacherSessionVersion) this.teacherActionCenterLoading = false;
+      if (isCurrent()) this.teacherActionCenterLoading = false;
     }
   },
 

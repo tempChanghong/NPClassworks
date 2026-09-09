@@ -237,9 +237,8 @@ class ClassworksNoiseService {
     this.sliceFrames.push(frame)
     this.processCalibration(frame)
 
-    let analysis = null
     if (!this.lastAnalysisAt || timestamp - this.lastAnalysisAt >= ANALYSIS_INTERVAL_MS) {
-      analysis = analyzeNoiseWindow(this.windowFrames)
+      const analysis = analyzeNoiseWindow(this.windowFrames)
       this.lastAnalysisAt = timestamp
       this.currentScore = analysis.score
       this.currentScoreDetail = analysis.scoreDetail
@@ -252,7 +251,7 @@ class ClassworksNoiseService {
       }
     }
     if (timestamp - this.sliceStart >= SLICE_MS) {
-      this.finalizeSlice(timestamp, analysis || analyzeNoiseWindow(this.sliceFrames, {windowMs: SLICE_MS}))
+      this.finalizeSlice(timestamp)
     }
     this.emit()
   }
@@ -315,11 +314,12 @@ class ClassworksNoiseService {
     }
   }
 
-  finalizeSlice(end, analysis = analyzeNoiseWindow(this.sliceFrames, {windowMs: SLICE_MS})) {
+  finalizeSlice(end) {
     if (!this.sliceFrames.length) {
       this.sliceStart = end
       return
     }
+    const analysis = analyzeNoiseWindow(this.sliceFrames, {windowMs: Math.max(FRAME_MS, end - this.sliceStart)})
     const displayValues = this.sliceFrames.map(frame => frame.displayDb).sort((a, b) => a - b)
     const average = displayValues.reduce((sum, value) => sum + value, 0) / displayValues.length
     const p95 = displayValues[Math.min(displayValues.length - 1, Math.floor(displayValues.length * 0.95))]

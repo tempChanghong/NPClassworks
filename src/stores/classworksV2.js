@@ -33,6 +33,8 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
 
     account: null,
     teacherSessionVersion: 0,
+    teacherPublicationsRequestVersion: 0,
+    teacherActionCenterRequestVersion: 0,
     oauthProviders: [],
     memberships: [],
     teacherSubjects: [],
