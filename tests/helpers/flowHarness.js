@@ -81,6 +81,7 @@ export async function createFlowHarness() {
   const vite = await createServer({
     root, configFile: false, envFile: false, logLevel: "error", plugins: [vue()],
     resolve: {alias: [
+      {find: "@/utils/screenUploadRetry", replacement: fileURLToPath(new URL("./screenUploadRetryFixture.js", import.meta.url))},
       {find: "@/utils/socketClient", replacement: fileURLToPath(new URL("./realtimeFixture.js", import.meta.url))},
       {find: "@", replacement: fileURLToPath(new URL("../../src", import.meta.url))},
     ]},
@@ -92,6 +93,7 @@ export async function createFlowHarness() {
   const screenExit = await vite.ssrLoadModule("/src/utils/screenTemporaryExit.js");
   const {useClassworksV2Store} = await vite.ssrLoadModule("/src/stores/classworksV2.js");
   const realtime = await vite.ssrLoadModule("/tests/helpers/realtimeFixture.js");
+  const {configureScreenUploadRetry} = await vite.ssrLoadModule("/tests/helpers/screenUploadRetryFixture.js");
   const {default: composer} = await vite.ssrLoadModule("/src/components/v2/ScreenHomeworkDialog.vue");
   const queue = await vite.ssrLoadModule("/src/utils/screenPublicationQueue.js");
   const drafts = await vite.ssrLoadModule("/src/utils/screenHomeworkDraft.js");
@@ -122,6 +124,7 @@ export async function createFlowHarness() {
     dialogs.settleActionDialog(false);
     for (const app of mounted.splice(0)) app.unmount();
     for (const store of stores.splice(0)) { store.stopRealtime(); store.stopScreenSync(); store.$dispose(); }
+    configureScreenUploadRetry();
     storage.clear(); sessionStorage.clear();
     requests.length = 0; publications.length = 0; routes.clear();
     realtime.configureRealtime(serverUrl);
@@ -149,7 +152,7 @@ export async function createFlowHarness() {
   }
   reset();
   return {
-    api, screenExit, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore,
+    api, screenExit, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore, configureScreenUploadRetry,
     loadDraft(bindingId, publicationId) {
       const id = sessionStorage.getItem("classworks-v2-draft-tab");
       return drafts.loadScreenHomeworkDraft(bindingId, publicationId, id ? {

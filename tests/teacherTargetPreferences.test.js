@@ -109,3 +109,34 @@ test("removed favorites are filtered before the merge limit so remote additions 
   assert.equal(next.favorites.length, 8);
   assert.ok(next.favorites.some(item => item.targetWorkspaceIds[0] === "remote"));
 });
+
+test("legacy synced favorites are not treated as additions by a new recent edit", () => {
+  const storage = memoryStorage();
+  const item = {type: "NOTICE", targetWorkspaceIds: ["old"]};
+  storage.setItem(teacherTargetPreferencesKey("a"), JSON.stringify({favorites: [item], syncState: {
+    dirty: false, lastSyncedAt: "2026-09-01T00:00:00Z", revision: 1, removedFavoriteIds: [],
+  }}));
+  const local = rememberTeacherTargets("a", {type: "NOTICE", targetWorkspaceIds: ["new"]}, storage);
+  const state = loadTeacherTargetSyncState("a", storage);
+  assert.deepEqual(state.addedFavoriteIds, []);
+  const next = reconcileTeacherTargetPreferences(local, {favorites: [], recent: []}, state);
+  assert.deepEqual(next.favorites, []);
+  assert.equal(next.recent.length, 1);
+});
+
+test("legacy unsynced additions survive journal migration and deletion followed by re-add remains intentional", () => {
+  const storage = memoryStorage();
+  const item = {type: "NOTICE", targetWorkspaceIds: ["old-pending"]};
+  storage.setItem(teacherTargetPreferencesKey("a"), JSON.stringify({favorites: [item], syncState: {
+    dirty: true, lastSyncedAt: "2026-09-01T00:00:00Z", revision: 1, removedFavoriteIds: [],
+  }}));
+  const local = rememberTeacherTargets("a", item, storage);
+  const id = teacherTargetCombinationId(item);
+  assert.deepEqual(loadTeacherTargetSyncState("a", storage).addedFavoriteIds, [id]);
+  assert.equal(reconcileTeacherTargetPreferences(local, {favorites: [], recent: []}, loadTeacherTargetSyncState("a", storage)).favorites.length, 1);
+  toggleFavoriteTeacherTargets("a", item, storage);
+  assert.deepEqual(loadTeacherTargetSyncState("a", storage).addedFavoriteIds, []);
+  toggleFavoriteTeacherTargets("a", item, storage);
+  assert.deepEqual(loadTeacherTargetSyncState("a", storage).addedFavoriteIds, [id]);
+  assert.deepEqual(loadTeacherTargetSyncState("a", storage).removedFavoriteIds, []);
+});

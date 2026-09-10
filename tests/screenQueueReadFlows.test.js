@@ -61,30 +61,37 @@ test("failed initialization and flush retain the last known list without submitt
 });
 
 test("an unknown queue retries with backoff without another network event and stops after disposal", async t => {
-  const scheduled = [];
-  const realTimeout = globalThis.setTimeout;
-  t.mock.method(globalThis, "setTimeout", (callback, delay, ...args) => {
-    if (delay >= 15_000 && delay <= 300_000) {
-      scheduled.push(callback);
-      return -scheduled.length;
-    }
-    return realTimeout(callback, delay, ...args);
+  const scheduled = new Map();
+  let nextTimer = 0;
+  h.configureScreenUploadRetry({
+    random: () => 0.5,
+    schedule: (callback, delay) => { const id = ++nextTimer; scheduled.set(id, {callback, delay}); return id; },
+    cancel: id => scheduled.delete(id),
   });
+  const take = () => { const [id, task] = scheduled.entries().next().value; scheduled.delete(id); return task; };
   const read = failReads(t);
   const store = h.newStore({screen: true});
   store.initializeScreenSync();
-  await eventually(() => assert.equal(scheduled.length, 1));
+  assert.equal(scheduled.size, 1);
+  const initial = take();
+  assert.equal(initial.delay, 1000, "initial recovery has jitter but no failure backoff yet");
+  initial.callback();
+  await eventually(() => assert.equal(scheduled.size, 1));
+  const retry = take();
+  assert.equal(retry.delay, 22500, "failed reads use the retry controller's exponential backoff");
   assert.ok(store.screenQueueReadError);
   read.mock.restore();
-  scheduled.shift()();
+  retry.callback();
   await eventually(() => assert.equal(store.screenQueueReadError, ""));
-  assert.equal(scheduled.length, 0);
+  assert.equal(scheduled.size, 0);
   const blocked = failReads(t);
   await store.flushScreenPublicationQueue();
-  assert.equal(scheduled.length, 1);
+  assert.equal(scheduled.size, 1);
+  const staleCallback = scheduled.values().next().value.callback;
   store.stopScreenSync();
+  assert.equal(scheduled.size, 0, "disposal cancels the business timer");
   const calls = blocked.mock.callCount();
-  scheduled.shift()();
+  staleCallback();
   await Promise.resolve(); await Promise.resolve();
   assert.equal(blocked.mock.callCount(), calls);
 });

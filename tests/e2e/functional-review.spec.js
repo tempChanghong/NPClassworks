@@ -244,3 +244,73 @@ for (const [state, label] of [["absent", "缺勤"], ["late", "迟到"], ["exclud
     } finally { await context.close(); }
   });
 }
+
+test("published homework succeeds even when saving recent targets exceeds local storage quota", async ({browser, request}) => {
+  const {context, page} = await openRole(browser, "teacher");
+  try {
+    await page.addInitScript(() => {
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (String(key).startsWith("classworks-v2-teacher-targets:")) throw new window.DOMException("Quota exceeded", "QuotaExceededError");
+        return set.call(this, key, value);
+      };
+    });
+    await page.goto(origin);
+    const composer = page.locator(".publication-composer");
+    await composer.locator(".v-select").filter({hasText: "科目"}).click();
+    await page.getByRole("option", {name: "数学", exact: true}).click();
+    await composer.getByRole("combobox", {name: "发布到 发布到", exact: true}).click();
+    await page.getByRole("option", {name: /高一一班/}).click();
+    await page.keyboard.press("Escape");
+    const body = composer.getByRole("textbox", {name: "正文 正文", exact: true});
+    await body.fill("偏好存储失败也必须正常发布");
+    await composer.getByRole("button", {name: "正式发布", exact: true}).click();
+    await expect(body).toHaveValue("");
+    await expect(page.getByRole("button", {name: "知道了", exact: true})).toBeVisible();
+    const items = (await (await request.get(`${api}/__test/state`)).json()).data.items;
+    expect(items).toHaveLength(1);
+    expect(items[0].content).toBe("偏好存储失败也必须正常发布");
+  } finally { await context.close(); }
+});
+
+test("opening settings during a pending favorite sync recovers and manual sync remains usable", async ({browser}) => {
+  const {context, page} = await openRole(browser, "teacher");
+  let release = () => {}, block = false, started = false, writes = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  let remote = {favorites: [], recent: []};
+  try {
+    await page.route(`${api}/accounts/preferences/teacher-targets`, async route => {
+      if (route.request().method() === "GET" && block) {
+        block = false; started = true; await gate;
+      }
+      if (route.request().method() === "PUT") { remote = route.request().postDataJSON().preferences; writes++; }
+      await route.fulfill({json: {data: {preferences: remote}}});
+    });
+    await page.goto(origin);
+    const composer = page.locator(".publication-composer");
+    await composer.locator(".v-select").filter({hasText: "科目"}).click();
+    await page.getByRole("option", {name: "数学", exact: true}).click();
+    await composer.getByRole("combobox", {name: "发布到 发布到", exact: true}).click();
+    await page.getByRole("option", {name: /高一一班/}).click();
+    await page.keyboard.press("Escape");
+    block = true;
+    await composer.getByRole("button", {name: "收藏当前目标组合", exact: true}).click();
+    await expect.poll(() => started).toBe(true);
+    const profile = page.waitForResponse(response => response.url() === `${api}/accounts/profile`);
+    await page.getByRole("button", {name: "设置", exact: true}).click();
+    await profile;
+    release();
+    // This fresh teacher fixture has no student selection; settings also boots
+    // the student catalog and opens its optional selector.
+    await expect(page.getByRole("dialog").filter({hasText: "选择我的班级"})).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.locator(".settings-nav").getByText("教师账号", {exact: true}).click();
+    const sync = page.getByRole("button", {name: "立即同步", exact: true});
+    await expect(sync).toBeEnabled();
+    await expect.poll(() => remote.favorites.length).toBe(1);
+    const before = writes;
+    await sync.click();
+    await expect.poll(() => writes).toBeGreaterThan(before);
+    await expect(sync).toBeEnabled();
+  } finally { release(); await context.close(); }
+});

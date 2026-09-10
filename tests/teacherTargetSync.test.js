@@ -127,3 +127,69 @@ test("a clean local list cannot repopulate an intentionally emptied remote list"
   assert.deepEqual(ids(s.store.teacherTargetPreferences), []);
   assert.deepEqual(ids(s.remote), []);
 });
+
+for (const operation of ["recent", "favorite"]) {
+  test(`a remote removal survives an unrelated local ${operation} change`, async () => {
+    const s = setup();
+    s.remote = {favorites: [combination("remote-new")], recent: []};
+    if (operation === "recent") s.store.rememberTeacherTargetCombination(combination("local-new"));
+    else s.store.toggleTeacherTargetFavorite(combination("local-new"));
+    await eventually(() => assert.equal(s.store.teacherTargetPreferencesSyncing, false));
+    assert.deepEqual(ids(s.remote), operation === "recent" ? ["remote-new"] : ["local-new", "remote-new"]);
+    assert.equal(loadTeacherTargetSyncState("teacher-a").dirty, false);
+  });
+}
+
+for (const [method, failed] of [["GET", false], ["PUT", false], ["PUT", true]]) {
+  test(`reinitialization takes over a pending ${method} (${failed ? "failed" : "successful"}) without getting stuck`, async () => {
+    const s = setup();
+    const started = deferred(), release = deferred(), newStarted = deferred(), newRelease = deferred();
+    const path = `${method} /accounts/preferences/teacher-targets`;
+    const healthy = h.routes.get(path);
+    let calls = 0;
+    h.routes.set(path, async (req, reply) => {
+      if (++calls === 1) {
+        started.resolve(); await release.promise;
+        if (failed) return reply({message: "old request failed"}, 503);
+      }
+      healthy(req, reply);
+    });
+    const old = s.store.syncTeacherTargetPreferences();
+    await started.promise;
+    const boot = s.store.bootstrapTeacher();
+    try {
+      await eventually(() => assert.equal(s.store.teacherSessionVersion, 1));
+      const get = h.routes.get("GET /accounts/preferences/teacher-targets");
+      h.routes.set("GET /accounts/preferences/teacher-targets", async (req, reply) => {
+        newStarted.resolve(); await newRelease.promise; await get(req, reply);
+      });
+      release.resolve(); await old;
+      await newStarted.promise;
+      assert.equal(s.store.teacherTargetPreferencesSyncing, true, "old completion cannot clear the new task's busy state");
+      s.store.toggleTeacherTargetFavorite(combination("during-reinitialization"));
+    } finally { release.resolve(); newRelease.resolve(); }
+    await boot;
+    assert.equal(s.store.teacherTargetPreferencesSyncing, false);
+    assert.deepEqual(ids(s.remote), ["a", "during-reinitialization"]);
+    const before = h.requests.length;
+    await s.store.syncTeacherTargetPreferences();
+    assert.ok(h.requests.length > before, "manual sync still sends requests after reinitialization");
+  });
+}
+
+test("failed reinitialization does not leave an abandoned preference task blocking manual retry", async () => {
+  const s = setup();
+  const started = deferred(), release = deferred();
+  const get = h.routes.get("GET /accounts/preferences/teacher-targets");
+  h.routes.set("GET /accounts/preferences/teacher-targets", async (req, reply) => {
+    started.resolve(); await release.promise; get(req, reply);
+  });
+  const old = s.store.syncTeacherTargetPreferences();
+  await started.promise;
+  h.routes.set("GET /accounts/profile", (_req, reply) => reply({message: "profile unavailable"}, 503));
+  try { await s.store.bootstrapTeacher(); } finally { release.resolve(); }
+  await old;
+  assert.equal(s.store.teacherTargetPreferencesSyncing, false);
+  await s.store.syncTeacherTargetPreferences();
+  assert.equal(s.store.teacherTargetPreferencesSynced, true);
+});

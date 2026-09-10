@@ -20,6 +20,8 @@ import {
   toggleFavoriteTeacherTargets,
 } from "@/utils/teacherTargetPreferences";
 
+const teacherTargetSyncTasks = new WeakMap();
+
 function collectionRequest(store, key) {
   const sessionVersion = store.teacherSessionVersion;
   const version = ++store[key];
@@ -104,59 +106,80 @@ export const teacherActions = {
     if (!this.account?.id) return;
     const accountId = this.account.id;
     const sessionVersion = this.teacherSessionVersion;
-    const isCurrent = () => sessionVersion === this.teacherSessionVersion && accountId === this.account?.id;
-    if (this.teacherTargetPreferencesSyncing) {
+    const previous = teacherTargetSyncTasks.get(this);
+    if (previous?.sessionVersion === sessionVersion && previous.accountId === accountId) {
       this.teacherTargetPreferencesSyncPending = true;
-      return;
+      return previous.promise;
     }
+    const task = {accountId, sessionVersion, promise: null};
+    teacherTargetSyncTasks.set(this, task);
+    const isCurrent = () => teacherTargetSyncTasks.get(this) === task
+      && sessionVersion === this.teacherSessionVersion && accountId === this.account?.id;
     this.teacherTargetPreferencesSyncing = true;
     this.teacherTargetPreferencesError = "";
-    try {
-      do {
-        this.teacherTargetPreferencesSyncPending = false;
-        // Fetch first so offline edits are applied to the latest known remote
-        // list, preserving favorites added on another device while offline.
-        const remoteResult = await classworksV2Api.teacherTargetPreferences();
+    task.promise = (async () => {
+      try {
+        // Let an older write for this account settle before reading and merging.
+        // A new session owns the status immediately; the older task cannot clear it.
+        if (previous?.accountId === accountId) await previous.promise;
         if (!isCurrent()) return;
-        const remote = sanitizeTeacherTargetPreferences(remoteResult.preferences);
-        // Read AFTER GET: edits made while the fetch was pending must participate.
-        const local = loadTeacherTargetPreferences(accountId);
-        const syncState = loadTeacherTargetSyncState(accountId);
-        const remoteEmpty = !remote.favorites.length && !remote.recent.length;
-        const migrateLocal = !syncState.lastSyncedAt && remoteEmpty && (local.favorites.length || local.recent.length);
-        const next = syncState.dirty || migrateLocal
-          ? reconcileTeacherTargetPreferences(local, remote, syncState)
-          : remote;
-        let saved = next;
-        if (!hydrate || syncState.dirty || migrateLocal) {
-          const result = await classworksV2Api.saveTeacherTargetPreferences(next);
+        do {
+          this.teacherTargetPreferencesSyncPending = false;
+          // Fetch first so offline edits are applied to the latest known remote
+          // list, preserving favorites added on another device while offline.
+          const remoteResult = await classworksV2Api.teacherTargetPreferences();
           if (!isCurrent()) return;
-          saved = result.preferences;
+          const remote = sanitizeTeacherTargetPreferences(remoteResult.preferences);
+          // Read AFTER GET: edits made while the fetch was pending must participate.
+          const local = loadTeacherTargetPreferences(accountId);
+          const syncState = loadTeacherTargetSyncState(accountId);
+          const remoteEmpty = !remote.favorites.length && !remote.recent.length;
+          const migrateLocal = !syncState.lastSyncedAt && remoteEmpty && (local.favorites.length || local.recent.length);
+          const next = syncState.dirty || migrateLocal
+            ? reconcileTeacherTargetPreferences(local, remote, syncState)
+            : remote;
+          let saved = next;
+          if (!hydrate || syncState.dirty || migrateLocal) {
+            const result = await classworksV2Api.saveTeacherTargetPreferences(next);
+            if (!isCurrent()) return;
+            saved = result.preferences;
+          }
+          if (loadTeacherTargetSyncState(accountId).revision !== syncState.revision) {
+            // A late response may acknowledge only its own snapshot. Keep newer
+            // edits and removal records until the following request succeeds.
+            this.teacherTargetPreferencesSyncPending = true;
+            continue;
+          }
+          this.teacherTargetPreferences = saveTeacherTargetPreferences(accountId, saved, localStorage, {dirty: false});
+          this.teacherTargetPreferencesSynced = true;
+        } while (this.teacherTargetPreferencesSyncPending);
+      } catch (error) {
+        if (!isCurrent()) return;
+        this.teacherTargetPreferencesSynced = false;
+        this.teacherTargetPreferencesError = describeApiError(error, "同步失败，偏好已保存在本机");
+        this.teacherTargetPreferencesSyncPending = false;
+      } finally {
+        if (teacherTargetSyncTasks.get(this) === task) {
+          this.teacherTargetPreferencesSyncing = false;
+          teacherTargetSyncTasks.delete(this);
         }
-        if (loadTeacherTargetSyncState(accountId).revision !== syncState.revision) {
-          // A late response may acknowledge only its own snapshot. Keep newer
-          // edits and removal records until the following request succeeds.
-          this.teacherTargetPreferencesSyncPending = true;
-          continue;
-        }
-        this.teacherTargetPreferences = saveTeacherTargetPreferences(accountId, saved, localStorage, {dirty: false});
-        this.teacherTargetPreferencesSynced = true;
-      } while (this.teacherTargetPreferencesSyncPending);
-    } catch (error) {
-      if (!isCurrent()) return;
-      this.teacherTargetPreferencesSynced = false;
-      this.teacherTargetPreferencesError = describeApiError(error, "同步失败，偏好已保存在本机");
-      this.teacherTargetPreferencesSyncPending = false;
-    } finally {
-      if (isCurrent()) this.teacherTargetPreferencesSyncing = false;
-    }
+      }
+    })();
+    return task.promise;
   },
 
   rememberTeacherTargetCombination(combination) {
     if (!this.account?.id) return;
-    this.teacherTargetPreferences = rememberTeacherTargets(this.account.id, combination);
+    try {
+      this.teacherTargetPreferences = rememberTeacherTargets(this.account.id, combination);
+    } catch {
+      this.teacherTargetPreferencesSynced = false;
+      this.teacherTargetPreferencesError = "最近目标未能保存在本机，不影响发布结果。";
+      return false;
+    }
     this.teacherTargetPreferencesSynced = false;
     void this.syncTeacherTargetPreferences();
+    return true;
   },
 
   toggleTeacherTargetFavorite(combination) {
