@@ -241,6 +241,8 @@ const actionNames = {
   COURSE_GROUP_UPDATED: "修改走班教学班",
   COURSE_GROUP_CHANGED: "修改走班教学班",
   SCREEN_ROSTER_CHANGED: "大屏修改学生名单",
+  ADMIN_ROSTER_CHANGED: "管理员修改学生名单",
+  CLASS_ROSTER_SAVED: "名单变更记录",
   SCREEN_ATTENDANCE_CHANGED: "大屏修改考勤",
   SCREEN_PUBLICATION_CREATED: "大屏录入作业",
   SCREEN_PUBLICATION_UPDATED: "大屏修改作业",

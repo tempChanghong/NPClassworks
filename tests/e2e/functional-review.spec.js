@@ -62,6 +62,36 @@ test("offline unfavorite survives browser reload and preserves another device's 
   } finally { await context.close(); }
 });
 
+test("remote roster events refresh a clean screen and preserve an open roster draft; reconnect catches missed changes", async ({browser, request}) => {
+  const {context, page} = await openRole(browser, "screen");
+  let revision = "v1", students = [{id: "s1", name: "张三", studentNumber: "01"}];
+  try {
+    await page.route(`${api}/api/v2/classroom-screens/students`, route => route.fulfill({json: {data: students, rosterRevision: revision}}));
+    await page.route(`${api}/api/v2/classroom-screens/attendance/*`, route => route.fulfill({json: {data: {absent: [], late: [], excluded: []}}}));
+    await page.goto(origin);
+    await page.getByRole("button", {name: "课堂工具", exact: true}).first().click();
+    await page.locator(".tool-entry").filter({hasText: "考勤"}).click();
+    await expect(page.getByText("张三", {exact: true})).toBeVisible();
+    students = [{...students[0], name: "远程改名"}]; revision = "v2";
+    await request.post(`${api}/__test/roster-updated`);
+    await expect(page.getByText("远程改名", {exact: true})).toBeVisible();
+    await page.getByRole("button", {name: "编辑学生名单", exact: true}).click();
+    await page.getByLabel("姓名 1", {exact: true}).fill("大屏未保存");
+    students = [{...students[0], name: "再次远程修改"}]; revision = "v3";
+    await request.post(`${api}/__test/roster-updated`);
+    await expect(page.getByText("名单已被远程修改，当前输入已保留，请先核对。", {exact: false})).toBeVisible();
+    await expect(page.getByLabel("姓名 1", {exact: true})).toHaveValue("大屏未保存");
+    await page.getByRole("dialog").filter({hasText: "编辑行政班学生名单"}).getByRole("button", {name: "取消", exact: true}).click();
+    await expect(page.getByText("编辑行政班学生名单", {exact: true})).toBeHidden();
+    await page.getByRole("button", {name: "重新载入名单与考勤", exact: true}).click();
+    await page.getByRole("dialog").filter({hasText: "重新载入名单与考勤？"}).getByRole("button", {name: "重新载入", exact: true}).click();
+    await expect(page.getByText("再次远程修改", {exact: true})).toBeVisible();
+    students = [{...students[0], name: "重连后名单"}]; revision = "v4";
+    await request.post(`${api}/__test/drop-connections`);
+    await expect(page.getByText("重连后名单", {exact: true})).toBeVisible();
+  } finally { await context.close(); }
+});
+
 test("attendance read failure and a pending retry cannot overwrite a cached saved record", async ({browser}) => {
   const {context, page} = await openRole(browser, "screen");
   let fail = false, saves = 0, release = () => {};
@@ -227,8 +257,9 @@ for (const [state, label] of [["absent", "缺勤"], ["late", "迟到"], ["exclud
       await expect.poll(() => saves).toBe(1);
       expect(attendance[state]).toEqual(["s1"]);
       await page.getByRole("button", {name: "编辑学生名单", exact: true}).click();
-      await page.getByRole("textbox", {name: "学生名单 学生名单", exact: true}).fill("李四");
+      await page.getByRole("button", {name: "移出第 1 人", exact: true}).click();
       await page.getByRole("button", {name: "保存名单", exact: true}).click();
+      await page.getByRole("button", {name: "确认保存名单", exact: true}).click();
       await expect(page.locator(".student-row")).toHaveCount(1);
       expect(attendance[state]).toEqual(["s1"]);
       await page.getByTitle("返回课堂工具", {exact: true}).click();

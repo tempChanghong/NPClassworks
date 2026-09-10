@@ -99,8 +99,11 @@ for (const status of ["absent", "late", "excluded"]) {
     tools.state.setStudentStatus("s1", status);
     await tools.state.saveAttendance();
     assert.deepEqual(saved[status], ["s1"]);
-    tools.state.rosterText.value = "李四";
-    await tools.state.saveRoster();
+    tools.state.openRosterEditor();
+    tools.state.rosterRows.value = tools.state.rosterRows.value.filter(s => s.id === "s2");
+    const savingRoster = tools.state.saveRoster();
+    h.dialogs.settleActionDialog(true);
+    await savingRoster;
     assert.deepEqual(saved[status], ["s1"], "saving the roster must not rewrite attendance records");
     tools.props.modelValue = false;
     await nextTick();

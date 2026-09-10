@@ -110,6 +110,7 @@ export const screenSessionActions = {
       ]);
       if (!current()) return;
       this.classroomStudents = students || [];
+      this.classroomRosterRevision = students?.rosterRevision || null;
       this.classroomAttendance = attendance || {date, absent: [], late: [], excluded: []};
       return {students: this.classroomStudents, attendance: this.classroomAttendance};
     } catch (error) {
@@ -120,13 +121,18 @@ export const screenSessionActions = {
     }
   },
 
-  async replaceClassroomStudents(students) {
+  async replaceClassroomStudents(students, expectedRevision = this.classroomRosterRevision) {
+    const scope = classroomToolScope(this);
     this.classroomToolsError = "";
     try {
-      this.classroomStudents = await classworksV2Api.replaceClassroomStudents(students);
-      return this.classroomStudents;
+      const result = await classworksV2Api.replaceClassroomStudents(students, expectedRevision);
+      if (scope === classroomToolScope(this)) {
+        this.classroomStudents = result;
+        this.classroomRosterRevision = result.rosterRevision || null;
+      }
+      return result;
     } catch (error) {
-      this.classroomToolsError = describeApiError(error, "保存学生名单失败");
+      if (scope === classroomToolScope(this)) this.classroomToolsError = describeApiError(error, "保存学生名单失败");
       throw error;
     }
   },

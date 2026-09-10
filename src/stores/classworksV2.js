@@ -68,6 +68,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     screenLastSyncedAt: null,
     screenHeartbeatAt: null,
     classroomStudents: [],
+    classroomRosterRevision: null,
     classroomAttendance: {date: "", absent: [], late: [], excluded: []},
     classroomToolsLoading: false,
     classroomToolsError: "",

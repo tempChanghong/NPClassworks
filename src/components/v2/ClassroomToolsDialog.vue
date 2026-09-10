@@ -246,6 +246,19 @@
         </template>
       </v-container>
 
+      <v-alert
+        v-if="remoteRosterChanged"
+        type="warning"
+        class="ma-4"
+      >
+        班级名单已在其他设备更新，当前输入已保留。请重新载入并核对名单与考勤。
+        <v-btn
+          variant="text"
+          @click="reloadChangedRoster"
+        >
+          重新载入名单与考勤
+        </v-btn>
+      </v-alert>
       <v-dialog
         v-model="rosterDialog"
         max-width="680"
@@ -256,20 +269,78 @@
           </v-card-title>
           <v-card-text class="px-5">
             <v-alert
+              v-if="remoteRosterChanged"
+              type="warning"
+              class="mb-3"
+            >
+              名单已被远程修改，当前输入已保留，请先核对。
+              <v-btn
+                variant="text"
+                @click="reloadChangedRoster"
+              >
+                重新载入名单与考勤
+              </v-btn>
+            </v-alert>
+            <v-alert
+              v-if="store.classroomToolsError"
+              type="error"
+              class="mb-3"
+            >
+              {{ store.classroomToolsError }}
+            </v-alert>
+            <v-alert
               class="mb-4"
               type="info"
               variant="tonal"
             >
-              每行一名学生，可填写“学号 姓名”或只填写姓名。
+              改名或修改学号请编辑下方学生行，以保留学生身份。批量导入每行填写“学号 姓名”，默认保留其他学生。
             </v-alert>
+            <div
+              v-for="(student, index) in rosterRows"
+              :key="student.id || `new-${index}`"
+              class="d-flex ga-2 mb-2"
+            >
+              <v-text-field
+                v-model="student.studentNumber"
+                :label="`学号 ${index + 1}`"
+                :disabled="savingRoster"
+                hide-details
+              />
+              <v-text-field
+                v-model="student.name"
+                :label="`姓名 ${index + 1}`"
+                :disabled="savingRoster"
+                hide-details
+              />
+              <v-btn
+                icon="mdi-close"
+                :aria-label="`移出第 ${index + 1} 人`"
+                :disabled="savingRoster"
+                @click="rosterRows.splice(index, 1)"
+              />
+            </div>
+            <v-btn
+              class="mb-3"
+              :disabled="savingRoster"
+              @click="rosterRows.push({name: '', studentNumber: ''})"
+            >
+              添加学生
+            </v-btn>
             <v-textarea
               v-model="rosterText"
+              :disabled="savingRoster"
               auto-grow
-              label="学生名单"
+              label="批量追加名单"
               placeholder="01 张三&#10;02 李四&#10;03 王五"
-              rows="12"
+              rows="4"
               variant="outlined"
             />
+            <v-btn
+              :disabled="savingRoster"
+              @click="appendScreenRoster"
+            >
+              导入到名单
+            </v-btn>
           </v-card-text>
           <v-card-actions class="px-5 pb-5">
             <v-spacer />
@@ -298,6 +369,10 @@ import {getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import NoiseMonitorCard from "@/components/NoiseMonitorCard.vue";
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
+import {editableRoster, importRoster, rosterChanges, validateRoster} from "@/utils/classRoster";
+import {confirmAction} from "@/utils/actionDialog";
+import {classworksV2Api} from "@/utils/classworksV2Client";
+import {on as socketOn, onConnect} from "@/utils/socketClient";
 
 const props = defineProps({modelValue: Boolean, initialTool: {type: String, default: ""}});
 defineEmits(["update:modelValue"]);
@@ -305,12 +380,17 @@ const store = useClassworksV2Store();
 const activeTool = ref(props.initialTool);
 const rosterDialog = ref(false);
 const rosterText = ref("");
+const rosterRows = ref([]);
 const savingRoster = ref(false);
 const savingAttendance = ref(false);
+const rosterBase = ref([]), rosterBaseRevision = ref(null), remoteRosterChanged = ref(false);
+const attendanceBaseline = ref("");
+const hasAttendanceDraft = () => attendanceBaseline.value && JSON.stringify(attendanceDraft.value) !== attendanceBaseline.value;
 const attendanceDraft = ref({absent: [], late: [], excluded: []});
 const attendanceLoading = ref(false);
 const attendanceLoadedScope = ref("");
 let attendanceRequest = 0;
+let toolsDisposed = false;
 const clock = useNow({interval: 1000});
 const toolSettings = ref(loadClassroomToolSettings(store.screenSession?.binding?.id));
 
@@ -330,6 +410,7 @@ const attendanceScope = () => store.screenSession?.binding?.id
 const attendanceReady = computed(() => {
   void clock.value;
   return Boolean(props.modelValue && !attendanceLoading.value && attendanceLoadedScope.value
+    && !remoteRosterChanged.value
     && attendanceLoadedScope.value === attendanceScope());
 });
 const activeToolTitle = computed(() => tools.value.find((tool) => tool.id === activeTool.value)?.title || "");
@@ -348,6 +429,8 @@ const attendanceCounts = computed(() => {
 watch(() => [props.modelValue, store.screenSession?.binding?.id, store.screenSession?.binding?.credentialVersion], ([open]) => {
   attendanceRequest++;
   attendanceLoadedScope.value = "";
+  rosterDialog.value = false;
+  remoteRosterChanged.value = false;
   if (!open) {
     activeTool.value = "";
     return;
@@ -355,9 +438,10 @@ watch(() => [props.modelValue, store.screenSession?.binding?.id, store.screenSes
   toolSettings.value = loadClassroomToolSettings(store.screenSession?.binding?.id);
   void loadAttendance();
 }, {immediate: true});
-onUnmounted(() => { attendanceRequest++; });
+onUnmounted(() => { toolsDisposed = true; attendanceRequest++; });
 
 async function loadAttendance() {
+  if (toolsDisposed) return;
   if (savingAttendance.value || savingRoster.value) return;
   const request = ++attendanceRequest;
   const scope = attendanceScope();
@@ -368,6 +452,8 @@ async function loadAttendance() {
     const result = await store.loadClassroomTools(today());
     if (request !== attendanceRequest || scope !== attendanceScope() || !props.modelValue || !result) return;
     attendanceDraft.value = attendanceForCurrentRoster(result.attendance);
+    attendanceBaseline.value = JSON.stringify(attendanceDraft.value);
+    remoteRosterChanged.value = false;
     attendanceLoadedScope.value = scope;
   } catch {
     // The store exposes the load failure in the classroom tools alert.
@@ -410,33 +496,38 @@ function statusColor(status) {
 }
 
 function openRosterEditor() {
-  rosterText.value = store.classroomStudents.map((student) =>
-    [student.studentNumber, student.name].filter(Boolean).join(" "),
-  ).join("\n");
+  rosterBase.value = store.classroomStudents.map(s => ({...s}));
+  rosterBaseRevision.value = store.classroomRosterRevision;
+  rosterRows.value = editableRoster(store.classroomStudents);
+  rosterText.value = "";
   rosterDialog.value = true;
 }
 
 function parseRoster() {
-  const existingByKey = new Map(store.classroomStudents.map((student) => [
-    `${student.studentNumber || ""}\u0000${student.name}`,
-    student,
-  ]));
-  return rosterText.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-    const match = line.match(/^(\S+)\s+(.+)$/);
-    const parsed = match
-      ? {studentNumber: match[1], name: match[2].trim()}
-      : {studentNumber: null, name: line};
-    const existing = existingByKey.get(`${parsed.studentNumber || ""}\u0000${parsed.name}`);
-    return {...parsed, id: existing?.id};
-  });
+  if (rosterText.value.trim()) throw new Error("请先导入粘贴内容，或清空批量追加名单");
+  return validateRoster(rosterRows.value);
+}
+
+function appendScreenRoster() {
+  try { rosterRows.value = importRoster(rosterText.value, rosterRows.value); rosterText.value = ""; store.classroomToolsError = ""; }
+  catch (e) { store.classroomToolsError = e.message; }
 }
 
 async function saveRoster() {
+  if (savingRoster.value) return;
+  const scope = attendanceScope();
   savingRoster.value = true;
   try {
-    await store.replaceClassroomStudents(parseRoster());
+    const students = parseRoster();
+    if (!await confirmAction({title: "核对名单变更", message: rosterChanges(rosterBase.value, students).join("\n") || "名单没有变化", confirmText: "确认保存名单"})) return;
+    if (scope !== attendanceScope()) return;
+    await store.replaceClassroomStudents(students, rosterBaseRevision.value);
+    if (scope !== attendanceScope()) return;
     attendanceDraft.value = attendanceForCurrentRoster(attendanceDraft.value);
+    remoteRosterChanged.value = false;
     rosterDialog.value = false;
+  } catch (error) {
+    if (scope === attendanceScope()) store.classroomToolsError ||= error.message;
   } finally {
     savingRoster.value = false;
   }
@@ -449,13 +540,48 @@ async function saveAttendance() {
   savingAttendance.value = true;
   try {
     const result = await store.saveClassroomAttendance(today(), attendanceForCurrentRoster(attendanceDraft.value));
-    if (scope === attendanceScope() && request === attendanceRequest) attendanceDraft.value = attendanceForCurrentRoster(result);
+    if (scope === attendanceScope() && request === attendanceRequest) {
+      attendanceDraft.value = attendanceForCurrentRoster(result);
+      attendanceBaseline.value = JSON.stringify(attendanceDraft.value);
+    }
   } catch {
     // Keep the editable draft and the store's error for an explicit retry.
   } finally {
     savingAttendance.value = false;
   }
 }
+
+let checkingRoster = false;
+async function checkRoster() {
+  if (toolsDisposed || !props.modelValue || !attendanceLoadedScope.value || checkingRoster || savingRoster.value || savingAttendance.value || attendanceLoading.value) return;
+  if (navigator.onLine === false || document.visibilityState === "hidden") return;
+  const scope = attendanceScope();
+  checkingRoster = true;
+  try {
+    const students = await classworksV2Api.classroomStudents();
+    if (toolsDisposed || !props.modelValue || scope !== attendanceScope() || !students.rosterRevision || students.rosterRevision === store.classroomRosterRevision) return;
+    if (rosterDialog.value || hasAttendanceDraft() || savingRoster.value || savingAttendance.value) remoteRosterChanged.value = true;
+    else await loadAttendance();
+  } catch { /* Retain the last successful state; retry on reconnect or next poll. */ }
+  finally { checkingRoster = false; }
+}
+async function reloadChangedRoster() {
+  if (!await confirmAction({title: "重新载入名单与考勤？", message: "当前未保存的名单和考勤修改会丢弃，请先复制保留需要的内容。", confirmText: "重新载入"})) return;
+  rosterDialog.value = false;
+  await loadAttendance();
+}
+const stopRosterEvent = socketOn("classroom.roster.updated", event => {
+  if (event?.content?.administrativeClassId === store.screenSession?.binding?.administrativeClassId) void checkRoster();
+});
+const stopRosterConnect = onConnect(checkRoster);
+window.addEventListener("online", checkRoster);
+window.addEventListener("visibilitychange", checkRoster);
+const rosterPoll = setInterval(checkRoster, 60000);
+onUnmounted(() => {
+  stopRosterEvent(); stopRosterConnect(); clearInterval(rosterPoll);
+  window.removeEventListener("online", checkRoster);
+  window.removeEventListener("visibilitychange", checkRoster);
+});
 </script>
 
 <style scoped>

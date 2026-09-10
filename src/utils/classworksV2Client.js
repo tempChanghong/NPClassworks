@@ -515,16 +515,28 @@ export const classworksV2Api = {
     ));
   },
   async classroomStudents() {
-    return unwrap(await client.get("/api/v2/classroom-screens/students", {
+    const response = await client.get("/api/v2/classroom-screens/students", {
       headers: screenHeaders(),
-    }));
+    });
+    const students = unwrap(response);
+    Object.defineProperty(students, "rosterRevision", {value: response.data.rosterRevision || null});
+    return students;
   },
-  async replaceClassroomStudents(students) {
-    return unwrap(await client.put(
+  async replaceClassroomStudents(students, expectedRevision) {
+    const response = await client.put(
       "/api/v2/classroom-screens/students",
-      {students},
+      {students, expectedRevision},
       {headers: screenHeaders()},
-    ));
+    );
+    const saved = unwrap(response);
+    Object.defineProperty(saved, "rosterRevision", {value: response.data.rosterRevision || null});
+    return saved;
+  },
+  async managedClassRoster(schoolId, classId) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/administrative-classes/${classId}/students`));
+  },
+  async saveManagedClassRoster(schoolId, classId, students, expectedRevision) {
+    return unwrap(await client.put(`/api/v2/admin/schools/${schoolId}/administrative-classes/${classId}/students`, {students, expectedRevision}));
   },
   async classroomAttendance(date) {
     return unwrap(await client.get(`/api/v2/classroom-screens/attendance/${date}`, {

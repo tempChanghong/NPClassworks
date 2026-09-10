@@ -20,6 +20,14 @@ test("teacher search and action filters include later pages and retain complete 
   const pageRequests = {publications: [], actions: []};
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
+  // Connection timing varies between local runs and CI. Hold the initial Socket.IO
+  // handshake so bootstrap and the legitimate connect refresh can be checked separately.
+  let connect;
+  const connectionGate = new Promise(resolve => { connect = resolve; });
+  await page.route(`${api}/socket.io/**`, async route => {
+    await connectionGate;
+    await route.continue();
+  });
   let fail = false;
   for (const [path, key, items] of [["/publications", "publications", publications], ["/publications/action-required", "actions", actions]]) {
     await page.route(`${api}/api/v2${path}?*`, async route => {
@@ -32,24 +40,37 @@ test("teacher search and action filters include later pages and retain complete 
         ...(key === "actions" ? {summary} : {})}}});
     });
   }
-  await page.goto(origin);
-  const manager = page.locator(".teacher-publication-manager");
-  await expect(manager).toContainText("101 / 101");
-  await manager.getByRole("textbox", {name: "搜索标题、正文、科目或班级"}).fill("最后一页的唯一作业");
-  await expect(manager.locator(".publication-list-item")).toHaveCount(1);
-  await expect(manager).toContainText("1 / 101");
-  const center = page.locator(".teacher-action-center");
-  await center.locator(".v-chip").filter({hasText: /^大屏新录入 1$/}).click();
-  await expect(center.locator(".action-item")).toHaveCount(1);
-  await expect(center).toContainText("最后一页的大屏新录入");
-  expect(pageRequests.publications).toEqual([0, 100]);
-  expect(pageRequests.actions).toEqual([0, 100]);
-  fail = true;
-  await manager.getByTitle("刷新发布记录").click();
-  await expect(page.getByText("后续页面暂不可用", {exact: true})).toBeVisible();
-  await expect(manager).toContainText("1 / 101");
-  await center.getByTitle("刷新待处理事项").click();
-  await expect.poll(() => pageRequests.actions.length).toBe(4);
-  await expect(center).toContainText("最后一页的大屏新录入");
-  expect(errors).toEqual([]);
+  try {
+    await page.goto(origin);
+    const manager = page.locator(".teacher-publication-manager");
+    await expect(manager).toContainText("101 / 101");
+    await manager.getByRole("textbox", {name: "搜索标题、正文、科目或班级"}).fill("最后一页的唯一作业");
+    await expect(manager.locator(".publication-list-item")).toHaveCount(1);
+    await expect(manager).toContainText("1 / 101");
+    const center = page.locator(".teacher-action-center");
+    await center.locator(".v-chip").filter({hasText: /^大屏新录入 1$/}).click();
+    await expect(center.locator(".action-item")).toHaveCount(1);
+    await expect(center).toContainText("最后一页的大屏新录入");
+    expect(pageRequests.publications).toEqual([0, 100]);
+    expect(pageRequests.actions).toEqual([0, 100]);
+    connect();
+    await expect.poll(() => pageRequests.publications).toEqual([0, 100, 0, 100]);
+    await expect.poll(() => pageRequests.actions).toEqual([0, 100, 0, 100]);
+    await expect(manager.getByTitle("刷新发布记录")).not.toHaveClass(/v-btn--loading/);
+    await expect(center.getByTitle("刷新待处理事项")).not.toHaveClass(/v-btn--loading/);
+    await expect(manager).toContainText("1 / 101");
+    await expect(center).toContainText("最后一页的大屏新录入");
+    fail = true;
+    const publicationRequestsBeforeFailure = pageRequests.publications.length;
+    await manager.getByTitle("刷新发布记录").click();
+    await expect.poll(() => pageRequests.publications.slice(publicationRequestsBeforeFailure)).toEqual([0, 100]);
+    await expect(page.getByText("后续页面暂不可用", {exact: true})).toBeVisible();
+    await expect(manager).toContainText("1 / 101");
+    const actionRequestsBeforeFailure = pageRequests.actions.length;
+    await center.getByTitle("刷新待处理事项").click();
+    await expect.poll(() => pageRequests.actions.slice(actionRequestsBeforeFailure)).toEqual([0, 100]);
+    await expect(center.getByTitle("刷新待处理事项")).not.toHaveClass(/v-btn--loading/);
+    await expect(center).toContainText("最后一页的大屏新录入");
+    expect(errors).toEqual([]);
+  } finally { connect(); }
 });

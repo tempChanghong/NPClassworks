@@ -60,6 +60,10 @@ export function startTestBackend(port = apiPort) {
       for (const socket of io.of("/").sockets.values()) socket.conn.close();
       return reply({});
     }
+    if (path === "/__test/roster-updated" && req.method === "POST") {
+      io.to(workspace.id).emit("classroom.roster.updated", {content: {administrativeClassId: workspace.id}});
+      return reply({ok: true});
+    }
     if (path === "/__test/invalidation-burst" && req.method === "POST") {
       for (let i = 0; i < 20; i++) io.to(workspace.id).emit("publication.updated", {content: {}});
       return reply({});
@@ -97,7 +101,7 @@ export function startTestBackend(port = apiPort) {
     if (path === "/api/v2/me/workspaces") return reply([{role: "TEACHER", workspace}]);
     if (path === "/api/v2/me/schools") return reply([{role: "TEACHER", school}]);
     if (path === "/api/v2/classroom-screens/session") return reply({
-      binding: {id: "screen-a", schoolId: school.id, name: "测试大屏", administrativeClass: workspace}, workspaces: [workspace], homeworkSettings: {},
+      binding: {id: "screen-a", schoolId: school.id, name: "测试大屏", administrativeClassId: workspace.id, administrativeClass: workspace}, workspaces: [workspace], homeworkSettings: {},
     });
     if (path === "/__test/reload-command") {
       commands = [{id: "reload-test", type: "RELOAD_APP", createdAt: new Date().toISOString()}];

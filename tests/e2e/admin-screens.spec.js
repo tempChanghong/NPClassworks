@@ -57,6 +57,48 @@ async function openAdmin(browser, width, role = "ADMIN", settings = {}, section 
   return {context, page, writes, errors};
 }
 
+test("student roster preserves IDs, previews imports, retains conflict drafts and guards navigation", async ({browser}) => {
+  let revision = "v1", students = [{id: "s1", name: "张三", studentNumber: "01"}, {id: "s2", name: "李四", studentNumber: "02"}];
+  const writes = [];
+  const {context, page, errors} = await openAdmin(browser, 1440, "ADMIN", {}, "students", async context => {
+    await context.route(`${api}/api/v2/admin/schools/school/academic-structure*`, route => route.fulfill({json: {data: {
+      grades: [{id: "grade", name: "高一"}], administrativeClasses: [{id: "class-a", name: "一班", gradeId: "grade", isActive: true}],
+    }}}));
+    await context.route(`${api}/api/v2/admin/schools/school/administrative-classes/class-a/students`, async route => {
+      if (route.request().method() === "PUT") {
+        const body = route.request().postDataJSON(); writes.push(body);
+        if (body.expectedRevision !== revision) return route.fulfill({status: 409, json: {message: "名单已被其他管理员修改，输入已保留"}});
+        students = body.students.map((s, index) => ({...s, id: s.id || `new-${index}`})); revision = "v2";
+      }
+      return route.fulfill({json: {data: {students, revision}}});
+    });
+  });
+  try {
+    const manager = page.locator(".class-roster-manager");
+    await expect(manager.getByLabel("姓名 1", {exact: true})).toHaveValue("张三");
+    await manager.getByLabel("姓名 1", {exact: true}).fill("张小三");
+    await manager.getByRole("button", {name: "批量粘贴", exact: true}).click();
+    await manager.getByLabel("粘贴名单", {exact: true}).fill("03\t王五");
+    await manager.getByRole("button", {name: "预览导入", exact: true}).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("张三 → 01 张小三");
+    await expect(dialog).toContainText("新增：03 王五");
+    await dialog.getByRole("button", {name: "确认保存名单", exact: true}).click();
+    await expect(manager).toContainText("名单已保存");
+    expect(writes[0].students.map(s => s.id)).toEqual(["s1", "s2", undefined]);
+    await manager.getByLabel("姓名 1", {exact: true}).fill("未提交修改");
+    revision = "remote-v3";
+    await manager.getByRole("button", {name: "预览并保存", exact: true}).click();
+    await dialog.getByRole("button", {name: "确认保存名单", exact: true}).click();
+    await expect(manager).toContainText("名单已被其他管理员修改");
+    await expect(manager.getByLabel("姓名 1", {exact: true})).toHaveValue("未提交修改");
+    expect(students[0].name).toBe("张小三");
+    await page.getByRole("button", {name: "返回教师工作台"}).click();
+    await expect(page.getByRole("dialog")).toContainText("放弃未保存的修改？");
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
 test("quick settings retain edits typed after saving and still warn before leaving", async ({browser}) => {
   const {context, page} = await openAdmin(browser, 1440, "ADMIN", {
     quickDeadlines: [{label: "明早", dayOffset: 1, time: "07:30"}], quickInputs: [],

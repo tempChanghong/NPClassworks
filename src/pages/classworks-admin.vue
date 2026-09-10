@@ -488,6 +488,21 @@
           </template>
         </v-window-item>
 
+        <v-window-item value="students">
+          <ClassRosterManager
+            v-if="tab === 'students' && managerMemberships.length && selectedSchoolId && selectedTermId"
+            :school-id="selectedSchoolId"
+            :term-id="selectedTermId"
+            @dirty="studentRosterDirty = $event"
+          />
+          <v-alert
+            v-else
+            type="info"
+          >
+            请选择学校和学期，并确认具有 OWNER/ADMIN 权限。
+          </v-alert>
+        </v-window-item>
+
         <v-window-item value="teachers">
           <v-alert
             v-if="adminMembershipsStatus === 'loaded' && !managerMemberships.length"
@@ -1181,6 +1196,7 @@ import {useSchoolHomeworkSettings} from "@/composables/admin/useSchoolHomeworkSe
 import {useAdminAccounts} from "@/composables/admin/useAdminAccounts";
 import AdminAccountPanel from "@/components/admin/AdminAccountPanel.vue";
 import AcademicStructureManager from "@/components/admin/AcademicStructureManager.vue";
+import ClassRosterManager from "@/components/admin/ClassRosterManager.vue";
 import TeachingRelationshipOverview from "@/components/admin/TeachingRelationshipOverview.vue";
 import StaffResponsibilityManager from "@/components/admin/StaffResponsibilityManager.vue";
 import SchoolManagementOverview from "@/components/admin/SchoolManagementOverview.vue";
@@ -1200,7 +1216,8 @@ import {
   startOAuthLogin,
 } from "@/utils/classworksV2Client";
 const ADMIN_CONTEXT_KEY = "npclassworks-admin-context:v1";
-const ADMIN_TABS = new Set(["overview", "structure", "organization", "teachers", "accounts", "screens", "migration", "audit", "terms"]);
+const ADMIN_TABS = new Set(["overview", "structure", "students", "organization", "teachers", "accounts", "screens", "migration", "audit", "terms"]);
+const studentRosterDirty = ref(false);
 
 function loadAdminContext() {
   try {
@@ -1278,6 +1295,7 @@ const adminNavigationGroups = [
     items: [
       {title: "管理总览", value: "overview", icon: "mdi-view-dashboard-outline"},
       {title: "组织与班级", value: "structure", icon: "mdi-school-outline"},
+      {title: "学生名单", value: "students", icon: "mdi-account-group-outline"},
       {title: "教师分配", value: "teachers", icon: "mdi-human-male-board"},
       {title: "大屏设备", value: "screens", icon: "mdi-monitor-dashboard"},
     ],
@@ -1409,6 +1427,7 @@ const filteredRosterWorkspaces = computed(() => {
   ].filter(Boolean).some((value) => String(value).toLowerCase().includes(keyword)));
 });
 const currentSectionHasUnsavedChanges = computed(() => {
+  if (tab.value === "students") return studentRosterDirty.value;
   // Quick settings are shared by the screen and teacher panels, and stay editable during saving.
   if (homeworkSettingsSnapshot.value && homeworkSettingsValue() !== homeworkSettingsSnapshot.value) return true;
   if (tab.value === "organization") return organizationText.value !== organizationTextSnapshot.value;
