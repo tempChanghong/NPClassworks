@@ -311,7 +311,10 @@ test("teacher expiry status updates while open and existing publication types ar
 });
 
 test("notification acknowledgement persists across offline reload and replays after the notice leaves the feed", async ({browser, request}) => {
-  await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", title: "回执恢复测试", content: "离线时确认的通知"}});
+  const response = await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", title: "回执恢复测试", content: "离线时确认的通知"}});
+  expect(response.ok()).toBe(true);
+  const notice = (await response.json()).data;
+  const isAcknowledged = item => item.publicationId === notice.id && item.revision === notice.revision && item.acknowledged;
   const screen = await openRole(browser, "screen");
   const key = `classworks-v2-notification-delivery:${encodeURIComponent(api)}:screen-a:1`;
   try {
@@ -319,19 +322,34 @@ test("notification acknowledgement persists across offline reload and replays af
     await screen.page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await expect.poll(() => screen.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
     await screen.context.setOffline(true);
+    // Deterministically exercise confirmation before asynchronous consolidation.
+    // Reloading this page releases the lock; intake must already be durable.
+    await screen.page.evaluate(key => {
+      void navigator.locks.request(key, () => {
+        window.receiptReloadLockHeld = true;
+        return new Promise(() => {});
+      });
+    }, key);
+    await expect.poll(() => screen.page.evaluate(() => window.receiptReloadLockHeld)).toBe(true);
     await screen.page.getByRole("dialog").getByRole("button", {name: "知道了", exact: true}).click();
-    const read = () => screen.page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
-    expect((await read()).items.some(item => item.acknowledged)).toBe(true);
+    // Both the canonical queue and immutable intake records are durable storage.
+    const read = () => screen.page.evaluate(key => Object.keys(localStorage)
+      .filter(candidate => candidate === key || candidate.startsWith(`${key}:staged:`))
+      .flatMap(candidate => JSON.parse(localStorage.getItem(candidate)).items), key);
+    expect((await read()).some(isAcknowledged)).toBe(true);
+    const canonical = await screen.page.evaluate(key => JSON.parse(localStorage.getItem(key))?.items || [], key);
+    expect(canonical.some(isAcknowledged)).toBe(false);
     const reload = await screen.page.reload({waitUntil: "domcontentloaded"});
     expect(reload.fromServiceWorker()).toBe(true);
     await expect(screen.page.getByRole("button", {name: "录入作业", exact: true}).first()).toBeVisible();
-    expect((await read()).items.some(item => item.acknowledged)).toBe(true);
+    expect((await read()).some(isAcknowledged)).toBe(true);
+    await expect(screen.page.locator(".screen-notice-popup")).toBeHidden();
     await request.post(`${api}/__test/reset`);
     const delivered = screen.page.waitForResponse(response => response.url().endsWith("/notification-deliveries") &&
-      response.request().method() === "POST" && response.request().postDataJSON().items.some(item => item.acknowledged));
+      response.request().method() === "POST" && response.request().postDataJSON().items.some(isAcknowledged));
     await screen.context.setOffline(false);
     expect((await delivered).ok()).toBe(true);
-    await expect.poll(async () => (await read()).items.length).toBe(0);
+    await expect.poll(async () => (await read()).length).toBe(0);
     expect(screen.errors).toEqual([]);
   } finally { await screen.context.close(); }
 });
