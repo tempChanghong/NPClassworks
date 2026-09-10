@@ -1,0 +1,29 @@
+# 自定义背景预设
+
+入口：设置 → 外观 → 启用自定义背景 → 预设。按分类选择图片，也可切换到“图片网址”输入自己的 HTTP/HTTPS 图片链接。遮罩和模糊设置继续生效；背景只保存到当前设备。
+
+## 资源与更新
+
+- 原始 PNG 放在 `images/预设自定义背景/`，按 `类别-照片名.png` 命名。该目录保留在本地并被 Git 忽略。
+- 使用安装了 Pillow 的 Python 运行 `python scripts/generate-background-presets.py`。
+- 生成最大长边 3840 像素的 WebP 和最大长边 480 像素的缩略图，不放大小图。文件名带内容哈希；分类和标题写入 `src/utils/backgroundPresets.json`。
+- 提交生成的清单与 `public/backgrounds/` 文件。普通构建和 GitHub Actions 不需要原图、Python 或 Pillow。
+- 更新原图时保持文件名，可保留预设 ID 和设备选择。脚本会删除旧清单中已被替代的生成文件；不会删除原图。删除或重命名原图会移除旧 ID，已选择该 ID 的设备需要重新选择背景。
+
+初始包含 10 张图片，分类为光谱、原神、教师节。全尺寸 WebP 合计约 7.76 MB。
+
+## 下载与离线行为
+
+图片不进入 PWA 预缓存。打开预设列表按需加载缩略图，选中时才下载、解码大图；下载成功后保存选择。下载或设置持久化失败时保留原背景。
+
+大图存入独立的 `classworks-backgrounds-v1` Cache Storage，最多保留 3 张并优先保留当前选择；缩略图使用独立缓存，最多 30 张、保留 60 天。图片不写入 localStorage，不清理离线作业队列。浏览器仍可能因空间压力或用户清理而删除缓存。
+
+已缓存的背景可在断网刷新后恢复。同一预设的资源哈希更新后，若暂时断网且旧文件仍在缓存，会使用同一 ID 的旧图片。缓存写入失败时允许在线使用，并明确提示下次加载需要联网。
+
+`background.selection` 单独记录预设 ID 或网址。未选择新来源的旧设备仍读取原 `background.imageData` / `background.url`，不迁移或删除旧数据。
+
+## 验证
+
+- `pnpm test`：检查资源格式、大小、清单和内容哈希。
+- `pnpm exec playwright test tests/e2e/background-presets.spec.js`：按需下载、断网刷新、失败保留原背景、网址覆盖旧来源、分类和缓存容量。
+- `pnpm build` 与 `pnpm pwa:validate`：验证构建，并防止背景图片意外进入预缓存。

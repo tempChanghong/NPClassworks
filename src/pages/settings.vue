@@ -135,14 +135,7 @@
                   v-if="appearance.backgroundEnabled"
                   class="settings-subsection"
                 >
-                  <v-text-field
-                    v-model="appearance.backgroundUrl"
-                    label="背景图片网址"
-                    placeholder="https://example.com/background.jpg"
-                    prepend-inner-icon="mdi-link"
-                    variant="outlined"
-                    @change="saveAppearance('backgroundUrl', appearance.backgroundUrl)"
-                  />
+                  <BackgroundPresetPicker class="mb-5" />
                   <div class="setting-slider-label">
                     <span>暗色遮罩</span><strong>{{ appearance.backgroundOpacity }}%</strong>
                   </div>
@@ -740,6 +733,7 @@ import {useRoute, useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
 import MicrophoneDevicePicker from "@/components/v2/MicrophoneDevicePicker.vue";
+import BackgroundPresetPicker from "@/components/v2/BackgroundPresetPicker.vue";
 import SettingsPanel from "@/components/v2/settings/SettingsPanel.vue";
 import SettingRow from "@/components/v2/settings/SettingRow.vue";
 import ScopeChip from "@/components/v2/settings/ScopeChip.vue";
@@ -798,7 +792,6 @@ const contextIcon = computed(() => ({
 const appearance = reactive({
   theme: getSetting("theme.mode"),
   backgroundEnabled: getSetting("background.enabled"),
-  backgroundUrl: getSetting("background.url"),
   backgroundBlur: getSetting("background.blur"),
   backgroundOpacity: getSetting("background.opacity"),
 });
@@ -901,7 +894,6 @@ function saveAppearance(field, value) {
   const mapping = {
     theme: "theme.mode",
     backgroundEnabled: "background.enabled",
-    backgroundUrl: "background.url",
     backgroundBlur: "background.blur",
     backgroundOpacity: "background.opacity",
   };

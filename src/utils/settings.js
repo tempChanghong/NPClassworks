@@ -343,6 +343,14 @@ const settingsDefinitions = {
   },
 
   // 背景设置
+  "background.selection": {
+    type: "object",
+    default: {kind: "legacy"},
+    validate: value => value && (value.kind === "legacy"
+      || (value.kind === "preset" && typeof value.id === "string")
+      || (value.kind === "url" && typeof value.url === "string")),
+    description: "当前背景来源",
+  },
   "background.enabled": {
     type: "boolean",
     default: false,
@@ -462,15 +470,17 @@ class SettingsManagerClass {
    * 保存所有设置到localStorage
    */
   saveSettings() {
-    if (typeof localStorage === "undefined") return;
+    if (typeof localStorage === "undefined") return false;
 
     try {
       localStorage.setItem(
         SETTINGS_STORAGE_KEY,
         JSON.stringify(this.settingsCache)
       );
+      return true;
     } catch (error) {
       console.error("保存设置失败:", error);
+      return false;
     }
   }
 
@@ -508,7 +518,7 @@ class SettingsManagerClass {
    * @param {any} value - 要设置的值
    * @returns {boolean} 是否设置成功
    */
-  setSetting(key, value) {
+  setSetting(key, value, {requirePersistence = false} = {}) {
     if (!this.isInitialized) {
       this.init();
     }
@@ -547,7 +557,10 @@ class SettingsManagerClass {
       }
 
       this.settingsCache[key] = value;
-      this.saveSettings();
+      if (!this.saveSettings() && requirePersistence) {
+        this.settingsCache[key] = oldValue;
+        return false;
+      }
       this.logSettingsChange(key, oldValue, value);
 
       // 触发同标签页内的设置变化事件
@@ -693,7 +706,7 @@ if (typeof window !== "undefined") {
 
 // 为了向后兼容性，提供与原来相同的函数接口
 const getSetting = (key) => SettingsManager.getSetting(key);
-const setSetting = (key, value) => SettingsManager.setSetting(key, value);
+const setSetting = (key, value, options) => SettingsManager.setSetting(key, value, options);
 const resetSetting = (key) => SettingsManager.resetSetting(key);
 const resetAllSettings = () => SettingsManager.resetAllSettings();
 const watchSettings = (callback) => SettingsManager.watchSettings(callback);

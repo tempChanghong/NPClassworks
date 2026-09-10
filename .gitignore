@@ -190,3 +190,6 @@ dist-e2e/
 test-results/
 playwright-report/
 .contract-backend/
+
+# Background originals are local authoring sources; publish generated WebP assets.
+/images/预设自定义背景/

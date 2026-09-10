@@ -34,7 +34,7 @@ if ((await readFile(resolve(releases.get("previous"), "sw.js"), "utf8")) ===
 let activeRelease = "previous";
 const backend = await startTestBackend();
 const mime = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
-  ".webmanifest": "application/manifest+json", ".woff2": "font/woff2", ".png": "image/png", ".svg": "image/svg+xml"};
+  ".webmanifest": "application/manifest+json", ".woff2": "font/woff2", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml"};
 const frontend = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url, "http://localhost").pathname;

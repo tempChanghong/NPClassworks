@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => {
           // precache，否则首次安装/更新 PWA 时会一次性下载全部 MP3。
           '**/*.{js,css,html,ico,png,svg,webmanifest,txt,json,woff2}',
         ],
-        globIgnores: ['sounds/**'],
+        globIgnores: ['sounds/**', 'backgrounds/**'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [
           /^\/api\//,
@@ -97,6 +97,20 @@ export default defineConfig(({ mode }) => {
                 url.pathname === '/ready';
             },
             handler: 'NetworkOnly',
+          },
+          {
+            // Full images are cached explicitly only after selection and decoding.
+            urlPattern: ({url, sameOrigin}) => sameOrigin && url.pathname.includes('/backgrounds/full/'),
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: ({url, sameOrigin}) => sameOrigin && url.pathname.includes('/backgrounds/thumbs/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'background-thumbnails-v1',
+              expiration: {maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 60},
+              cacheableResponse: {statuses: [200]},
+            },
           },
           {
             urlPattern: ({ url, sameOrigin }) => {

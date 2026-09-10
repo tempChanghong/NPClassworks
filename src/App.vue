@@ -47,6 +47,7 @@ import {useRoute, useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {installScreenSessionLifecycle} from "@/utils/screenSessionLifecycle";
 import {screenExitState} from "@/utils/screenTemporaryExit";
+import {findBackgroundPreset, loadPresetBackground, pruneBackgroundCache} from "@/utils/backgroundPresets";
 
 const currentRoute = useRoute();
 const router = useRouter();
@@ -62,14 +63,38 @@ const bgEnabled = ref(false);
 const bgSrc = ref("");
 const bgBlur = ref(10);
 const bgOpacity = ref(30);
+let backgroundRequest = 0, backgroundKey = "", backgroundObjectUrl = "";
+function releaseBackgroundObject() {
+  if (backgroundObjectUrl) URL.revokeObjectURL(backgroundObjectUrl);
+  backgroundObjectUrl = "";
+}
+onUnmounted(() => { backgroundRequest++; releaseBackgroundObject(); });
 
-function loadBgSettings() {
+async function loadBgSettings() {
   bgEnabled.value = getSetting("background.enabled") || false;
   const imageData = getSetting("background.imageData") || "";
   const url = getSetting("background.url") || "";
-  bgSrc.value = imageData || url;
   bgBlur.value = getSetting("background.blur") ?? 10;
   bgOpacity.value = getSetting("background.opacity") ?? 30;
+  const selection = getSetting("background.selection");
+  const key = JSON.stringify([bgEnabled.value, selection, imageData, url]);
+  if (key === backgroundKey) return;
+  backgroundKey = key;
+  const request = ++backgroundRequest;
+  if (!bgEnabled.value) { releaseBackgroundObject(); bgSrc.value = ""; return; }
+  if (selection?.kind === "preset") {
+    const preset = findBackgroundPreset(selection.id);
+    if (!preset) { releaseBackgroundObject(); bgSrc.value = ""; return; }
+    try {
+      const {objectUrl} = await loadPresetBackground(preset);
+      if (request !== backgroundRequest) { URL.revokeObjectURL(objectUrl); return; }
+      releaseBackgroundObject(); backgroundObjectUrl = objectUrl; bgSrc.value = objectUrl;
+      await pruneBackgroundCache(preset.id);
+    } catch { if (request === backgroundRequest) backgroundKey = ""; }
+  } else {
+    releaseBackgroundObject();
+    bgSrc.value = selection?.kind === "url" ? selection.url : imageData || url;
+  }
 }
 
 const vAppStyle = computed(() => {
