@@ -7,6 +7,59 @@ test.use({serviceWorkers: "block", storageState: {cookies: [], origins: [{origin
   {name: "classworks-v2-screen-token", value: "screen-token"},
 ]}]}});
 
+for (const holdLock of [false, true]) {
+test(`two tabs preserve offline acknowledgements across reload without the feed (lock held: ${holdLock})`, async ({page, context, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  const notices = [];
+  for (const content of ["甲页确认的通知", "乙页确认的通知"]) {
+    const response = await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", priority: "MINOR", content, contentJson: {popupEnabled: false}}});
+    notices.push((await response.json()).data);
+  }
+  const key = `classworks-v2-notification-delivery:${encodeURIComponent(api)}:screen-a:1`;
+  const read = tab => tab.evaluate(key => JSON.parse(localStorage.getItem(key))?.items || [], key);
+  await page.goto(origin);
+  const other = await context.newPage();
+  await other.goto(origin);
+  for (const tab of [page, other]) {
+    await tab.getByRole("button", {name: "通知", exact: true}).first().click();
+    await expect(tab.locator(".notification-center__item")).toHaveCount(2);
+  }
+  await expect.poll(async () => (await read(page)).length).toBe(0);
+  await context.setOffline(true);
+  if (holdLock) {
+    await page.evaluate(key => {
+      void navigator.locks.request(key, () => {
+        window.receiptLockHeld = true;
+        return new Promise(() => {}); // Closing the owner releases this real browser lock.
+      });
+    }, key);
+    await expect.poll(() => page.evaluate(() => window.receiptLockHeld)).toBe(true);
+  }
+  await Promise.all([page, other].map((tab, index) => tab.locator(".notification-center__item")
+    .filter({hasText: notices[index].content}).getByRole("button", {name: "知道了", exact: true}).click()));
+  const durable = () => page.evaluate(key => Object.keys(localStorage)
+    .filter(candidate => candidate === key || candidate.startsWith(`${key}:staged:`))
+    .flatMap(candidate => JSON.parse(localStorage.getItem(candidate)).items), key);
+  await expect.poll(async () => [...new Set((await durable()).filter(item => item.acknowledged).map(item => item.publicationId))].sort()).toEqual(notices.map(item => item.id).sort());
+  if (holdLock) expect(await read(page)).toEqual([]);
+  await other.close(); await page.close();
+  // Remove the feed: recovery must come from the persisted queue, not UI reconstruction.
+  await request.post(`${api}/__test/reset`);
+  const sent = [];
+  await context.route("**/notification-deliveries", route => {
+    sent.push(...route.request().postDataJSON().items);
+    return route.fulfill({json: {data: []}});
+  });
+  await context.setOffline(false);
+  const restored = await context.newPage();
+  await restored.goto(origin);
+  await expect.poll(() => [...new Set(sent.filter(item => item.acknowledged).map(item => item.publicationId))].sort()).toEqual(notices.map(item => item.id).sort());
+  await expect.poll(async () => (await read(restored)).length).toBe(0);
+  await restored.close();
+});
+}
+
 test("popup confirmation immediately updates an open notification center, including a new revision", async ({page, request}) => {
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
   await request.post(`${api}/__test/reset`);

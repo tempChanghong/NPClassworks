@@ -407,7 +407,11 @@ function createDeliveryQueue() {
   const token = getClassroomScreenToken();
   return createNotificationDeliveryQueue({
     storageKey: notificationDeliveryStorageKey(getServerUrl(), binding),
-    storage: {getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value)},
+    storage: {
+      getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value),
+      removeItem: key => localStorage.removeItem(key), key: index => localStorage.key(index),
+      get length() { return localStorage.length; },
+    },
     send: (items) => {
       if (!binding?.id || binding.id !== store.screenSession?.binding?.id || token !== getClassroomScreenToken()) {
         throw {status: 401};
@@ -516,18 +520,20 @@ function acknowledgeNotice(publication) {
   acknowledgeNotices([publication]);
 }
 
-function acknowledgeNotices(publications) {
+async function acknowledgeNotices(publications) {
   const valid = (publications || []).filter((publication) => publication?.id);
   if (!valid.length || !store.screenSession) return;
-  for (const publication of valid) {
-    acknowledgedNoticeKeys.value = rememberAcknowledgedNotification(publication, bindingId.value);
-  }
-  notificationDeliveryQueue.enqueue(valid.map((publication) => ({
+  const queue = notificationDeliveryQueue;
+  // Keep local confirmation durable even if navigation interrupts the lock wait.
+  for (const publication of valid) rememberAcknowledgedNotification(publication, bindingId.value);
+  await queue.enqueue(valid.map((publication) => ({
     publicationId: publication.id,
     revision: publication.revision,
     displayed: true,
     acknowledged: true,
   })));
+  if (queue !== notificationDeliveryQueue || queue.getState().status === "disposed") return;
+  acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(bindingId.value, localStorage, activeNotices.value);
 }
 
 function applySettings(value) {
