@@ -23,7 +23,7 @@
       </v-alert>
       <v-btn-toggle
         v-model="form.type"
-        :disabled="isEditing"
+        :disabled="isEditing || requestBusy"
         class="mb-5"
         color="primary"
         mandatory
@@ -404,6 +404,14 @@
       </v-alert>
 
       <v-alert
+        v-if="saveNotice"
+        class="mb-3"
+        type="info"
+        variant="tonal"
+      >
+        {{ saveNotice }}
+      </v-alert>
+      <v-alert
         v-if="localError"
         class="mb-3"
         type="error"
@@ -417,14 +425,14 @@
       <v-btn
         v-if="isEditing"
         variant="text"
-        @click="$emit('cancel')"
+        @click="cancelEditing"
       >
         取消编辑
       </v-btn>
       <v-spacer />
       <v-btn
-        v-if="!isEditing || editingPublication.status === 'DRAFT'"
-        :disabled="Boolean(conflict || duplicateWarning)"
+        v-if="!isEditing || editingBase.status === 'DRAFT'"
+        :disabled="Boolean(conflict || duplicateWarning || requestBusy)"
         :loading="saving"
         variant="tonal"
         @click="submit('DRAFT')"
@@ -432,7 +440,7 @@
         保存草稿
       </v-btn>
       <v-btn
-        :disabled="Boolean(conflict || duplicateWarning)"
+        :disabled="Boolean(conflict || duplicateWarning || requestBusy)"
         :loading="publishing"
         color="primary"
         prepend-icon="mdi-send"
@@ -479,16 +487,22 @@ const props = defineProps({
 });
 const emit = defineEmits(["published", "cancel", "reload-latest"]);
 const store = useClassworksV2Store();
+const editingBase = ref(null);
+let editorGeneration = 0;
+let mounted = true;
 const saving = ref(false);
 const publishing = ref(false);
 const localError = ref("");
+const saveNotice = ref("");
 const conflict = ref(null);
 const conflictInput = ref(null);
+const conflictFormSnapshot = ref("");
 const conflictReloading = ref(false);
 const conflictCopying = ref(false);
 const conflictApplying = ref(false);
 const duplicateWarning = ref(null);
 const duplicateStatus = ref("PUBLISHED");
+const requestBusy = computed(() => saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 const contentInput = ref(null);
 let previousHomework = null;
 let originalContentJson = null;
@@ -540,7 +554,7 @@ const releaseReloadProtection = registerAppReloadBlocker(() => {
   }
   return JSON.stringify(form) !== cleanForm.value ? "教师编辑器中有未保存的内容，请先保存草稿或完成发布，再刷新。" : "";
 });
-onUnmounted(releaseReloadProtection);
+onUnmounted(() => { mounted = false; editorGeneration++; releaseReloadProtection(); });
 
 const priorities = computed(() => [
   ...(form.type === "NOTICE" ? [{title: "次要", value: "MINOR"}] : []),
@@ -585,10 +599,10 @@ const lifecyclePreview = computed(() => {
   const defaultExpiry = new Date(publishAt.getTime() + 3 * 24 * 60 * 60 * 1000);
   return `未指定失效时间，将在 ${formatPreviewDateTime(defaultExpiry)} 自动停止显示`;
 });
-const isEditing = computed(() => Boolean(props.editingPublication));
+const isEditing = computed(() => Boolean(editingBase.value));
 const publishButtonLabel = computed(() => {
   if (isEditing.value && props.confirmAfterSave) return "保存修改并确认";
-  if (isEditing.value && props.editingPublication.status === "PUBLISHED") return "保存修改";
+  if (isEditing.value && editingBase.value.status === "PUBLISHED") return "保存修改";
   return "正式发布";
 });
 const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
@@ -646,10 +660,14 @@ watch(form, () => {
 }, {deep: true});
 
 watch(() => props.editingPublication, (publication) => {
+  editorGeneration++;
+  editingBase.value = publication;
   conflict.value = null;
   duplicateWarning.value = null;
   conflictInput.value = null;
+  conflictFormSnapshot.value = "";
   localError.value = "";
+  saveNotice.value = "";
   if (!publication) {
     reset();
     return;
@@ -672,6 +690,53 @@ watch(() => props.editingPublication, (publication) => {
   form.popupEnabled = publication.contentJson?.popupEnabled === true;
   cleanForm.value = JSON.stringify(form);
 }, {immediate: true});
+
+function captureEditor(savedForm) {
+  const generation = editorGeneration;
+  const accountVersion = store.teacherSessionVersion;
+  const source = props.editingPublication;
+  const serialized = JSON.stringify(form);
+  const alive = () => mounted && accountVersion === store.teacherSessionVersion;
+  const current = () => alive() && generation === editorGeneration && source === props.editingPublication;
+  return {
+    alive, current, unchanged: () => current() && JSON.stringify(form) === serialized,
+    savedForm: savedForm || serialized,
+    serialized, base: editingBase.value ? JSON.parse(JSON.stringify(editingBase.value)) : null,
+    targets: JSON.parse(JSON.stringify(currentTargetCombination.value)),
+    confirmAfterSave: props.confirmAfterSave === true,
+  };
+}
+
+function completeSave(publication, edit, details) {
+  if (!edit.alive()) return;
+  const clearEditor = edit.unchanged() && edit.serialized === edit.savedForm;
+  if (clearEditor) {
+    reset();
+    editingBase.value = null;
+  } else if (edit.current()) {
+    // Keep later input, but the next save must use the revision/ID that was actually saved.
+    editingBase.value = publication;
+    cleanForm.value = edit.savedForm;
+  }
+  if (edit.current()) {
+    conflict.value = null;
+    conflictInput.value = null;
+    conflictFormSnapshot.value = "";
+  }
+  if (edit.current()) saveNotice.value = clearEditor ? "" : "本次提交已保存；之后输入的修改仍未保存。";
+  emit("published", publication, {...details, clearEditor, confirmAfterSave: edit.confirmAfterSave});
+}
+
+function cancelEditing() {
+  editorGeneration++;
+  editingBase.value = null;
+  reset();
+  conflict.value = null;
+  conflictInput.value = null;
+  localError.value = "";
+  saveNotice.value = "";
+  emit("cancel");
+}
 
 function targetSubtitle(workspace) {
   const kind = workspace.type === "ADMIN_CLASS" ? "行政班" : "走班教学班";
@@ -717,7 +782,9 @@ function reset() {
 }
 
 async function submit(status, allowDuplicate = false) {
+  if (requestBusy.value) return;
   localError.value = "";
+  saveNotice.value = "";
   if (form.type === "ASSIGNMENT" && !form.subjectId) {
     localError.value = "作业必须选择科目";
     return;
@@ -743,14 +810,15 @@ async function submit(status, allowDuplicate = false) {
     return;
   }
   const flag = status === "DRAFT" ? saving : publishing;
+  const edit = captureEditor();
   let submittedInput = null;
   flag.value = true;
   try {
-    const operation = isEditing.value ? "updated" : "created";
+    const operation = edit.base ? "updated" : "created";
     const input = {
       type: form.type,
       subjectId: form.type === "ASSIGNMENT" ? form.subjectId : null,
-      targetWorkspaceIds: form.targetWorkspaceIds,
+      targetWorkspaceIds: [...form.targetWorkspaceIds],
       title: form.title,
       content: form.content,
       contentJson: form.type === "NOTICE"
@@ -765,13 +833,14 @@ async function submit(status, allowDuplicate = false) {
       ...(allowDuplicate ? {allowDuplicate: true} : {}),
     };
     submittedInput = input;
-    const publication = isEditing.value
-      ? await store.updatePublication(props.editingPublication, input)
+    const publication = edit.base
+      ? await store.updatePublication(edit.base, input)
       : await store.publish(input);
-    store.rememberTeacherTargetCombination(currentTargetCombination.value);
-    reset();
-    emit("published", publication, {operation});
+    if (!edit.alive()) return;
+    store.rememberTeacherTargetCombination(edit.targets);
+    completeSave(publication, edit, {operation});
   } catch (error) {
+    if (!edit.unchanged()) return;
     const duplicate = publicationDuplicateState(error);
     if (duplicate) {
       duplicateWarning.value = duplicate;
@@ -781,15 +850,18 @@ async function submit(status, allowDuplicate = false) {
       store.teacherError = "";
       return;
     }
-    const nextConflict = publicationConflictState(error, props.editingPublication?.revision);
+    const nextConflict = publicationConflictState(error, edit.base?.revision);
     if (nextConflict) {
       conflictInput.value = submittedInput;
+      conflictFormSnapshot.value = edit.serialized;
       localError.value = "";
       try {
-        const latestPublication = await store.latestPublication(props.editingPublication.id, "teacher");
+        const latestPublication = await store.latestPublication(edit.base.id, "teacher");
+        if (!edit.unchanged()) return;
         conflict.value = {...nextConflict, latestPublication};
         store.teacherError = "";
       } catch {
+        if (!edit.unchanged()) return;
         conflict.value = nextConflict;
       }
     } else {
@@ -815,25 +887,29 @@ function conflictValue(row, key) {
 }
 
 async function applyLocalOnLatest() {
-  if (!conflict.value?.latestPublication || !conflictInput.value) return;
+  if (requestBusy.value || !conflict.value?.latestPublication || !conflictInput.value) return;
+  const edit = captureEditor(conflictFormSnapshot.value);
+  const base = JSON.parse(JSON.stringify(conflict.value.latestPublication));
+  const input = JSON.parse(JSON.stringify(conflictInput.value));
   if (!await confirmAction({
     title: "用当前输入生成新版本",
     message: "服务器当前版本会保留，你的输入将保存为下一个新版本。",
     confirmText: "保存新版本",
     color: "warning",
   })) return;
+  if (!edit.unchanged()) return;
   conflictApplying.value = true;
   localError.value = "";
   try {
-    const updated = await store.updatePublication(conflict.value.latestPublication, conflictInput.value);
-    reset();
-    conflict.value = null;
-    conflictInput.value = null;
-    emit("published", updated, {operation: "updated", conflictResolved: true});
+    const updated = await store.updatePublication(base, input);
+    completeSave(updated, edit, {operation: "updated", conflictResolved: true});
   } catch (error) {
-    const nextConflict = publicationConflictState(error, conflict.value.latestPublication.revision);
+    if (!edit.unchanged()) return;
+    const nextConflict = publicationConflictState(error, base.revision);
     if (nextConflict) {
-      const latestPublication = await store.latestPublication(props.editingPublication.id, "teacher");
+      let latestPublication;
+      try { latestPublication = await store.latestPublication(base.id, "teacher"); } catch { /* Keep the conflict retry available. */ }
+      if (!edit.unchanged()) return;
       conflict.value = {...nextConflict, latestPublication};
       localError.value = "保存期间内容再次发生变化，已更新对比，请重新确认。";
     } else {
@@ -845,18 +921,22 @@ async function applyLocalOnLatest() {
 }
 
 async function reloadLatest() {
-  if (!props.editingPublication || !conflict.value) return;
+  if (requestBusy.value || !editingBase.value || !conflict.value) return;
+  const edit = captureEditor();
   if (!await confirmAction({
     title: "载入服务器最新版",
     message: "当前表单输入会被替换。需要保留时，请先将其另存为草稿。",
     confirmText: "载入最新版",
     color: "warning",
   })) return;
+  if (!edit.unchanged()) return;
   conflictReloading.value = true;
   try {
-    const latest = await store.latestPublication(props.editingPublication.id, "teacher");
+    const latest = await store.latestPublication(edit.base.id, "teacher");
+    if (!edit.unchanged()) return;
     emit("reload-latest", latest);
   } catch (error) {
+    if (!edit.unchanged()) return;
     localError.value = error.response?.data?.message || error.message || "载入最新版失败";
   } finally {
     conflictReloading.value = false;
@@ -864,16 +944,16 @@ async function reloadLatest() {
 }
 
 async function saveConflictCopy() {
-  if (!conflictInput.value) return;
+  if (requestBusy.value || !conflictInput.value) return;
+  const edit = captureEditor(conflictFormSnapshot.value);
+  const input = JSON.parse(JSON.stringify(conflictInput.value));
   conflictCopying.value = true;
   localError.value = "";
   try {
-    const copied = await store.publish({...conflictInput.value, status: "DRAFT"});
-    reset();
-    conflict.value = null;
-    conflictInput.value = null;
-    emit("published", copied, {operation: "created"});
+    const copied = await store.publish({...input, status: "DRAFT"});
+    completeSave(copied, edit, {operation: "created"});
   } catch {
+    if (!edit.unchanged()) return;
     localError.value = store.teacherError;
   } finally {
     conflictCopying.value = false;

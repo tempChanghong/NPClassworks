@@ -103,3 +103,20 @@ test("manual failures do not repeatedly restart on periodic evaluations", () => 
   assert.equal(f.service.starts, 2);
   f.detach();
 });
+
+test("a new microphone gets one fresh attempt in the current schedule, without retrying the same failed device", () => {
+  const f = fixture();
+  const devices = [];
+  f.service.start = ({deviceId}) => { devices.push(deviceId); f.service.status = deviceId === "good" ? "active" : "error"; };
+  f.context.scheduleKey = "today"; f.context.deviceId = "missing";
+  f.controller.tick(); f.controller.tick();
+  assert.deepEqual(devices, ["missing"]);
+  f.context.deviceId = "also-missing";
+  f.controller.tick(); f.controller.tick();
+  assert.deepEqual(devices, ["missing", "also-missing"]);
+  f.context.deviceId = "good"; f.controller.tick();
+  assert.equal(f.service.status, "active");
+  assert.deepEqual(devices, ["missing", "also-missing", "good"]);
+  assert.equal(f.controller.snapshot().manualActive, false);
+  f.detach();
+});

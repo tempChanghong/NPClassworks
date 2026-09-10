@@ -1,4 +1,4 @@
-import {ref} from "vue";
+import {computed, ref, watch} from "vue";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
 import {
   DEFAULT_HOMEWORK_QUICK_DEADLINES,
@@ -11,7 +11,20 @@ import {
 
 // Both panels share one page-owned instance, including the saved snapshot.
 export function useSchoolHomeworkSettings({selectedSchoolId, errorMessage, successMessage}) {
-  const homeworkSettingsBusy = ref(false);
+  const loading = ref(false);
+  const saving = ref(false);
+  const loadedSchoolId = ref("");
+  let requestVersion = 0;
+  const homeworkSettingsBusy = computed(() => loading.value || saving.value);
+  const homeworkSettingsReady = computed(() => Boolean(selectedSchoolId.value)
+    && loadedSchoolId.value === selectedSchoolId.value && !loading.value);
+  watch(selectedSchoolId, () => {
+    requestVersion++;
+    loadedSchoolId.value = "";
+    homeworkSettingsSnapshot.value = "";
+    loading.value = false;
+    saving.value = false;
+  }, {flush: "sync"});
   const homeworkQuickDeadlines = ref(DEFAULT_HOMEWORK_QUICK_DEADLINES.map((item) => ({...item})));
   const homeworkQuickInputs = ref(DEFAULT_HOMEWORK_QUICK_INPUTS.map((item) => ({...item, subjectIds: []})));
   const homeworkQuickInputSubjects = ref([]);
@@ -39,27 +52,36 @@ export function useSchoolHomeworkSettings({selectedSchoolId, errorMessage, succe
   }
 
   async function loadSchoolHomeworkSettings() {
-    if (!selectedSchoolId.value) {
+    const schoolId = selectedSchoolId.value;
+    const version = ++requestVersion;
+    const current = () => version === requestVersion && schoolId === selectedSchoolId.value;
+    loadedSchoolId.value = "";
+    homeworkQuickInputSubjects.value = [];
+    saving.value = false;
+    if (!schoolId) {
       resetHomeworkQuickDeadlines();
       resetHomeworkQuickInputs();
-      homeworkQuickInputSubjects.value = [];
       homeworkSettingsSnapshot.value = homeworkSettingsValue();
+      loading.value = false;
       return;
     }
-    homeworkSettingsBusy.value = true;
+    loading.value = true;
+    errorMessage.value = "";
     try {
       const [settings, subjects] = await Promise.all([
-        classworksV2Api.schoolHomeworkSettings(selectedSchoolId.value),
-        classworksV2Api.subjects(selectedSchoolId.value),
+        classworksV2Api.schoolHomeworkSettings(schoolId),
+        classworksV2Api.subjects(schoolId),
       ]);
+      if (!current()) return;
       homeworkQuickDeadlines.value = sanitizeHomeworkQuickDeadlines(settings.quickDeadlines);
       homeworkQuickInputs.value = sanitizeHomeworkQuickInputs(settings.quickInputs);
       homeworkQuickInputSubjects.value = subjects;
       homeworkSettingsSnapshot.value = homeworkSettingsValue();
+      loadedSchoolId.value = schoolId;
     } catch (error) {
-      errorMessage.value = describeApiError(error, "加载作业快捷时间失败");
+      if (current()) errorMessage.value = describeApiError(error, "加载作业快捷时间失败");
     } finally {
-      homeworkSettingsBusy.value = false;
+      if (current()) loading.value = false;
     }
   }
 
@@ -101,6 +123,7 @@ export function useSchoolHomeworkSettings({selectedSchoolId, errorMessage, succe
   }
 
   async function saveSchoolHomeworkSettings() {
+    if (homeworkSettingsBusy.value || !homeworkSettingsReady.value) return;
     const valid = homeworkQuickDeadlines.value.length >= 1 && homeworkQuickDeadlines.value.length <= 8 &&
       homeworkQuickDeadlines.value.every((preset) => (
         preset.label.trim() && preset.label.trim().length <= 16 &&
@@ -124,27 +147,39 @@ export function useSchoolHomeworkSettings({selectedSchoolId, errorMessage, succe
       errorMessage.value = "请检查快捷词：按钮名必填且不超过16字，普通快捷词必须填写插入内容。";
       return;
     }
-    homeworkSettingsBusy.value = true;
+    saving.value = true;
     errorMessage.value = "";
+    successMessage.value = "";
+    const schoolId = selectedSchoolId.value;
+    const version = ++requestVersion;
+    const current = () => version === requestVersion && schoolId === selectedSchoolId.value;
+    const submitted = homeworkSettingsValue();
     try {
-      const settings = await classworksV2Api.updateSchoolHomeworkSettings(selectedSchoolId.value, {
-        quickDeadlines: homeworkQuickDeadlines.value,
-        quickInputs: homeworkQuickInputs.value,
-      });
-      homeworkQuickDeadlines.value = sanitizeHomeworkQuickDeadlines(settings.quickDeadlines);
-      homeworkQuickInputs.value = sanitizeHomeworkQuickInputs(settings.quickInputs);
-      homeworkSettingsSnapshot.value = homeworkSettingsValue();
-      successMessage.value = "全校作业快捷时间和快捷词已保存；教师端和大屏刷新后生效。";
+      const settings = await classworksV2Api.updateSchoolHomeworkSettings(schoolId, JSON.parse(submitted));
+      if (!current()) return;
+      const saved = {
+        quickDeadlines: sanitizeHomeworkQuickDeadlines(settings.quickDeadlines),
+        quickInputs: sanitizeHomeworkQuickInputs(settings.quickInputs),
+      };
+      const unchanged = homeworkSettingsValue() === submitted;
+      if (unchanged) {
+        homeworkQuickDeadlines.value = saved.quickDeadlines;
+        homeworkQuickInputs.value = saved.quickInputs;
+      }
+      homeworkSettingsSnapshot.value = JSON.stringify(saved);
+      successMessage.value = unchanged ? "全校作业快捷时间和快捷词已保存；教师端和大屏刷新后生效。"
+        : "本次提交已保存；之后输入的修改仍未保存，请再次保存。";
     } catch (error) {
-      errorMessage.value = describeApiError(error, "保存作业快捷时间失败");
+      if (current()) errorMessage.value = describeApiError(error, "保存作业快捷时间失败");
     } finally {
-      homeworkSettingsBusy.value = false;
+      if (current()) saving.value = false;
     }
   }
 
 
   return {
     homeworkSettingsBusy,
+    homeworkSettingsReady,
     homeworkQuickDeadlines,
     homeworkQuickInputs,
     homeworkQuickInputSubjects,

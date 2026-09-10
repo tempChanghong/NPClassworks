@@ -7,14 +7,16 @@ import {resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 import {execFileSync} from "node:child_process";
 import {createServer} from "vite";
+import vue from "@vitejs/plugin-vue";
 import {createPinia, setActivePinia} from "pinia";
+import {createRenderer, ssrContextKey} from "vue";
 import "axios";
 
 // Real producer routes/services and consumer modules. Only database records are fixtures.
 const peer = resolve(process.env.CLASSWORKS_BACKEND_ROOT || "../NPClassworksKV");
 const requirePeer = createRequire(resolve(peer, "package.json"));
 const peerImport = file => import(pathToFileURL(resolve(peer, file)).href);
-let vite, server, io, socket, client, store, realtime, broadcast, origin;
+let vite, server, io, socket, client, store, realtime, broadcast, origin, pinia;
 const restores = [];
 const values = new Map();
 const storage = {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, String(value)), removeItem: key => values.delete(key)};
@@ -49,11 +51,11 @@ before(async () => {
   globalThis.window = Object.assign(new globalThis.EventTarget(), {localStorage: storage, location: {origin}, setTimeout, clearTimeout, setInterval, clearInterval});
   globalThis.localStorage = storage; globalThis.sessionStorage = storage;
   globalThis.document = {visibilityState: "visible"};
-  vite = await createServer({configFile: false, envFile: false, logLevel: "error", resolve: {alias: {"@": resolve("src")}},
+  vite = await createServer({configFile: false, envFile: false, logLevel: "error", plugins: [vue()], resolve: {alias: {"@": resolve("src")}},
     server: {middlewareMode: true, hmr: false, watch: null}, appType: "custom", optimizeDeps: {noDiscovery: true, include: []}});
   client = await vite.ssrLoadModule("/src/utils/classworksV2Client.js");
   realtime = await vite.ssrLoadModule("/src/utils/socketClient.js");
-  setActivePinia(createPinia());
+  pinia = createPinia(); setActivePinia(pinia);
   const {useClassworksV2Store} = await vite.ssrLoadModule("/src/stores/classworksV2.js");
   store = useClassworksV2Store();
   client.saveClassroomScreenToken("test-screen-token");
@@ -77,6 +79,47 @@ test("the actual screen-session and subject-catalog routes satisfy the frontend 
   client.saveClassroomScreenToken("invalid");
   await assert.rejects(client.classworksV2Api.classroomScreenSession(), error => error.response?.status === 401 && error.response.data.code === "SCREEN_TOKEN_INVALID");
   client.saveClassroomScreenToken("test-screen-token");
+});
+
+test("the actual course-options producer supplies every selected streamed subject to the status component", async t => {
+  const {buildAdministrativeClassCourseOptions} = await peerImport("domain/academicCatalog.js");
+  const catalog = buildAdministrativeClassCourseOptions({administrativeClass: workspace,
+    subjectRules: [
+      {subjectId: "chinese", deliveryMode: "ADMIN_CLASS", subject: {id: "chinese", name: "语文"}},
+      {subjectId: "math", deliveryMode: "COURSE_GROUP", subject: subjects[0]},
+    ], sourcedCourseGroups: [
+      {id: "math-a", name: "数学A班", code: "MA", type: "COURSE_GROUP", subjectId: "math"},
+      {id: "math-b", name: "数学B班", code: "MB", type: "COURSE_GROUP", subjectId: "math"},
+    ]});
+  store.feedAudience = "student";
+  store.selection = {schoolId: "school", administrativeClassId: "class-a", courseGroupIds: {math: "math-a"}};
+  store.administrativeClasses = [workspace];
+  store.courseOptions = catalog;
+  store.studentSubjects = [subjects[0], {id: "chinese", name: "语文"}];
+  store.boardDate = "2026-09-10";
+  const {default: component} = await vite.ssrLoadModule("/src/components/v2/HomeworkSubjectStatus.vue");
+  let state;
+  const renderer = createRenderer({createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null});
+  const app = renderer.createApp({setup() { state = component.setup({}, {expose() {}}); return () => null; }});
+  app.use(pinia); app.provide(ssrContextKey, {}); app.mount({});
+  t.after(() => app.unmount());
+  const {NO_HOMEWORK_TITLE, NO_HOMEWORK_CONTENT, NO_HOMEWORK_META} = await vite.ssrLoadModule("/src/utils/noHomework.js");
+  const work = {id: "work", type: "ASSIGNMENT", status: "PUBLISHED", subjectId: "math", boardDate: store.boardDate,
+    content: "练习", targets: [{workspaceId: "math-a"}]};
+  const marker = {...work, id: "none", title: NO_HOMEWORK_TITLE, content: NO_HOMEWORK_CONTENT, contentJson: NO_HOMEWORK_META, isCertified: true};
+  for (const [items, expected] of [[[], "unknown"], [[work], "assigned"], [[marker], "none"], [[work, marker], "conflict"]]) {
+    store.feed = items;
+    assert.deepEqual(state.rows.value.map(row => [row.subject, row.workspace, row.state]), [
+      ["语文", "一班", "unknown"], ["数学", "数学A班", expected],
+    ]);
+    if (expected === "none") assert.equal(state.rows.value[1].confirmed, true);
+  }
+  store.selection = {...store.selection, courseGroupIds: {}};
+  assert.deepEqual(state.rows.value.map(row => row.subject), ["语文"], "unselected course groups must remain absent");
+  store.courseOptions = {...catalog, subjects: catalog.subjects.filter(item => item.subject.id === "math")};
+  store.selection = {...store.selection, courseGroupIds: {math: "math-a"}};
+  assert.equal(state.rows.value.length, 1, "a class with only streamed subjects still has status rows");
+  store.feed = []; store.feedAudience = "screen";
 });
 
 test("the real Socket server accepts batched 21+ subscriptions and delivers events from the final batch after reconnect", async () => {

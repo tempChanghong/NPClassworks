@@ -34,7 +34,7 @@ const rows = computed(() => {
   const workspaces = store.feedAudience === "screen" ? store.screenWorkspaces : [
     ...store.administrativeClasses.map(item => ({...item, subjectRules: item.id === store.courseOptions?.administrativeClass?.id
       ? store.courseOptions.subjects.map(option => ({subjectId: option.subject.id, deliveryMode: option.deliveryMode})) : item.subjectRules})),
-    ...(store.courseOptions?.subjects || []).flatMap(item => (item.courseGroups || []).map(group => ({...group, subjectId: item.subject.id}))),
+    ...(store.courseOptions?.subjects || []).flatMap(item => (item.courseGroups || []).map(group => ({...group, type: "COURSE_GROUP", subjectId: item.subject.id}))),
   ];
   const subjects = store.feedAudience === "screen" ? store.screenSession?.subjects || [] : store.studentSubjects;
   return dailyHomeworkStatuses(store.feed, workspaces.filter(item => allowed.has(item.id)), subjects, store.boardDate);

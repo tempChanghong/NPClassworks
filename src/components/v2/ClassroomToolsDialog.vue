@@ -91,26 +91,46 @@
         />
 
         <template v-else-if="activeTool === 'attendance'">
+          <v-alert
+            v-if="!attendanceReady"
+            class="mb-5"
+            type="warning"
+            variant="tonal"
+          >
+            {{ attendanceLoading ? '正在读取今日考勤，完成前不能编辑或保存。' : '尚未成功读取今日考勤，不能将当前状态当作全员到校。请重新读取后再编辑。' }}
+            <v-btn
+              class="ml-3"
+              :loading="attendanceLoading"
+              variant="text"
+              @click="loadAttendance"
+            >
+              重新读取考勤
+            </v-btn>
+          </v-alert>
           <div class="d-flex align-center flex-wrap ga-3 mb-5">
             <v-chip
+              v-if="attendanceReady"
               color="success"
               variant="tonal"
             >
               到校 {{ attendanceCounts.present }}
             </v-chip>
             <v-chip
+              v-if="attendanceReady"
               color="error"
               variant="tonal"
             >
               缺勤 {{ attendanceCounts.absent }}
             </v-chip>
             <v-chip
+              v-if="attendanceReady"
               color="warning"
               variant="tonal"
             >
               迟到 {{ attendanceCounts.late }}
             </v-chip>
             <v-chip
+              v-if="attendanceReady"
               color="grey"
               variant="tonal"
             >
@@ -118,6 +138,7 @@
             </v-chip>
             <v-spacer />
             <v-btn
+              :disabled="!attendanceReady || savingAttendance"
               prepend-icon="mdi-account-edit-outline"
               variant="tonal"
               @click="openRosterEditor"
@@ -126,6 +147,7 @@
             </v-btn>
             <v-btn
               color="primary"
+              :disabled="!attendanceReady || savingRoster"
               :loading="savingAttendance"
               prepend-icon="mdi-content-save-check-outline"
               variant="elevated"
@@ -136,7 +158,7 @@
           </div>
 
           <v-empty-state
-            v-if="!store.classroomStudents.length"
+            v-if="attendanceReady && !store.classroomStudents.length"
             icon="mdi-account-school-outline"
             text="先录入行政班学生名单，之后即可记录每日考勤。"
             title="尚未录入学生名单"
@@ -153,7 +175,7 @@
           </v-empty-state>
 
           <v-list
-            v-else
+            v-else-if="attendanceReady"
             class="rounded-xl"
             lines="two"
           >
@@ -178,6 +200,7 @@
               </v-list-item-subtitle>
               <template #append>
                 <v-btn-toggle
+                  :disabled="savingAttendance || savingRoster"
                   :model-value="studentStatus(student.id)"
                   color="primary"
                   mandatory
@@ -269,7 +292,9 @@
 </template>
 
 <script setup>
-import {computed, ref, watch} from "vue";
+import {computed, onUnmounted, ref, watch} from "vue";
+import {useNow} from "@vueuse/core";
+import {getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import NoiseMonitorCard from "@/components/NoiseMonitorCard.vue";
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
@@ -283,6 +308,10 @@ const rosterText = ref("");
 const savingRoster = ref(false);
 const savingAttendance = ref(false);
 const attendanceDraft = ref({absent: [], late: [], excluded: []});
+const attendanceLoading = ref(false);
+const attendanceLoadedScope = ref("");
+let attendanceRequest = 0;
+const clock = useNow({interval: 1000});
 const toolSettings = ref(loadClassroomToolSettings(store.screenSession?.binding?.id));
 
 const allTools = [
@@ -296,6 +325,13 @@ const today = () => {
   const offset = now.getTimezoneOffset() * 60000;
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 };
+const attendanceScope = () => store.screenSession?.binding?.id
+  ? `${store.screenSession.binding.id}:${store.screenSession.binding.credentialVersion || 1}:${getClassroomScreenToken()}:${today()}` : "";
+const attendanceReady = computed(() => {
+  void clock.value;
+  return Boolean(props.modelValue && !attendanceLoading.value && attendanceLoadedScope.value
+    && attendanceLoadedScope.value === attendanceScope());
+});
 const activeToolTitle = computed(() => tools.value.find((tool) => tool.id === activeTool.value)?.title || "");
 const attendanceCounts = computed(() => {
   const attendance = attendanceForCurrentRoster(attendanceDraft.value);
@@ -309,19 +345,36 @@ const attendanceCounts = computed(() => {
     excluded: attendance.excluded.length,
   };
 });
-watch(() => props.modelValue, async (open) => {
+watch(() => [props.modelValue, store.screenSession?.binding?.id, store.screenSession?.binding?.credentialVersion], ([open]) => {
+  attendanceRequest++;
+  attendanceLoadedScope.value = "";
   if (!open) {
     activeTool.value = "";
     return;
   }
   toolSettings.value = loadClassroomToolSettings(store.screenSession?.binding?.id);
+  void loadAttendance();
+}, {immediate: true});
+onUnmounted(() => { attendanceRequest++; });
+
+async function loadAttendance() {
+  if (savingAttendance.value || savingRoster.value) return;
+  const request = ++attendanceRequest;
+  const scope = attendanceScope();
+  attendanceLoadedScope.value = "";
+  if (!scope || !props.modelValue) return;
+  attendanceLoading.value = true;
   try {
-    await store.loadClassroomTools(today());
-    attendanceDraft.value = attendanceForCurrentRoster(store.classroomAttendance);
+    const result = await store.loadClassroomTools(today());
+    if (request !== attendanceRequest || scope !== attendanceScope() || !props.modelValue || !result) return;
+    attendanceDraft.value = attendanceForCurrentRoster(result.attendance);
+    attendanceLoadedScope.value = scope;
   } catch {
     // The store exposes the load failure in the classroom tools alert.
+  } finally {
+    if (request === attendanceRequest) attendanceLoading.value = false;
   }
-}, {immediate: true});
+}
 
 function attendanceForCurrentRoster(attendance) {
   const validIds = new Set(store.classroomStudents.map(student => student.id));
@@ -345,6 +398,7 @@ function studentStatus(studentId) {
 }
 
 function setStudentStatus(studentId, status) {
+  if (!attendanceReady.value || savingAttendance.value || savingRoster.value) return;
   for (const key of ["absent", "late", "excluded"]) {
     attendanceDraft.value[key] = attendanceDraft.value[key].filter((id) => id !== studentId);
   }
@@ -389,10 +443,15 @@ async function saveRoster() {
 }
 
 async function saveAttendance() {
+  if (!attendanceReady.value || attendanceLoadedScope.value !== attendanceScope() || savingAttendance.value || savingRoster.value) return;
+  const scope = attendanceLoadedScope.value;
+  const request = attendanceRequest;
   savingAttendance.value = true;
   try {
-    await store.saveClassroomAttendance(today(), attendanceForCurrentRoster(attendanceDraft.value));
-    attendanceDraft.value = attendanceForCurrentRoster(store.classroomAttendance);
+    const result = await store.saveClassroomAttendance(today(), attendanceForCurrentRoster(attendanceDraft.value));
+    if (scope === attendanceScope() && request === attendanceRequest) attendanceDraft.value = attendanceForCurrentRoster(result);
+  } catch {
+    // Keep the editable draft and the store's error for an explicit retry.
   } finally {
     savingAttendance.value = false;
   }

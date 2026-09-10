@@ -13,7 +13,7 @@ import {completeTeacherCollection} from "@/utils/completeTeacherCollection";
 import {
   loadTeacherTargetPreferences,
   loadTeacherTargetSyncState,
-  mergeTeacherTargetPreferences,
+  reconcileTeacherTargetPreferences,
   rememberTeacherTargets,
   sanitizeTeacherTargetPreferences,
   saveTeacherTargetPreferences,
@@ -94,77 +94,62 @@ export const teacherActions = {
 
   async hydrateTeacherTargetPreferences() {
     if (!this.account?.id) return;
-    const accountId = this.account.id;
-    const sessionVersion = this.teacherSessionVersion;
-    const local = loadTeacherTargetPreferences(accountId);
-    const syncState = loadTeacherTargetSyncState(accountId);
-    this.teacherTargetPreferences = local;
-    this.teacherTargetPreferencesSyncing = true;
-    this.teacherTargetPreferencesError = "";
-    try {
-      const remoteResult = await classworksV2Api.teacherTargetPreferences();
-      if (sessionVersion !== this.teacherSessionVersion) return;
-      const remote = sanitizeTeacherTargetPreferences(remoteResult.preferences);
-      const remoteEmpty = !remote.favorites.length && !remote.recent.length;
-      const next = syncState.dirty || remoteEmpty
-        ? mergeTeacherTargetPreferences(local, remote)
-        : remote;
-      if (syncState.dirty || (remoteEmpty && (next.favorites.length || next.recent.length))) {
-        await classworksV2Api.saveTeacherTargetPreferences(next);
-      }
-      if (sessionVersion !== this.teacherSessionVersion) return;
-      this.teacherTargetPreferences = saveTeacherTargetPreferences(
-        accountId,
-        next,
-        localStorage,
-        {dirty: false},
-      );
-      this.teacherTargetPreferencesSynced = true;
-    } catch (error) {
-      if (sessionVersion !== this.teacherSessionVersion) return;
-      this.teacherTargetPreferencesSynced = false;
-      this.teacherTargetPreferencesError = describeApiError(error, "偏好暂存于本机，联网后可重新同步");
-    } finally {
-      if (sessionVersion === this.teacherSessionVersion) this.teacherTargetPreferencesSyncing = false;
+    if (!this.teacherTargetPreferencesSyncing) {
+      this.teacherTargetPreferences = loadTeacherTargetPreferences(this.account.id);
     }
+    await this.syncTeacherTargetPreferences({hydrate: true});
   },
 
-  async syncTeacherTargetPreferences() {
+  async syncTeacherTargetPreferences({hydrate = false} = {}) {
     if (!this.account?.id) return;
     const accountId = this.account.id;
     const sessionVersion = this.teacherSessionVersion;
+    const isCurrent = () => sessionVersion === this.teacherSessionVersion && accountId === this.account?.id;
     if (this.teacherTargetPreferencesSyncing) {
       this.teacherTargetPreferencesSyncPending = true;
       return;
     }
     this.teacherTargetPreferencesSyncing = true;
     this.teacherTargetPreferencesError = "";
-    do {
-      this.teacherTargetPreferencesSyncPending = false;
-      const snapshot = this.teacherTargetPreferences;
-      const serializedSnapshot = JSON.stringify(snapshot);
-      try {
-        const result = await classworksV2Api.saveTeacherTargetPreferences(snapshot);
-        if (sessionVersion !== this.teacherSessionVersion) return;
-        if (JSON.stringify(this.teacherTargetPreferences) === serializedSnapshot) {
-          this.teacherTargetPreferences = saveTeacherTargetPreferences(
-            accountId,
-            result.preferences,
-            localStorage,
-            {dirty: false},
-          );
-          this.teacherTargetPreferencesSynced = true;
-        } else {
-          this.teacherTargetPreferencesSyncPending = true;
-        }
-      } catch (error) {
-        if (sessionVersion !== this.teacherSessionVersion) return;
-        this.teacherTargetPreferencesSynced = false;
-        this.teacherTargetPreferencesError = describeApiError(error, "同步失败，偏好已保存在本机");
+    try {
+      do {
         this.teacherTargetPreferencesSyncPending = false;
-      }
-    } while (this.teacherTargetPreferencesSyncPending);
-    this.teacherTargetPreferencesSyncing = false;
+        // Fetch first so offline edits are applied to the latest known remote
+        // list, preserving favorites added on another device while offline.
+        const remoteResult = await classworksV2Api.teacherTargetPreferences();
+        if (!isCurrent()) return;
+        const remote = sanitizeTeacherTargetPreferences(remoteResult.preferences);
+        // Read AFTER GET: edits made while the fetch was pending must participate.
+        const local = loadTeacherTargetPreferences(accountId);
+        const syncState = loadTeacherTargetSyncState(accountId);
+        const remoteEmpty = !remote.favorites.length && !remote.recent.length;
+        const migrateLocal = !syncState.lastSyncedAt && remoteEmpty && (local.favorites.length || local.recent.length);
+        const next = syncState.dirty || migrateLocal
+          ? reconcileTeacherTargetPreferences(local, remote, syncState)
+          : remote;
+        let saved = next;
+        if (!hydrate || syncState.dirty || migrateLocal) {
+          const result = await classworksV2Api.saveTeacherTargetPreferences(next);
+          if (!isCurrent()) return;
+          saved = result.preferences;
+        }
+        if (loadTeacherTargetSyncState(accountId).revision !== syncState.revision) {
+          // A late response may acknowledge only its own snapshot. Keep newer
+          // edits and removal records until the following request succeeds.
+          this.teacherTargetPreferencesSyncPending = true;
+          continue;
+        }
+        this.teacherTargetPreferences = saveTeacherTargetPreferences(accountId, saved, localStorage, {dirty: false});
+        this.teacherTargetPreferencesSynced = true;
+      } while (this.teacherTargetPreferencesSyncPending);
+    } catch (error) {
+      if (!isCurrent()) return;
+      this.teacherTargetPreferencesSynced = false;
+      this.teacherTargetPreferencesError = describeApiError(error, "同步失败，偏好已保存在本机");
+      this.teacherTargetPreferencesSyncPending = false;
+    } finally {
+      if (isCurrent()) this.teacherTargetPreferencesSyncing = false;
+    }
   },
 
   rememberTeacherTargetCombination(combination) {

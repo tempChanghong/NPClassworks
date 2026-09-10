@@ -63,10 +63,19 @@ export function loadTeacherTargetPreferences(accountId, storage = localStorage) 
 
 export function loadTeacherTargetSyncState(accountId, storage = localStorage) {
   try {
-    const value = JSON.parse(storage.getItem(teacherTargetSyncStateKey(accountId))) || {};
-    return {dirty: value.dirty === true, lastSyncedAt: value.lastSyncedAt || null};
+    // Keep edits and their sync journal in one storage write. Read the old key
+    // only when migrating preferences written before the journal existed.
+    const record = JSON.parse(storage.getItem(teacherTargetPreferencesKey(accountId)));
+    const value = record?.syncState || JSON.parse(storage.getItem(teacherTargetSyncStateKey(accountId))) || {};
+    return {
+      dirty: value.dirty === true,
+      lastSyncedAt: value.lastSyncedAt || null,
+      revision: Number.isSafeInteger(value.revision) ? value.revision : 0,
+      removedFavoriteIds: [...new Set((Array.isArray(value.removedFavoriteIds) ? value.removedFavoriteIds : [])
+        .filter(id => typeof id === "string" && id))],
+    };
   } catch {
-    return {dirty: false, lastSyncedAt: null};
+    return {dirty: false, lastSyncedAt: null, revision: 0, removedFavoriteIds: []};
   }
 }
 
@@ -74,15 +83,28 @@ export function saveTeacherTargetPreferences(
   accountId,
   preferences,
   storage = localStorage,
-  {dirty = true} = {},
+  {dirty = true, removedFavoriteIds} = {},
 ) {
   const sanitized = sanitizeTeacherTargetPreferences(preferences);
-  storage.setItem(teacherTargetPreferencesKey(accountId), JSON.stringify(sanitized));
-  storage.setItem(teacherTargetSyncStateKey(accountId), JSON.stringify({
+  const previous = loadTeacherTargetSyncState(accountId, storage);
+  const syncState = {
     dirty,
-    lastSyncedAt: dirty ? loadTeacherTargetSyncState(accountId, storage).lastSyncedAt : new Date().toISOString(),
-  }));
+    lastSyncedAt: dirty ? previous.lastSyncedAt : new Date().toISOString(),
+    revision: previous.revision + 1,
+    removedFavoriteIds: dirty ? (removedFavoriteIds ?? previous.removedFavoriteIds) : [],
+  };
+  storage.setItem(teacherTargetPreferencesKey(accountId), JSON.stringify({...sanitized, syncState}));
   return sanitized;
+}
+
+export function reconcileTeacherTargetPreferences(local, remote, syncState) {
+  const removed = new Set(syncState.removedFavoriteIds);
+  // Filter before the combined favorites limit, so a removed entry cannot
+  // displace a different device's addition from the merged list.
+  return mergeTeacherTargetPreferences(...[local, remote].map(value => ({
+    ...value,
+    favorites: value.favorites.filter(item => !removed.has(teacherTargetCombinationId(item))),
+  })));
 }
 
 export function mergeTeacherTargetPreferences(...values) {
@@ -113,10 +135,13 @@ export function toggleFavoriteTeacherTargets(accountId, combination, storage = l
   if (!normalized) return preferences;
   const id = teacherTargetCombinationId(normalized);
   const exists = preferences.favorites.some((item) => teacherTargetCombinationId(item) === id);
+  const removed = new Set(loadTeacherTargetSyncState(accountId, storage).removedFavoriteIds);
+  if (exists) removed.add(id);
+  else removed.delete(id);
   return saveTeacherTargetPreferences(accountId, {
     ...preferences,
     favorites: exists
       ? preferences.favorites.filter((item) => teacherTargetCombinationId(item) !== id)
       : [normalized, ...preferences.favorites],
-  }, storage);
+  }, storage, {removedFavoriteIds: [...removed]});
 }

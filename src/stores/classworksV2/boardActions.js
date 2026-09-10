@@ -90,16 +90,22 @@ export const boardActions = {
     }
   },
 
-  async loadSchool(schoolId, {preserveSelection = false} = {}) {
-    this.term = await classworksV2Api.currentTerm(schoolId);
+  async fetchSchoolCatalog(schoolId) {
+    const term = await classworksV2Api.currentTerm(schoolId);
     const [grades, administrativeClasses, subjects] = await Promise.all([
-      classworksV2Api.grades(this.term.id),
-      classworksV2Api.workspaces({termId: this.term.id, type: "ADMIN_CLASS"}),
+      classworksV2Api.grades(term.id),
+      classworksV2Api.workspaces({termId: term.id, type: "ADMIN_CLASS"}),
       classworksV2Api.subjects(schoolId),
     ]);
-    this.grades = grades;
-    this.administrativeClasses = administrativeClasses;
-    this.studentSubjects = subjects;
+    return {schoolId, term, grades, administrativeClasses, subjects};
+  },
+
+  async loadSchool(schoolId, {preserveSelection = false} = {}) {
+    const catalog = await this.fetchSchoolCatalog(schoolId);
+    this.term = catalog.term;
+    this.grades = catalog.grades;
+    this.administrativeClasses = catalog.administrativeClasses;
+    this.studentSubjects = catalog.subjects;
     if (!preserveSelection || this.selection.schoolId !== schoolId) {
       this.selection = {schoolId, courseGroupIds: {}};
       this.courseOptions = null;
@@ -117,16 +123,19 @@ export const boardActions = {
     return result;
   },
 
-  async commitStudentSelection({schoolId, administrativeClassId, courseGroupIds, declinedSubjectIds}) {
+  async commitStudentSelection({schoolId, administrativeClassId, courseGroupIds, declinedSubjectIds}, {
+    catalog = null, courseOptions = null, isCurrent = () => true, onInvalid = null,
+  } = {}) {
     const school = this.schools.find((item) => item.id === schoolId);
-    const administrativeClass = this.administrativeClasses.find(
+    const administrativeClass = (catalog?.administrativeClasses || this.administrativeClasses).find(
       (item) => item.id === administrativeClassId,
     );
-    if (!school || !administrativeClass) throw new Error("请选择有效的学校和行政班");
-    if (this.courseOptions?.administrativeClass?.id !== administrativeClassId) {
-      await this.loadCourseOptions(administrativeClassId);
+    if (!school || !administrativeClass || (catalog && catalog.schoolId !== schoolId)) throw new Error("请选择有效的学校和行政班");
+    let options = courseOptions || this.courseOptions;
+    if (options?.administrativeClass?.id !== administrativeClassId) {
+      options = await classworksV2Api.courseOptions(administrativeClassId);
     }
-    const oldWorkspaceIds = this.selectedWorkspaceIds;
+    if (!isCurrent()) return;
     let validation;
     try {
       validation = await classworksV2Api.validateStudentSelection(administrativeClassId, {
@@ -134,20 +143,31 @@ export const boardActions = {
         declinedSubjectIds,
       });
     } catch (error) {
-      this.selectionIssues = error.response?.data?.data?.issues || [];
-      this.selectionNeedsConfirmation = true;
+      if (!isCurrent()) return;
+      const issues = error.response?.data?.data?.issues || [];
+      let refreshedOptions = options;
       if (error.response?.data?.code === "STUDENT_SELECTION_INVALID") {
-        const optionsRequest = ++courseOptionsRequest;
-        try {
-          const options = await classworksV2Api.courseOptions(administrativeClassId);
-          if (optionsRequest === courseOptionsRequest
-            && this.courseOptions?.administrativeClass?.id === administrativeClassId) {
-            this.courseOptions = options;
-          }
-        } catch { /* Keep the submitted choices when the catalog cannot be read. */ }
+        try { refreshedOptions = await classworksV2Api.courseOptions(administrativeClassId); }
+        catch { /* Retain the draft when its catalog cannot be read. */ }
+      }
+      if (!isCurrent()) return;
+      if (onInvalid) onInvalid(issues, refreshedOptions);
+      else {
+        this.selectionIssues = issues;
+        this.selectionNeedsConfirmation = true;
+        this.courseOptions = refreshedOptions;
       }
       throw error;
     }
+    if (!isCurrent()) return;
+    const oldWorkspaceIds = this.selectedWorkspaceIds;
+    if (catalog) {
+      this.term = catalog.term;
+      this.grades = catalog.grades;
+      this.administrativeClasses = catalog.administrativeClasses;
+      this.studentSubjects = catalog.subjects;
+    }
+    this.courseOptions = options;
     const sanitizedCourseGroupIds = validation.normalized.courseGroupIds;
     this.selection = {
       schoolId,

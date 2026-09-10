@@ -287,7 +287,8 @@ class ClassworksNoiseService {
 
   async setMicrophoneDevice(deviceId = "default", {restart = false, label = ""} = {}) {
     const normalized = typeof deviceId === "string" && deviceId.trim() ? deviceId.trim() : "default"
-    const shouldRestart = restart && ["active", "initializing"].includes(this.status)
+    // The schedule listener may already be starting this newly selected device.
+    const shouldRestart = restart && normalized !== this.preferredDeviceId && ["active", "initializing"].includes(this.status)
     const stopping = shouldRestart ? this.stop() : null
     const generation = this.generation
     await stopping

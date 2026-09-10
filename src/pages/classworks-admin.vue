@@ -1409,12 +1409,13 @@ const filteredRosterWorkspaces = computed(() => {
   ].filter(Boolean).some((value) => String(value).toLowerCase().includes(keyword)));
 });
 const currentSectionHasUnsavedChanges = computed(() => {
+  // Quick settings are shared by the screen and teacher panels, and stay editable during saving.
+  if (homeworkSettingsSnapshot.value && homeworkSettingsValue() !== homeworkSettingsSnapshot.value) return true;
   if (tab.value === "organization") return organizationText.value !== organizationTextSnapshot.value;
   if (tab.value === "teachers") {
     return Boolean(
       teacherEmail.value || teacherUsername.value || teacherName.value || teacherPin.value ||
-      selectedWorkspaceCodes.value.length || assignmentBatchText.value.trim() ||
-      homeworkSettingsSnapshot.value && homeworkSettingsValue() !== homeworkSettingsSnapshot.value
+      selectedWorkspaceCodes.value.length || assignmentBatchText.value.trim()
     );
   }
   if (tab.value === "accounts") {

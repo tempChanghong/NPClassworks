@@ -10,6 +10,8 @@ import {clearCachedScreenSession, loadCachedScreenSession, saveCachedScreenSessi
 import {isTransientScreenRequestError} from "./screenRequestError";
 
 const bootstrapRequests = new WeakMap();
+const classroomToolRequests = new WeakMap();
+const classroomToolScope = store => `${getClassroomScreenToken()}:${store.screenSession?.binding?.id || ""}:${store.screenSession?.binding?.credentialVersion || 1}`;
 const screenSchoolId = (session) => session?.binding?.schoolId || session?.binding?.school?.id
   || session?.binding?.administrativeClass?.term?.schoolId || session?.binding?.administrativeClass?.term?.school?.id
   || session?.workspaces?.[0]?.term?.schoolId || session?.workspaces?.[0]?.term?.school?.id;
@@ -95,6 +97,10 @@ export const screenSessionActions = {
 
   async loadClassroomTools(date) {
     if (!this.screenSession) return;
+    const request = {};
+    classroomToolRequests.set(this, request);
+    const scope = classroomToolScope(this);
+    const current = () => classroomToolRequests.get(this) === request && classroomToolScope(this) === scope;
     this.classroomToolsLoading = true;
     this.classroomToolsError = "";
     try {
@@ -102,13 +108,15 @@ export const screenSessionActions = {
         classworksV2Api.classroomStudents(),
         classworksV2Api.classroomAttendance(date),
       ]);
+      if (!current()) return;
       this.classroomStudents = students || [];
       this.classroomAttendance = attendance || {date, absent: [], late: [], excluded: []};
+      return {students: this.classroomStudents, attendance: this.classroomAttendance};
     } catch (error) {
-      this.classroomToolsError = describeApiError(error, "加载课堂工具数据失败");
+      if (current()) this.classroomToolsError = describeApiError(error, "加载课堂工具数据失败");
       throw error;
     } finally {
-      this.classroomToolsLoading = false;
+      if (classroomToolRequests.get(this) === request) this.classroomToolsLoading = false;
     }
   },
 
@@ -124,12 +132,14 @@ export const screenSessionActions = {
   },
 
   async saveClassroomAttendance(date, attendance) {
+    const scope = classroomToolScope(this);
     this.classroomToolsError = "";
     try {
-      this.classroomAttendance = await classworksV2Api.saveClassroomAttendance(date, attendance);
-      return this.classroomAttendance;
+      const result = await classworksV2Api.saveClassroomAttendance(date, attendance);
+      if (scope === classroomToolScope(this)) this.classroomAttendance = result;
+      return result;
     } catch (error) {
-      this.classroomToolsError = describeApiError(error, "保存考勤失败");
+      if (scope === classroomToolScope(this)) this.classroomToolsError = describeApiError(error, "保存考勤失败");
       throw error;
     }
   },

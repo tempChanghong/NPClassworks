@@ -4,7 +4,7 @@ import {origin, api} from "./environment.js";
 
 // Production Vue page and real buttons, with explicit admin API fixtures.
 // Backend authorization remains covered by the separate backend integration tests.
-async function openAdmin(browser, width, role = "ADMIN", settings = {}, section = "screens") {
+async function openAdmin(browser, width, role = "ADMIN", settings = {}, section = "screens", prepare = async () => {}) {
   const context = await browser.newContext({viewport: {width, height: 1000}, serviceWorkers: "block",
     storageState: {cookies: [], origins: [{origin, localStorage: [
       {name: "classworks-v2-access-token", value: "admin-token"},
@@ -50,11 +50,40 @@ async function openAdmin(browser, width, role = "ADMIN", settings = {}, section 
     if (path.endsWith("/staff-responsibilities")) return reply(route, {policy: {}, people: [], grades: [], administrativeClasses: []});
     return route.fulfill({status: 404, json: {message: `Unconfigured admin fixture: ${path}`}});
   });
+  await prepare(context);
   const page = await context.newPage();
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(`${origin}/classworks-admin?section=${section}&school=school&term=term`);
   return {context, page, writes, errors};
 }
+
+test("quick settings retain edits typed after saving and still warn before leaving", async ({browser}) => {
+  const {context, page} = await openAdmin(browser, 1440, "ADMIN", {
+    quickDeadlines: [{label: "明早", dayOffset: 1, time: "07:30"}], quickInputs: [],
+  });
+  let release = () => {}, sent = null;
+  const gate = new Promise(resolve => { release = resolve; });
+  try {
+    const card = page.locator(".v-card").filter({has: page.locator(".v-card-title", {hasText: "作业快捷截止时间"})});
+    await expect(card.locator(".quick-deadline-row")).toHaveCount(1);
+    await expect(card.getByLabel("按钮名称", {exact: true})).toHaveValue("明早");
+    await page.route(`${api}/api/v2/admin/schools/school/homework-settings`, async route => {
+      if (route.request().method() !== "PUT") return route.fallback();
+      sent = route.request().postDataJSON();
+      await gate;
+      await route.fulfill({json: {data: sent}});
+    });
+    await card.getByLabel("按钮名称", {exact: true}).fill("本次提交");
+    await card.getByRole("button", {name: "保存全校配置", exact: true}).click();
+    await expect.poll(() => sent?.quickDeadlines[0].label).toBe("本次提交");
+    await card.getByLabel("按钮名称", {exact: true}).fill("后续未保存");
+    release();
+    await expect(page.getByText("本次提交已保存；之后输入的修改仍未保存，请再次保存。", {exact: true})).toBeVisible();
+    await expect(card.getByLabel("按钮名称", {exact: true})).toHaveValue("后续未保存");
+    await page.getByRole("button", {name: "返回教师工作台"}).click();
+    await expect(page.getByRole("dialog")).toContainText("放弃未保存的修改？");
+  } finally { release(); await context.close(); }
+});
 
 for (const [width, role] of [[1440, "OWNER"], [540, "ADMIN"]]) {
   test(`account management preserves role options, credentials and undo at ${width}px`, async ({browser}) => {
@@ -216,5 +245,52 @@ for (const width of [1440, 540]) {
       await expect(deadlineCard.locator(".v-select")).toContainText("下周一");
       expect(errors).toEqual([]);
     } finally { await context.close(); }
+  });
+}
+
+for (const failB of [false, true]) {
+  test(`school settings ignore late A responses and ${failB ? "require retry after B fails" : "save only B's loaded form"}`, async ({browser}) => {
+    let release = () => {}, unavailable = failB;
+    const gate = new Promise(resolve => { release = resolve; });
+    const settings = label => ({quickDeadlines: [{label, dayOffset: 1, time: "07:30"}], quickInputs: []});
+    const writes = [];
+    const {context, page, errors} = await openAdmin(browser, 1440, "ADMIN", {}, "screens", async context => {
+      await context.route(url => url.origin === api && url.pathname === "/api/v2/me/schools", r => r.fulfill({json: {data: ["school", "school-b"].map(id => ({role: "ADMIN", school:
+        {id, name: id === "school" ? "A学校" : "B学校", terms: [{id: `term-${id}`, name: "当前学期", status: "ACTIVE"}]},
+      }))}}));
+      await context.route(`${api}/api/v2/admin/schools/*/homework-settings`, async r => {
+        const id = new URL(r.request().url()).pathname.split("/")[5];
+        if (r.request().method() === "PUT") {
+          writes.push({id, data: r.request().postDataJSON()});
+          return r.fulfill({json: {data: r.request().postDataJSON()}});
+        }
+        if (id === "school") await gate;
+        if (id === "school-b" && unavailable) return r.fulfill({status: 503, json: {message: "B学校配置读取失败"}});
+        return r.fulfill({json: {data: settings(id === "school" ? "A配置" : "B配置")}});
+      });
+    });
+    try {
+      const card = page.locator(".v-card").filter({has: page.locator(".v-card-title", {hasText: "作业快捷截止时间"})});
+      await page.locator(".v-select").filter({hasText: /^学校/}).first().click();
+      await page.getByRole("option", {name: /B学校/}).click();
+      if (failB) {
+        await expect(card.getByRole("button", {name: "重新读取配置"})).toBeVisible();
+        await expect(card.getByRole("button", {name: "保存全校配置"})).toHaveCount(0);
+        unavailable = false;
+        await card.getByRole("button", {name: "重新读取配置"}).click();
+      }
+      await expect(card.getByLabel("按钮名称", {exact: true})).toHaveValue("B配置");
+      const lateResponse = page.waitForResponse(response => response.url() === `${api}/api/v2/admin/schools/school/homework-settings`
+        && response.request().method() === "GET");
+      release();
+      await lateResponse;
+      await expect(card.getByLabel("按钮名称", {exact: true})).toHaveValue("B配置");
+      await card.getByLabel("按钮名称", {exact: true}).fill("B新配置");
+      await card.getByRole("button", {name: "保存全校配置", exact: true}).click();
+      await expect.poll(() => writes.length).toBe(1);
+      expect(writes[0].id).toBe("school-b");
+      expect(writes[0].data.quickDeadlines[0].label).toBe("B新配置");
+      expect(errors).toEqual([]);
+    } finally { release(); await context.close(); }
   });
 }

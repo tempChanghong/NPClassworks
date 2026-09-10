@@ -67,6 +67,40 @@ async function historyCount(page) {
   }));
 }
 
+test("replacing a missing microphone through the picker resumes the current schedule exactly once", async ({page}) => {
+  await page.goto(origin);
+  await expect(page.getByRole("button", {name: "课堂工具", exact: true}).first()).toBeVisible();
+  await page.evaluate(() => {
+    const original = navigator.mediaDevices.getUserMedia;
+    window.noiseFixture.attempts = [];
+    navigator.mediaDevices.enumerateDevices = async () => [{kind: "audioinput", deviceId: "good", label: "正常麦克风"}];
+    navigator.mediaDevices.getUserMedia = async options => {
+      const id = options.audio.deviceId.exact;
+      window.noiseFixture.attempts.push(id);
+      if (id !== "good") throw new window.DOMException("Device missing", "NotFoundError");
+      return original(options);
+    };
+    localStorage.setItem("classworks-v2-microphone-device:screen-a", JSON.stringify({deviceId: "missing"}));
+    localStorage.setItem("classworks-v2-noise-schedule:screen-a", JSON.stringify({enabled: true, startTime: "08:00", endTime: "09:00"}));
+    window.dispatchEvent(new CustomEvent("classworks-noise-schedule-settings-changed", {detail: {bindingId: "screen-a"}}));
+  });
+  const status = page.locator(".screen-noise-status");
+  await expect(status).toContainText("噪声监测异常");
+  await status.getByRole("button", {name: "查看噪声监测"}).click();
+  await page.getByRole("button", {name: /测试或更换麦克风|检查麦克风设备|选择麦克风/}).first().click();
+  await page.locator(".microphone-picker .v-select").click();
+  await page.getByRole("option", {name: "正常麦克风", exact: true}).click();
+  await page.getByRole("button", {name: "保存并使用", exact: true}).click();
+  await expect(page.locator(".microphone-picker")).not.toBeVisible();
+  await leaveTool(page);
+  await expect(status).toContainText("噪声监测中 · 定时");
+  expect(await page.evaluate(() => window.noiseFixture.attempts)).toEqual(["missing", "good"]);
+  expect(await page.evaluate(() => window.noiseFixture.starts)).toBe(1);
+  await page.clock.fastForward(61 * 60 * 1000);
+  await expect(status).not.toBeVisible();
+  expect(await page.evaluate(() => window.noiseFixture.stopped)).toBe(1);
+});
+
 test("manual monitoring continues recording after closing tools, reopens without restarting, and stops from the board", async ({page}) => {
   await startManual(page);
   await page.clock.runFor(31000); await sample(page);

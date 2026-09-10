@@ -48,6 +48,28 @@ test.beforeEach(async ({request}) => {
   await request.post(`${api}/__test/reset`);
 });
 
+test("a selected streamed subject displays missing, assigned, no-homework and conflict states", async ({context, page}) => {
+  await context.route(`${api}/api/v2/catalog/subjects?**`, r => r.fulfill({json: {data: [{id: "math", name: "数学"}, {id: "physics", name: "物理"}]}}));
+  const s = await openStudent(context, page, false);
+  const status = page.locator(".v-chip").filter({hasText: /^物理 · 物理旧班：/});
+  await expect(status).toHaveText("物理 · 物理旧班：尚未录入");
+  let items = [];
+  await context.route(`${api}/api/v2/publications/feed?**`, route => {
+    const date = new URL(route.request().url()).searchParams.get("boardDate");
+    return route.fulfill({json: {data: {items: items.map(item => ({...item, boardDate: date})), generatedAt: new Date().toISOString()}}});
+  });
+  const work = {id: "physics-work", type: "ASSIGNMENT", status: "PUBLISHED", subjectId: "physics", revision: 1,
+    subject: {id: "physics", name: "物理"}, content: "走班练习", publishAt: new Date().toISOString(), isCertified: true,
+    targets: [{workspaceId: "old-group", workspace: {id: "old-group", name: "物理旧班", type: "COURSE_GROUP", subjectId: "physics"}}]};
+  const marker = {...work, id: "physics-none", title: "今日无作业", content: "本日该科目无作业。", contentJson: {kind: "NO_HOMEWORK", version: 1}};
+  for (const [next, label] of [[[work], "1 项作业"], [[marker], "今日无作业"], [[work, marker], "作业与无作业标记并存，请核对"]]) {
+    items = next;
+    await page.getByRole("button", {name: "刷新", exact: true}).first().click();
+    await expect(status).toHaveText(`物理 · 物理旧班：${label}`);
+  }
+  expect(s.errors).toEqual([]);
+});
+
 test("persisted stopped groups are removed on reload and replacement selection works through real controls", async ({context, page}) => {
   const s = await openStudent(context, page, true);
   await expect(s.page.getByText("行政班作业保持可见", {exact: true})).toBeVisible();
@@ -129,5 +151,50 @@ test("realtime recovery disables stale open selection and keeps the active board
   await expect.poll(() => s.feeds.length).toBeGreaterThan(recovered);
   expect(s.feeds.slice(recovered).every(ids => !ids.includes("old-group"))).toBe(true);
   await expect(s.page.getByText("行政班作业保持可见", {exact: true})).toBeVisible();
+  expect(s.errors).toEqual([]);
+});
+
+test("changing schools in the selector is a draft until explicitly saved", async ({context, page}) => {
+  await context.route(`${api}/api/v2/catalog/schools`, r => r.fulfill({json: {data: [
+    {id: "school", name: "A学校"}, {id: "school-b", name: "B学校"},
+  ]}}));
+  await context.route(`${api}/api/v2/catalog/terms/current?**`, r => r.fulfill({json: {data:
+    new URL(r.request().url()).searchParams.get("schoolId") === "school-b"
+      ? {id: "term-b", schoolId: "school-b"} : {id: "term", schoolId: "school"},
+  }}));
+  await context.route(`${api}/api/v2/catalog/workspaces?**`, r => r.fulfill({json: {data:
+    new URL(r.request().url()).searchParams.get("termId") === "term-b"
+      ? [{id: "class-b", name: "B校一班", type: "ADMIN_CLASS"}]
+      : [{id: "class-a", name: "高一一班", type: "ADMIN_CLASS"}],
+  }}));
+  await context.route(`${api}/api/v2/catalog/administrative-classes/class-b/course-options`, r => r.fulfill({json: {data:
+    {administrativeClass: {id: "class-b", name: "B校一班"}, subjects: []},
+  }}));
+  await context.route(`${api}/api/v2/catalog/administrative-classes/class-b/student-selection/validate`, r => r.fulfill({json: {data:
+    {normalized: r.request().postDataJSON(), issues: [], confirmedAt: new Date().toISOString()},
+  }}));
+  const s = await openStudent(context, page, false);
+  await expect(page.getByText("行政班作业保持可见", {exact: true})).toBeVisible();
+  const original = await page.evaluate(key => localStorage.getItem(key), selectionKey);
+  const dialog = page.getByRole("dialog");
+  const chooseB = async () => {
+    await page.getByRole("button", {name: "修改选班"}).click();
+    await dialog.locator(".v-select").filter({hasText: /^学校/}).click();
+    await page.getByRole("option", {name: "B学校", exact: true}).click();
+    await dialog.locator(".v-select").filter({hasText: /^行政班/}).click();
+    await page.getByRole("option", {name: "B校一班", exact: true}).click();
+    await expect(dialog.getByRole("button", {name: "保存并查看作业"})).toBeEnabled();
+  };
+  await chooseB();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText("行政班作业保持可见", {exact: true})).toBeVisible();
+  expect(await page.evaluate(key => localStorage.getItem(key), selectionKey)).toBe(original);
+  expect(s.feeds.every(ids => !ids.includes("class-b"))).toBe(true);
+  await chooseB();
+  await dialog.getByRole("button", {name: "保存并查看作业"}).click();
+  await expect(dialog).not.toBeVisible();
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)).administrativeClassId, selectionKey)).toBe("class-b");
+  await expect.poll(() => s.feeds.some(ids => ids.includes("class-b") && !ids.includes("class-a"))).toBe(true);
   expect(s.errors).toEqual([]);
 });

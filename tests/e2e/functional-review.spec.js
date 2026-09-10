@@ -19,6 +19,144 @@ test.beforeEach(async ({request}) => {
   await request.post(`${api}/__test/reset`);
 });
 
+test("offline unfavorite survives browser reload and preserves another device's addition", async ({browser}) => {
+  const {context, page} = await openRole(browser, "teacher");
+  const favorite = {type: "ASSIGNMENT", subjectId: "math", targetWorkspaceIds: ["class-a"], savedAt: "2026-09-10T00:00:00Z"};
+  const otherFavorite = {type: "NOTICE", subjectId: null, targetWorkspaceIds: ["class-a"], savedAt: "2026-09-10T01:00:00.000Z"};
+  let remote = {favorites: [favorite], recent: []}, unavailable = false, failedRequests = 0;
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.route(`${api}/accounts/preferences/teacher-targets`, async route => {
+      if (unavailable) { failedRequests++; return route.abort("internetdisconnected"); }
+      if (route.request().method() === "PUT") remote = route.request().postDataJSON().preferences;
+      return route.fulfill({json: {data: {preferences: remote}}});
+    });
+    await page.goto(origin);
+    const composer = page.locator(".publication-composer");
+    const selectMath = async () => {
+      await composer.locator(".v-select").filter({hasText: "科目"}).click();
+      await page.getByRole("option", {name: "数学", exact: true}).click();
+      await composer.getByRole("combobox", {name: "发布到 发布到", exact: true}).click();
+      await page.getByRole("option", {name: /高一一班/}).click();
+      await page.keyboard.press("Escape");
+    };
+    await selectMath();
+    unavailable = true;
+    await composer.getByRole("button", {name: "取消收藏当前目标", exact: true}).click();
+    await expect.poll(() => failedRequests).toBeGreaterThan(0);
+    await expect(composer.getByRole("button", {name: "收藏当前目标组合", exact: true})).toBeVisible();
+    // Reload with the preference endpoint still offline: the local removal is durable.
+    await page.reload();
+    await selectMath();
+    await expect(composer.getByRole("button", {name: "收藏当前目标组合", exact: true})).toBeVisible();
+    remote.favorites.push(otherFavorite);
+    unavailable = false;
+    await page.reload();
+    await selectMath();
+    await expect(composer.getByRole("button", {name: "收藏当前目标组合", exact: true})).toBeVisible();
+    await expect.poll(() => remote.favorites).toEqual([otherFavorite]);
+    await composer.getByRole("button", {name: "通知", exact: true}).click();
+    await expect(composer.getByRole("button", {name: "取消收藏当前目标", exact: true})).toBeVisible();
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+test("attendance read failure and a pending retry cannot overwrite a cached saved record", async ({browser}) => {
+  const {context, page} = await openRole(browser, "screen");
+  let fail = false, saves = 0, release = () => {};
+  let pendingRead = null;
+  const saved = {absent: ["s1"], late: [], excluded: []};
+  try {
+    await page.route(`${api}/api/v2/classroom-screens/students`, r => r.fulfill({json: {data: [{id: "s1", name: "张三", sortOrder: 0}]}}));
+    await page.route(`${api}/api/v2/classroom-screens/attendance/*`, async route => {
+      if (route.request().method() === "PUT") {
+        saves++;
+        expect(route.request().postDataJSON()).toEqual(saved);
+      } else {
+        if (fail) return route.fulfill({status: 503, json: {message: "考勤读取暂时失败"}});
+        if (pendingRead) await pendingRead;
+      }
+      await route.fulfill({json: {data: saved}});
+    });
+    await page.goto(origin);
+    const open = async () => {
+      await page.getByRole("button", {name: "课堂工具", exact: true}).first().click();
+      await page.locator(".tool-entry").filter({hasText: "考勤"}).click();
+    };
+    await open();
+    await expect(page.locator(".classroom-tools-container")).toContainText("缺勤 1");
+    await page.getByTitle("返回课堂工具", {exact: true}).click();
+    await page.getByTitle("关闭", {exact: true}).click();
+    fail = true;
+    await open();
+    const save = page.getByRole("button", {name: "保存今日考勤", exact: true});
+    await expect(page.getByText("考勤读取暂时失败", {exact: true})).toBeVisible();
+    await expect(save).toBeDisabled();
+    await expect(page.locator(".student-row")).toHaveCount(0);
+    expect(saves).toBe(0);
+    fail = false;
+    pendingRead = new Promise(resolve => { release = resolve; });
+    await page.getByRole("button", {name: "重新读取考勤"}).click();
+    await expect(page.getByText("正在读取今日考勤，完成前不能编辑或保存。", {exact: false})).toBeVisible();
+    await expect(save).toBeDisabled();
+    release();
+    await expect(save).toBeEnabled();
+    await expect(page.locator(".classroom-tools-container")).toContainText("缺勤 1");
+    await save.click();
+    await expect.poll(() => saves).toBe(1);
+  } finally { release(); await context.close(); }
+});
+
+for (const switchEditor of [false, true]) {
+  test(`teacher delayed save preserves ${switchEditor ? "another publication's" : "the same publication's"} later input`, async ({browser, request}) => {
+    for (const title of ["隔离测试A", "隔离测试B"]) {
+      await request.post(`${api}/api/v2/publications`, {data: {type: "ASSIGNMENT", subjectId: "math", targetWorkspaceIds: ["class-a"],
+        title, content: `${title}正文`, status: "PUBLISHED", priority: "NORMAL"}});
+    }
+    const {context, page} = await openRole(browser, "teacher");
+    let release = () => {}, started = false;
+    const gate = new Promise(resolve => { release = resolve; });
+    try {
+      await page.route(`${api}/api/v2/publications/pub-1`, async route => {
+        if (route.request().method() === "PATCH" && !started) {
+          started = true;
+          await gate;
+        }
+        await route.continue();
+      });
+      await page.goto(origin);
+      const composer = page.locator(".publication-composer");
+      const body = composer.getByRole("textbox", {name: "正文 正文", exact: true});
+      const edit = async title => {
+        await page.locator(".publication-list-item").filter({hasText: title}).getByRole("button").last().click();
+        await page.getByText("编辑", {exact: true}).click();
+        await expect(body).toHaveValue(`${title}正文`);
+      };
+      await edit("隔离测试A");
+      await body.fill("A本次提交");
+      await composer.getByRole("button", {name: "保存修改", exact: true}).click();
+      await expect.poll(() => started).toBe(true);
+      if (switchEditor) await edit("隔离测试B");
+      await body.fill("之后输入，仍需保存");
+      release();
+      await expect(composer.getByRole("button", {name: "保存修改", exact: true})).toBeEnabled();
+      await expect(body).toHaveValue("之后输入，仍需保存");
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      let items = (await (await request.get(`${api}/__test/state`)).json()).data.items;
+      expect(items[0].content).toBe("A本次提交");
+      expect(items[1].content).toBe("隔离测试B正文");
+      await page.getByRole("button", {name: "知道了", exact: true}).click();
+      await composer.getByRole("button", {name: "保存修改", exact: true}).click();
+      await expect.poll(async () => {
+        items = (await (await request.get(`${api}/__test/state`)).json()).data.items;
+        return items[switchEditor ? 1 : 0].content;
+      }).toBe("之后输入，仍需保存");
+      expect(items[switchEditor ? 1 : 0].revision).toBe(switchEditor ? 2 : 3);
+    } finally { release(); await context.close(); }
+  });
+}
+
 for (const [button, status] of [["保存草稿", "DRAFT"], ["正式发布", "PUBLISHED"]]) {
   test(`${status}: empty publication time is explained, preserves input and allows correction`, async ({browser, request}) => {
     const {context, page} = await openRole(browser, "teacher");

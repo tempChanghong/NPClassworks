@@ -28,10 +28,11 @@ export function deferred() {
 }
 
 export async function eventually(assertion) {
-  const deadline = Date.now() + 3000;
+  // Business-clock tests can freeze Date; assertion timeouts must still expire.
+  const deadline = globalThis.performance.now() + 3000;
   while (true) {
     try { assertion(); return; } catch (error) {
-      if (Date.now() >= deadline) throw error;
+      if (globalThis.performance.now() >= deadline) throw error;
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }

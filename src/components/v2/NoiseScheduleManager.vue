@@ -10,7 +10,7 @@ import {onMounted, onUnmounted, watch} from "vue";
 import {noiseMonitoring} from "@/utils/noiseMonitoring";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {loadClassroomToolSettings, classroomToolSettingsKey, CLASSROOM_TOOLS_SETTINGS_EVENT} from "@/utils/classroomToolSettings";
-import {loadMicrophoneDeviceSettings} from "@/utils/microphoneDeviceSettings";
+import {loadMicrophoneDeviceSettings, microphoneDeviceSettingsKey, MICROPHONE_DEVICE_SETTINGS_EVENT} from "@/utils/microphoneDeviceSettings";
 import {getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {getServerUrl} from "@/utils/socketClient";
 import {screenExitState} from "@/utils/screenTemporaryExit";
@@ -41,8 +41,17 @@ function handleScheduleChange(event) {
   if (event.detail?.bindingId && event.detail.bindingId !== store.screenSession?.binding?.id) return;
   noiseMonitoring.tick({retry: true});
 }
+function handleMicrophoneChange(event) {
+  if (event.detail?.bindingId !== store.screenSession?.binding?.id) return;
+  // A changed device gets a new attempt key; saving the same failed device does not force retries.
+  evaluate();
+}
 function handleStorage(event) {
   const id = store.screenSession?.binding?.id;
+  if (event.key === microphoneDeviceSettingsKey(id)) {
+    evaluate();
+    return;
+  }
   if (event.key === null || [noiseScheduleSettingsKey(id), classroomToolSettingsKey(id)].includes(event.key)) {
     noiseMonitoring.tick({retry: true});
   }
@@ -54,6 +63,7 @@ onMounted(() => {
   detach = noiseMonitoring.attach(readContext);
   window.addEventListener(NOISE_SCHEDULE_SETTINGS_EVENT, handleScheduleChange);
   window.addEventListener(CLASSROOM_TOOLS_SETTINGS_EVENT, handleScheduleChange);
+  window.addEventListener(MICROPHONE_DEVICE_SETTINGS_EVENT, handleMicrophoneChange);
   window.addEventListener("storage", handleStorage);
   window.addEventListener("focus", evaluate);
   window.addEventListener("pageshow", evaluate);
@@ -63,6 +73,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener(NOISE_SCHEDULE_SETTINGS_EVENT, handleScheduleChange);
   window.removeEventListener(CLASSROOM_TOOLS_SETTINGS_EVENT, handleScheduleChange);
+  window.removeEventListener(MICROPHONE_DEVICE_SETTINGS_EVENT, handleMicrophoneChange);
   window.removeEventListener("storage", handleStorage);
   window.removeEventListener("focus", evaluate);
   window.removeEventListener("pageshow", evaluate);

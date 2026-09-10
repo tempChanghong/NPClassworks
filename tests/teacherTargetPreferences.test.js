@@ -4,7 +4,11 @@ import {
   loadTeacherTargetPreferences,
   loadTeacherTargetSyncState,
   mergeTeacherTargetPreferences,
+  reconcileTeacherTargetPreferences,
   rememberTeacherTargets,
+  saveTeacherTargetPreferences,
+  teacherTargetPreferencesKey,
+  teacherTargetSyncStateKey,
   teacherTargetCombinationId,
   toggleFavoriteTeacherTargets,
 } from "../src/utils/teacherTargetPreferences.js";
@@ -64,4 +68,44 @@ test("local and remote teacher targets merge by newest unique combination", () =
   );
   assert.equal(merged.favorites.length, 2);
   assert.equal(merged.favorites[0].savedAt, "2026-08-11T00:00:00.000Z");
+});
+
+test("removal journal is persisted with favorites, survives recent edits, and is account isolated", () => {
+  const storage = memoryStorage();
+  const item = {type: "NOTICE", targetWorkspaceIds: ["a"]};
+  saveTeacherTargetPreferences("a", {favorites: [item]}, storage, {dirty: false});
+  toggleFavoriteTeacherTargets("a", item, storage);
+  rememberTeacherTargets("a", item, storage);
+  const record = JSON.parse(storage.getItem(teacherTargetPreferencesKey("a")));
+  assert.equal(record.favorites.length, 0);
+  assert.deepEqual(record.syncState.removedFavoriteIds, [teacherTargetCombinationId(item)]);
+  assert.deepEqual(loadTeacherTargetSyncState("b", storage).removedFavoriteIds, []);
+  toggleFavoriteTeacherTargets("a", item, storage);
+  assert.deepEqual(loadTeacherTargetSyncState("a", storage).removedFavoriteIds, []);
+});
+
+test("legacy sync metadata migrates and a failed atomic write retains the prior favorite and journal", () => {
+  const storage = memoryStorage();
+  const item = {type: "NOTICE", targetWorkspaceIds: ["a"]};
+  storage.setItem(teacherTargetPreferencesKey("a"), JSON.stringify({favorites: [item]}));
+  storage.setItem(teacherTargetSyncStateKey("a"), JSON.stringify({dirty: false, lastSyncedAt: "2026-09-01T00:00:00Z"}));
+  assert.equal(loadTeacherTargetSyncState("a", storage).lastSyncedAt, "2026-09-01T00:00:00Z");
+  assert.throws(() => toggleFavoriteTeacherTargets("a", item, {
+    getItem: storage.getItem, setItem: () => { throw new Error("quota"); },
+  }), /quota/);
+  assert.equal(loadTeacherTargetPreferences("a", storage).favorites.length, 1);
+  assert.equal(loadTeacherTargetSyncState("a", storage).dirty, false);
+  toggleFavoriteTeacherTargets("a", item, storage);
+  assert.equal(loadTeacherTargetSyncState("a", storage).dirty, true);
+  assert.equal(loadTeacherTargetSyncState("a", storage).removedFavoriteIds.length, 1);
+});
+
+test("removed favorites are filtered before the merge limit so remote additions remain", () => {
+  const favorites = Array.from({length: 8}, (_, i) => ({type: "NOTICE", targetWorkspaceIds: [`a${i}`], savedAt: "2026-09-10T00:00:00Z"}));
+  const extra = {type: "NOTICE", targetWorkspaceIds: ["remote"], savedAt: "2026-09-09T00:00:00Z"};
+  const next = reconcileTeacherTargetPreferences({favorites, recent: []}, {favorites: [extra], recent: []}, {
+    removedFavoriteIds: [teacherTargetCombinationId(favorites[0])],
+  });
+  assert.equal(next.favorites.length, 8);
+  assert.ok(next.favorites.some(item => item.targetWorkspaceIds[0] === "remote"));
 });

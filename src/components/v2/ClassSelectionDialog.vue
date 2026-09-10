@@ -41,6 +41,7 @@
 
         <v-select
           v-model="schoolId"
+          :disabled="saving"
           :items="store.schools"
           item-title="name"
           item-value="id"
@@ -52,8 +53,8 @@
 
         <v-select
           v-model="administrativeClassId"
-          :disabled="!schoolId"
-          :items="store.administrativeClasses"
+          :disabled="!schoolId || loadingOptions || saving"
+          :items="catalog?.administrativeClasses || []"
           item-title="name"
           item-value="id"
           label="行政班"
@@ -69,7 +70,7 @@
           rounded
         />
 
-        <template v-if="store.courseOptions">
+        <template v-if="courseOptions">
           <div class="text-subtitle-1 font-weight-bold mb-2">
             随行政班课程
           </div>
@@ -81,7 +82,7 @@
               prepend-icon="mdi-check-circle-outline"
               variant="tonal"
             >
-              {{ item.subject.name }} · {{ store.courseOptions.administrativeClass.name }}
+              {{ item.subject.name }} · {{ courseOptions.administrativeClass.name }}
             </v-chip>
           </div>
 
@@ -93,6 +94,7 @@
               v-for="item in streamedSubjects"
               :key="item.subject.id"
               v-model="courseDecisions[item.subject.id]"
+              :disabled="saving"
               :error-messages="issueMessages(item.subject.id)"
               :items="decisionOptions(item)"
               :label="`${item.subject.name}（必须确认）`"
@@ -140,7 +142,7 @@
       <v-card-actions class="pa-5 pt-2">
         <v-spacer />
         <v-btn
-          :disabled="!administrativeClassId || loadingOptions || !selectionComplete"
+          :disabled="!administrativeClassId || loadingOptions || !courseOptions || !selectionComplete"
           :loading="saving"
           color="primary"
           prepend-icon="mdi-content-save-check"
@@ -156,13 +158,19 @@
 </template>
 
 <script setup>
-import {computed, reactive, ref, watch} from "vue";
+import {computed, onBeforeUnmount, reactive, ref, watch} from "vue";
+import {classworksV2Api} from "@/utils/classworksV2Client";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 
 const props = defineProps({modelValue: Boolean});
 defineEmits(["update:modelValue"]);
 
 const store = useClassworksV2Store();
+const catalog = ref(null);
+const courseOptions = ref(null);
+const issues = ref([]);
+let generation = 0;
+onBeforeUnmount(() => { generation++; });
 const schoolId = ref("");
 const administrativeClassId = ref("");
 const courseDecisions = reactive({});
@@ -171,12 +179,12 @@ const saving = ref(false);
 const error = ref("");
 
 const fixedSubjects = computed(() =>
-  (store.courseOptions?.subjects || []).filter((item) => item.followsAdministrativeClass),
+  (courseOptions.value?.subjects || []).filter((item) => item.followsAdministrativeClass),
 );
 const streamedSubjects = computed(() =>
-  (store.courseOptions?.subjects || []).filter((item) => item.requiresCourseGroupSelection),
+  (courseOptions.value?.subjects || []).filter((item) => item.requiresCourseGroupSelection),
 );
-const generalIssues = computed(() => (store.selectionIssues || []).filter((item) => !item.subjectId));
+const generalIssues = computed(() => issues.value.filter((item) => !item.subjectId));
 const selectionComplete = computed(() => streamedSubjects.value.every(
   (item) => decisionOptions(item).some(option => option.value === courseDecisions[item.subject.id]),
 ));
@@ -189,8 +197,14 @@ function decisionOptions(item) {
   return groups;
 }
 
-watch(() => store.courseOptions, () => {
-  if (!props.modelValue || store.courseOptions?.administrativeClass?.id !== administrativeClassId.value) return;
+// Realtime recovery of the active board may invalidate choices in the open draft.
+watch(() => store.courseOptions, value => {
+  if (props.modelValue && value?.administrativeClass?.id === administrativeClassId.value) {
+    courseOptions.value = value;
+  }
+});
+watch(courseOptions, () => {
+  if (!props.modelValue || courseOptions.value?.administrativeClass?.id !== administrativeClassId.value) return;
   for (const subjectId of Object.keys(courseDecisions)) {
     const item = streamedSubjects.value.find(subject => subject.subject.id === subjectId);
     if (!item || !decisionOptions(item).some(option => option.value === courseDecisions[subjectId])) {
@@ -200,56 +214,91 @@ watch(() => store.courseOptions, () => {
 });
 
 function issueMessages(subjectId) {
-  return (store.selectionIssues || [])
+  return issues.value
     .filter((item) => item.subjectId === subjectId && item.severity === "ERROR")
     .map((item) => item.message);
 }
 
 watch(() => props.modelValue, async (open) => {
+  const version = ++generation;
+  saving.value = false;
+  loadingOptions.value = false;
+  error.value = "";
   if (!open) return;
   schoolId.value = store.selection.schoolId || (store.schools.length === 1 ? store.schools[0].id : "");
   administrativeClassId.value = store.selection.administrativeClassId || "";
-  Object.keys(courseDecisions).forEach((key) => delete courseDecisions[key]);
+  Object.keys(courseDecisions).forEach(key => delete courseDecisions[key]);
   Object.assign(courseDecisions, store.selection.courseGroupIds || {});
-  for (const subjectId of store.selection.declinedSubjectIds || []) {
-    courseDecisions[subjectId] = "__NOT_TAKING__";
+  for (const subjectId of store.selection.declinedSubjectIds || []) courseDecisions[subjectId] = "__NOT_TAKING__";
+  issues.value = [...store.selectionIssues];
+  catalog.value = store.term?.schoolId === schoolId.value ? {
+    schoolId: schoolId.value, term: store.term, grades: store.grades,
+    administrativeClasses: store.administrativeClasses, subjects: store.studentSubjects,
+  } : null;
+  courseOptions.value = store.courseOptions?.administrativeClass?.id === administrativeClassId.value ? store.courseOptions : null;
+  loadingOptions.value = true;
+  try {
+    if (schoolId.value && !catalog.value) {
+      const result = await store.fetchSchoolCatalog(schoolId.value);
+      if (version !== generation) return;
+      catalog.value = result;
+    }
+    if (administrativeClassId.value && !courseOptions.value) {
+      const result = await classworksV2Api.courseOptions(administrativeClassId.value);
+      if (version !== generation) return;
+      courseOptions.value = result;
+    }
+  } catch (caught) {
+    if (version === generation) error.value = caught.response?.data?.message || caught.message || "加载班级失败";
+  } finally {
+    if (version === generation) loadingOptions.value = false;
   }
-  if (schoolId.value && store.term?.schoolId !== schoolId.value) {
-    await handleSchoolChange(schoolId.value);
-  }
-  if (administrativeClassId.value && !store.courseOptions) {
-    await handleAdministrativeClassChange(administrativeClassId.value);
-  }
-}, {immediate: true});
+}, {immediate: true, flush: "sync"});
 
 async function handleSchoolChange(value) {
+  const version = ++generation;
+  schoolId.value = value;
   error.value = "";
-  store.selectionIssues = [];
+  issues.value = [];
+  catalog.value = null;
+  courseOptions.value = null;
   administrativeClassId.value = "";
-  Object.keys(courseDecisions).forEach((key) => delete courseDecisions[key]);
+  Object.keys(courseDecisions).forEach(key => delete courseDecisions[key]);
+  loadingOptions.value = Boolean(value);
+  if (!value) return;
   try {
-    await store.loadSchool(value);
+    const result = await store.fetchSchoolCatalog(value);
+    if (version === generation) catalog.value = result;
   } catch (caught) {
-    error.value = caught.response?.data?.message || caught.message || "加载班级失败";
+    if (version === generation) error.value = caught.response?.data?.message || caught.message || "加载班级失败";
+  } finally {
+    if (version === generation) loadingOptions.value = false;
   }
 }
 
 async function handleAdministrativeClassChange(value) {
+  const version = ++generation;
+  administrativeClassId.value = value;
   error.value = "";
-  store.selectionIssues = [];
-  Object.keys(courseDecisions).forEach((key) => delete courseDecisions[key]);
+  issues.value = [];
+  courseOptions.value = null;
+  Object.keys(courseDecisions).forEach(key => delete courseDecisions[key]);
+  loadingOptions.value = Boolean(value);
   if (!value) return;
-  loadingOptions.value = true;
   try {
-    await store.loadCourseOptions(value);
+    const result = await classworksV2Api.courseOptions(value);
+    if (version === generation) courseOptions.value = result;
   } catch (caught) {
-    error.value = caught.response?.data?.message || caught.message || "加载走班选项失败";
+    if (version === generation) error.value = caught.response?.data?.message || caught.message || "加载走班选项失败";
   } finally {
-    loadingOptions.value = false;
+    if (version === generation) loadingOptions.value = false;
   }
 }
 
 async function commit() {
+  if (saving.value || loadingOptions.value || !catalog.value || !courseOptions.value || !selectionComplete.value) return;
+  const version = generation;
+  const isCurrent = () => version === generation && props.modelValue;
   saving.value = true;
   error.value = "";
   try {
@@ -261,11 +310,13 @@ async function commit() {
       declinedSubjectIds: Object.entries(courseDecisions)
         .filter(([, value]) => value === "__NOT_TAKING__")
         .map(([subjectId]) => subjectId),
+    }, {catalog: catalog.value, courseOptions: courseOptions.value, isCurrent,
+      onInvalid: (nextIssues, options) => { issues.value = nextIssues; courseOptions.value = options; },
     });
   } catch (caught) {
-    error.value = caught.response?.data?.message || caught.message || "保存选择失败";
+    if (isCurrent()) error.value = caught.response?.data?.message || caught.message || "保存选择失败";
   } finally {
-    saving.value = false;
+    if (isCurrent()) saving.value = false;
   }
 }
 

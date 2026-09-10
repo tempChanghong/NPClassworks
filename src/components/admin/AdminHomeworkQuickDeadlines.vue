@@ -8,7 +8,28 @@
       />
       作业快捷截止时间
     </v-card-title>
-    <v-card-text class="px-5 pb-5">
+    <v-progress-linear
+      v-if="homeworkSettingsBusy && !homeworkSettingsReady"
+      indeterminate
+    />
+    <v-alert
+      v-if="!homeworkSettingsReady && !homeworkSettingsBusy"
+      class="ma-5"
+      type="info"
+      variant="tonal"
+    >
+      请先成功读取当前学校的配置，再编辑或保存。
+      <v-btn
+        variant="text"
+        @click="loadSchoolHomeworkSettings"
+      >
+        重新读取配置
+      </v-btn>
+    </v-alert>
+    <v-card-text
+      v-if="homeworkSettingsReady"
+      class="px-5 pb-5"
+    >
       <p class="text-body-2 text-medium-emphasis mb-4">
         全校班级大屏共用；支持按操作当天向后计算，也支持自动选择下一个指定星期。
       </p>
@@ -92,6 +113,8 @@ const props = defineProps({manager: {type: Object, required: true}});
 // Share refs with the other panel and the page leave guard.
 const {
   homeworkSettingsBusy,
+  homeworkSettingsReady,
+  loadSchoolHomeworkSettings,
   homeworkQuickDeadlines,
   quickDeadlineDayOptions,
   quickDeadlineDateValue,

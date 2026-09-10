@@ -41,6 +41,9 @@ export function createNoiseMonitoringController(service, {
     timer = deadline ? schedule(() => { timer = null; tick(); },
       Math.max(0, Math.min(deadline - now(), monotonicDeadline - monotonicNow()))) : null;
   }
+  function attemptKey() {
+    return JSON.stringify([context.scopeKey, deadline || context.scheduleKey, context.deviceId || "default"]);
+  }
   function reconcile(retry) {
     const wanted = context.enabled && (deadline || context.scheduleKey);
     if (!wanted) {
@@ -49,7 +52,7 @@ export function createNoiseMonitoringController(service, {
       return;
     }
     if (["active", "initializing"].includes(service.status)) return;
-    const key = `${context.scopeKey}:${deadline || context.scheduleKey}`;
+    const key = attemptKey();
     if (!retry && attemptedKey === key && ["error", "permission-denied", "unavailable"].includes(service.status)) return;
     attemptedKey = key;
     void service.start({deviceId: context.deviceId});
@@ -107,6 +110,8 @@ export function createNoiseMonitoringController(service, {
       unsubscribe = service.subscribe(() => {
         if (lastStatus === service.status) return;
         lastStatus = service.status;
+        // The picker can restart an active stream itself. Count that attempt too.
+        if (service.status === "initializing" && context.enabled && (deadline || context.scheduleKey)) attemptedKey = attemptKey();
         publish();
       });
       tick();

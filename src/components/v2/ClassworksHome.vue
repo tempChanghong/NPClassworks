@@ -1192,9 +1192,11 @@ async function restoreActionItem(item) {
 
 async function showPublishedMessage(publication, context = {}) {
   const shouldCertify = context.operation === "updated"
-    && certifyAfterEditPublicationId.value === publication.id;
-  editingPublication.value = null;
-  certifyAfterEditPublicationId.value = "";
+    && (context.confirmAfterSave ?? (certifyAfterEditPublicationId.value === publication.id));
+  if (context.clearEditor !== false) {
+    editingPublication.value = null;
+    certifyAfterEditPublicationId.value = "";
+  }
 
   if (shouldCertify) {
     try {
@@ -1205,7 +1207,7 @@ async function showPublishedMessage(publication, context = {}) {
         icon: "mdi-pencil-check-outline",
       });
       publicationResult.value = certified;
-      publicationResultDialog.value = true;
+      publicationResultDialog.value = context.clearEditor !== false;
     } catch (error) {
       if (isPublicationRevisionConflict(error)) {
         await Promise.all([store.refreshTeacherPublications(), store.refreshTeacherActionCenter()]);
@@ -1228,7 +1230,7 @@ async function showPublishedMessage(publication, context = {}) {
   }
 
   showFeedback(teacherPublicationSaveFeedback(publication, context));
-  if (publication.status === "PUBLISHED") {
+  if (publication.status === "PUBLISHED" && context.clearEditor !== false) {
     publicationResult.value = publication;
     publicationResultDialog.value = true;
   }
