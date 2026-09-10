@@ -1,5 +1,6 @@
 import {test, expect} from "@playwright/test";
 import {readFileSync} from "node:fs";
+import {createServer} from "node:http";
 import {origin, api} from "./environment.js";
 
 const presets = JSON.parse(readFileSync(new URL("../../src/utils/backgroundPresets.json", import.meta.url), "utf8"));
@@ -17,6 +18,25 @@ test.beforeEach(async ({request}) => {
 });
 const button = (page, preset) => page.getByRole("button", {name: `使用背景：${preset.category} · ${preset.title}`, exact: true});
 const selected = page => page.evaluate(() => JSON.parse(localStorage.getItem("Classworks_settings"))["background.selection"]);
+
+test("a missing cached background automatically recovers after offline startup reconnects", async ({page, context}) => {
+  await page.goto(`${origin}/settings`);
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  await button(page, presets[0]).click();
+  await expect(button(page, presets[0])).toBeEnabled();
+  await expect(page.locator(".app-background-image")).toHaveCSS("background-image", /blob:/);
+  await page.evaluate(() => caches.delete("classworks-backgrounds-v1"));
+  await context.setOffline(true);
+  const failed = page.waitForEvent("requestfailed", request => request.url().endsWith(presets[0].image));
+  await page.reload();
+  await failed;
+  await expect(button(page, presets[0])).toBeVisible();
+  await expect(page.locator(".app-background-image")).not.toHaveCSS("background-image", /blob:/);
+  await context.setOffline(false);
+  await expect(page.locator(".app-background-image")).toHaveCSS("background-image", /blob:/);
+  expect(await selected(page)).toEqual({kind: "preset", id: presets[0].id});
+});
 
 test("preset gallery downloads only chosen full images and selected background survives offline reload", async ({page, context}) => {
   const downloads = [];
@@ -51,6 +71,65 @@ test("preset gallery downloads only chosen full images and selected background s
 
 test.describe("background failure handling", () => {
   test.use({serviceWorkers: "block"});
+
+test("a stalled response body times out, preserves the old background and permits another selection", async ({page}) => {
+  const server = createServer((request, response) => {
+    response.writeHead(200, {"Content-Type": "image/webp", "Access-Control-Allow-Origin": "*"});
+    response.flushHeaders();
+    response.write("RIFF"); // Real HTTP headers and partial body; deliberately never finish.
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    await page.goto(`${origin}/settings`);
+    await button(page, presets[0]).click();
+    await expect(button(page, presets[0])).toBeEnabled();
+    await expect(page.locator(".app-background-image")).toHaveCSS("background-image", /blob:/);
+    const previous = await page.locator(".app-background-image").evaluate(element => window.getComputedStyle(element).backgroundImage);
+    await page.evaluate(({path, slowUrl}) => {
+      window.restoreBackgroundFetch = window.fetch.bind(window);
+      window.fetch = (input, options) => window.restoreBackgroundFetch(String(input).endsWith(path) ? slowUrl : input, options);
+    }, {path: presets[1].image, slowUrl: `http://127.0.0.1:${server.address().port}/slow-image`});
+    await button(page, presets[1]).click();
+    await expect(page.getByText("背景图片下载超时，请重试", {exact: true})).toBeVisible({timeout: 25000});
+    await expect(button(page, presets[1])).toBeEnabled();
+    await expect(page.locator(".app-background-image")).toHaveCSS("background-image", previous);
+    expect(await selected(page)).toEqual({kind: "preset", id: presets[0].id});
+    expect(await page.evaluate(async path => Boolean(await (await caches.open("classworks-backgrounds-v1")).match(new URL(path, window.location.origin))), presets[1].image)).toBe(false);
+    await page.evaluate(() => { window.fetch = window.restoreBackgroundFetch; });
+    await button(page, presets[1]).click();
+    await expect(button(page, presets[1])).toHaveAttribute("aria-pressed", "true");
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test("reconnection before failure settles retries once and a late result cannot replace a new URL", async ({page}) => {
+  const pending = [];
+  await page.route(`${origin}/${presets[0].image}`, route => { pending.push(route); });
+  await page.addInitScript(preset => {
+    const settings = JSON.parse(localStorage.getItem("Classworks_settings"));
+    settings["background.selection"] = {kind: "preset", id: preset.id};
+    localStorage.setItem("Classworks_settings", JSON.stringify(settings));
+  }, presets[0]);
+  await page.goto(`${origin}/settings`);
+  await expect.poll(() => pending.length).toBe(1);
+  const reconnect = () => page.evaluate(() => { for (let i = 0; i < 3; i++) window.dispatchEvent(new window.Event("online")); });
+  await reconnect();
+  expect(pending).toHaveLength(1);
+  await pending[0].abort("failed");
+  await expect.poll(() => pending.length).toBe(2);
+  await reconnect();
+  expect(pending).toHaveLength(2);
+  await page.getByRole("button", {name: "图片网址", exact: true}).click();
+  await page.getByRole("textbox", {name: "背景图片网址"}).fill(`${origin}/${presets[1].thumbnail}`);
+  await page.getByRole("button", {name: "使用此网址", exact: true}).click();
+  await pending[1].fulfill({status: 200, contentType: "image/webp", body: readFileSync(new URL(`../../public/${presets[0].image}`, import.meta.url))});
+  await expect.poll(() => page.evaluate(async path => Boolean(await (await caches.open("classworks-backgrounds-v1")).match(new URL(path, window.location.origin))), presets[0].image)).toBe(true);
+  await expect(page.locator(".app-background-image")).toHaveCSS("background-image", new RegExp(presets[1].thumbnail));
+  expect(await selected(page)).toEqual({kind: "url", url: `${origin}/${presets[1].thumbnail}`});
+  expect(pending).toHaveLength(2);
+});
 test("failed downloads and settings writes preserve the previous background; URL selection overrides legacy data", async ({page}) => {
   await page.goto(`${origin}/settings`);
   await button(page, presets[0]).click();

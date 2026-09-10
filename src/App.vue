@@ -64,6 +64,11 @@ const bgSrc = ref("");
 const bgBlur = ref(10);
 const bgOpacity = ref(30);
 let backgroundRequest = 0, backgroundKey = "", backgroundObjectUrl = "";
+let backgroundOnlineVersion = 0;
+function onBackgroundOnline() {
+  backgroundOnlineVersion++;
+  void loadBgSettings();
+}
 function releaseBackgroundObject() {
   if (backgroundObjectUrl) URL.revokeObjectURL(backgroundObjectUrl);
   backgroundObjectUrl = "";
@@ -81,6 +86,7 @@ async function loadBgSettings() {
   if (key === backgroundKey) return;
   backgroundKey = key;
   const request = ++backgroundRequest;
+  const onlineVersion = backgroundOnlineVersion;
   if (!bgEnabled.value) { releaseBackgroundObject(); bgSrc.value = ""; return; }
   if (selection?.kind === "preset") {
     const preset = findBackgroundPreset(selection.id);
@@ -90,7 +96,13 @@ async function loadBgSettings() {
       if (request !== backgroundRequest) { URL.revokeObjectURL(objectUrl); return; }
       releaseBackgroundObject(); backgroundObjectUrl = objectUrl; bgSrc.value = objectUrl;
       await pruneBackgroundCache(preset.id);
-    } catch { if (request === backgroundRequest) backgroundKey = ""; }
+    } catch {
+      if (request !== backgroundRequest) return;
+      backgroundKey = "";
+      // Reconnection may precede the rejected request's catch. Retry once after
+      // that request settles; repeated online events never start parallel loads.
+      if (onlineVersion !== backgroundOnlineVersion) void loadBgSettings();
+    }
   } else {
     releaseBackgroundObject();
     bgSrc.value = selection?.kind === "url" ? selection.url : imageData || url;
@@ -147,6 +159,7 @@ onMounted(() => {
 
   window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
   window.addEventListener('appinstalled', onAppInstalled);
+  window.addEventListener('online', onBackgroundOnline);
 });
 
 onUnmounted(() => {
@@ -154,6 +167,7 @@ onUnmounted(() => {
   if (unwatchSettings) unwatchSettings();
   window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
   window.removeEventListener('appinstalled', onAppInstalled);
+  window.removeEventListener('online', onBackgroundOnline);
 });
 </script>
 <style>

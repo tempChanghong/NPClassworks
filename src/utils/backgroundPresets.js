@@ -14,6 +14,7 @@ export async function loadPresetBackground(preset) {
   let response;
   try { response = await cache?.match(url); } catch { cache = null; }
   let cached = Boolean(response), fallback = false;
+  let blob;
   if (!response && recentImage?.url === url) response = new window.Response(recentImage.blob);
   if (!response) {
     const controller = new window.AbortController();
@@ -21,18 +22,20 @@ export async function loadPresetBackground(preset) {
     try {
       response = await fetch(url, {signal: controller.signal});
       if (!response.ok || !response.headers.get("Content-Type")?.startsWith("image/")) throw new Error("背景图片下载失败");
+      // fetch resolves at the headers; keep the deadline until all image bytes arrive.
+      blob = await response.blob();
     } catch (error) {
       // A PWA upgrade may change an asset hash while offline. Keep the last
       // downloaded version of this same preset available until the network recovers.
       const previous = (await cache?.keys() || []).find(key => new URL(key.url).pathname.split("/").pop().startsWith(`${preset.id}-`));
-      if (!previous) throw error;
+      if (!previous) throw controller.signal.aborted ? new Error("背景图片下载超时，请重试") : error;
       response = await cache.match(previous);
       cached = true; fallback = true;
     } finally {
       window.clearTimeout(timeout);
     }
   }
-  const blob = await response.blob();
+  blob ??= await response.blob();
   const objectUrl = URL.createObjectURL(blob);
   try {
     const image = new window.Image(); image.src = objectUrl;
