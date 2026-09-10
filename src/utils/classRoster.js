@@ -17,11 +17,27 @@ export function validateRoster(students) {
 }
 
 export function importRoster(text, existing, mode = "append") {
-  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  // Preserve tab-delimited empty cells until columns have been parsed.
+  const lines = text.split(/\r\n?|\n/).map((line, index) => ({line, row: index + 1})).filter(({line}) => line.trim());
   if (!lines.length) throw new Error("请先粘贴学生名单");
-  const parsed = lines.map(line => {
-    const match = line.match(/^(\S+)\s+(.+)$/);
-    const item = match ? {studentNumber: match[1], name: match[2].trim()} : {studentNumber: "", name: line};
+  const unnumberedNames = new Set();
+  const parsed = lines.map(({line, row}) => {
+    let item;
+    if (line.includes("\t")) {
+      const columns = line.split("\t");
+      if (columns.length !== 2) throw new Error(`第 ${row} 行：请只粘贴“学号、姓名”两列`);
+      item = {studentNumber: columns[0].trim(), name: columns[1].trim()};
+    } else {
+      // Keep the existing plain-text formats: a name, or "number name".
+      const trimmed = line.trim();
+      const match = trimmed.match(/^(\S+)\s+(.+)$/);
+      item = match ? {studentNumber: match[1], name: match[2].trim()} : {studentNumber: "", name: trimmed};
+    }
+    if (!item.name) throw new Error(`第 ${row} 行：姓名不能为空`);
+    if (!item.studentNumber) {
+      if (unnumberedNames.has(item.name)) throw new Error(`第 ${row} 行：“${item.name}”存在同名且未填写学号的学生，请补充不同学号，或在表格中逐项添加`);
+      unnumberedNames.add(item.name);
+    }
     const matches = existing.filter(s => item.studentNumber
       ? s.studentNumber === item.studentNumber : !s.studentNumber && s.name === item.name);
     if (matches.length > 1) throw new Error(`“${item.name}”存在同名记录，请在表格中逐项编辑`);

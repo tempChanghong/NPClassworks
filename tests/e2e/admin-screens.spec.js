@@ -99,6 +99,55 @@ test("student roster preserves IDs, previews imports, retains conflict drafts an
   } finally { await context.close(); }
 });
 
+for (const mode of ["append", "replace"]) {
+  test(`student roster ${mode} import preserves spreadsheet cells and rejects ambiguous names before saving`, async ({browser}) => {
+    let students = [{id: "s1", name: "欧阳 小明", studentNumber: ""}];
+    const writes = [];
+    const {context, page, errors} = await openAdmin(browser, 1440, "ADMIN", {}, "students", async context => {
+      await context.route(`${api}/api/v2/admin/schools/school/academic-structure*`, route => route.fulfill({json: {data: {
+        grades: [{id: "grade", name: "高一"}], administrativeClasses: [{id: "class-a", name: "一班", gradeId: "grade", isActive: true}],
+      }}}));
+      await context.route(`${api}/api/v2/admin/schools/school/administrative-classes/class-a/students`, route => {
+        if (route.request().method() === "PUT") {
+          const body = route.request().postDataJSON(); writes.push(body);
+          students = body.students.map((student, index) => ({...student, id: student.id || `new-${index}`}));
+        }
+        return route.fulfill({json: {data: {students, revision: "v1"}}});
+      });
+    });
+    try {
+      const manager = page.locator(".class-roster-manager");
+      await expect(manager.getByLabel("姓名 1", {exact: true})).toHaveValue("欧阳 小明");
+      await manager.getByRole("button", {name: "批量粘贴", exact: true}).click();
+      if (mode === "replace") {
+        await manager.locator(".v-select").filter({hasText: "导入方式"}).click();
+        await page.getByRole("option", {name: "整班替换（未列出的学生将移出）", exact: true}).click();
+      }
+      const paste = manager.getByLabel("粘贴名单", {exact: true});
+      for (const [text, message] of [["01\t张三\n03\t", "第 2 行：姓名不能为空"], ["\t张三\n\t张三", "同名且未填写学号"]]) {
+        await paste.fill(text);
+        await manager.getByRole("button", {name: "预览导入", exact: true}).click();
+        await expect(manager.locator(".v-alert").filter({hasText: message})).toBeVisible();
+        await expect(paste).toHaveValue(text);
+        await expect(manager.locator(".roster-row")).toHaveCount(1);
+        await expect(manager.getByLabel("姓名 1", {exact: true})).toHaveValue("欧阳 小明");
+        await expect(page.getByRole("dialog")).toHaveCount(0);
+        expect(writes).toHaveLength(0);
+      }
+      await paste.fill("\t欧阳 小明\n01\t张三\n02\t张三");
+      await manager.getByRole("button", {name: "预览导入", exact: true}).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toContainText("新增：01 张三");
+      await expect(dialog).toContainText("新增：02 张三");
+      await dialog.getByRole("button", {name: "确认保存名单", exact: true}).click();
+      await expect(manager).toContainText("名单已保存");
+      expect(writes).toHaveLength(1);
+      expect(writes[0].students).toEqual([{id: "s1", name: "欧阳 小明", studentNumber: ""}, {name: "张三", studentNumber: "01"}, {name: "张三", studentNumber: "02"}]);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+}
+
 test("quick settings retain edits typed after saving and still warn before leaving", async ({browser}) => {
   const {context, page} = await openAdmin(browser, 1440, "ADMIN", {
     quickDeadlines: [{label: "明早", dayOffset: 1, time: "07:30"}], quickInputs: [],

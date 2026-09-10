@@ -19,6 +19,49 @@ test.beforeEach(async ({request}) => {
   await request.post(`${api}/__test/reset`);
 });
 
+test("screen roster imports retain invalid paste and keep separately numbered names", async ({browser}) => {
+  const {context, page} = await openRole(browser, "screen");
+  let students = [{id: "s1", name: "欧阳 小明", studentNumber: ""}];
+  const writes = [], errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.route(`${api}/api/v2/classroom-screens/students`, route => {
+      if (route.request().method() === "PUT") {
+        const body = route.request().postDataJSON(); writes.push(body);
+        students = body.students.map((student, index) => ({...student, id: student.id || `new-${index}`}));
+      }
+      return route.fulfill({json: {data: students, rosterRevision: "v1"}});
+    });
+    await page.route(`${api}/api/v2/classroom-screens/attendance/*`, route => route.fulfill({json: {data: {absent: [], late: [], excluded: []}}}));
+    await page.goto(origin);
+    await page.getByRole("button", {name: "课堂工具", exact: true}).first().click();
+    await page.locator(".tool-entry").filter({hasText: "考勤"}).click();
+    await expect(page.getByText("欧阳 小明", {exact: true})).toBeVisible();
+    await page.getByRole("button", {name: "编辑学生名单", exact: true}).click();
+    const dialog = page.getByRole("dialog").filter({hasText: "编辑行政班学生名单"});
+    const paste = dialog.getByLabel("批量追加名单", {exact: true});
+    for (const [text, message] of [["03\t", "姓名不能为空"], ["\t张三\n\t张三", "同名且未填写学号"]]) {
+      await paste.fill(text);
+      await dialog.getByRole("button", {name: "导入到名单", exact: true}).click();
+      await expect(dialog.locator(".v-alert.bg-error").filter({hasText: message})).toBeVisible();
+      await expect(paste).toHaveValue(text);
+      await expect(dialog.getByLabel("姓名 1", {exact: true})).toHaveValue("欧阳 小明");
+      await expect(dialog.getByLabel("姓名 2", {exact: true})).toHaveCount(0);
+      expect(writes).toHaveLength(0);
+    }
+    await paste.fill("\t欧阳 小明\n01\t张三\n02\t张三");
+    await dialog.getByRole("button", {name: "导入到名单", exact: true}).click();
+    await expect(paste).toHaveValue("");
+    await expect(dialog.getByLabel("姓名 3", {exact: true})).toHaveValue("张三");
+    await dialog.getByRole("button", {name: "保存名单", exact: true}).click();
+    await page.getByRole("dialog").filter({hasText: "核对名单变更"}).getByRole("button", {name: "确认保存名单", exact: true}).click();
+    await expect(dialog).toBeHidden();
+    expect(writes).toHaveLength(1);
+    expect(writes[0].students).toEqual([{id: "s1", name: "欧阳 小明", studentNumber: ""}, {name: "张三", studentNumber: "01"}, {name: "张三", studentNumber: "02"}]);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
 test("offline unfavorite survives browser reload and preserves another device's addition", async ({browser}) => {
   const {context, page} = await openRole(browser, "teacher");
   const favorite = {type: "ASSIGNMENT", subjectId: "math", targetWorkspaceIds: ["class-a"], savedAt: "2026-09-10T00:00:00Z"};
