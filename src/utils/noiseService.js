@@ -304,17 +304,21 @@ class ClassworksNoiseService {
     else this.emit()
   }
 
-  async testMicrophoneDevice(deviceId = "default") {
+  async testMicrophoneDevice(deviceId = "default", {diagnostic = false, onPhase, signal} = {}) {
     const shouldResume = ["active", "initializing"].includes(this.status)
     const stopping = this.stop()
     const generation = this.generation
     await stopping
     if (generation !== this.generation) throw new window.DOMException("Microphone test cancelled", "AbortError")
     const controller = new AbortController()
+    const cancel = () => controller.abort()
+    signal?.addEventListener("abort", cancel, {once: true})
+    if (signal?.aborted) controller.abort()
     this.microphoneTest = controller
     try {
-      return await testMicrophoneInput(deviceId, {signal: controller.signal})
+      return await testMicrophoneInput(deviceId, {signal: controller.signal, diagnostic, onPhase})
     } finally {
+      signal?.removeEventListener("abort", cancel)
       if (this.microphoneTest === controller) this.microphoneTest = null
       if (shouldResume && generation === this.generation) await this.start({deviceId: this.preferredDeviceId})
     }

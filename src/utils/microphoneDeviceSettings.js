@@ -47,7 +47,25 @@ export async function listMicrophoneDevices({requestPermission = false} = {}) {
   }
 }
 
-export async function testMicrophoneInput(deviceId = "default", {durationMs = 1400, intervalMs = 70, signal} = {}) {
+export function summarizeMicrophoneComparison(quiet, speech) {
+  const level = samples => {
+    if (!samples.length || samples.some(value => !Number.isFinite(value) || value < 0)) return null;
+    const power = samples.reduce((sum, value) => sum + value * value, 0) / samples.length;
+    return power > 0 ? Math.max(-100, 10 * Math.log10(power)) : -100;
+  };
+  const quietDbfs = level(quiet);
+  const speechDbfs = level(speech);
+  const changeDb = quietDbfs === null || speechDbfs === null ? null : speechDbfs - quietDbfs;
+  return {quietDbfs, speechDbfs, changeDb};
+}
+
+export function microphoneProcessingSettings(settings = {}) {
+  return Object.fromEntries(["autoGainControl", "noiseSuppression", "echoCancellation"].map(key => [
+    key, typeof settings[key] === "boolean" ? settings[key] : null,
+  ]));
+}
+
+export async function testMicrophoneInput(deviceId = "default", {durationMs = 1400, intervalMs = 70, signal, diagnostic = false, onPhase} = {}) {
   const AudioContextApi = window.AudioContext || window.webkitAudioContext;
   if (!navigator.mediaDevices?.getUserMedia || !AudioContextApi) {
     throw new window.DOMException("Microphone API unavailable", "NotSupportedError");
@@ -85,14 +103,20 @@ export async function testMicrophoneInput(deviceId = "default", {durationMs = 14
     assertActive();
 
     const samples = [];
+    let clippedSamples = 0;
     const buffer = new Float32Array(analyser.fftSize);
-    const count = Math.max(4, Math.ceil(durationMs / intervalMs));
+    const phaseCount = Math.ceil(5000 / intervalMs);
+    const count = diagnostic ? phaseCount * 2 : Math.max(4, Math.ceil(durationMs / intervalMs));
     for (let index = 0; index < count; index += 1) {
+      if (diagnostic && index % phaseCount === 0) onPhase?.(index === 0 ? "quiet" : "speech");
       await new Promise(resolve => window.setTimeout(resolve, intervalMs));
       assertActive();
       analyser.getFloatTimeDomainData(buffer);
       let sumSquares = 0;
-      for (const sample of buffer) sumSquares += sample * sample;
+      for (const sample of buffer) {
+        sumSquares += sample * sample;
+        if (Math.abs(sample) >= 0.99) clippedSamples += 1;
+      }
       samples.push(Math.sqrt(sumSquares / buffer.length));
     }
 
@@ -105,6 +129,9 @@ export async function testMicrophoneInput(deviceId = "default", {durationMs = 14
       averageRms,
       peakRms,
       dbfs,
+      clippedRatio: clippedSamples / (count * buffer.length),
+      processing: microphoneProcessingSettings(stream.getAudioTracks()[0]?.getSettings?.()),
+      comparison: diagnostic ? summarizeMicrophoneComparison(samples.slice(0, phaseCount), samples.slice(phaseCount)) : null,
       deviceId: stream.getAudioTracks()[0]?.getSettings?.().deviceId || deviceId,
       label: stream.getAudioTracks()[0]?.label || "麦克风",
     };

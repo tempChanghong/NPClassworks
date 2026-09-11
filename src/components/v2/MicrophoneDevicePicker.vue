@@ -23,12 +23,21 @@
 
     <div class="microphone-picker__actions">
       <v-btn
+        :disabled="busy"
         :loading="testing"
         prepend-icon="mdi-waveform"
         variant="tonal"
-        @click="testSelectedDevice"
+        @click="testSelectedDevice(false)"
       >
         测试所选麦克风
+      </v-btn>
+      <v-btn
+        :disabled="busy"
+        prepend-icon="mdi-microphone-message"
+        variant="tonal"
+        @click="testSelectedDevice(true)"
+      >
+        安静 / 说话对照诊断
       </v-btn>
       <v-btn
         :disabled="busy || !selectionChanged"
@@ -55,8 +64,29 @@
         <span :style="{width: `${testLevel}%`}" />
       </div>
     </v-alert>
+    <v-alert
+      v-if="diagnosticResult"
+      class="mt-3"
+      type="info"
+      variant="tonal"
+    >
+      <div v-if="diagnosticResult.comparison">
+        安静阶段：{{ formatLevel(diagnosticResult.comparison.quietDbfs) }} dBFS；
+        说话阶段：{{ formatLevel(diagnosticResult.comparison.speechDbfs) }} dBFS；
+        变化：{{ formatLevel(diagnosticResult.comparison.changeDb) }} dB。
+        <p class="mt-2">
+          {{ comparisonHint }}
+        </p>
+      </div>
+      <div class="mt-2">
+        浏览器报告：{{ processingLabel }}
+      </div>
+      <div class="mt-2 text-caption">
+        dBFS 是数字输入电平，不是环境分贝。浏览器报告关闭也不能排除设备内部的音频处理。
+      </div>
+    </v-alert>
     <p class="microphone-picker__hint">
-      测试持续约 1.5 秒。请在测试时说话或拍手；虚拟麦克风若没有信号，会显示为“近似无输入”。
+      普通测试约 1.5 秒。对照诊断约 10 秒：先保持安静，看到提示后在固定位置正常说话，期间不要调整系统麦克风音量。
     </p>
   </div>
 </template>
@@ -84,6 +114,20 @@ const testing = ref(false);
 const statusMessage = ref("");
 const statusType = ref("info");
 const testLevel = ref(null);
+const diagnosticResult = ref(null);
+let testController;
+const formatLevel = value => Number.isFinite(value) ? value.toFixed(1) : "—";
+const processingLabel = computed(() => Object.entries({autoGainControl: "自动增益", noiseSuppression: "降噪", echoCancellation: "回声消除"})
+  .map(([key, label]) => `${label}：${diagnosticResult.value?.processing?.[key] === true ? "开启" : diagnosticResult.value?.processing?.[key] === false ? "关闭" : "未报告"}`).join("；"));
+const comparisonHint = computed(() => {
+  const result = diagnosticResult.value?.comparison;
+  if (!result) return "";
+  if (diagnosticResult.value.clippedRatio > 0.01) return "检测到输入削波，声音可能已经失真。请降低系统麦克风音量或远离声源后重新测试。";
+  if (result.changeDb === null) return "没有足够的有效采样，请重新测试。";
+  if (result.speechDbfs <= -90) return "说话阶段近似无输入，请检查静音、输入设备和系统麦克风音量。";
+  if (result.changeDb < 6) return "两阶段差异较小。请确认按提示操作、周围足够安静，并换一个输入设备对照；单次测试不能判定自动增益或硬件故障。";
+  return "本次说话时输入有明显上升。可在相同位置重复测试，检查结果是否稳定；这不代表分贝测量已校准。";
+});
 const busy = computed(() => scanning.value || testing.value);
 const selectionChanged = computed(() => selectedDeviceId.value !== savedDeviceId.value);
 const deviceOptions = computed(() => {
@@ -104,6 +148,11 @@ const deviceOptions = computed(() => {
 });
 
 watch(() => props.bindingId, loadSelection, {immediate: true});
+watch(selectedDeviceId, () => {
+  diagnosticResult.value = null;
+  statusMessage.value = "";
+  testLevel.value = null;
+});
 
 onMounted(() => {
   void refreshDevices(false);
@@ -111,10 +160,15 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  testController?.abort();
   navigator.mediaDevices?.removeEventListener?.("devicechange", handleDeviceChange);
 });
 
 function loadSelection() {
+  testController?.abort();
+  diagnosticResult.value = null;
+  statusMessage.value = "";
+  testLevel.value = null;
   const settings = loadMicrophoneDeviceSettings(props.bindingId);
   selectedDeviceId.value = settings.deviceId;
   savedDeviceId.value = settings.deviceId;
@@ -144,13 +198,26 @@ async function refreshDevices(requestPermission) {
   emit("permission", state);
 }
 
-async function testSelectedDevice() {
+async function testSelectedDevice(diagnostic = false) {
+  if (busy.value) return;
+  const controller = new AbortController();
+  testController = controller;
   testing.value = true;
+  diagnosticResult.value = null;
   testLevel.value = null;
   statusType.value = "info";
   statusMessage.value = "正在采样，请对着麦克风说话或拍手……";
   try {
-    const result = await noiseService.testMicrophoneDevice(selectedDeviceId.value);
+    const result = await noiseService.testMicrophoneDevice(selectedDeviceId.value, {
+      diagnostic,
+      signal: controller.signal,
+      onPhase: phase => {
+        if (controller.signal.aborted) return;
+        statusMessage.value = phase === "quiet" ? "第一阶段：请保持安静约 5 秒……" : "第二阶段：请在原位置正常说话约 5 秒……";
+      },
+    });
+    if (controller.signal.aborted) return;
+    diagnosticResult.value = result;
     emit("permission", "granted");
     const displayDbfs = Math.max(-100, Math.min(0, result.dbfs));
     testLevel.value = Math.round(Math.max(2, Math.min(100, (displayDbfs + 80) / 0.8)));
@@ -161,10 +228,12 @@ async function testSelectedDevice() {
     };
     [statusType.value, statusMessage.value] = labels[result.state];
   } catch (error) {
+    if (controller.signal.aborted || error.name === "AbortError") return;
     const state = classifyMicrophoneError(error, {secureContext: window.isSecureContext});
     statusType.value = "error";
     statusMessage.value = microphonePermissionLabel(state);
   } finally {
+    if (testController === controller) testController = null;
     testing.value = false;
   }
 }
