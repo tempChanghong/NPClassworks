@@ -89,7 +89,7 @@
 
     <section
       v-if="organized.notices.length"
-      class="feed-section mb-5"
+      class="feed-section feed-notices mb-5"
     >
       <div class="feed-section-heading">
         <v-icon
@@ -103,19 +103,36 @@
         >
           {{ organized.notices.length }}
         </v-chip>
+        <v-spacer />
+        <v-btn
+          v-if="screenMode"
+          :aria-controls="noticeContentId"
+          :aria-expanded="!noticesCollapsed"
+          :prepend-icon="noticesCollapsed ? 'mdi-chevron-down' : 'mdi-chevron-up'"
+          size="small"
+          variant="text"
+          @click="noticesCollapsed = !noticesCollapsed"
+        >
+          {{ noticesCollapsed ? "展开通知栏" : "折叠通知栏" }}
+        </v-btn>
       </div>
-      <HomeworkFeedGrid
-        :can-edit="canEdit"
-        :publications="organized.notices"
-        :screen-mode="screenMode"
-        :settings="settings"
-        :current-time="now"
-        :completion-enabled="completionEnabled"
-        :completion-records="completionRecords"
-        @edit="$emit('edit', $event)"
-        @history="$emit('history', $event)"
-        @toggle-complete="toggleCompletion"
-      />
+      <div
+        v-show="!screenMode || !noticesCollapsed"
+        :id="noticeContentId"
+      >
+        <HomeworkFeedGrid
+          :can-edit="canEdit"
+          :publications="organized.notices"
+          :screen-mode="screenMode"
+          :settings="settings"
+          :current-time="now"
+          :completion-enabled="completionEnabled"
+          :completion-records="completionRecords"
+          @edit="$emit('edit', $event)"
+          @history="$emit('history', $event)"
+          @toggle-complete="toggleCompletion"
+        />
+      </div>
     </section>
 
     <section
@@ -214,7 +231,7 @@
 </template>
 
 <script setup>
-import {computed, onBeforeUnmount, onMounted, ref, watch} from "vue";
+import {computed, onBeforeUnmount, onMounted, ref, useId, watch} from "vue";
 import HomeworkFeedGrid from "@/components/v2/HomeworkFeedGrid.vue";
 import {SCREEN_DISPLAY_DEFAULTS} from "@/utils/screenDisplaySettings";
 import {organizePublicationFeed, publicationFilterOptions} from "@/utils/publicationFeed";
@@ -238,6 +255,16 @@ defineEmits(["edit", "history", "focus"]);
 const subjectId = ref("");
 const workspaceId = ref("");
 const sortMode = ref("smart");
+const noticesCollapsed = ref(false);
+const noticeContentId = useId();
+// Compare identities and revisions, not count/order: replacement notices and
+// corrections must reopen the bar; ordinary refreshes and removals must not.
+watch(() => props.publications.filter(item => item.type === "NOTICE")
+  .map(item => `${item.id}:${item.revision}`), (keys, previous = []) => {
+  if (!props.screenMode) return;
+  const previousKeys = new Set(previous);
+  if (keys.some(key => !previousKeys.has(key))) noticesCollapsed.value = false;
+});
 const completionRecords = ref(props.completionEnabled ? loadStudentHomeworkCompletions() : {});
 const hideCompleted = ref(false);
 const now = ref(new Date());

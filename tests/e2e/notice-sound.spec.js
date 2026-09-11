@@ -7,6 +7,75 @@ test.use({serviceWorkers: "block", storageState: {cookies: [], origins: [{origin
   {name: "classworks-v2-screen-token", value: "screen-token"},
 ]}]}});
 
+test("screen notice bar stays collapsed on refresh/removal and expands for new notices and revisions", async ({page, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  // The shared fixture retains withdrawn rows; the production feed excludes them.
+  await page.route("**/classroom-screens/feed?*", async route => {
+    const response = await route.fetch();
+    const json = await response.json();
+    json.data.items = json.data.items.filter(item => item.status === "PUBLISHED");
+    await route.fulfill({response, json});
+  });
+  const createNotice = async (content, priority = "MINOR") => {
+    const response = await request.post(`${api}/api/v2/publications`, {data: {
+      type: "NOTICE", priority, content, contentJson: {popupEnabled: false},
+    }});
+    expect(response.ok()).toBe(true);
+    return (await response.json()).data;
+  };
+  const original = await createNotice("折叠栏的原有通知");
+  await request.post(`${api}/api/v2/publications`, {data: {
+    type: "ASSIGNMENT", subjectId: "math", content: "折叠后作业仍然显示",
+  }});
+  await page.goto(origin);
+  const bar = page.locator(".feed-notices");
+  const collapse = () => bar.getByRole("button", {name: "折叠通知栏", exact: true});
+  const expand = () => bar.getByRole("button", {name: "展开通知栏", exact: true});
+  await expect(bar.getByText(original.content, {exact: true})).toBeVisible();
+  await collapse().click();
+  await expect(expand()).toHaveAttribute("aria-expanded", "false");
+  await expect(bar.getByText(original.content, {exact: true})).toBeHidden();
+  await expect(page.locator(".organized-homework-feed").getByText("折叠后作业仍然显示", {exact: true})).toBeVisible();
+  // A completed refresh containing the same notices must preserve the choice.
+  const refresh = page.waitForResponse(response => response.url().includes("/classroom-screens/feed"));
+  await page.locator(".screen-toolbar").getByRole("button", {name: "刷新", exact: true}).click();
+  await refresh;
+  await expect(page.locator(".classroom-screen-view > .v-progress-linear")).toBeHidden();
+  await expect(expand()).toBeVisible();
+  await expand().click();
+  await expect(bar.getByText(original.content, {exact: true})).toBeVisible();
+
+  for (const priority of ["MINOR", "NORMAL", "IMPORTANT", "URGENT"]) {
+    await collapse().click();
+    const notice = await createNotice(`新到达的${priority}通知`, priority);
+    await expect(collapse()).toHaveAttribute("aria-expanded", "true");
+    if (priority === "MINOR") {
+      await expect(page.locator(".screen-notice-popup")).toBeHidden();
+    } else {
+      const popup = page.locator(".screen-notice-popup");
+      await expect(popup).toContainText(notice.content);
+      await popup.getByRole("button", {name: "知道了", exact: true}).click();
+      await expect(popup).toBeHidden();
+    }
+    await expect(bar.getByText(original.content, {exact: true})).toBeVisible();
+  }
+
+  await collapse().click();
+  const updated = await request.patch(`${api}/api/v2/publications/${original.id}`, {
+    headers: {"If-Match": `"${original.revision}"`}, data: {content: "原有通知更正后的内容"},
+  });
+  expect(updated.ok()).toBe(true);
+  await expect(bar.getByText("原有通知更正后的内容", {exact: true})).toBeVisible();
+  await collapse().click();
+  const withdrawn = await request.patch(`${api}/api/v2/publications/${original.id}`, {
+    headers: {"If-Match": `"${(await updated.json()).data.revision}"`}, data: {status: "WITHDRAWN"},
+  });
+  expect(withdrawn.ok()).toBe(true);
+  await expect(bar.getByText("原有通知更正后的内容", {exact: true})).toHaveCount(0);
+  await expect(expand()).toHaveAttribute("aria-expanded", "false");
+});
+
 for (const holdLock of [false, true]) {
 test(`two tabs preserve offline acknowledgements across reload without the feed (lock held: ${holdLock})`, async ({page, context, request}) => {
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
