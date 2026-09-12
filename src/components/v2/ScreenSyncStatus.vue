@@ -54,6 +54,11 @@
         >
           {{ statusDetail }}
         </v-alert>
+        <div class="screen-content-status mb-4 text-body-2">
+          <p>{{ store.screenRealtimeConnected ? '实时连接已建立' : '实时连接未建立' }}</p>
+          <p>{{ contentDetail }}</p>
+          <p>当前显示内容更新时间：{{ contentUpdatedAt }}</p>
+        </div>
 
         <v-list
           v-if="store.screenPendingUploads.length"
@@ -120,7 +125,7 @@
           v-else-if="!store.screenQueueReadError"
           headline="没有待提交作业"
           icon="mdi-cloud-check-outline"
-          text="当前大屏上的作业已经与服务器同步"
+          text="本机队列中没有等待上传的作业。内容更新情况请查看上方状态。"
         />
       </v-card-text>
     </v-card>
@@ -143,9 +148,23 @@ const status = computed(() => {
     syncing: {label: `正在同步${count ? ` · ${count} 项` : ""}`, color: "info", icon: "mdi-cloud-sync-outline", variant: "tonal"},
     pending: {label: `${count} 项待处理`, color: "warning", icon: "mdi-cloud-alert-outline", variant: "tonal"},
     reconnecting: {label: "正在重连", color: "warning", icon: "mdi-lan-pending", variant: "tonal"},
+    stale: {label: "内容更新失败", color: "warning", icon: "mdi-cloud-alert-outline", variant: "tonal"},
+    refreshing: {label: "正在更新内容", color: "info", icon: "mdi-cloud-sync-outline", variant: "tonal"},
+    awaiting: {label: "等待内容同步", color: "warning", icon: "mdi-cloud-download-outline", variant: "tonal"},
     synced: {label: "实时同步", color: "success", icon: "mdi-cloud-check-outline", variant: "tonal"},
   };
   return states[store.screenSyncState];
+});
+const contentDetail = computed(() => {
+  if (store.feedLoading) return "正在请求所选日期的最新内容。";
+  if (store.feedLoadError) return store.feedLoadError;
+  if (store.feedUsingCache) return "正在显示本机缓存，内容可能不是最新。";
+  return store.feedGeneratedAt ? "上次内容请求成功。" : "尚未成功加载所选日期的内容。";
+});
+const contentUpdatedAt = computed(() => {
+  const value = store.feedGeneratedAt;
+  return value && Number.isFinite(new Date(value).getTime())
+    ? new Date(value).toLocaleString("zh-CN") : "暂无成功记录";
 });
 const statusDetail = computed(() => {
   if (store.screenQueueReadError) return store.screenQueueReadError;
@@ -157,7 +176,7 @@ const statusDetail = computed(() => {
 });
 
 function openQueue() {
-  if (store.screenPendingUploads.length || store.screenSyncState !== "synced") dialog.value = true;
+  dialog.value = true;
 }
 
 function queuedAtLabel(value) {

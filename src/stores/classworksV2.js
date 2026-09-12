@@ -123,6 +123,9 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
       if (state.screenSyncing) return "syncing";
       if (state.screenPendingUploads.length) return "pending";
       if (!state.screenRealtimeConnected) return "reconnecting";
+      if (state.feedLoadError || state.feedUsingCache) return "stale";
+      if (state.feedLoading) return "refreshing";
+      if (!state.feedGeneratedAt) return "awaiting";
       return "synced";
     },
   },

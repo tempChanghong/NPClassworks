@@ -8,6 +8,46 @@ after(async () => { await h?.close(); });
 beforeEach(() => h.reset());
 
 const endpoint = "GET /api/v2/classroom-screens/feed";
+test("healthy network and socket do not imply content success; retry and cached failures have distinct sync states", async () => {
+  const store = h.newStore({screen: true});
+  store.screenNetworkOnline = true;
+  store.screenRealtimeConnected = true;
+  assert.equal(store.screenSyncState, "awaiting");
+  const updatedAt = "2026-09-12T04:00:00Z";
+  let gate = deferred(), status = 200, started = false;
+  h.routes.set(endpoint, async (_req, reply) => {
+    started = true;
+    await gate.promise;
+    reply(status === 200 ? {items: [{id: "work"}], generatedAt: updatedAt} : {message: "temporarily unavailable"}, status);
+  });
+  let pending = store.loadScreenFeed();
+  try {
+    await eventually(() => assert(started));
+    assert.equal(store.screenSyncState, "refreshing");
+    gate.resolve(); await pending;
+    assert.equal(store.screenSyncState, "synced");
+    status = 503; gate = deferred(); started = false;
+    pending = store.loadScreenFeed();
+    await eventually(() => assert(started));
+    assert.equal(store.screenSyncState, "refreshing");
+    gate.resolve(); await pending;
+    assert.equal(store.feedUsingCache, true);
+    assert.equal(store.feedGeneratedAt, updatedAt);
+    assert.equal(store.screenSyncState, "stale");
+    store.screenNetworkOnline = false;
+    assert.equal(store.screenSyncState, "offline");
+    store.screenNetworkOnline = true;
+    status = 200;
+    await store.loadScreenFeed();
+    assert.equal(store.screenSyncState, "synced");
+    // A failure on a different day has no successful snapshot to claim as synced.
+    store.boardDate = "2026-09-13"; status = 503;
+    await store.loadScreenFeed();
+    assert.equal(store.feedGeneratedAt, null);
+    assert.equal(store.screenSyncState, "stale");
+  } finally { gate.resolve(); await pending; }
+});
+
 const mutations = {
   binding: store => { store.screenSession = {binding: {id: "screen-b"}, workspaces: [{id: "class-b"}]}; },
   date: store => { store.boardDate = "2026-09-08"; },

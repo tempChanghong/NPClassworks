@@ -71,18 +71,25 @@
         </p>
         <v-alert
           v-if="error"
-          type="error"
+          :type="hasSnapshot ? 'warning' : 'error'"
           variant="tonal"
           class="mb-3"
         >
           {{ error }}
+          <span v-if="hasSnapshot">刷新未成功，保留上次加载的结果，内容可能已变化。</span>
         </v-alert>
+        <p
+          v-if="hasSnapshot"
+          class="text-caption mb-3"
+        >
+          上次成功加载：{{ loadedAtLabel }}{{ loading ? ' · 正在刷新，暂时显示上次结果' : '' }}
+        </p>
         <v-progress-linear
           v-if="loading"
           indeterminate
         />
         <div
-          v-else-if="!error"
+          v-if="hasSnapshot"
           class="week-grid"
         >
           <section
@@ -155,14 +162,20 @@ const props = defineProps({className: {type: String, required: true}, hideButton
 const store = useClassworksV2Store();
 const opened = ref(false), start = ref(homeworkWeekStart(store.boardDate)), view = ref("board"), subject = ref("");
 const items = ref([]), error = ref(""), loading = ref(false);
+const loadedQuery = ref(""), loadedAt = ref(null);
+let loadedToken;
 let controller, generation = 0;
 const scope = computed(() => JSON.stringify([store.feedAudience, store.activeWorkspaceIds, store.screenSession?.binding?.id, props.className]));
+const query = computed(() => JSON.stringify([scope.value, start.value, view.value]));
+const hasSnapshot = computed(() => loadedQuery.value === query.value);
+const loadedAtLabel = computed(() => loadedAt.value?.toLocaleString("zh-CN") || "");
 const subjects = computed(() => [...new Map(items.value.map(item => [item.subjectId, {value: item.subjectId, title: item.subject?.name || item.subjectId}])).values()]);
 const days = computed(() => groupHomeworkWeek(items.value, start.value, view.value, subject.value));
 const weekday = date => new Intl.DateTimeFormat("zh-CN", {weekday: "short"}).format(new Date(`${date}T12:00:00`));
 const deadlineLabel = date => new Intl.DateTimeFormat("zh-CN", {timeZone: "Asia/Shanghai", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"}).format(new Date(date));
 const targetNames = item => (item.targets || []).filter(target => store.activeWorkspaceIds.includes(target.workspaceId)).map(target => target.workspace?.name || "所选教学班").join("、");
 function cancel() { generation++; controller?.abort(); loading.value = false; }
+function clearSnapshot() { items.value = []; loadedQuery.value = ""; loadedAt.value = null; loadedToken = undefined; }
 function open() {
   if (!store.activeWorkspaceIds.length) return;
   start.value = homeworkWeekStart(store.boardDate); subject.value = ""; opened.value = true;
@@ -173,22 +186,29 @@ async function reload() {
   controller = new AbortController();
   const signal = controller.signal, current = generation, currentScope = scope.value, token = getClassroomScreenToken();
   const screen = store.feedAudience === "screen", workspaceIds = [...store.activeWorkspaceIds];
-  error.value = ""; items.value = []; loading.value = true;
-  const isCurrent = () => current === generation && scope.value === currentScope && token === getClassroomScreenToken();
+  const currentQuery = query.value;
+  if (!hasSnapshot.value || loadedToken !== token) clearSnapshot();
+  error.value = ""; loading.value = true;
+  const isCurrent = () => current === generation && scope.value === currentScope && query.value === currentQuery && token === getClassroomScreenToken();
   try {
     const result = await loadHomeworkWeek(params => classworksV2Api.publicationWeek(workspaceIds, params, {screen, signal}), {
       weekStart: start.value, weekView: view.value,
     }, signal);
     if (isCurrent()) {
       items.value = result;
+      loadedQuery.value = currentQuery; loadedAt.value = new Date(); loadedToken = token;
       if (subject.value && !result.some(item => item.subjectId === subject.value)) subject.value = "";
     }
   } catch (failure) {
-    if (isCurrent() && !signal.aborted) error.value = failure.response?.data?.message || failure.message || "一周总览加载失败，请重试。";
+    if (isCurrent() && !signal.aborted) {
+      // Revoked access must not leave a successful private snapshot visible.
+      if ([401, 403].includes(failure.response?.status)) clearSnapshot();
+      error.value = failure.response?.data?.message || failure.message || "一周总览加载失败，请重试。";
+    }
   } finally { if (current === generation) loading.value = false; }
 }
-watch([opened, start, view], () => { if (opened.value) void reload(); else { cancel(); items.value = []; } });
-watch(scope, () => { opened.value = false; cancel(); items.value = []; });
+watch([opened, start, view], () => { if (opened.value) void reload(); else { cancel(); clearSnapshot(); } });
+watch(scope, () => { opened.value = false; cancel(); clearSnapshot(); });
 onUnmounted(cancel);
 defineExpose({open});
 </script>

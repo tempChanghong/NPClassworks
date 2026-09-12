@@ -39,6 +39,44 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
 
+test("screen separates a connected socket from failed content refresh and reports the cached content timestamp", async ({browser, request}) => {
+  const board = await openBoard(browser, "screen", "block");
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  try {
+    const date = await board.page.getByLabel("选择日期").inputValue();
+    await seed(request, {boardDate: date, content: "需要保留的内容"});
+    await expect(board.page.getByText("需要保留的内容", {exact: true})).toBeVisible();
+    const chip = board.page.locator(".screen-sync-chip");
+    await expect(chip).toHaveText("实时同步");
+    await chip.click();
+    const dialog = board.page.getByRole("dialog");
+    const timestamp = await dialog.locator(".screen-content-status p").last().textContent();
+    expect(timestamp).not.toContain("暂无成功记录");
+    await board.page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await board.page.route("**/api/v2/classroom-screens/feed?**", async route => {
+      await gate;
+      await route.fulfill({status: 503, json: {message: "测试内容服务暂不可用"}});
+    });
+    await board.page.getByRole("button", {name: "刷新", exact: true}).first().click();
+    await expect(chip).toHaveText("正在更新内容");
+    release();
+    await expect(chip).toHaveText("内容更新失败");
+    await chip.click();
+    await expect(dialog.locator(".screen-content-status")).toContainText("实时连接已建立");
+    await expect(dialog.locator(".screen-content-status")).toContainText("上次同步的内容");
+    await expect(dialog.locator(".screen-content-status p").last()).toHaveText(timestamp);
+    await expect(dialog).toContainText("没有待提交作业");
+    await expect(dialog).not.toContainText("当前大屏上的作业已经与服务器同步");
+    await board.page.keyboard.press("Escape");
+    await board.page.unroute("**/api/v2/classroom-screens/feed?**");
+    await board.page.getByRole("button", {name: "刷新", exact: true}).first().click();
+    await expect(chip).toHaveText("实时同步");
+    expect(board.errors).toEqual([]);
+  } finally { release(); await board.context.close(); }
+});
+
 test("real-shaped screen session resolves missing subject names; new homework is silent until edited", async ({browser, request}) => {
   const board = await openBoard(browser, "screen");
   try {
@@ -136,12 +174,23 @@ test("student switches weekly board/deadline views including earlier homework du
     await board.page.route("**/api/v2/publications/feed?**weekStart**", route => route.fulfill({json: {data: {items: []}}}));
     await dialog.getByRole("button", {name: "刷新总览"}).click();
     await expect(dialog.getByText(/后端尚不支持一周总览/)).toBeVisible();
-    await expect(dialog.locator(".week-day")).toHaveCount(0);
+    await expect(dialog.locator(".week-day")).toHaveCount(7);
+    await expect(dialog).toContainText("刷新未成功，保留上次加载的结果");
+    await expect(dialog.getByText("下周的作业", {exact: true})).toBeVisible();
     await board.page.unroute("**/api/v2/publications/feed?**weekStart**");
     await board.context.setOffline(true);
     await dialog.getByRole("button", {name: "刷新总览"}).click();
     await expect(dialog.locator(".v-alert")).toBeVisible();
+    await expect(dialog.locator(".week-day")).toHaveCount(7);
+    await expect(dialog.getByText("下周的作业", {exact: true})).toBeVisible();
+    await dialog.getByRole("button", {name: "上一周"}).click();
+    await expect(dialog.locator(".v-alert")).toBeVisible();
     await expect(dialog.locator(".week-day")).toHaveCount(0);
+    await expect(dialog.getByText("下周的作业", {exact: true})).toHaveCount(0);
+    await board.context.setOffline(false);
+    await dialog.getByRole("button", {name: "刷新总览"}).click();
+    await expect(dialog.getByText("上周布置本周截止", {exact: true})).toBeVisible();
+    await expect(dialog.locator(".v-alert")).toHaveCount(0);
     expect(board.errors).toEqual([]);
   } finally { await board.context.close(); }
 });
