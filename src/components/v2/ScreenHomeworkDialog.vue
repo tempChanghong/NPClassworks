@@ -476,8 +476,7 @@ const canSave = computed(() => Boolean(
   (form.title.trim() || form.content.trim()),
 ));
 const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
-const screenConflictInput = computed(() => ({
-  contentJson: basePublication.value?.contentJson,
+const screenWriteInput = computed(() => ({
   subjectId: form.subjectId,
   targetWorkspaceIds: [form.targetWorkspaceId],
   title: form.title,
@@ -487,6 +486,12 @@ const screenConflictInput = computed(() => ({
   priority: form.priority,
   publishAt: basePublication.value?.publishAt,
   status: "PUBLISHED",
+}));
+// Metadata participates in comparison, but this editor cannot change it.
+// Omit it from writes so the server keeps the latest teacher-maintained fields.
+const screenConflictInput = computed(() => ({
+  ...screenWriteInput.value,
+  contentJson: basePublication.value?.contentJson,
 }));
 const screenConflictRows = computed(() => buildConflictComparison(
   screenConflictInput.value,
@@ -724,7 +729,7 @@ async function applyLocalOnLatest() {
   if (!latest) return;
   if (!await confirmAction({
     title: "用本机输入生成新版本",
-    message: "服务器当前版本会保留在历史中，本机输入将成为下一个待教师确认版本。",
+    message: "服务器当前版本会保留在历史中，本机输入将成为下一个待教师确认版本。提交说明和需带物品等本页不可编辑的信息保留服务器最新版。",
     confirmText: "保存新版本",
     color: "warning",
   })) return;
@@ -736,7 +741,7 @@ async function applyLocalOnLatest() {
       targetName: eligibleTargets.value.find((workspace) => workspace.id === form.targetWorkspaceId)?.name || "目标班级",
       operation: "updated",
     };
-    const saved = await store.saveScreenPublication(screenConflictInput.value, latest, context);
+    const saved = await store.saveScreenPublication(screenWriteInput.value, latest, context);
     clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftStorage);
     conflict.value = null;
     emit("saved", saved, context);

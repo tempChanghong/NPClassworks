@@ -835,7 +835,11 @@ function completeSave(publication, edit, details) {
   } else if (edit.current()) {
     // Keep later input, but the next save must use the revision/ID that was actually saved.
     editingBase.value = publication;
-    cleanForm.value = edit.savedForm;
+    const savedForm = JSON.parse(edit.savedForm);
+    // Consume only the submitted reason. A reason typed while saving belongs
+    // to the next edit and must survive this older request's completion.
+    if (form.correctionReason === savedForm.correctionReason) form.correctionReason = "";
+    cleanForm.value = JSON.stringify({...savedForm, correctionReason: ""});
   }
   if (edit.current()) {
     conflict.value = null;
