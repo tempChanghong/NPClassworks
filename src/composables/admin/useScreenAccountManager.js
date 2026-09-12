@@ -1,11 +1,19 @@
-import {computed, onUnmounted, ref} from "vue";
+import {computed, onUnmounted, ref, watch} from "vue";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
 import {confirmAction} from "@/utils/actionDialog";
 
 // One instance per admin page; shared messages and undo remain owned by the page.
 export function useScreenAccountManager({selectedSchoolId, errorMessage, successMessage, offerUndo}) {
   const screenAccounts = ref([]);
-  const screenBusy = ref(false);
+  const screenLoading = ref(false), screenMutationBusy = ref(false);
+  const screenBusy = computed(() => screenLoading.value || screenMutationBusy.value);
+  const screenLoadError = ref(""), screenLoadedAt = ref(null);
+  let running = null, disposed = false;
+  function clearSnapshot() { screenAccounts.value = []; screenLoadedAt.value = null; }
+  function cancelLoad() {
+    running?.controller.abort(); running = null; screenLoading.value = false;
+  }
+  watch(selectedSchoolId, () => { cancelLoad(); clearSnapshot(); screenLoadError.value = ""; }, {flush: "sync"});
   const screenSearch = ref("");
   const screenStatusFilter = ref("ALL");
   const newScreenName = ref("");
@@ -43,24 +51,47 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
     });
   });
 
-  async function loadScreenAccounts() {
-    if (!selectedSchoolId.value) {
-      screenAccounts.value = [];
-      return;
+  function loadScreenAccounts({afterMutation = false} = {}) {
+    if (disposed) return Promise.resolve();
+    const schoolId = selectedSchoolId.value;
+    if (!schoolId) { cancelLoad(); clearSnapshot(); return Promise.resolve(); }
+    if (running) {
+      // Vue watchers can request a follow-up after the loop returns but before
+      // its Promise's finally clears running. Queue that pass after cleanup.
+      if (afterMutation && running.finished) {
+        return running.promise.then(() => {
+          if (!disposed && selectedSchoolId.value === schoolId) return loadScreenAccounts();
+        });
+      }
+      if (afterMutation) running.again = true;
+      return running.promise;
     }
-    screenBusy.value = true;
-    try {
-      screenAccounts.value = await classworksV2Api.classroomScreens(selectedSchoolId.value);
-    } catch (error) {
-      screenAccounts.value = [];
-      errorMessage.value = describeApiError(error, "加载大屏账号失败");
-    } finally {
-      screenBusy.value = false;
-    }
+    const job = {controller: new AbortController(), again: false, finished: false};
+    running = job; screenLoading.value = true;
+    const current = () => !disposed && running === job && schoolId === selectedSchoolId.value;
+    job.promise = (async () => {
+      do {
+        job.again = false;
+        screenLoadError.value = "";
+        try {
+          const result = await classworksV2Api.classroomScreens(schoolId, {signal: job.controller.signal});
+          if (current() && !job.again) { screenAccounts.value = result; screenLoadedAt.value = new Date().toLocaleString("zh-CN"); }
+        } catch (error) {
+          if (current() && !job.again) {
+            if ([401, 403].includes(error.response?.status)) clearSnapshot();
+            screenLoadError.value = describeApiError(error, "加载大屏账号失败");
+          }
+        }
+      } while (current() && job.again);
+      job.finished = true;
+    })().finally(() => {
+      if (running === job) { running = null; screenLoading.value = false; }
+    });
+    return job.promise;
   }
 
   async function createScreenAccount() {
-    screenBusy.value = true;
+    screenMutationBusy.value = true;
     errorMessage.value = "";
     try {
       const created = await classworksV2Api.createClassroomScreenAccount(selectedSchoolId.value, {
@@ -74,11 +105,11 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
       newScreenPin.value = "";
       newScreenAdministrativeClassId.value = "";
       successMessage.value = `大屏账号 ${created.loginCode} 已创建，请在对应一体机上完成首次登录。`;
-      await loadScreenAccounts();
+      await loadScreenAccounts({afterMutation: true});
     } catch (error) {
       errorMessage.value = describeApiError(error, "创建大屏账号失败");
     } finally {
-      screenBusy.value = false;
+      screenMutationBusy.value = false;
     }
   }
 
@@ -96,7 +127,7 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
 
   async function saveScreenAccount() {
     if (!editingScreenId.value) return;
-    screenBusy.value = true;
+    screenMutationBusy.value = true;
     errorMessage.value = "";
     try {
       const input = {
@@ -112,11 +143,11 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
       );
       screenEditDialog.value = false;
       successMessage.value = "大屏账号已更新。";
-      await loadScreenAccounts();
+      await loadScreenAccounts({afterMutation: true});
     } catch (error) {
       errorMessage.value = describeApiError(error, "更新大屏账号失败");
     } finally {
-      screenBusy.value = false;
+      screenMutationBusy.value = false;
     }
   }
 
@@ -128,15 +159,15 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
       confirmText: "重置绑定",
       color: "error",
     })) return;
-    screenBusy.value = true;
+    screenMutationBusy.value = true;
     try {
       await classworksV2Api.resetClassroomScreenDevice(selectedSchoolId.value, screen.id);
       successMessage.value = "旧设备登录已失效，可以在新设备上重新登录。";
-      await loadScreenAccounts();
+      await loadScreenAccounts({afterMutation: true});
     } catch (error) {
       errorMessage.value = describeApiError(error, "重置大屏设备失败");
     } finally {
-      screenBusy.value = false;
+      screenMutationBusy.value = false;
     }
   }
 
@@ -150,23 +181,23 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
       color: isActive ? "success" : "warning",
     })) return;
     const schoolId = selectedSchoolId.value;
-    screenBusy.value = true;
+    screenMutationBusy.value = true;
     try {
       await classworksV2Api.updateClassroomScreenAccount(schoolId, screen.id, {isActive});
       successMessage.value = `大屏账号已${action}，可在下方短时撤销。`;
-      await loadScreenAccounts();
+      await loadScreenAccounts({afterMutation: true});
       offerUndo({
         message: `已${action}大屏“${screen.name}”`,
         undo: async () => {
           await classworksV2Api.updateClassroomScreenAccount(schoolId, screen.id, {isActive: !isActive});
           successMessage.value = `已撤销“大屏${action}”。`;
-          await loadScreenAccounts();
+          await loadScreenAccounts({afterMutation: true});
         },
       });
     } catch (error) {
       errorMessage.value = describeApiError(error, `${action}大屏账号失败`);
     } finally {
-      screenBusy.value = false;
+      screenMutationBusy.value = false;
     }
   }
 
@@ -204,15 +235,15 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
       message: `指令将在“${screen.name}”下一次心跳时执行。`,
       confirmText: "下发指令",
     })) return;
-    screenBusy.value = true;
+    screenMutationBusy.value = true;
     try {
       await classworksV2Api.issueClassroomScreenCommand(selectedSchoolId.value, screen.id, type);
       successMessage.value = `已向 ${screen.name} 下发“${action}”指令。`;
-      await loadScreenAccounts();
+      await loadScreenAccounts({afterMutation: true});
     } catch (error) {
       errorMessage.value = describeApiError(error, "下发值守指令失败");
     } finally {
-      screenBusy.value = false;
+      screenMutationBusy.value = false;
     }
   }
 
@@ -225,11 +256,14 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
     window.clearInterval(screenDutyTimer);
     screenDutyTimer = null;
   }
-  onUnmounted(stopDutyPolling);
+  onUnmounted(() => { disposed = true; stopDutyPolling(); cancelLoad(); });
 
   return {
     screenAccounts,
     screenBusy,
+    screenLoading,
+    screenLoadError,
+    screenLoadedAt,
     screenSearch,
     screenStatusFilter,
     newScreenName,

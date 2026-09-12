@@ -68,6 +68,13 @@
       <p class="text-caption mt-3">
         选择后才下载大图。成功缓存的背景可离线使用；浏览器清理站点数据后需重新下载。
       </p>
+      <v-btn
+        v-if="busy"
+        variant="text"
+        @click="cancelDownload"
+      >
+        取消下载
+      </v-btn>
     </template>
     <template v-else>
       <v-text-field
@@ -89,7 +96,7 @@
 </template>
 
 <script setup>
-import {computed, onUnmounted, ref} from "vue";
+import {computed, onUnmounted, ref, watch} from "vue";
 import {getSetting, setSetting, watchSettings} from "@/utils/settings";
 import {backgroundPresets, backgroundAssetUrl, loadPresetBackground, pruneBackgroundCache} from "@/utils/backgroundPresets";
 
@@ -102,8 +109,14 @@ const selectedId = computed(() => selection.value?.kind === "preset" ? selection
 const url = ref(selection.value?.kind === "url" ? selection.value.url : getSetting("background.url"));
 const error = ref(""), message = ref(""), busy = ref(false);
 let disposed = false;
+let downloadController;
 const unwatch = watchSettings(() => { selection.value = getSetting("background.selection"); });
-onUnmounted(() => { disposed = true; unwatch(); });
+onUnmounted(() => { disposed = true; cancelDownload(); unwatch(); });
+watch(tab, cancelDownload);
+
+function cancelDownload() {
+  downloadController?.abort(); downloadController = null; busy.value = false;
+}
 
 function saveSelection(value) {
   if (!setSetting("background.selection", value, {requirePersistence: true})) throw new Error("背景设置未能保存，原背景已保留。请检查浏览器存储空间后重试。");
@@ -111,18 +124,23 @@ function saveSelection(value) {
 async function choose(preset) {
   if (busy.value) return;
   busy.value = true; error.value = ""; message.value = "";
+  const controller = new AbortController(); downloadController = controller;
+  const current = () => !disposed && downloadController === controller && !controller.signal.aborted;
   let result;
   try {
-    result = await loadPresetBackground(preset);
-    if (disposed) return;
+    result = await loadPresetBackground(preset, {signal: controller.signal});
+    if (!current()) return;
     saveSelection({kind: "preset", id: preset.id});
     await pruneBackgroundCache(preset.id);
+    if (!current()) return;
     message.value = result.cached ? `已使用“${preset.title}”，并缓存供离线使用。` : `已使用“${preset.title}”，但离线缓存未成功，下次加载需要联网。`;
-  } catch (e) { if (!disposed) error.value = e.message || "加载背景失败，请重试"; }
+  } catch (e) { if (current()) error.value = e.message || "加载背景失败，请重试"; }
   finally {
     if (result) URL.revokeObjectURL(result.objectUrl);
-    await pruneBackgroundCache(getSetting("background.selection")?.id);
-    busy.value = false;
+    if (current()) {
+      await pruneBackgroundCache(getSetting("background.selection")?.id);
+      if (current()) { busy.value = false; downloadController = null; }
+    }
   }
 }
 function saveUrl() {

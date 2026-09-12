@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {after, before, beforeEach, test} from "node:test";
-import {createFlowHarness, eventually} from "./helpers/flowHarness.js";
+import {watch} from "vue";
+import {createFlowHarness, deferred, eventually} from "./helpers/flowHarness.js";
 
 let h, screens;
 const base = "/api/v2/admin/schools/school";
@@ -20,6 +21,98 @@ async function confirm(pending, accepted = true) {
   h.dialogs.settleActionDialog(accepted);
   await pending;
 }
+
+test("a mutation refresh queued after results apply but before request cleanup still fetches again", async () => {
+  const {state: s} = await h.openScreenAccountManager();
+  let followup, calls = 0;
+  h.routes.set(`GET ${base}/classroom-screens`, (_req, reply) => reply([{...device, name: `version-${++calls}`} ]));
+  const unwatch = watch(s.screenAccounts, () => { followup = s.loadScreenAccounts({afterMutation: true}); }, {once: true});
+  try {
+    await s.loadScreenAccounts();
+    await followup;
+    assert.equal(calls, 2);
+    assert.equal(s.screenAccounts.value[0].name, "version-2");
+  } finally { unwatch(); }
+});
+
+test("same-school failure retains the snapshot and permission rejection clears it", async () => {
+  const {state: s} = await h.openScreenAccountManager();
+  await s.loadScreenAccounts();
+  const timestamp = s.screenLoadedAt.value;
+  h.routes.set(`GET ${base}/classroom-screens`, (_req, reply) => reply({message: "暂时失败"}, 503));
+  await s.loadScreenAccounts();
+  assert.deepEqual(s.screenAccounts.value, screens);
+  assert.equal(s.screenLoadedAt.value, timestamp);
+  assert.match(s.screenLoadError.value, /暂时失败/);
+  h.routes.set(`GET ${base}/classroom-screens`, (_req, reply) => reply({message: "权限撤销"}, 403));
+  await s.loadScreenAccounts();
+  assert.deepEqual(s.screenAccounts.value, []);
+  assert.equal(s.screenLoadedAt.value, null);
+});
+
+test("overlapping refreshes share one request; a completed mutation requests one fresh pass", async () => {
+  const {state: s} = await h.openScreenAccountManager();
+  const gate = deferred(); let calls = 0;
+  h.routes.set(`GET ${base}/classroom-screens`, async (_req, reply) => {
+    const call = ++calls;
+    if (call === 1) await gate.promise;
+    reply([{...device, name: call === 1 ? "旧名字" : "新名字"}]);
+  });
+  const first = s.loadScreenAccounts(), duplicate = s.loadScreenAccounts();
+  try {
+    assert.equal(first, duplicate);
+    await eventually(() => assert.equal(calls, 1));
+    const afterWrite = s.loadScreenAccounts({afterMutation: true});
+    gate.resolve(); await afterWrite;
+    assert.equal(calls, 2);
+    assert.equal(s.screenAccounts.value[0].name, "新名字");
+    assert.equal(s.screenLoading.value, false);
+  } finally { gate.resolve(); await first; }
+});
+
+test("school change and unmount discard late list responses and stop loading", async () => {
+  const m = await h.openScreenAccountManager(), s = m.state;
+  await s.loadScreenAccounts();
+  const gate = deferred(); let started = false;
+  h.routes.set(`GET ${base}/classroom-screens`, async (_req, reply) => { started = true; await gate.promise; reply(screens); });
+  const pending = s.loadScreenAccounts();
+  try {
+    await eventually(() => assert(started));
+    m.selectedSchoolId.value = "other";
+    assert.deepEqual(s.screenAccounts.value, []);
+    assert.equal(s.screenLoadedAt.value, null);
+    gate.resolve(); await pending;
+    assert.deepEqual(s.screenAccounts.value, []);
+    const otherGate = deferred(); let otherStarted = false;
+    h.routes.set("GET /api/v2/admin/schools/other/classroom-screens", async (_req, reply) => {
+      otherStarted = true; await otherGate.promise; reply([{id: "other-device"}]);
+    });
+    const other = s.loadScreenAccounts();
+    await eventually(() => assert(otherStarted));
+    m.unmount();
+    otherGate.resolve(); await other;
+    assert.deepEqual(s.screenAccounts.value, []);
+    await s.loadScreenAccounts();
+    assert.equal(s.screenLoading.value, false);
+  } finally { gate.resolve(); await pending; }
+});
+
+test("a polling response cannot end an account write's busy state", async () => {
+  const {state: s} = await h.openScreenAccountManager();
+  const gate = deferred(); let started = false;
+  h.routes.set(`POST ${base}/classroom-screen-accounts`, async (_req, reply) => {
+    started = true; await gate.promise; reply({loginCode: "created"});
+  });
+  const writing = s.createScreenAccount();
+  try {
+    await eventually(() => assert(started));
+    await s.loadScreenAccounts();
+    assert.equal(s.screenLoading.value, false);
+    assert.equal(s.screenBusy.value, true);
+    gate.resolve(); await writing;
+    assert.equal(s.screenBusy.value, false);
+  } finally { gate.resolve(); await writing; }
+});
 
 test("screen creation preserves failed input, sends the original payload and clears only after success", async () => {
   const m = await h.openScreenAccountManager(), s = m.state;

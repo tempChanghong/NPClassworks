@@ -64,6 +64,7 @@ const bgSrc = ref("");
 const bgBlur = ref(10);
 const bgOpacity = ref(30);
 let backgroundRequest = 0, backgroundKey = "", backgroundObjectUrl = "";
+let backgroundController;
 let backgroundOnlineVersion = 0;
 function onBackgroundOnline() {
   backgroundOnlineVersion++;
@@ -73,7 +74,7 @@ function releaseBackgroundObject() {
   if (backgroundObjectUrl) URL.revokeObjectURL(backgroundObjectUrl);
   backgroundObjectUrl = "";
 }
-onUnmounted(() => { backgroundRequest++; releaseBackgroundObject(); });
+onUnmounted(() => { backgroundRequest++; backgroundController?.abort(); releaseBackgroundObject(); });
 
 async function loadBgSettings() {
   bgEnabled.value = getSetting("background.enabled") || false;
@@ -86,13 +87,15 @@ async function loadBgSettings() {
   if (key === backgroundKey) return;
   backgroundKey = key;
   const request = ++backgroundRequest;
+  backgroundController?.abort();
+  const controller = new AbortController(); backgroundController = controller;
   const onlineVersion = backgroundOnlineVersion;
   if (!bgEnabled.value) { releaseBackgroundObject(); bgSrc.value = ""; return; }
   if (selection?.kind === "preset") {
     const preset = findBackgroundPreset(selection.id);
     if (!preset) { releaseBackgroundObject(); bgSrc.value = ""; return; }
     try {
-      const {objectUrl} = await loadPresetBackground(preset);
+      const {objectUrl} = await loadPresetBackground(preset, {signal: controller.signal});
       if (request !== backgroundRequest) { URL.revokeObjectURL(objectUrl); return; }
       releaseBackgroundObject(); backgroundObjectUrl = objectUrl; bgSrc.value = objectUrl;
       await pruneBackgroundCache(preset.id);

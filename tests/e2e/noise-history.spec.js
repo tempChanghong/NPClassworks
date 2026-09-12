@@ -28,6 +28,59 @@ test("noise history imports legacy data once and persists incremental writes acr
   })).toEqual(["legacy", "new"]);
 });
 
+test("a real blocked database open times out and its late upgrade cannot replace the recovered connection", async ({page}) => {
+  expect(await page.evaluate(async () => {
+    const name = "noise-open-timeout-test";
+    const held = await new Promise((resolve, reject) => {
+      const request = window.indexedDB.open(name, 1);
+      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    let blocked;
+    const blockedEvent = new Promise(resolve => { blocked = resolve; });
+    const removed = new Promise((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase(name);
+      request.onblocked = blocked; request.onsuccess = resolve; request.onerror = () => reject(request.error);
+    });
+    await blockedEvent;
+    const store = window.historyModule.createNoiseHistoryStore({databaseName: name, operationTimeoutMs: 1000});
+    let message;
+    try { await store.read(); } catch (error) { message = error.message; }
+    held.close(); await removed;
+    // This retry is queued behind the timed-out open. The old upgrade must abort.
+    await store.append(window.fixtureSlice("recovered"));
+    const ids = (await store.read()).map(item => item.id);
+    await store.close();
+    return {message, ids};
+  })).toEqual({message: "噪声历史存储打开超时，请重试", ids: ["recovered"]});
+});
+
+test("a timed-out real write transaction is aborted before clear and later writes recover", async ({page}) => {
+  expect(await page.evaluate(async () => {
+    const store = window.historyModule.createNoiseHistoryStore({operationTimeoutMs: 1000});
+    await store.append(window.fixtureSlice("saved"));
+    const db = await new Promise(resolve => {
+      const request = window.indexedDB.open("classworks-noise-history", 1);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const blocking = db.transaction("slices", "readwrite");
+    let keepAlive = true;
+    const pump = () => {
+      if (keepAlive) blocking.objectStore("slices").get("saved").onsuccess = pump;
+    };
+    pump();
+    let message;
+    try { await store.append(window.fixtureSlice("must-not-commit")); } catch (error) { message = error.message; }
+    const released = new Promise(resolve => { blocking.oncomplete = resolve; });
+    keepAlive = false; await released; db.close();
+    const before = (await store.read()).map(item => item.id);
+    await store.clear();
+    await store.append(window.fixtureSlice("after-clear", Date.now() + 1));
+    const after = (await store.read()).map(item => item.id);
+    await store.close();
+    return {message, before, after};
+  })).toEqual({message: "噪声历史存储超时，请重试", before: ["saved"], after: ["after-clear"]});
+});
+
 test("noise history bounds storage and cleans expired records without touching queued homework", async ({page}) => {
   expect(await page.evaluate(async () => {
     const now = Date.now();

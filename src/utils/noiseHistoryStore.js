@@ -7,6 +7,7 @@ export function createNoiseHistoryStore({
   storage = localStorage,
   now = Date.now,
   databaseName = "classworks-noise-history",
+  operationTimeoutMs = 10000,
 } = {}) {
   let opening
   let importedSource
@@ -22,31 +23,62 @@ export function createNoiseHistoryStore({
   function transaction(db, stores, mode, body) {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(stores, mode)
-      let result
-      tx.oncomplete = () => resolve(result)
-      tx.onabort = () => reject(tx.error || new Error("噪声历史存储事务中止"))
+      let result, settled = false
+      const finish = error => {
+        if (settled) return
+        settled = true; clearTimeout(timer)
+        if (error) reject(error); else resolve(result)
+      }
+      const timer = setTimeout(() => {
+        // Abort the actual transaction: merely racing its Promise could allow a
+        // timed-out write to commit after a subsequent clear.
+        finish(new Error("噪声历史存储超时，请重试"))
+        try { tx.abort() } catch { /* Already completed or aborted. */ }
+        if (opening?.db === db) { db.close(); opening = null; importedSource = undefined }
+      }, operationTimeoutMs)
+      tx.oncomplete = () => finish()
+      tx.onabort = () => finish(tx.error || new Error("噪声历史存储事务中止"))
       tx.onerror = () => {} // onabort handles request failures as one failed transaction.
       try { body(tx, value => { result = value }) } catch (error) {
-        tx.abort(); reject(error)
+        try { tx.abort() } catch { /* Preserve the original error. */ }
+        finish(error)
       }
     })
   }
   function open() {
-    if (opening) return opening
-    opening = new Promise((resolve, reject) => {
-      const request = indexedDB.open(databaseName, 1)
+    if (opening) return opening.promise
+    const attempt = {db: null, abandoned: false}
+    opening = attempt
+    attempt.promise = new Promise((resolve, reject) => {
+      const fail = error => {
+        if (attempt.abandoned) return
+        attempt.abandoned = true; clearTimeout(timer)
+        if (opening === attempt) { opening = null; importedSource = undefined }
+        reject(error)
+      }
+      attempt.cancel = () => fail(new Error("噪声历史存储已关闭，请重试"))
+      const timer = setTimeout(() => fail(new Error("噪声历史存储打开超时，请重试")), operationTimeoutMs)
+      let request
+      try { request = indexedDB.open(databaseName, 1) } catch (error) { fail(error); return }
       request.onupgradeneeded = () => {
+        if (attempt.abandoned) { request.transaction.abort(); return }
         request.result.createObjectStore("slices", {keyPath: "id"}).createIndex("end", "end")
         request.result.createObjectStore("meta")
       }
-      request.onerror = () => reject(request.error)
+      request.onerror = () => fail(request.error)
+      request.onblocked = () => fail(new Error("噪声历史存储被其他页面占用，请关闭其他页面后重试"))
       request.onsuccess = () => {
         const db = request.result
-        db.onversionchange = () => { db.close(); opening = null; importedSource = undefined }
+        if (attempt.abandoned) { db.close(); return }
+        clearTimeout(timer); attempt.db = db
+        db.onversionchange = () => {
+          db.close()
+          if (opening === attempt) { opening = null; importedSource = undefined }
+        }
         resolve(db)
       }
-    }).catch(error => { opening = null; throw error })
-    return opening
+    })
+    return attempt.promise
   }
   async function importLegacy(db) {
     const source = storage.getItem(NOISE_HISTORY_KEY)
@@ -66,7 +98,7 @@ export function createNoiseHistoryStore({
         } catch { tx.abort() }
       }
     })
-    importedSource = source
+    if (opening?.db === db) importedSource = source
     // Keep the bounded legacy source: another old page can write it between an
     // IndexedDB commit and removeItem. Cross-storage deletion cannot be atomic.
   }
@@ -129,10 +161,11 @@ export function createNoiseHistoryStore({
           slices.clear()
         }
       })
-      importedSource = source
+      if (opening?.db === db) importedSource = source
     },
     async close() {
-      if (opening) (await opening).close()
+      if (opening?.db) opening.db.close()
+      else opening?.cancel()
       opening = null
       importedSource = undefined
     },

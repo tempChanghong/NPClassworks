@@ -366,7 +366,8 @@ class ClassworksNoiseService {
         await this.historyStore.append(slice)
         this.historyError = ""
       } catch (error) {
-        this.historyError = "噪声统计未能保存，请检查浏览器存储空间。"
+        this.historyError = String(error?.message || "").startsWith("噪声历史")
+          ? `噪声统计未能保存：${error.message}` : "噪声统计未能保存，请检查浏览器存储空间。"
         console.warn("无法保存噪声统计", error)
       }
       this.emit()

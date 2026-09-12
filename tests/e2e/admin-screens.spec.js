@@ -148,6 +148,24 @@ for (const mode of ["append", "replace"]) {
   });
 }
 
+test("screen list preserves its snapshot after HTTP failure and shows fresh status on retry", async ({browser}) => {
+  const m = await openAdmin(browser, 1440);
+  try {
+    const panel = m.page.locator(".v-card").filter({has: m.page.getByRole("button", {name: "刷新大屏列表", exact: true})});
+    await expect(panel).toContainText("一班大屏");
+    await expect(panel.locator(".screen-list-status")).toContainText("上次成功刷新");
+    await m.page.route(`${api}/api/v2/admin/schools/school/classroom-screens`, route => route.fulfill({status: 503, json: {message: "测试列表服务不可用"}}));
+    await panel.getByRole("button", {name: "刷新大屏列表", exact: true}).click();
+    await expect(panel).toContainText("保留上次成功的列表");
+    await expect(panel).toContainText("一班大屏");
+    await expect(panel).not.toContainText("当前学校还没有大屏账号");
+    await m.page.unroute(`${api}/api/v2/admin/schools/school/classroom-screens`);
+    await panel.getByRole("button", {name: "刷新大屏列表", exact: true}).click();
+    await expect(panel.locator(".screen-list-status .v-alert")).toHaveCount(0);
+    expect(m.errors).toEqual([]);
+  } finally { await m.context.close(); }
+});
+
 test("quick settings retain edits typed after saving and still warn before leaving", async ({browser}) => {
   const {context, page} = await openAdmin(browser, 1440, "ADMIN", {
     quickDeadlines: [{label: "明早", dayOffset: 1, time: "07:30"}], quickInputs: [],

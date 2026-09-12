@@ -59,12 +59,29 @@
           已分配大屏
           <v-spacer />
           <v-btn
-            :loading="screenBusy"
+            :loading="screenLoading"
+            aria-label="刷新大屏列表"
             icon="mdi-refresh"
             variant="text"
             @click="loadScreenAccounts"
           />
         </v-card-title>
+        <div class="px-5 screen-list-status">
+          <v-alert
+            v-if="screenLoadError"
+            :type="screenLoadedAt ? 'warning' : 'error'"
+            variant="tonal"
+            class="mb-2"
+          >
+            {{ screenLoadError }}{{ screenLoadedAt ? '；保留上次成功的列表，设备状态可能已变化。' : '' }}
+          </v-alert>
+          <p
+            v-if="screenLoadedAt"
+            class="text-caption mb-2"
+          >
+            上次成功刷新：{{ screenLoadedAt }}
+          </p>
+        </div>
         <v-card-text class="account-filter-bar px-5 pb-2 pt-0">
           <v-text-field
             v-model.trim="screenSearch"
@@ -206,7 +223,7 @@
           </template>
         </v-list>
         <v-empty-state
-          v-if="!filteredScreenAccounts.length && !screenBusy"
+          v-if="!filteredScreenAccounts.length && !screenBusy && !screenLoadError && screenLoadedAt"
           icon="mdi-monitor-off"
           :text="screenSearch || screenStatusFilter !== 'ALL' ? '没有符合筛选条件的大屏' : '当前学校还没有大屏账号'"
         />
@@ -277,6 +294,9 @@ const props = defineProps({
 // The page creates this stable manager once, so refs survive lazy tab mounting.
 const {
   screenBusy,
+  screenLoading,
+  screenLoadError,
+  screenLoadedAt,
   screenSearch,
   screenStatusFilter,
   newScreenName,

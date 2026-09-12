@@ -732,8 +732,8 @@ export const classworksV2Api = {
       `/api/v2/admin/schools/${schoolId}/local-accounts/${accountId}`,
     ));
   },
-  async classroomScreens(schoolId) {
-    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/classroom-screens`));
+  async classroomScreens(schoolId, {signal} = {}) {
+    return unwrap(await client.get(`/api/v2/admin/schools/${schoolId}/classroom-screens`, {signal}));
   },
   async issueClassroomScreenCommand(schoolId, bindingId, type, payload = undefined) {
     return unwrap(await client.post(

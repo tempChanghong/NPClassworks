@@ -72,6 +72,67 @@ test("preset gallery downloads only chosen full images and selected background s
 test.describe("background failure handling", () => {
   test.use({serviceWorkers: "block"});
 
+for (const action of ["cancel", "leave"]) {
+  test(`background body download is aborted on ${action} and a new choice still works`, async ({page}) => {
+    let disconnected = false, started = false;
+    const server = createServer((_request, response) => {
+      started = true;
+      response.on("close", () => { disconnected = true; });
+      response.writeHead(200, {"Content-Type": "image/webp", "Access-Control-Allow-Origin": "*"});
+      response.flushHeaders(); response.write("RIFF");
+    });
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+    try {
+      await page.goto(`${origin}/settings`);
+      await button(page, presets[0]).click();
+      await expect(button(page, presets[0])).toBeEnabled();
+      await expect(page.locator(".app-background-image")).toHaveCSS("background-image", /blob:/);
+      const previous = await page.locator(".app-background-image").evaluate(element => window.getComputedStyle(element).backgroundImage);
+      await page.evaluate(({path, url}) => {
+        const original = window.fetch.bind(window);
+        window.fetch = (input, options) => original(String(input).endsWith(path) ? url : input, options);
+      }, {path: presets[1].image, url: `http://127.0.0.1:${server.address().port}/slow`});
+      await button(page, presets[1]).click();
+      await expect.poll(() => started).toBe(true);
+      if (action === "cancel") await page.getByRole("button", {name: "取消下载", exact: true}).click();
+      else await page.getByTitle("返回作业板").click();
+      await expect.poll(() => disconnected).toBe(true);
+      expect(await selected(page)).toEqual({kind: "preset", id: presets[0].id});
+      await expect(page.locator(".app-background-image")).toHaveCSS("background-image", previous);
+      if (action === "leave") await page.goto(`${origin}/settings`);
+      await button(page, presets[2]).click();
+      await expect(button(page, presets[2])).toHaveAttribute("aria-pressed", "true");
+      await expect(button(page, presets[2])).toBeEnabled();
+    } finally {
+      server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+    }
+  });
+}
+
+test("a stalled image decoder times out, releases its object URL and permits retry", async ({page}) => {
+  await page.goto(`${origin}/settings`);
+  await button(page, presets[0]).click();
+  await expect(button(page, presets[0])).toBeEnabled();
+  await expect(page.locator(".app-background-image")).toHaveCSS("background-image", /blob:/);
+  await page.evaluate(() => {
+    window.originalDecode = window.HTMLImageElement.prototype.decode;
+    window.backgroundRevoked = [];
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.revokeObjectURL = url => { window.backgroundRevoked.push(url); revoke(url); };
+    window.HTMLImageElement.prototype.decode = function() {
+      window.stalledBackgroundUrl = this.src;
+      return new Promise(resolve => { window.finishBackgroundDecode = resolve; });
+    };
+  });
+  await button(page, presets[1]).click();
+  await expect(page.getByText("背景图片解码超时，请重试", {exact: true})).toBeVisible();
+  expect(await selected(page)).toEqual({kind: "preset", id: presets[0].id});
+  expect(await page.evaluate(() => window.backgroundRevoked.includes(window.stalledBackgroundUrl))).toBe(true);
+  await page.evaluate(() => { window.HTMLImageElement.prototype.decode = window.originalDecode; window.finishBackgroundDecode(); });
+  await button(page, presets[2]).click();
+  await expect(button(page, presets[2])).toHaveAttribute("aria-pressed", "true");
+});
+
 test("a stalled response body times out, preserves the old background and permits another selection", async ({page}) => {
   const server = createServer((request, response) => {
     response.writeHead(200, {"Content-Type": "image/webp", "Access-Control-Allow-Origin": "*"});
@@ -123,9 +184,11 @@ test("reconnection before failure settles retries once and a late result cannot 
   expect(pending).toHaveLength(2);
   await page.getByRole("button", {name: "图片网址", exact: true}).click();
   await page.getByRole("textbox", {name: "背景图片网址"}).fill(`${origin}/${presets[1].thumbnail}`);
+  const abandoned = page.waitForEvent("requestfailed", request => request.url().endsWith(presets[0].image));
   await page.getByRole("button", {name: "使用此网址", exact: true}).click();
+  await abandoned;
   await pending[1].fulfill({status: 200, contentType: "image/webp", body: readFileSync(new URL(`../../public/${presets[0].image}`, import.meta.url))});
-  await expect.poll(() => page.evaluate(async path => Boolean(await (await caches.open("classworks-backgrounds-v1")).match(new URL(path, window.location.origin))), presets[0].image)).toBe(true);
+  expect(await page.evaluate(async path => Boolean(await (await caches.open("classworks-backgrounds-v1")).match(new URL(path, window.location.origin))), presets[0].image)).toBe(false);
   await expect(page.locator(".app-background-image")).toHaveCSS("background-image", new RegExp(presets[1].thumbnail));
   expect(await selected(page)).toEqual({kind: "url", url: `${origin}/${presets[1].thumbnail}`});
   expect(pending).toHaveLength(2);
