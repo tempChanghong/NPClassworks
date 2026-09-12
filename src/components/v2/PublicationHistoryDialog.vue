@@ -81,6 +81,10 @@
                 <div class="revision-content">
                   {{ item.purgedAt ? "该待教师确认备份已按三天保留策略清理正文" : (item.snapshot.content || "（无正文）") }}
                 </div>
+                <PreparationDetails
+                  v-if="!item.purgedAt"
+                  :publication="item.snapshot"
+                />
                 <div class="d-flex justify-end mt-3">
                   <v-btn
                     :disabled="item.revision === workingPublication?.revision || item.snapshot.status === 'WITHDRAWN' || Boolean(item.purgedAt)"
@@ -134,6 +138,7 @@
 </template>
 
 <script setup>
+import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {onBeforeUnmount, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {isPublicationRevisionConflict} from "@/utils/publicationConflict";

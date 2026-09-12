@@ -167,10 +167,43 @@
       >
         个人作业模板
       </v-btn>
+      <v-row
+        v-if="form.type === 'ASSIGNMENT'"
+        class="preparation-editor"
+      >
+        <v-col
+          cols="12"
+          md="8"
+        >
+          <v-textarea
+            v-model="form.materials"
+            label="需带物品（可选）"
+            placeholder="例如：圆规、实验材料、运动服"
+            rows="2"
+            auto-grow
+            maxlength="500"
+            counter="500"
+          />
+        </v-col>
+        <v-col
+          cols="12"
+          md="4"
+        >
+          <v-text-field
+            v-model="form.materialsDate"
+            type="date"
+            label="携带日期"
+            :disabled="!form.materials.trim()"
+            hint="携带当天结束后退出当前清单"
+            persistent-hint
+          />
+        </v-col>
+      </v-row>
       <TeacherHomeworkTemplates
         v-if="templatesOpen"
         :title="form.title"
         :content="form.content"
+        :materials="form.materials"
         :applying="templateApplying"
         @close="templatesOpen = false"
         @apply="applyTemplate"
@@ -474,6 +507,7 @@
 import {computed, defineAsyncComponent, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {useNow} from "@vueuse/core";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
+import {withPreparation, preparationOf} from "@/utils/homeworkPreparation";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {describeApiError} from "@/utils/classworksV2Client";
@@ -529,9 +563,10 @@ async function applyTemplate(input) {
   const generation = editorGeneration, session = store.teacherSessionVersion, snapshot = JSON.stringify(form);
   templateApplying.value = true;
   try {
-    if ((form.title || form.content) && !await confirmAction({title: "替换当前标题和正文？", message: "班级、科目、日期和截止时间保持当前设置。", confirmText: "替换内容"})) return;
+    if ((form.title || form.content || form.materials) && !await confirmAction({title: "替换当前标题和正文？", message: "班级、科目、作业日期和截止时间保持当前设置。模板含需带物品时会一并套用，请重新选择携带日期。", confirmText: "替换内容"})) return;
     if (!mounted || generation !== editorGeneration || session !== store.teacherSessionVersion || !templatesOpen.value || templatesDisabled.value || snapshot !== JSON.stringify(form)) return;
     form.title = input.title; form.content = input.content;
+    if (Object.hasOwn(input, "materials")) { form.materials = input.materials; form.materialsDate = ""; }
     templatesOpen.value = false;
   } finally { templateApplying.value = false; }
 }
@@ -574,6 +609,8 @@ const form = reactive({
   boardDate: todayBoardDate(),
   publishAt: localDateTime(),
   dueAt: "",
+  materials: "",
+  materialsDate: "",
   expiresAt: "",
   priority: "NORMAL",
   popupEnabled: false,
@@ -712,6 +749,8 @@ watch(() => props.editingPublication, (publication) => {
   form.targetWorkspaceIds = publication.targets?.map((target) => target.workspaceId) || [];
   form.title = publication.title || "";
   form.content = publication.content || "";
+  form.materials = preparationOf(publication)?.text || "";
+  form.materialsDate = preparationOf(publication)?.date || "";
   form.boardDate = publication.boardDate
     ? String(publication.boardDate).slice(0, 10)
     : todayBoardDate(new Date(publication.publishAt));
@@ -808,6 +847,8 @@ function reset() {
   form.content = "";
   form.boardDate = todayBoardDate();
   form.dueAt = "";
+  form.materials = "";
+  form.materialsDate = "";
   form.expiresAt = "";
   form.publishAt = localDateTime();
   cleanForm.value = JSON.stringify(form);
@@ -855,7 +896,7 @@ async function submit(status, allowDuplicate = false) {
       content: form.content,
       contentJson: form.type === "NOTICE"
         ? {...originalContentJson, popupEnabled: form.priority !== "MINOR" || form.popupEnabled}
-        : form.noHomework ? {...NO_HOMEWORK_META} : originalContentJson,
+        : withPreparation(form.noHomework ? {...NO_HOMEWORK_META} : originalContentJson, form.materials, form.materialsDate),
       boardDate: form.type === "ASSIGNMENT" ? form.boardDate : null,
       publishAt: new Date(form.publishAt).toISOString(),
       dueAt: form.type === "ASSIGNMENT" && form.dueAt ? new Date(form.dueAt).toISOString() : null,

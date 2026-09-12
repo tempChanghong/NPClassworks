@@ -128,7 +128,7 @@ function openPreview() {
     : screen && store.screenPendingUploads.length
       ? `本机还有 ${store.screenPendingUploads.length} 项待处理作业，未包含在本清单中。` : "";
   snapshot = homeworkPrintSnapshot({
-    publications: store.feed, workspaceIds: store.activeWorkspaceIds, boardDate: store.boardDate,
+    publications: store.feed, preparations: store.feedPreparations, workspaceIds: store.activeWorkspaceIds, boardDate: store.boardDate,
     className: props.className, scopeLabel: props.scopeLabel, generatedAt: store.feedGeneratedAt,
     cached: store.feedUsingCache, warning,
   });

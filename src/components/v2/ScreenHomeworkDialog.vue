@@ -477,6 +477,7 @@ const canSave = computed(() => Boolean(
 ));
 const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
 const screenConflictInput = computed(() => ({
+  contentJson: basePublication.value?.contentJson,
   subjectId: form.subjectId,
   targetWorkspaceIds: [form.targetWorkspaceId],
   title: form.title,

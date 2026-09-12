@@ -74,6 +74,13 @@ function* planImageSteps(snapshot, measure, maxPages) {
     }
   }
   nextPage();
+  for (const item of snapshot.preparations || []) {
+    const continuation = "需带物品（续）";
+    append(yield* rows(`需带物品 · ${item.date}`, "heading"), continuation);
+    append(yield* rows(`${item.subject} · ${item.targets} · ${item.certified ? "教师已确认" : "待教师确认"}`, "meta"), continuation);
+    append(yield* rows(item.text, "body"), continuation);
+    y += 24;
+  }
   for (const [index, item] of snapshot.items.entries()) {
     yield;
     const continuation = `第 ${index + 1} 项（续）`;
@@ -82,6 +89,7 @@ function* planImageSteps(snapshot, measure, maxPages) {
     append(yield* rows(`${item.targets} · ${item.certification} · ${item.priority}`, "meta"), continuation);
     if (!item.noHomework) append(yield* rows(`截止：${item.deadline}`, "meta"), continuation);
     append(yield* rows(item.content || "（正文为空，请参阅标题）", "body"), continuation);
+    if (item.preparation) append(yield* rows(`${item.preparation.date} 需带：${item.preparation.text}`, "body"), continuation);
     y += 24;
   }
   if (!snapshot.items.length) append(yield* rows("当前已加载内容中没有该日期的作业。", "body"));

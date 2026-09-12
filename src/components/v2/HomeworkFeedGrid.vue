@@ -86,6 +86,7 @@
           {{ publication.title }}
         </v-card-subtitle>
         <v-card-text class="publication-body">
+          <PreparationDetails :publication="publication" />
           <component
             :is="screenMode && publication.type === 'ASSIGNMENT' ? 'button' : 'div'"
             class="publication-content"
@@ -184,6 +185,7 @@
 </template>
 
 <script setup>
+import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {isNoHomework} from "@/utils/noHomework";
 import {

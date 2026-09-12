@@ -79,6 +79,7 @@
           <div class="copy-content">
             {{ current?.content || '（正文为空，请参阅标题）' }}
           </div>
+          <PreparationDetails :publication="current" />
         </div>
       </v-card-text>
       <v-card-actions class="copy-controls px-5 ga-2">
@@ -125,6 +126,7 @@
   </v-dialog>
 </template>
 <script setup>
+import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {hasNoHomeworkConflict, isNoHomework} from "@/utils/noHomework";
@@ -188,7 +190,7 @@ function restore() {
 watch(automatic, value => { if (value) changed.value = false; });
 watch([automatic, visible, () => props.suspended, seconds], schedule);
 watch(scope, () => { position = null; pause(); opened.value = false; }, {flush: "sync"});
-watch(() => JSON.stringify(items.value.map(item => [item.id, item.revision, item.title, item.content, item.dueAt, item.isCertified])), async (value, old) => {
+watch(() => JSON.stringify(items.value.map(item => [item.id, item.revision, item.title, item.content, item.contentJson, item.dueAt, item.isCertified])), async (value, old) => {
   if (!opened.value) return;
   if (!items.value.length) { opened.value = false; return; }
   if (old && value !== old) { pause(); changed.value = true; await nextTick(); if (element()) element().scrollTop = 0; measure(); }

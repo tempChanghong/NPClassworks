@@ -194,7 +194,7 @@ export const boardActions = {
     if (this.feedAudience === "student") leaveWorkspaces(this.selectedWorkspaceIds);
     this.selection = {};
     this.courseOptions = null;
-    this.feed = [];
+    this.feed = []; this.feedPreparations = [];
     this.feedLoadError = "";
     this.feedUsingCache = false;
     this.studentNotice = "";
@@ -212,7 +212,7 @@ export const boardActions = {
     const requestId = ++feedRequest;
     if (this.selectedWorkspaceIds.length === 0) {
       if (this.feedAudience === "student") {
-        this.feed = [];
+        this.feed = []; this.feedPreparations = [];
         this.feedGeneratedAt = null;
         this.feedLoadError = "";
         this.feedUsingCache = false;
@@ -258,12 +258,12 @@ export const boardActions = {
         result = await classworksV2Api.feed(this.selectedWorkspaceIds, boardDate, {isCurrent: current});
       }
       if (!current()) return;
-      this.feed = result.items || [];
+      this.feed = result.items || []; this.feedPreparations = result.preparations || [];
       this.feedGeneratedAt = result.generatedAt;
       this.scheduleFeedTransition(result.nextTransitionAt);
     } catch (error) {
       if (current()) {
-        this.feed = [];
+        this.feed = []; this.feedPreparations = [];
         this.feedGeneratedAt = null;
         this.feedLoadError = describeApiError(error, "加载作业失败");
       }
@@ -289,7 +289,7 @@ export const boardActions = {
     try {
       const result = await classworksV2Api.classroomScreenFeed(boardDate, {isCurrent: current});
       if (!current()) return;
-      this.feed = result.items || [];
+      this.feed = result.items || []; this.feedPreparations = result.preparations || [];
       this.feedGeneratedAt = result.generatedAt;
       saveCachedScreenFeed(bindingId, boardDate, result);
       this.scheduleFeedTransition(result.nextTransitionAt);
@@ -299,14 +299,14 @@ export const boardActions = {
         ? loadCachedScreenFeed(bindingId, boardDate)
         : null;
       if (cached) {
-        this.feed = cached.items || [];
+        this.feed = cached.items || []; this.feedPreparations = cached.preparations || [];
         this.feedGeneratedAt = cached.generatedAt;
         this.feedUsingCache = true;
         this.feedLoadError = "当前无法连接服务器，正在显示这台大屏上次同步的内容";
         this.scheduleFeedTransition(cached.nextTransitionAt);
         return;
       }
-      this.feed = [];
+      this.feed = []; this.feedPreparations = [];
       this.feedGeneratedAt = null;
       this.feedLoadError = describeApiError(error, "加载大屏作业失败");
       if ([401, 409].includes(error.response?.status)) {
@@ -316,7 +316,7 @@ export const boardActions = {
         clearCachedScreenSession();
         this.screenSession = null;
         this.feedAudience = "student";
-        this.feed = [];
+        this.feed = []; this.feedPreparations = [];
         this.feedLoadError = "";
         this.feedUsingCache = false;
         joinWorkspaces(this.realtimeWorkspaceIds);
@@ -359,7 +359,7 @@ export const boardActions = {
     const oldWorkspaceIds = this.activeWorkspaceIds;
     leaveWorkspaces(oldWorkspaceIds);
     this.feedAudience = nextAudience;
-    this.feed = [];
+    this.feed = []; this.feedPreparations = [];
     this.feedLoadError = "";
     this.feedUsingCache = false;
     joinWorkspaces(this.realtimeWorkspaceIds);

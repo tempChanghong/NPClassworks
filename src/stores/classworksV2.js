@@ -18,6 +18,7 @@ export const useClassworksV2Store = defineStore("classworks-v2", {
     studentSubjects: [],
     selection: loadSavedSelection(),
     feed: [],
+    feedPreparations: [],
     boardDate: todayBoardDate(),
     feedGeneratedAt: null,
     feedAudience: "student",

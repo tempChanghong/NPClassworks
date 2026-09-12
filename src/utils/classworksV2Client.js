@@ -1,5 +1,6 @@
 import axios from "axios";
 import {completePublicationFeed} from "./completePublicationFeed.js";
+import {splitPreparationFeed} from "./homeworkPreparation.js";
 import {getServerUrl} from "@/utils/socketClient";
 import {recordDiagnosticEvent, sanitizeDiagnosticEndpoint} from "@/utils/localDiagnostics";
 import {endScreenTemporaryExit, readScreenTemporaryExit, screenAccountAccessAllowed, screenAccountContext} from "@/utils/screenTemporaryExit";
@@ -429,9 +430,9 @@ export const classworksV2Api = {
   },
   async feed(workspaceIds, boardDate, {isCurrent = () => true} = {}) {
     const server = baseUrl();
-    return completePublicationFeed(async page => unwrap(await client.get("/api/v2/publications/feed", {
-      params: {workspaceIds: workspaceIds.join(","), boardDate, ...page},
-    })), {isCurrent: () => isCurrent() && baseUrl() === server});
+    return splitPreparationFeed(await completePublicationFeed(async page => unwrap(await client.get("/api/v2/publications/feed", {
+      params: {workspaceIds: workspaceIds.join(","), boardDate, includePreparations: true, ...page},
+    })), {isCurrent: () => isCurrent() && baseUrl() === server}), boardDate);
   },
   async publicationWeek(workspaceIds, params, {screen = false, signal} = {}) {
     return unwrap(await client.get(screen ? "/api/v2/classroom-screens/feed" : "/api/v2/publications/feed", {
@@ -507,10 +508,10 @@ export const classworksV2Api = {
   },
   async classroomScreenFeed(boardDate, {isCurrent = () => true} = {}) {
     const server = baseUrl(), token = getClassroomScreenToken();
-    return completePublicationFeed(async page => unwrap(await client.get("/api/v2/classroom-screens/feed", {
-      params: {boardDate, ...page},
+    return splitPreparationFeed(await completePublicationFeed(async page => unwrap(await client.get("/api/v2/classroom-screens/feed", {
+      params: {boardDate, includePreparations: true, ...page},
       headers: screenHeaders(),
-    })), {isCurrent: () => isCurrent() && baseUrl() === server && getClassroomScreenToken() === token});
+    })), {isCurrent: () => isCurrent() && baseUrl() === server && getClassroomScreenToken() === token}), boardDate);
   },
   async acknowledgeScreenNotifications(items) {
     return unwrap(await client.post(

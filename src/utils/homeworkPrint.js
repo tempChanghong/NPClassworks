@@ -1,4 +1,5 @@
 import {isNoHomework} from "./noHomework.js";
+import {preparationOf, preparationList, preparationToday} from "./homeworkPreparation.js";
 
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -13,7 +14,7 @@ function dateTime(value) {
 }
 
 // Copy only fields needed on paper; never include credentials, diagnostics or offline inputs.
-export function homeworkPrintSnapshot({publications, workspaceIds, boardDate, className, scopeLabel,
+export function homeworkPrintSnapshot({publications, preparations = [], workspaceIds, boardDate, className, scopeLabel,
   generatedAt, cached = false, warning = "", now = new Date()}) {
   const targets = new Set(workspaceIds);
   const seen = new Set();
@@ -30,11 +31,13 @@ export function homeworkPrintSnapshot({publications, workspaceIds, boardDate, cl
       .map(target => target.workspace?.name || "所选教学班"))].join("、"),
     title: item.title || "", content: item.content || "",
     noHomework: isNoHomework(item),
+    preparation: preparationOf(item),
     deadline: item.dueAt ? dateTime(item.dueAt) : "未设置",
     priority: ({URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通"})[item.priority] || "普通",
     certification: item.isCertified ? "教师已确认" : "待教师确认",
   })).sort((a, b) => a.subject.localeCompare(b.subject, "zh-CN"));
-  return {className, scopeLabel, boardDate, items, generatedAt: dateTime(generatedAt),
+  return {className, scopeLabel, boardDate, items,
+    preparations: preparationList(preparations, workspaceIds, [boardDate, preparationToday(now)].sort().at(-1), now), generatedAt: dateTime(generatedAt),
     createdAt: dateTime(now), cached, warning};
 }
 
@@ -44,6 +47,7 @@ export function homeworkPrintDocument(snapshot) {
     <h2><span class="checkbox" aria-hidden="true">□</span> ${index + 1}. ${e(item.subject)}${item.title ? ` · ${e(item.title)}` : ""}</h2>
     <p class="details">${e(item.targets)} · ${e(item.priority)} · ${e(item.certification)}</p>
     <p class="content">${e(item.content || "（正文为空，请参阅标题）")}</p>
+    ${item.preparation ? `<p class="content">${e(item.preparation.date)} 需带：${e(item.preparation.text)}</p>` : ""}
     <p class="deadline">截止：${e(item.deadline)}</p>
   </section>`).join("\n");
   return `<!doctype html>
@@ -73,6 +77,7 @@ footer { border-top: 1px solid #111; margin-top: 20px; padding-top: 8px; }
 <p>${e(snapshot.scopeLabel)}</p><p class="details">共 ${snapshot.items.length} 项 · 数据更新于 ${e(snapshot.generatedAt)}</p></header>
 ${snapshot.cached ? '<p class="warning">离线缓存内容，可能不是最新作业。请核对后使用。</p>' : ""}
 ${snapshot.warning ? `<p class="warning">${e(snapshot.warning)}</p>` : ""}
+${snapshot.preparations?.length ? `<section class="assignment"><h2>需带物品</h2>${snapshot.preparations.map(item => `<p class="content">${e(item.date)} · ${e(item.subject)} · ${e(item.targets)} · ${item.certified ? "教师已确认" : "待教师确认"}<br>${e(item.text)}</p>`).join("")}</section>` : ""}
 ${rows || '<p>当前已加载内容中没有该日期的作业。</p>'}
 <footer>NPClassworks · 生成于 ${e(snapshot.createdAt)}<br>按当前班级选择整理已加载作业；不含通知及本机尚未上传的作业。内容以生成时为准。</footer>
 </main></body></html>`;

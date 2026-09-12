@@ -81,6 +81,7 @@
         <div class="focus-content">
           {{ publication.content || '（正文为空，请参阅标题）' }}
         </div>
+        <PreparationDetails :publication="publication" />
       </v-card-text>
       <v-card-actions class="px-6">
         <span class="text-caption">长正文可滚动查看，按 Esc 或点击关闭返回作业板。</span>
@@ -96,6 +97,7 @@
   </v-dialog>
 </template>
 <script setup>
+import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {isNoHomework} from "@/utils/noHomework";

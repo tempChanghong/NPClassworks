@@ -211,6 +211,7 @@
           @change="store.setBoardDate"
         />
         <HomeworkSubjectStatus />
+        <PreparationBoard />
         <v-empty-state
           v-if="store.feedLoadError && !store.feed.length"
           class="rounded-xl"
@@ -627,6 +628,7 @@
 </template>
 
 <script setup>
+import PreparationBoard from "@/components/v2/PreparationBoard.vue";
 import {computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";

@@ -1,3 +1,5 @@
+import {preparationOf} from "./homeworkPreparation.js";
+
 const SESSION_KEY = "classworks-v2-screen-session-cache";
 const FEED_PREFIX = "classworks-v2-screen-feed-cache:";
 const SESSION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -105,7 +107,8 @@ export function loadCachedScreenFeed(bindingId, boardDate, storage) {
   transitions.push(feed.nextTransitionAt);
   const future = transitions.filter(Boolean).map(value => new Date(value).getTime())
     .filter(time => Number.isFinite(time) && time > now);
-  return {...feed, items, nextTransitionAt: future.length ? new Date(Math.min(...future)).toISOString() : null};
+  return {...feed, items, preparations: feed.preparations || items.filter(item => preparationOf(item)),
+    nextTransitionAt: future.length ? new Date(Math.min(...future)).toISOString() : null};
 }
 
 export function saveCachedScreenFeed(bindingId, boardDate, feed, storage) {

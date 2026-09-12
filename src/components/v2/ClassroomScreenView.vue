@@ -208,6 +208,7 @@
     />
 
     <HomeworkSubjectStatus />
+    <PreparationBoard />
     <ScreenHomeworkChanges :font-scale="settings.fontScale" />
     <ScreenHomeworkFocus
       ref="focusTool"
@@ -370,6 +371,7 @@
 </template>
 
 <script setup>
+import PreparationBoard from "@/components/v2/PreparationBoard.vue";
 import {computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
