@@ -127,6 +127,8 @@
               <p class="week-content">
                 {{ item.content }}
               </p>
+              <SubmissionDetails :publication="item" />
+              <PreparationDetails :publication="item" />
               <p
                 v-if="item.dueAt"
                 class="text-caption"
@@ -152,6 +154,8 @@
   </v-dialog>
 </template>
 <script setup>
+import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
+import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, onUnmounted, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {classworksV2Api, getClassroomScreenToken} from "@/utils/classworksV2Client";

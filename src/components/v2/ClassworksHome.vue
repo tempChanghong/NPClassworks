@@ -1117,10 +1117,10 @@ function handleHistoryChanged(publication) {
 
 async function certifyPublication(publication) {
   try {
-    await store.certify(publication);
+    const certified = await store.certify(publication);
     showFeedback({
       title: "当前版本已通过教师确认",
-      detail: `版本 ${publication.revision} · 待处理事项已完成`,
+      detail: `版本 ${certified.revision} · 待处理事项已完成`,
       icon: "mdi-check-decagram-outline",
     });
   } catch (error) {
@@ -1139,10 +1139,10 @@ async function certifyPublication(publication) {
 async function certifyActionItem(item) {
   teacherActionBusyId.value = item.id;
   try {
-    await store.certify(item.publication);
+    const certified = await store.certify(item.publication);
     showFeedback({
       title: "当前版本已通过教师确认",
-      detail: `版本 ${item.publication.revision} · 待处理事项已完成`,
+      detail: `版本 ${certified.revision} · 待处理事项已完成`,
       icon: "mdi-check-decagram-outline",
     });
   } catch (error) {

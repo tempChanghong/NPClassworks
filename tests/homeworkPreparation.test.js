@@ -33,7 +33,7 @@ test("enriched feed separates earlier homework, prints all materials and safely 
 });
 test("templates fill common materials but cannot inherit a carrying date", () => {
   const result = fillHomeworkTemplate({title: "预习", content: "看书", materials: "〔工具〕", materialsDate: "2000-01-01"}, new Map([["工具", "圆规"]]));
-  assert.deepEqual(result, {title: "预习", content: "看书", materials: "圆规"});
+  assert.deepEqual(result, {title: "预习", content: "看书", materials: "圆规", submission: ""});
 });
 
 test("older display caches recover already-known preparations without rewriting stored homework", () => {

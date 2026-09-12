@@ -6,7 +6,7 @@ test("template placeholders repeat literally, preserve newlines and never copy p
   const template = {title: "练习〔页码〕", content: "完成〔页码〕\n〔__proto__〕", boardDate: "2000-01-01", targetWorkspaceIds: ["old"], dueAt: "old"};
   assert.deepEqual(templateFields(template), ["页码", "__proto__"]);
   assert.deepEqual(fillHomeworkTemplate(template, new Map([["页码", "$&"], ["__proto__", "<script>文字</script>"]])),
-    {title: "练习$&", content: "完成$&\n<script>文字</script>"});
+    {title: "练习$&", content: "完成$&\n<script>文字</script>", submission: "", materials: ""});
 });
 test("template filling rejects missing, malformed and oversized results", () => {
   assert.throws(() => fillHomeworkTemplate({content: "〔题号〕"}, new Map()), /全部/);

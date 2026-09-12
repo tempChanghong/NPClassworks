@@ -605,11 +605,12 @@ async function applyTemplate(input) {
   const generation = editorGeneration, session = store.teacherSessionVersion, snapshot = JSON.stringify(form);
   templateApplying.value = true;
   try {
-    if ((form.title || form.content || form.materials || form.submission) && !await confirmAction({title: "替换当前标题和正文？", message: "班级、科目、作业日期和截止时间保持当前设置。模板中的提交说明会一并套用；含需带物品时请重新选择携带日期。", confirmText: "替换内容"})) return;
+    if ((form.title || form.content || form.materials || form.submission) && !await confirmAction({title: "替换当前作业内容？", message: "将替换标题、正文、提交说明和需带物品，模板中的空字段也会清空对应内容。携带日期将清空，含物品时请重新选择。班级、科目、作业日期和截止时间保持当前设置。", confirmText: "替换内容"})) return;
     if (!mounted || generation !== editorGeneration || session !== store.teacherSessionVersion || !templatesOpen.value || templatesDisabled.value || snapshot !== JSON.stringify(form)) return;
     form.title = input.title; form.content = input.content;
-    if (Object.hasOwn(input, "submission")) form.submission = input.submission;
-    if (Object.hasOwn(input, "materials")) { form.materials = input.materials; form.materialsDate = ""; }
+    form.submission = input.submission;
+    form.materials = input.materials;
+    form.materialsDate = "";
     templatesOpen.value = false;
   } finally { templateApplying.value = false; }
 }
