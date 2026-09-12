@@ -199,11 +199,40 @@
           />
         </v-col>
       </v-row>
+      <v-textarea
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
+        v-model="form.submission"
+        label="提交说明（可选）"
+        placeholder="例如：早读前交给数学课代表，订正在原卷上"
+        maxlength="500"
+        counter="500"
+        rows="2"
+        auto-grow
+      />
+      <v-textarea
+        v-if="correctionEligible"
+        v-model="form.correctionReason"
+        label="本次更正原因（可选）"
+        hint="只记录本次修改，不会沿用到下一次编辑"
+        persistent-hint
+        maxlength="300"
+        counter="300"
+        rows="2"
+        auto-grow
+      />
+      <PublicationScreenPreview
+        v-if="screenPreview"
+        :publication="screenPreview.publication"
+        :targets="screenPreview.targets"
+        :timing="screenPreview.timing"
+        @close="screenPreview = null"
+      />
       <TeacherHomeworkTemplates
         v-if="templatesOpen"
         :title="form.title"
         :content="form.content"
         :materials="form.materials"
+        :submission="form.submission"
         :applying="templateApplying"
         @close="templatesOpen = false"
         @apply="applyTemplate"
@@ -471,7 +500,16 @@
       </v-alert>
     </v-card-text>
 
-    <v-card-actions class="pa-5 pt-0">
+    <v-card-actions class="pa-5 pt-0 flex-wrap ga-2">
+      <v-btn
+        v-if="form.type === 'ASSIGNMENT'"
+        :disabled="requestBusy"
+        prepend-icon="mdi-monitor-eye"
+        variant="tonal"
+        @click="openScreenPreview"
+      >
+        预览大屏效果
+      </v-btn>
       <v-btn
         v-if="isEditing"
         variant="text"
@@ -507,7 +545,9 @@
 import {computed, defineAsyncComponent, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {useNow} from "@vueuse/core";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
-import {withPreparation, preparationOf} from "@/utils/homeworkPreparation";
+import {publicationDraftInput} from "@/utils/publicationDraft";
+import {submissionOf} from "@/utils/homeworkInstructions";
+import {preparationOf} from "@/utils/homeworkPreparation";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {describeApiError} from "@/utils/classworksV2Client";
@@ -527,7 +567,7 @@ import {
   publicationDuplicateState,
 } from "@/utils/publicationDuplicate";
 import {confirmAction} from "@/utils/actionDialog";
-import {isNoHomework, NO_HOMEWORK_TITLE, NO_HOMEWORK_CONTENT, NO_HOMEWORK_META} from "@/utils/noHomework";
+import {isNoHomework, NO_HOMEWORK_TITLE, NO_HOMEWORK_CONTENT} from "@/utils/noHomework";
 
 const props = defineProps({
   editingPublication: {
@@ -556,6 +596,8 @@ const duplicateStatus = ref("PUBLISHED");
 const requestBusy = computed(() => saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 const contentInput = ref(null);
 const TeacherHomeworkTemplates = defineAsyncComponent(() => import("@/components/v2/TeacherHomeworkTemplates.vue"));
+const PublicationScreenPreview = defineAsyncComponent(() => import("@/components/v2/PublicationScreenPreview.vue"));
+const screenPreview = ref(null);
 const templatesOpen = ref(false), templateApplying = ref(false);
 const templatesDisabled = computed(() => Boolean(requestBusy.value || conflict.value || duplicateWarning.value || form.noHomework || form.type !== "ASSIGNMENT"));
 async function applyTemplate(input) {
@@ -563,9 +605,10 @@ async function applyTemplate(input) {
   const generation = editorGeneration, session = store.teacherSessionVersion, snapshot = JSON.stringify(form);
   templateApplying.value = true;
   try {
-    if ((form.title || form.content || form.materials) && !await confirmAction({title: "替换当前标题和正文？", message: "班级、科目、作业日期和截止时间保持当前设置。模板含需带物品时会一并套用，请重新选择携带日期。", confirmText: "替换内容"})) return;
+    if ((form.title || form.content || form.materials || form.submission) && !await confirmAction({title: "替换当前标题和正文？", message: "班级、科目、作业日期和截止时间保持当前设置。模板中的提交说明会一并套用；含需带物品时请重新选择携带日期。", confirmText: "替换内容"})) return;
     if (!mounted || generation !== editorGeneration || session !== store.teacherSessionVersion || !templatesOpen.value || templatesDisabled.value || snapshot !== JSON.stringify(form)) return;
     form.title = input.title; form.content = input.content;
+    if (Object.hasOwn(input, "submission")) form.submission = input.submission;
     if (Object.hasOwn(input, "materials")) { form.materials = input.materials; form.materialsDate = ""; }
     templatesOpen.value = false;
   } finally { templateApplying.value = false; }
@@ -611,12 +654,14 @@ const form = reactive({
   dueAt: "",
   materials: "",
   materialsDate: "",
+  submission: "",
+  correctionReason: "",
   expiresAt: "",
   priority: "NORMAL",
   popupEnabled: false,
 });
 const cleanForm = ref("");
-watch(() => [store.account?.id, store.teacherSessionVersion, props.editingPublication, form.type, form.noHomework], () => { templatesOpen.value = false; }, {flush: "sync"});
+watch(() => [store.account?.id, store.teacherSessionVersion, props.editingPublication, form.type, form.noHomework], () => { templatesOpen.value = false; screenPreview.value = null; }, {flush: "sync"});
 const releaseReloadProtection = registerAppReloadBlocker(() => {
   if (saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value) {
     return "正在保存或载入发布内容，请等待完成后再刷新。";
@@ -668,6 +713,7 @@ const lifecyclePreview = computed(() => {
   const defaultExpiry = new Date(publishAt.getTime() + 3 * 24 * 60 * 60 * 1000);
   return `未指定失效时间，将在 ${formatPreviewDateTime(defaultExpiry)} 自动停止显示`;
 });
+const correctionEligible = computed(() => form.type === "ASSIGNMENT" && editingBase.value?.status === "PUBLISHED");
 const isEditing = computed(() => Boolean(editingBase.value));
 const publishButtonLabel = computed(() => {
   if (isEditing.value && props.confirmAfterSave) return "保存修改并确认";
@@ -749,6 +795,8 @@ watch(() => props.editingPublication, (publication) => {
   form.targetWorkspaceIds = publication.targets?.map((target) => target.workspaceId) || [];
   form.title = publication.title || "";
   form.content = publication.content || "";
+  form.submission = submissionOf(publication);
+  form.correctionReason = "";
   form.materials = preparationOf(publication)?.text || "";
   form.materialsDate = preparationOf(publication)?.date || "";
   form.boardDate = publication.boardDate
@@ -849,9 +897,25 @@ function reset() {
   form.dueAt = "";
   form.materials = "";
   form.materialsDate = "";
+  form.submission = "";
+  form.correctionReason = "";
+  screenPreview.value = null;
   form.expiresAt = "";
   form.publishAt = localDateTime();
   cleanForm.value = JSON.stringify(form);
+}
+
+function openScreenPreview() {
+  localError.value = "";
+  try {
+    const input = publicationDraftInput(form, originalContentJson, "PUBLISHED", correctionEligible.value);
+    if (!selectedSubject.value) throw new Error("科目已不可用，请重新选择科目");
+    if (selectedTargets.value.length !== input.targetWorkspaceIds.length) throw new Error("部分发布目标已不可用，请重新选择班级");
+    screenPreview.value = JSON.parse(JSON.stringify({
+      publication: {...input, id: "local-preview", revision: 1, subject: selectedSubject.value, author: {name: store.account?.name || "教师"}},
+      targets: selectedTargets.value, timing: publishTimePreview.value,
+    }));
+  } catch (error) { localError.value = error.message; }
 }
 
 async function submit(status, allowDuplicate = false) {
@@ -888,23 +952,8 @@ async function submit(status, allowDuplicate = false) {
   flag.value = true;
   try {
     const operation = edit.base ? "updated" : "created";
-    const input = {
-      type: form.type,
-      subjectId: form.type === "ASSIGNMENT" ? form.subjectId : null,
-      targetWorkspaceIds: [...form.targetWorkspaceIds],
-      title: form.title,
-      content: form.content,
-      contentJson: form.type === "NOTICE"
-        ? {...originalContentJson, popupEnabled: form.priority !== "MINOR" || form.popupEnabled}
-        : withPreparation(form.noHomework ? {...NO_HOMEWORK_META} : originalContentJson, form.materials, form.materialsDate),
-      boardDate: form.type === "ASSIGNMENT" ? form.boardDate : null,
-      publishAt: new Date(form.publishAt).toISOString(),
-      dueAt: form.type === "ASSIGNMENT" && form.dueAt ? new Date(form.dueAt).toISOString() : null,
-      expiresAt: form.type === "NOTICE" && form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
-      priority: form.priority,
-      status,
-      ...(allowDuplicate ? {allowDuplicate: true} : {}),
-    };
+    const input = {...publicationDraftInput(form, originalContentJson, status, correctionEligible.value),
+      ...(allowDuplicate ? {allowDuplicate: true} : {})};
     submittedInput = input;
     const publication = edit.base
       ? await store.updatePublication(edit.base, input)

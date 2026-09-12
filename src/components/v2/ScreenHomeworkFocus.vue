@@ -81,6 +81,7 @@
         <div class="focus-content">
           {{ publication.content || '（正文为空，请参阅标题）' }}
         </div>
+        <SubmissionDetails :publication="publication" />
         <PreparationDetails :publication="publication" />
       </v-card-text>
       <v-card-actions class="px-6">
@@ -97,6 +98,7 @@
   </v-dialog>
 </template>
 <script setup>
+import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";

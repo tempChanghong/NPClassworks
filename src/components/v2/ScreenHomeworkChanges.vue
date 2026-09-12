@@ -43,6 +43,10 @@
             >
               {{ summary(field) }}
             </span>
+            <span
+              v-if="item.after.correctionReason"
+              class="change-summary"
+            >更正原因：{{ item.after.correctionReason }}</span>
             <span class="text-caption">展开查看完整前后内容</span>
           </summary>
           <div

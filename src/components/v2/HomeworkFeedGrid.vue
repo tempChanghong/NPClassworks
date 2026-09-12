@@ -86,14 +86,15 @@
           {{ publication.title }}
         </v-card-subtitle>
         <v-card-text class="publication-body">
+          <SubmissionDetails :publication="publication" />
           <PreparationDetails :publication="publication" />
           <component
-            :is="screenMode && publication.type === 'ASSIGNMENT' ? 'button' : 'div'"
+            :is="screenMode && !previewMode && publication.type === 'ASSIGNMENT' ? 'button' : 'div'"
             class="publication-content"
-            :class="{'publication-focus-trigger': screenMode && publication.type === 'ASSIGNMENT'}"
-            :type="screenMode && publication.type === 'ASSIGNMENT' ? 'button' : undefined"
-            :aria-label="screenMode && publication.type === 'ASSIGNMENT' ? `放大查看${publication.subject?.name || ''}作业` : undefined"
-            @click="screenMode && publication.type === 'ASSIGNMENT' && $emit('focus', {publication, activator: $event.currentTarget})"
+            :class="{'publication-focus-trigger': screenMode && !previewMode && publication.type === 'ASSIGNMENT'}"
+            :type="screenMode && !previewMode && publication.type === 'ASSIGNMENT' ? 'button' : undefined"
+            :aria-label="screenMode && !previewMode && publication.type === 'ASSIGNMENT' ? `放大查看${publication.subject?.name || ''}作业` : undefined"
+            @click="screenMode && !previewMode && publication.type === 'ASSIGNMENT' && $emit('focus', {publication, activator: $event.currentTarget})"
           >
             {{ publication.content }}
           </component>
@@ -138,11 +139,11 @@
             </span>
           </div>
           <div
-            v-if="(screenMode && (canEdit(publication) || publication.type === 'ASSIGNMENT')) || (completionEnabled && publication.type === 'ASSIGNMENT')"
+            v-if="!previewMode && ((screenMode && (canEdit(publication) || publication.type === 'ASSIGNMENT')) || (completionEnabled && publication.type === 'ASSIGNMENT'))"
             class="publication-actions d-flex justify-end"
           >
             <v-btn
-              v-if="screenMode && publication.type === 'ASSIGNMENT'"
+              v-if="screenMode && !previewMode && publication.type === 'ASSIGNMENT'"
               prepend-icon="mdi-magnify-plus-outline"
               size="small"
               variant="text"
@@ -185,6 +186,7 @@
 </template>
 
 <script setup>
+import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";
 import {isNoHomework} from "@/utils/noHomework";
@@ -203,6 +205,7 @@ import {
 const props = defineProps({
   publications: {type: Array, default: () => []},
   screenMode: Boolean,
+  previewMode: Boolean,
   settings: {type: Object, default: () => ({...SCREEN_DISPLAY_DEFAULTS})},
   canEdit: {type: Function, default: () => false},
   currentTime: {type: [Date, Number, String], default: () => new Date()},
@@ -212,10 +215,11 @@ const props = defineProps({
 defineEmits(["edit", "history", "toggle-complete", "focus"]);
 
 function publicationState(publication) {
-  return publicationDisplayState(publication, {now: props.currentTime});
+  return props.previewMode ? {label: "尚未发布 · 预览", color: "info", icon: "mdi-eye-outline"} : publicationDisplayState(publication, {now: props.currentTime});
 }
 
 function indicatorVisibility(publication) {
+  if (props.previewMode) return {showState: true, showPriority: true};
   return publicationIndicatorVisibility(publication, {
     now: props.currentTime,
     screenMode: props.screenMode,
@@ -442,8 +446,16 @@ function targetNames(publication) {
   gap: 0 10px;
 }
 .screen-feed .publication-content,
+.screen-feed .submission-details,
+.screen-feed .preparation-details,
 .screen-feed .publication-divider {
   flex: 1 0 100%;
+}
+.screen-feed .submission-details,
+.screen-feed .preparation-details {
+  min-width: 0;
+  font-size: calc(1rem * var(--screen-font-scale));
+  line-height: 1.65;
 }
 .screen-feed .publication-metadata {
   flex: 1 1 300px;

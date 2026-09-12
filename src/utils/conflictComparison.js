@@ -40,6 +40,8 @@ export const PUBLICATION_CONFLICT_FIELDS = Object.freeze([
   {key: "boardDate", label: "作业板日期", current: (value) => String(value?.boardDate || "").slice(0, 10)},
   {key: "publishAt", label: "发布时间"},
   {key: "dueAt", label: "截止时间"},
+  {key: "submission", label: "提交说明", local: value => value?.contentJson?.submission, current: value => value?.contentJson?.submission},
+  {key: "correctionReason", label: "本次更正原因", local: value => value?.correctionReason, current: value => value?.contentJson?.correctionReason},
   {key: "materials", label: "需带物品", local: value => value?.contentJson?.preparation?.text, current: value => value?.contentJson?.preparation?.text},
   {key: "materialsDate", label: "携带日期", local: value => value?.contentJson?.preparation?.date, current: value => value?.contentJson?.preparation?.date},
   {key: "expiresAt", label: "失效时间"},

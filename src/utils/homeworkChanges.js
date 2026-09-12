@@ -1,7 +1,8 @@
+import {submissionOf, correctionOf} from "./homeworkInstructions.js";
 import {isNoHomework} from "./noHomework.js";
 
 export const HOMEWORK_CHANGE_DURATION = 120_000;
-const fields = {title: "标题", content: "正文", dueAt: "截止时间", subject: "科目", targets: "班级", noHomework: "作业状态", materials: "需带物品", materialsDate: "携带日期"};
+const fields = {title: "标题", content: "正文", dueAt: "截止时间", subject: "科目", targets: "班级", noHomework: "作业状态", materials: "需带物品", materialsDate: "携带日期", submission: "提交说明"};
 
 export function homeworkChangeSnapshot(items, date, workspaceIds) {
   const allowed = new Set(workspaceIds);
@@ -9,6 +10,7 @@ export function homeworkChangeSnapshot(items, date, workspaceIds) {
     && String(item.boardDate).slice(0, 10) === date && item.targets?.some(target => allowed.has(target.workspaceId)))
     .map(item => ({id: item.id, revision: item.revision, title: item.title || "", content: item.content || "",
       dueAt: item.dueAt || "", subject: item.subject?.name || "未指定科目", isCertified: Boolean(item.isCertified),
+      submission: submissionOf(item), correctionReason: correctionOf(item),
       materials: item.contentJson?.preparation?.text || "", materialsDate: item.contentJson?.preparation?.date || "",
       targets: item.targets.filter(target => allowed.has(target.workspaceId)).map(target => target.workspace?.name || target.workspaceId).sort().join("、"),
       noHomework: isNoHomework(item) ? "今日无作业" : "有作业"}));

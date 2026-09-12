@@ -89,6 +89,7 @@ function* planImageSteps(snapshot, measure, maxPages) {
     append(yield* rows(`${item.targets} · ${item.certification} · ${item.priority}`, "meta"), continuation);
     if (!item.noHomework) append(yield* rows(`截止：${item.deadline}`, "meta"), continuation);
     append(yield* rows(item.content || "（正文为空，请参阅标题）", "body"), continuation);
+    if (item.submission) append(yield* rows(`提交说明：${item.submission}`, "body"), continuation);
     if (item.preparation) append(yield* rows(`${item.preparation.date} 需带：${item.preparation.text}`, "body"), continuation);
     y += 24;
   }

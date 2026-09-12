@@ -81,6 +81,16 @@
                 <div class="revision-content">
                   {{ item.purgedAt ? "该待教师确认备份已按三天保留策略清理正文" : (item.snapshot.content || "（无正文）") }}
                 </div>
+                <SubmissionDetails
+                  v-if="!item.purgedAt"
+                  :publication="item.snapshot"
+                />
+                <p
+                  v-if="!item.purgedAt && correctionOf(item.snapshot)"
+                  class="revision-content"
+                >
+                  更正原因：{{ correctionOf(item.snapshot) }}
+                </p>
                 <PreparationDetails
                   v-if="!item.purgedAt"
                   :publication="item.snapshot"
@@ -138,6 +148,8 @@
 </template>
 
 <script setup>
+import {correctionOf} from "@/utils/homeworkInstructions";
+import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {onBeforeUnmount, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";

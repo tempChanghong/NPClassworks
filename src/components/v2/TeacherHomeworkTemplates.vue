@@ -9,7 +9,7 @@
   >
     <v-card class="homework-templates">
       <v-card-title>个人作业模板</v-card-title>
-      <v-card-subtitle>跟随当前教师账号同步 · 标题、正文和常用物品</v-card-subtitle>
+      <v-card-subtitle>跟随当前教师账号同步 · 标题、正文、常用物品和提交说明</v-card-subtitle>
       <v-card-text>
         <v-alert
           v-if="error"
@@ -92,6 +92,13 @@
             auto-grow
           />
           <v-textarea
+            v-model="draft.submission"
+            :disabled="busy"
+            label="模板提交说明（可选）"
+            maxlength="500"
+            rows="2"
+          />
+          <v-textarea
             v-model="draft.materials"
             :disabled="busy"
             label="模板需带物品（可选）"
@@ -131,6 +138,9 @@
             class="template-preview mb-4"
           >
             <h4>{{ preview.title }}</h4><p>{{ preview.content }}</p>
+            <p v-if="preview.submission">
+              提交说明：{{ preview.submission }}
+            </p>
             <p v-if="preview.materials">
               需带：{{ preview.materials }}（套用后选择携带日期）
             </p>
@@ -173,10 +183,10 @@ import {confirmAction} from "@/utils/actionDialog";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import {fillHomeworkTemplate, templateFields} from "@/utils/homeworkTemplates";
 
-const props = defineProps({title: {type: String, default: ""}, content: {type: String, default: ""}, materials: {type: String, default: ""}, applying: Boolean});
+const props = defineProps({title: {type: String, default: ""}, content: {type: String, default: ""}, materials: {type: String, default: ""}, submission: {type: String, default: ""}, applying: Boolean});
 const emit = defineEmits(["close", "apply"]);
 const items = ref([]), busy = ref(false), error = ref(""), mode = ref("list"), selected = ref(null);
-const draft = reactive({name: "", title: "", content: "", materials: ""}), values = reactive(new Map()), fields = ref([]);
+const draft = reactive({name: "", title: "", content: "", materials: "", submission: ""}), values = reactive(new Map()), fields = ref([]);
 let alive = true, clean = "";
 const dirty = computed(() => mode.value === "edit" ? JSON.stringify(draft) !== clean : mode.value === "use" && [...values.values()].some(Boolean));
 const previewError = computed(() => { try { fillHomeworkTemplate(selected.value || {}, values); return ""; } catch (e) { return e.message; } });
@@ -198,7 +208,7 @@ async function run(operation) {
 function load() { return run(async () => { const result = await classworksV2Api.homeworkTemplates(); if (alive) items.value = result; }); }
 function edit(item = null) {
   selected.value = item;
-  Object.assign(draft, {name: item?.name || "", title: item?.title ?? props.title, content: item?.content ?? props.content, materials: item ? item.materials || "" : props.materials});
+  Object.assign(draft, {name: item?.name || "", title: item?.title ?? props.title, content: item?.content ?? props.content, materials: item ? item.materials || "" : props.materials, submission: item ? item.submission || "" : props.submission});
   clean = JSON.stringify(draft); mode.value = "edit"; error.value = "";
 }
 function use(item) {

@@ -1,3 +1,4 @@
+import {submissionOf} from "./homeworkInstructions.js";
 import {isNoHomework} from "./noHomework.js";
 import {preparationOf, preparationList, preparationToday} from "./homeworkPreparation.js";
 
@@ -32,6 +33,7 @@ export function homeworkPrintSnapshot({publications, preparations = [], workspac
     title: item.title || "", content: item.content || "",
     noHomework: isNoHomework(item),
     preparation: preparationOf(item),
+    submission: submissionOf(item),
     deadline: item.dueAt ? dateTime(item.dueAt) : "未设置",
     priority: ({URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通"})[item.priority] || "普通",
     certification: item.isCertified ? "教师已确认" : "待教师确认",
@@ -47,6 +49,7 @@ export function homeworkPrintDocument(snapshot) {
     <h2><span class="checkbox" aria-hidden="true">□</span> ${index + 1}. ${e(item.subject)}${item.title ? ` · ${e(item.title)}` : ""}</h2>
     <p class="details">${e(item.targets)} · ${e(item.priority)} · ${e(item.certification)}</p>
     <p class="content">${e(item.content || "（正文为空，请参阅标题）")}</p>
+    ${item.submission ? `<p class="content">提交说明：${e(item.submission)}</p>` : ""}
     ${item.preparation ? `<p class="content">${e(item.preparation.date)} 需带：${e(item.preparation.text)}</p>` : ""}
     <p class="deadline">截止：${e(item.deadline)}</p>
   </section>`).join("\n");

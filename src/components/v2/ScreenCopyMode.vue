@@ -79,6 +79,7 @@
           <div class="copy-content">
             {{ current?.content || '（正文为空，请参阅标题）' }}
           </div>
+          <SubmissionDetails :publication="current" />
           <PreparationDetails :publication="current" />
         </div>
       </v-card-text>
@@ -126,6 +127,7 @@
   </v-dialog>
 </template>
 <script setup>
+import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
