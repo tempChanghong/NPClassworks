@@ -382,6 +382,7 @@ import {
   alertableScreenNotifications,
   createNotificationAlertController,
   notificationAlertKey,
+  notificationAcknowledgedStorageKey,
   readAcknowledgedNotificationKeys,
   rememberAcknowledgedNotification,
   screenNotificationSoundProfile,
@@ -458,6 +459,19 @@ watch(notificationCenterOpen, (open) => {
     acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(bindingId.value, localStorage, activeNotices.value);
   }
 });
+
+function syncAcknowledgedNotices(event) {
+  if (event.storageArea !== localStorage || event.key !== notificationAcknowledgedStorageKey(bindingId.value)) return;
+  // Re-read current storage instead of applying a possibly superseded event.
+  // Missing/corrupt data must not undo confirmations already known by this page.
+  try {
+    const saved = JSON.parse(localStorage.getItem(event.key));
+    if (!Array.isArray(saved) || !saved.every(key => typeof key === "string")) return;
+    const keys = readAcknowledgedNotificationKeys(bindingId.value, localStorage, activeNotices.value);
+    acknowledgedNoticeKeys.value = new Set([...acknowledgedNoticeKeys.value, ...keys]);
+    keys.forEach(key => noticeConfirmationErrors.value.delete(key));
+  } catch { /* Keep the current UI when local storage cannot be read. */ }
+}
 const className = computed(() => store.screenSession?.binding?.administrativeClass?.name || "班级大屏");
 const currentBoardDay = useCurrentBoardDate();
 const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate, currentBoardDay.value));
@@ -586,6 +600,7 @@ onMounted(() => {
   window.addEventListener("keydown", handleShortcut);
   window.addEventListener("online", retryNotificationDelivery);
   window.addEventListener("offline", pauseNotificationDelivery);
+  window.addEventListener("storage", syncAcknowledgedNotices);
   retryNotificationDelivery();
   burnInTimer = window.setInterval(() => {
     burnInStep.value += 1;
@@ -598,6 +613,7 @@ onUnmounted(() => {
   window.removeEventListener("keydown", handleShortcut);
   window.removeEventListener("online", retryNotificationDelivery);
   window.removeEventListener("offline", pauseNotificationDelivery);
+  window.removeEventListener("storage", syncAcknowledgedNotices);
   notificationDeliveryQueue.dispose();
   window.clearInterval(burnInTimer);
 });

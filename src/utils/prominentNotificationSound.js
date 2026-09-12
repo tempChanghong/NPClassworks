@@ -5,25 +5,45 @@ export const PROMINENT_NOTIFICATION_GAIN = 1.5;
 export const GENTLE_NOTIFICATION_GAIN = 1.2;
 
 let audioContext = null;
-const decodedBuffers = new Map();
+const contextBuffers = new WeakMap();
+const PREPARATION_TIMEOUT_MS = 5000;
+
+async function withPreparationTimeout(operation, timeoutMs) {
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = Object.assign(new Error("提示音准备超时，本次不再播放"), {code: "AUDIO_PREPARATION_TIMEOUT"});
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+  });
+  try { return await Promise.race([Promise.resolve().then(() => operation(controller.signal)), timeout]); }
+  finally { clearTimeout(timer); }
+}
 
 function resolveAudioContextApi() {
   return globalThis.AudioContext || globalThis.webkitAudioContext || null;
 }
 
-async function loadDecodedBuffer(context, path, fetchImpl) {
+async function loadDecodedBuffer(context, path, fetchImpl, timeoutMs) {
+  if (!contextBuffers.has(context)) contextBuffers.set(context, new Map());
+  const decodedBuffers = contextBuffers.get(context);
   if (!decodedBuffers.has(path)) {
-    decodedBuffers.set(path, (async () => {
-      const response = await fetchImpl(path);
+    decodedBuffers.set(path, withPreparationTimeout(async signal => {
+      const response = await fetchImpl(path, {signal});
+      if (signal.aborted) throw signal.reason;
       if (!response.ok) throw new Error(`提示音加载失败（HTTP ${response.status}）`);
-      return context.decodeAudioData(await response.arrayBuffer());
-    })());
+      const data = await response.arrayBuffer();
+      if (signal.aborted) throw signal.reason;
+      return context.decodeAudioData(data);
+    }, timeoutMs));
   }
-
+  const pending = decodedBuffers.get(path);
   try {
-    return await decodedBuffers.get(path);
+    return await pending;
   } catch (error) {
-    decodedBuffers.delete(path);
+    if (decodedBuffers.get(path) === pending) decodedBuffers.delete(path);
     throw error;
   }
 }
@@ -40,9 +60,12 @@ export async function playProminentNotificationSound(filename, {
   fetchImpl = globalThis.fetch,
   fallback = playSound,
   gainValue = PROMINENT_NOTIFICATION_GAIN,
+  timeoutMs = PREPARATION_TIMEOUT_MS,
 } = {}) {
+  timeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : PREPARATION_TIMEOUT_MS;
   const path = getSoundPath(filename);
   if (!path) return null;
+  const deadline = Date.now() + timeoutMs;
 
   if (!AudioContextApi || typeof fetchImpl !== "function") {
     return fallback(filename);
@@ -56,26 +79,37 @@ export async function playProminentNotificationSound(filename, {
     ) {
       audioContext = new AudioContextApi();
     }
-    if (audioContext.state === "suspended") await audioContext.resume();
-    if (audioContext.state !== "running") throw new Error("音频上下文未启动");
+    const context = audioContext;
+    if (context.state === "suspended") await withPreparationTimeout(() => context.resume(), timeoutMs);
+    if (context.state !== "running") throw new Error("音频上下文未启动");
 
-    const source = audioContext.createBufferSource();
-    source.buffer = await loadDecodedBuffer(audioContext, path, fetchImpl);
+    const remaining = Math.max(1, deadline - Date.now());
+    const loading = loadDecodedBuffer(context, path, fetchImpl, remaining);
+    const buffer = await withPreparationTimeout(() => loading, remaining);
+    if (Date.now() >= deadline) throw Object.assign(new Error("提示音准备超时，本次不再播放"), {code: "AUDIO_PREPARATION_TIMEOUT"});
+    const source = context.createBufferSource();
+    source.buffer = buffer;
 
-    const gain = audioContext.createGain();
+    const gain = context.createGain();
     gain.gain.value = Math.min(2, Math.max(0.5, Number(gainValue) || 1));
 
-    const limiter = audioContext.createDynamicsCompressor();
+    const limiter = context.createDynamicsCompressor();
     limiter.threshold.value = -2;
     limiter.knee.value = 1;
     limiter.ratio.value = 20;
     limiter.attack.value = 0.003;
     limiter.release.value = 0.2;
 
-    source.connect(gain).connect(limiter).connect(audioContext.destination);
+    source.connect(gain).connect(limiter).connect(context.destination);
     source.start();
     return source;
   } catch (error) {
+    // A timed-out attempt must not start another potentially delayed playback.
+    // Its failed cache entry is removed, so the next notification can try again.
+    if (error?.code === "AUDIO_PREPARATION_TIMEOUT") {
+      console.warn(error.message);
+      return null;
+    }
     console.warn("增强提示音播放失败，已退回普通播放:", error);
     return fallback(filename);
   }

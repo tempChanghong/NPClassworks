@@ -245,6 +245,40 @@ test("opening the center reloads confirmations saved by another tab", async ({pa
   await expect(page.locator(".notification-center")).toContainText("待确认 0 条");
 });
 
+test("already open centers and popups immediately share confirmations but retain a newer revision", async ({page, context, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  await page.goto(origin);
+  const other = await context.newPage();
+  await other.goto(origin);
+  for (const tab of [page, other]) {
+    await tab.getByRole("button", {name: "通知", exact: true}).first().click();
+    await expect(tab.locator(".notification-center")).toContainText("当前 0 条");
+  }
+  const response = await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content: "两页同步确认"}});
+  const notice = (await response.json()).data;
+  for (const tab of [page, other]) await expect(tab.locator(".screen-notice-popup")).toContainText(notice.content);
+  // No feed change or reopening either center: only the other tab's storage event.
+  await other.locator(".screen-notice-popup").getByRole("button", {name: "知道了", exact: true}).click();
+  for (const tab of [page, other]) {
+    await expect(tab.locator(".screen-notice-popup")).toBeHidden();
+    await expect(tab.locator(".notification-center")).toContainText("待确认 0 条");
+  }
+  const updated = await request.patch(`${api}/api/v2/publications/${notice.id}`, {
+    headers: {"If-Match": '"1"'}, data: {content: "第二版仍须确认"},
+  });
+  expect(updated.ok()).toBe(true);
+  for (const tab of [page, other]) await expect(tab.locator(".screen-notice-popup")).toContainText("第二版仍须确认");
+  await other.evaluate(id => {
+    localStorage.setItem("classworks-v2-notification-acknowledged:another-screen", JSON.stringify([`${id}:2`]));
+    localStorage.setItem("classworks-v2-notification-acknowledged:screen-a", JSON.stringify([`${id}:1`, "unrelated:1"]));
+  }, notice.id);
+  await expect(page.locator(".screen-notice-popup")).toContainText("第二版仍须确认");
+  await other.locator(".screen-notice-popup").getByRole("button", {name: "知道了", exact: true}).click();
+  await expect(page.locator(".screen-notice-popup")).toBeHidden();
+  await expect(page.locator(".notification-center")).toContainText("待确认 0 条");
+});
+
 test("delivery refresh is disabled while loading and recovers after a request failure", async ({browser, request}) => {
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
   await request.post(`${api}/__test/reset`);

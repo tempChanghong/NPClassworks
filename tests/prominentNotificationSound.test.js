@@ -1,10 +1,53 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {setImmediate} from "node:timers";
 import {
   GENTLE_NOTIFICATION_GAIN,
   playProminentNotificationSound,
   PROMINENT_NOTIFICATION_GAIN,
 } from "../src/utils/prominentNotificationSound.js";
+
+for (const phase of ["resume", "fetch", "body", "decode"]) {
+  test(`stalled ${phase} times out, permits retry and never plays its late result`, async () => {
+    let finish;
+    const stalled = new Promise(resolve => { finish = resolve; });
+    let stall = true, starts = 0, fetches = 0, fallbackCalls = 0, signal;
+    class Context {
+      state = phase === "resume" ? "suspended" : "running";
+      destination = {};
+      async resume() { if (stall) await stalled; this.state = "running"; }
+      async decodeAudioData() { if (stall && phase === "decode") await stalled; return {}; }
+      createBufferSource() { return {connect: target => target, start: () => { starts++; }}; }
+      createGain() { return {gain: {}, connect: target => target}; }
+      createDynamicsCompressor() { return {threshold: {}, knee: {}, ratio: {}, attack: {}, release: {}, connect: target => target}; }
+    }
+    const options = {
+      AudioContextApi: Context, timeoutMs: 20, fallback: () => { fallbackCalls++; },
+      fetchImpl: async (path, options) => {
+        fetches++; signal = options.signal;
+        if (stall && phase === "fetch") await stalled;
+        return {ok: true, arrayBuffer: async () => {
+          if (stall && phase === "body") await stalled;
+          return new ArrayBuffer(1);
+        }};
+      },
+    };
+    assert.equal(await playProminentNotificationSound(`timeout-${phase}.mp3`, options), null);
+    assert.equal(starts, 0);
+    assert.equal(fallbackCalls, 0);
+    if (phase !== "resume") assert.equal(signal.aborted, true);
+    stall = false;
+    await playProminentNotificationSound(`timeout-${phase}.mp3`, {...options, timeoutMs: 1000});
+    assert.equal(starts, 1);
+    const successfulFetches = fetches;
+    finish();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(starts, 1);
+    await playProminentNotificationSound(`timeout-${phase}.mp3`, {...options, timeoutMs: 1000});
+    assert.equal(fetches, successfulFetches);
+    assert.equal(starts, 2);
+  });
+}
 
 test("prominent notification sound falls back when Web Audio is unavailable", async () => {
   const calls = [];
