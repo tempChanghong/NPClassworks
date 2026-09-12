@@ -13,20 +13,35 @@ const [{default: app}, {initSocket}, {prisma}] = await Promise.all([
 if (await prisma.school.count() || await prisma.account.count()) throw new Error("Fullstack database must be empty");
 process.env.VITE_DEFAULT_KV_SERVER = api;
 process.env.VITE_ENABLE_ANALYTICS = "false";
-const root = resolve("dist-e2e/fullstack");
+const upgrade = process.env.FULLSTACK_RELEASE_UPGRADE === "true";
+const releases = upgrade ? JSON.parse(await readFile(resolve("dist-e2e/release-upgrade/manifest.json"), "utf8")) : null;
+let activeRelease = "previous";
+const buildRoot = resolve("dist-e2e/fullstack");
 // Prisma's generated client sets global __dirname. Build in a fresh process so
 // backend globals cannot alter frontend plugins' package-relative resolution.
-const build = spawnSync(process.execPath, [resolve("node_modules/vite/bin/vite.js"), "build", "--outDir", root, "--logLevel", "error"], {
+const build = upgrade ? {status: 0} : spawnSync(process.execPath, [resolve("node_modules/vite/bin/vite.js"), "build", "--outDir", buildRoot, "--logLevel", "error"], {
   env: {...process.env, NODE_ENV: "production"}, stdio: "inherit",
 });
 if (build.error || build.status !== 0) throw build.error || new Error(`Fullstack frontend build failed (${build.status})`);
 const backend = createServer(app);
 const io = initSocket(backend);
 const mime = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
-  ".webmanifest": "application/manifest+json", ".woff2": "font/woff2", ".png": "image/png", ".svg": "image/svg+xml"};
+  ".webmanifest": "application/manifest+json", ".woff2": "font/woff2", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".mp3": "audio/mpeg"};
 const frontend = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url, origin).pathname;
+    // Local test server only; never included in the production application.
+    if (upgrade && pathname === "/__test/release" && req.method === "POST") {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      const {release} = JSON.parse(raw);
+      if (!Object.hasOwn(releases, release)) { res.writeHead(400); res.end(); return; }
+      activeRelease = release;
+      res.writeHead(200, {"Content-Type": "application/json", "Cache-Control": "no-store"});
+      res.end(JSON.stringify(releases[release]));
+      return;
+    }
+    const root = upgrade ? releases[activeRelease].root : buildRoot;
     const path = resolve(root, `.${decodeURIComponent(pathname)}`);
     if (path !== root && !path.startsWith(root + sep)) { res.writeHead(403); res.end(); return; }
     const file = await stat(path).then(info => info.isFile() ? path : resolve(root, "index.html"))

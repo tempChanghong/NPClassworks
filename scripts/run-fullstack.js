@@ -4,6 +4,10 @@ import {resolve} from "node:path";
 import {backendRoot, configureRuntime} from "../tests/fullstack/environment.js";
 
 const managedDatabase = !process.env.FULLSTACK_DATABASE_URL;
+const upgrade = process.argv.includes("--upgrade");
+const performance = process.argv.includes("--performance");
+if (upgrade && performance) throw new Error("Choose one acceptance suite");
+if (upgrade) process.env.FULLSTACK_RELEASE_UPGRADE = "true";
 const port = Number(process.env.FULLSTACK_POSTGRES_PORT || 55434);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid FULLSTACK_POSTGRES_PORT");
 if (managedDatabase) process.env.FULLSTACK_DATABASE_URL = `postgresql://npclassworks_test:fullstack_test_only@127.0.0.1:${port}/npclassworks_test_fullstack`;
@@ -18,17 +22,21 @@ const version = cwd => ({
   sha: execFileSync("git", ["rev-parse", "HEAD"], {cwd, encoding: "utf8"}).trim(),
   dirty: Boolean(execFileSync("git", ["status", "--porcelain"], {cwd, encoding: "utf8"}).trim()),
 });
-mkdirSync("test-results/fullstack-metadata", {recursive: true});
+const metadata = `test-results/${upgrade ? "upgrade" : performance ? "performance" : "fullstack"}-metadata`;
+mkdirSync(metadata, {recursive: true});
 const pair = {frontend: version(process.cwd()), backend: version(backendRoot)};
-writeFileSync("test-results/fullstack-metadata/versions.json", JSON.stringify(pair, null, 2));
+writeFileSync(`${metadata}/versions.json`, JSON.stringify(pair, null, 2));
 console.log("Fullstack checkout pair:", pair);
 try {
+  if (upgrade) run(process.execPath, ["scripts/prepare-release-upgrade.js"]);
   if (managedDatabase) run("docker", [...compose, "up", "-d", "--wait", "--wait-timeout", "60"]);
   run(process.execPath, [resolve(backendRoot, "node_modules/prisma/build/index.js"), "migrate", "deploy"], backendRoot);
   // Also execute the recently added persisted single-session regression on this DB.
   process.env.RUN_DATABASE_TESTS = "true";
   run(process.execPath, ["--test", "tests/accountSessionDatabase.integration.test.js"], backendRoot);
-  run(process.execPath, ["node_modules/@playwright/test/cli.js", "test", "--config", "playwright.fullstack.config.js"]);
+  const config = upgrade ? "playwright.upgrade.config.js" : performance ? "playwright.performance.config.js" : "playwright.fullstack.config.js";
+  const testArgs = process.argv.slice(2).filter(arg => !["--upgrade", "--performance"].includes(arg));
+  run(process.execPath, ["node_modules/@playwright/test/cli.js", "test", "--config", config, ...testArgs]);
 } finally {
   if (managedDatabase) {
     const cleanup = spawnSync("docker", [...compose, "down", "--volumes", "--remove-orphans"], {stdio: "inherit"});

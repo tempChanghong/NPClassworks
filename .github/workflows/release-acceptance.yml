@@ -1,0 +1,52 @@
+name: Released PWA upgrade acceptance (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_ref:
+        description: Backend tag or commit to verify with the fixed frontend release pair
+        default: v1.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: tempChanghong/NPClassworksKV
+          ref: ${{ inputs.backend_ref }}
+          path: .contract-backend
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+        working-directory: .contract-backend
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Upgrade actual released application with real API and PostgreSQL
+        run: pnpm test:upgrade
+        env:
+          CLASSWORKS_BACKEND_ROOT: ${{ github.workspace }}/.contract-backend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-upgrade-results
+          path: |
+            test-results/upgrade/
+            test-results/upgrade-metadata/
+            dist-e2e/release-upgrade/manifest.json
+          retention-days: 14

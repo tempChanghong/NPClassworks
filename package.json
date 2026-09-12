@@ -18,6 +18,8 @@
     "test:flows": "node --test tests/publicationFlows.test.js",
     "test:e2e": "playwright test",
     "test:e2e:fullstack": "node scripts/run-fullstack.js",
+    "test:upgrade": "node scripts/run-fullstack.js --upgrade",
+    "test:performance": "node scripts/run-fullstack.js --performance",
     "test:contracts": "node --test tests/contracts/core.test.js",
     "prebuild": "node scripts/generate-sound-list.js"
   },

@@ -1,0 +1,301 @@
+[
+  {
+    "recordedAt": "2026-09-12T11:05:06.209Z",
+    "machine": {
+      "os": "win32 10.0.26200",
+      "cpu": "Intel(R) Core(TM) Ultra 9 275HX",
+      "ramGiB": 31.4,
+      "browser": "152.0.4191.66",
+      "channel": "msedge"
+    },
+    "cpuRate": 1,
+    "workload": {
+      "assignments": 30,
+      "notices": 20,
+      "preset": "4f333ef5259d",
+      "microphone": "Chromium synthetic device; real AudioWorklet"
+    },
+    "before": {
+      "JSEventListeners": 1581,
+      "Nodes": 6012,
+      "ScriptDuration": 0.046397,
+      "TaskDuration": 0.680795,
+      "JSHeapUsedSize": 19201544
+    },
+    "samples": [
+      {
+        "cycle": 1,
+        "automationOpenMs": 61,
+        "JSEventListeners": 1725,
+        "Nodes": 6152,
+        "ScriptDuration": 0.050544,
+        "TaskDuration": 0.798026,
+        "JSHeapUsedSize": 19991364
+      },
+      {
+        "cycle": 2,
+        "automationOpenMs": 58,
+        "JSEventListeners": 1723,
+        "Nodes": 6148,
+        "ScriptDuration": 0.054474,
+        "TaskDuration": 0.92471,
+        "JSHeapUsedSize": 20567852
+      },
+      {
+        "cycle": 3,
+        "automationOpenMs": 61,
+        "JSEventListeners": 1867,
+        "Nodes": 6289,
+        "ScriptDuration": 0.057692,
+        "TaskDuration": 1.040165,
+        "JSHeapUsedSize": 20312064
+      },
+      {
+        "cycle": 4,
+        "automationOpenMs": 60,
+        "JSEventListeners": 2011,
+        "Nodes": 6429,
+        "ScriptDuration": 0.060866,
+        "TaskDuration": 1.156595,
+        "JSHeapUsedSize": 21919420
+      },
+      {
+        "cycle": 5,
+        "automationOpenMs": 56,
+        "JSEventListeners": 2155,
+        "Nodes": 6570,
+        "ScriptDuration": 0.064448,
+        "TaskDuration": 1.26978,
+        "JSHeapUsedSize": 21865792
+      },
+      {
+        "cycle": 6,
+        "automationOpenMs": 54,
+        "JSEventListeners": 2299,
+        "Nodes": 6710,
+        "ScriptDuration": 0.067542,
+        "TaskDuration": 1.383537,
+        "JSHeapUsedSize": 21842360
+      },
+      {
+        "cycle": 7,
+        "automationOpenMs": 59,
+        "JSEventListeners": 1723,
+        "Nodes": 6149,
+        "ScriptDuration": 0.070984,
+        "TaskDuration": 1.514954,
+        "JSHeapUsedSize": 20877372
+      },
+      {
+        "cycle": 8,
+        "automationOpenMs": 59,
+        "JSEventListeners": 1867,
+        "Nodes": 6289,
+        "ScriptDuration": 0.074612,
+        "TaskDuration": 1.634128,
+        "JSHeapUsedSize": 20628612
+      },
+      {
+        "cycle": 9,
+        "automationOpenMs": 73,
+        "JSEventListeners": 2011,
+        "Nodes": 6430,
+        "ScriptDuration": 0.07808,
+        "TaskDuration": 1.772788,
+        "JSHeapUsedSize": 22614064
+      },
+      {
+        "cycle": 10,
+        "automationOpenMs": 56,
+        "JSEventListeners": 2155,
+        "Nodes": 6571,
+        "ScriptDuration": 0.081063,
+        "TaskDuration": 1.884919,
+        "JSHeapUsedSize": 22899508
+      }
+    ],
+    "after": {
+      "JSEventListeners": 2156,
+      "Nodes": 6576,
+      "ScriptDuration": 0.085409,
+      "TaskDuration": 1.914767,
+      "JSHeapUsedSize": 23389288
+    },
+    "afterGC": {
+      "JSEventListeners": 1570,
+      "Nodes": 5885,
+      "ScriptDuration": 0.085409,
+      "TaskDuration": 1.95555,
+      "JSHeapUsedSize": 19639120
+    },
+    "longTasks": [],
+    "audioSamplesBefore": 7,
+    "audioSamplesAfter": 115,
+    "limitations": "Headless development machine, not physical Windows 10 classroom screen. Automation timings include driver and actionability overhead. JS heap is not total browser memory. CPU slowdown does not simulate 8 GB RAM or GPU."
+  },
+  {
+    "recordedAt": "2026-09-12T11:05:26.326Z",
+    "machine": {
+      "os": "win32 10.0.26200",
+      "cpu": "Intel(R) Core(TM) Ultra 9 275HX",
+      "ramGiB": 31.4,
+      "browser": "152.0.4191.66",
+      "channel": "msedge"
+    },
+    "cpuRate": 4,
+    "workload": {
+      "assignments": 30,
+      "notices": 20,
+      "preset": "4f333ef5259d",
+      "microphone": "Chromium synthetic device; real AudioWorklet"
+    },
+    "before": {
+      "JSEventListeners": 1581,
+      "Nodes": 6010,
+      "ScriptDuration": 0.193023,
+      "TaskDuration": 3.584927,
+      "JSHeapUsedSize": 19329176
+    },
+    "samples": [
+      {
+        "cycle": 1,
+        "automationOpenMs": 342,
+        "JSEventListeners": 1725,
+        "Nodes": 6151,
+        "ScriptDuration": 0.213995,
+        "TaskDuration": 4.203531,
+        "JSHeapUsedSize": 19966088
+      },
+      {
+        "cycle": 2,
+        "automationOpenMs": 305,
+        "JSEventListeners": 1713,
+        "Nodes": 6024,
+        "ScriptDuration": 0.238496,
+        "TaskDuration": 4.845593,
+        "JSHeapUsedSize": 20399128
+      },
+      {
+        "cycle": 3,
+        "automationOpenMs": 314,
+        "JSEventListeners": 1857,
+        "Nodes": 6165,
+        "ScriptDuration": 0.256523,
+        "TaskDuration": 5.432613,
+        "JSHeapUsedSize": 21255632
+      },
+      {
+        "cycle": 4,
+        "automationOpenMs": 312,
+        "JSEventListeners": 2001,
+        "Nodes": 6306,
+        "ScriptDuration": 0.275309,
+        "TaskDuration": 6.031734,
+        "JSHeapUsedSize": 21074792
+      },
+      {
+        "cycle": 5,
+        "automationOpenMs": 312,
+        "JSEventListeners": 2145,
+        "Nodes": 6446,
+        "ScriptDuration": 0.292349,
+        "TaskDuration": 6.61388,
+        "JSHeapUsedSize": 22190608
+      },
+      {
+        "cycle": 6,
+        "automationOpenMs": 317,
+        "JSEventListeners": 2289,
+        "Nodes": 6587,
+        "ScriptDuration": 0.308422,
+        "TaskDuration": 7.216615,
+        "JSHeapUsedSize": 21961632
+      },
+      {
+        "cycle": 7,
+        "automationOpenMs": 293,
+        "JSEventListeners": 2433,
+        "Nodes": 6728,
+        "ScriptDuration": 0.324485,
+        "TaskDuration": 7.773758,
+        "JSHeapUsedSize": 22102832
+      },
+      {
+        "cycle": 8,
+        "automationOpenMs": 294,
+        "JSEventListeners": 2577,
+        "Nodes": 6868,
+        "ScriptDuration": 0.341626,
+        "TaskDuration": 8.361808,
+        "JSHeapUsedSize": 22027660
+      },
+      {
+        "cycle": 9,
+        "automationOpenMs": 365,
+        "JSEventListeners": 2721,
+        "Nodes": 7009,
+        "ScriptDuration": 0.360646,
+        "TaskDuration": 9.018117,
+        "JSHeapUsedSize": 22047404
+      },
+      {
+        "cycle": 10,
+        "automationOpenMs": 281,
+        "JSEventListeners": 2865,
+        "Nodes": 7150,
+        "ScriptDuration": 0.379142,
+        "TaskDuration": 9.593901,
+        "JSHeapUsedSize": 24737044
+      }
+    ],
+    "after": {
+      "JSEventListeners": 1570,
+      "Nodes": 5886,
+      "ScriptDuration": 0.400022,
+      "TaskDuration": 9.751464,
+      "JSHeapUsedSize": 19867836
+    },
+    "afterGC": {
+      "JSEventListeners": 1570,
+      "Nodes": 5885,
+      "ScriptDuration": 0.400804,
+      "TaskDuration": 9.913153,
+      "JSHeapUsedSize": 19621552
+    },
+    "longTasks": [
+      82,
+      96,
+      97,
+      69,
+      74,
+      106,
+      77,
+      78,
+      82,
+      75,
+      62,
+      94,
+      69,
+      75,
+      89,
+      64,
+      77,
+      88,
+      66,
+      97,
+      87,
+      70,
+      78,
+      93,
+      73,
+      88,
+      92,
+      69,
+      78,
+      96
+    ],
+    "audioSamplesBefore": 11,
+    "audioSamplesAfter": 130,
+    "limitations": "Headless development machine, not physical Windows 10 classroom screen. Automation timings include driver and actionability overhead. JS heap is not total browser memory. CPU slowdown does not simulate 8 GB RAM or GPU."
+  }
+]

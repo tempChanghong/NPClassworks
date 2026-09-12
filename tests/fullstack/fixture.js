@@ -34,6 +34,9 @@ export const test = base.extend({
         const values = {
           "classworks-v2-oobe": JSON.stringify({version: 1, completed: true, roleHint: role}),
           [`classworks-v2-screen-oobe:${binding.id}`]: JSON.stringify({version: 1, completed: true}),
+          "classworks-v2-student-selection": JSON.stringify({schoolId: school.id,
+            administrativeClassId: workspace.id, administrativeClassName: workspace.name,
+            courseGroupIds: {}, declinedSubjectIds: []}),
           ...(role === "teacher" ? {"classworks-v2-access-token": credentials.accessToken, "classworks-v2-refresh-token": credentials.refreshToken}
             : {"classworks-v2-screen-token": screenToken}),
         };
