@@ -158,6 +158,23 @@
         rows="5"
         variant="outlined"
       />
+      <v-btn
+        v-if="form.type === 'ASSIGNMENT'"
+        :disabled="templatesDisabled"
+        class="mb-3"
+        prepend-icon="mdi-file-document-multiple-outline"
+        @click="templatesOpen = true"
+      >
+        个人作业模板
+      </v-btn>
+      <TeacherHomeworkTemplates
+        v-if="templatesOpen"
+        :title="form.title"
+        :content="form.content"
+        :applying="templateApplying"
+        @close="templatesOpen = false"
+        @apply="applyTemplate"
+      />
       <HomeworkQuickInputBar
         v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
         density="teacher"
@@ -454,7 +471,7 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
+import {computed, defineAsyncComponent, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {useNow} from "@vueuse/core";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
@@ -504,6 +521,20 @@ const duplicateWarning = ref(null);
 const duplicateStatus = ref("PUBLISHED");
 const requestBusy = computed(() => saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 const contentInput = ref(null);
+const TeacherHomeworkTemplates = defineAsyncComponent(() => import("@/components/v2/TeacherHomeworkTemplates.vue"));
+const templatesOpen = ref(false), templateApplying = ref(false);
+const templatesDisabled = computed(() => Boolean(requestBusy.value || conflict.value || duplicateWarning.value || form.noHomework || form.type !== "ASSIGNMENT"));
+async function applyTemplate(input) {
+  if (templateApplying.value || templatesDisabled.value) return;
+  const generation = editorGeneration, session = store.teacherSessionVersion, snapshot = JSON.stringify(form);
+  templateApplying.value = true;
+  try {
+    if ((form.title || form.content) && !await confirmAction({title: "替换当前标题和正文？", message: "班级、科目、日期和截止时间保持当前设置。", confirmText: "替换内容"})) return;
+    if (!mounted || generation !== editorGeneration || session !== store.teacherSessionVersion || !templatesOpen.value || templatesDisabled.value || snapshot !== JSON.stringify(form)) return;
+    form.title = input.title; form.content = input.content;
+    templatesOpen.value = false;
+  } finally { templateApplying.value = false; }
+}
 let previousHomework = null;
 let originalContentJson = null;
 
@@ -548,6 +579,7 @@ const form = reactive({
   popupEnabled: false,
 });
 const cleanForm = ref("");
+watch(() => [store.account?.id, store.teacherSessionVersion, props.editingPublication, form.type, form.noHomework], () => { templatesOpen.value = false; }, {flush: "sync"});
 const releaseReloadProtection = registerAppReloadBlocker(() => {
   if (saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value) {
     return "正在保存或载入发布内容，请等待完成后再刷新。";

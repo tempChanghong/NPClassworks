@@ -94,7 +94,8 @@ test("student roster preserves IDs, previews imports, retains conflict drafts an
     await expect(manager.getByLabel("姓名 1", {exact: true})).toHaveValue("未提交修改");
     expect(students[0].name).toBe("张小三");
     await page.getByRole("button", {name: "返回教师工作台"}).click();
-    await expect(page.getByRole("dialog")).toContainText("放弃未保存的修改？");
+    // The roster preview may still be leaving while the navigation guard opens.
+    await expect(page.getByRole("dialog").filter({hasText: "放弃未保存的修改？"})).toBeVisible();
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });

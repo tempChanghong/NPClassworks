@@ -448,6 +448,18 @@ export const classworksV2Api = {
   async changeLocalPin(input) {
     return unwrap(await client.post("/accounts/local/change-pin", input));
   },
+  async homeworkTemplates() {
+    return unwrap(await client.get("/accounts/preferences/homework-templates"));
+  },
+  async createHomeworkTemplate(input) {
+    return unwrap(await client.post("/accounts/preferences/homework-templates", input));
+  },
+  async updateHomeworkTemplate(id, input) {
+    return unwrap(await client.put(`/accounts/preferences/homework-templates/${encodeURIComponent(id)}`, input));
+  },
+  async deleteHomeworkTemplate(id, expectedRevision) {
+    return unwrap(await client.delete(`/accounts/preferences/homework-templates/${encodeURIComponent(id)}`, {data: {expectedRevision}}));
+  },
   async teacherTargetPreferences() {
     return unwrap(await client.get("/accounts/preferences/teacher-targets"));
   },

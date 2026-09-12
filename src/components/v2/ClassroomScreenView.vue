@@ -103,6 +103,12 @@
             </template>
             <v-list>
               <v-list-item
+                prepend-icon="mdi-book-open-page-variant"
+                title="抄写模式"
+                :disabled="!store.feed.some(item => item.type === 'ASSIGNMENT')"
+                @click="copyModeOpen = true"
+              />
+              <v-list-item
                 prepend-icon="mdi-calendar-week"
                 title="一周总览"
                 @click="weekTool.open()"
@@ -206,6 +212,12 @@
     <ScreenHomeworkFocus
       ref="focusTool"
       :font-scale="settings.fontScale"
+    />
+    <ScreenCopyMode
+      v-if="copyModeOpen"
+      v-model="copyModeOpen"
+      :font-scale="settings.fontScale"
+      :suspended="copyModeSuspended"
     />
 
     <v-progress-linear
@@ -358,7 +370,7 @@
 </template>
 
 <script setup>
-import {computed, onMounted, onUnmounted, ref, watch} from "vue";
+import {computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
@@ -386,6 +398,7 @@ import {
   readAcknowledgedNotificationKeys,
   rememberAcknowledgedNotification,
   screenNotificationSoundProfile,
+  screenNotificationPopupEnabled,
 } from "@/utils/notificationAlerts";
 import {getSetting} from "@/utils/settings";
 import {
@@ -397,6 +410,9 @@ import {
 defineEmits(["create", "edit", "history", "tools", "noise", "copy-board", "settings", "exit", "diagnostics"]);
 const store = useClassworksV2Store();
 const focusTool = ref(null);
+const ScreenCopyMode = defineAsyncComponent(() => import("@/components/v2/ScreenCopyMode.vue"));
+const copyModeOpen = ref(false);
+const copyModeSuspended = computed(() => activeNotices.value.some(notice => !acknowledgedNoticeKeys.value.has(notificationAlertKey(notice)) && screenNotificationPopupEnabled(notice)));
 const printTool = ref(null);
 const weekTool = ref(null);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
