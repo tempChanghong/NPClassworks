@@ -24,6 +24,15 @@
         >还有 {{ pending.length - 1 }} 条待确认</span>
       </v-card-title>
       <v-card-text class="notice-popup-scroll pa-6">
+        <v-alert
+          v-if="confirmationErrors.get(notificationAlertKey(currentNotice))"
+          class="mb-4"
+          type="warning"
+          variant="tonal"
+          role="alert"
+        >
+          {{ confirmationErrors.get(notificationAlertKey(currentNotice)) }}
+        </v-alert>
         <div
           v-if="currentNotice.title"
           class="notice-popup-title mb-4"
@@ -45,9 +54,11 @@
           size="large"
           variant="flat"
           prepend-icon="mdi-check-bold"
+          :loading="pendingKeys.has(notificationAlertKey(currentNotice))"
+          :disabled="pendingKeys.has(notificationAlertKey(currentNotice))"
           @click="$emit('acknowledge', currentNotice)"
         >
-          知道了
+          {{ pendingKeys.has(notificationAlertKey(currentNotice)) ? "正在确认" : "知道了" }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -56,13 +67,15 @@
 
 <script setup>
 import {computed} from "vue";
-import {screenNotificationPopupEnabled} from "@/utils/notificationAlerts";
+import {notificationAlertKey, screenNotificationPopupEnabled} from "@/utils/notificationAlerts";
 import {screenNotificationCenterItems} from "@/utils/screenNotificationCenter";
 import {publicationPriorityMeta} from "@/utils/publicationStatus";
 
 const props = defineProps({
   notices: {type: Array, default: () => []},
   acknowledgedKeys: {type: Set, default: () => new Set()},
+  pendingKeys: {type: Set, default: () => new Set()},
+  confirmationErrors: {type: Map, default: () => new Map()},
 });
 defineEmits(["acknowledge"]);
 const pending = computed(() => screenNotificationCenterItems(props.notices, props.acknowledgedKeys)

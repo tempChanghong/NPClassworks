@@ -76,6 +76,73 @@ test("screen notice bar stays collapsed on refresh/removal and expands for new n
   await expect(expand()).toHaveAttribute("aria-expanded", "false");
 });
 
+test("confirmation pending state is shared by popup and center and blocks repeated intake", async ({page, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  await page.goto(origin);
+  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  const center = page.locator(".notification-center");
+  await expect(center).toContainText("当前 0 条");
+  const response = await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content: "确认处理中验证"}});
+  const notice = (await response.json()).data;
+  const key = `classworks-v2-notification-delivery:${encodeURIComponent(api)}:screen-a:1`;
+  const popup = page.locator(".screen-notice-popup");
+  await expect(popup).toContainText(notice.content);
+  await page.evaluate(async key => {
+    await new Promise(resolve => {
+      void navigator.locks.request(key, () => { resolve(); return new Promise(release => { window.releaseConfirmationLock = release; }); });
+    });
+  }, key);
+  await popup.getByRole("button", {name: "知道了", exact: true}).dblclick();
+  await expect(popup.getByRole("button", {name: "正在确认", exact: true})).toBeDisabled();
+  await expect(center.getByRole("button", {name: "正在确认", exact: true})).toBeDisabled();
+  const intake = await page.evaluate(key => Object.keys(localStorage).filter(candidate => candidate.startsWith(`${key}:staged:`))
+    .flatMap(candidate => JSON.parse(localStorage.getItem(candidate)).items).filter(item => item.acknowledged), key);
+  expect(intake.map(item => item.publicationId)).toEqual([notice.id]);
+  await page.evaluate(() => window.releaseConfirmationLock());
+  await expect(popup).toBeHidden();
+  await expect(center).toContainText("待确认 0 条");
+
+  for (const content of ["批量确认甲", "批量确认乙"]) await request.post(`${api}/api/v2/publications`, {
+    data: {type: "NOTICE", priority: "MINOR", content, contentJson: {popupEnabled: false}},
+  });
+  await expect(center).toContainText("待确认 2 条");
+  await page.evaluate(async key => {
+    await new Promise(resolve => {
+      void navigator.locks.request(key, () => { resolve(); return new Promise(release => { window.releaseConfirmationLock = release; }); });
+    });
+  }, key);
+  await center.getByRole("button", {name: "全部确认", exact: true}).click();
+  await expect(center.getByRole("button", {name: "正在确认", exact: true})).toHaveCount(3);
+  for (const button of await center.getByRole("button", {name: "正在确认", exact: true}).all()) await expect(button).toBeDisabled();
+  await page.evaluate(() => window.releaseConfirmationLock());
+  await expect(center).toContainText("待确认 0 条");
+});
+
+test("failed local confirmation shows a retryable error inside the popup", async ({page, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content: "确认保存失败验证"}});
+  await page.goto(origin);
+  const popup = page.locator(".screen-notice-popup");
+  await expect(popup).toContainText("确认保存失败验证");
+  await page.evaluate(() => {
+    const setItem = Storage.prototype.setItem;
+    window.rejectReceiptSave = true;
+    Storage.prototype.setItem = function(key, value) {
+      if (window.rejectReceiptSave && key.startsWith("classworks-v2-notification-delivery:")) throw new window.DOMException("full", "QuotaExceededError");
+      return setItem.call(this, key, value);
+    };
+  });
+  await page.context().setOffline(true);
+  await popup.getByRole("button", {name: "知道了", exact: true}).click();
+  await expect(popup.getByRole("alert")).toContainText("确认记录暂未完成本机保存，请重试");
+  await expect(popup.getByRole("button", {name: "知道了", exact: true})).toBeEnabled();
+  await page.evaluate(() => { window.rejectReceiptSave = false; });
+  await popup.getByRole("button", {name: "知道了", exact: true}).click();
+  await expect(popup).toBeHidden();
+});
+
 for (const holdLock of [false, true]) {
 test(`two tabs preserve offline acknowledgements across reload without the feed (lock held: ${holdLock})`, async ({page, context, request}) => {
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});

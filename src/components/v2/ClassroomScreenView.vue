@@ -178,12 +178,16 @@
       :key="bindingId"
       :notices="activeNotices"
       :acknowledged-keys="acknowledgedNoticeKeys"
+      :pending-keys="confirmingNoticeKeys"
+      :confirmation-errors="noticeConfirmationErrors"
       @acknowledge="acknowledgeNotice"
     />
 
     <ScreenNotificationCenter
       v-model="notificationCenterOpen"
       :acknowledged-keys="acknowledgedNoticeKeys"
+      :pending-keys="confirmingNoticeKeys"
+      :confirmation-errors="noticeConfirmationErrors"
       :notices="activeNotices"
       @acknowledge="acknowledgeNotice"
       @acknowledge-all="acknowledgeNotices"
@@ -397,6 +401,8 @@ const weekTool = ref(null);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const notificationCenterOpen = ref(false);
 const acknowledgedNoticeKeys = ref(readAcknowledgedNotificationKeys(store.screenSession?.binding?.id));
+const confirmingNoticeKeys = ref(new Set());
+const noticeConfirmationErrors = ref(new Map());
 const burnInStep = ref(0);
 let burnInTimer = null;
 let notificationAlertController = createNotificationAlertController({scopeId: store.screenSession?.binding?.id});
@@ -481,6 +487,8 @@ watch([bindingId, () => store.screenSession?.binding?.credentialVersion], ([id])
   notificationDeliveryQueue = createDeliveryQueue();
   settings.value = loadScreenDisplaySettings(id);
   acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(id);
+  confirmingNoticeKeys.value = new Set();
+  noticeConfirmationErrors.value = new Map();
   notificationCenterOpen.value = false;
   notificationAlertController = createNotificationAlertController({scopeId: id});
   retryNotificationDelivery();
@@ -521,19 +529,31 @@ function acknowledgeNotice(publication) {
 }
 
 async function acknowledgeNotices(publications) {
-  const valid = (publications || []).filter((publication) => publication?.id);
+  const valid = [...new Map((publications || []).filter(publication => publication?.id
+    && !confirmingNoticeKeys.value.has(notificationAlertKey(publication)))
+    .map(publication => [notificationAlertKey(publication), publication])).values()];
   if (!valid.length || !store.screenSession) return;
   const queue = notificationDeliveryQueue;
-  // Keep local confirmation durable even if navigation interrupts the lock wait.
-  for (const publication of valid) rememberAcknowledgedNotification(publication, bindingId.value);
-  await queue.enqueue(valid.map((publication) => ({
-    publicationId: publication.id,
-    revision: publication.revision,
-    displayed: true,
-    acknowledged: true,
-  })));
-  if (queue !== notificationDeliveryQueue || queue.getState().status === "disposed") return;
-  acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(bindingId.value, localStorage, activeNotices.value);
+  const keys = valid.map(notificationAlertKey);
+  const isCurrent = () => queue === notificationDeliveryQueue && queue.getState().status !== "disposed";
+  keys.forEach(key => { confirmingNoticeKeys.value.add(key); noticeConfirmationErrors.value.delete(key); });
+  try {
+    // Keep local confirmation durable even if navigation interrupts the lock wait.
+    for (const publication of valid) rememberAcknowledgedNotification(publication, bindingId.value);
+    const saved = await queue.enqueue(valid.map((publication) => ({
+      publicationId: publication.id,
+      revision: publication.revision,
+      displayed: true,
+      acknowledged: true,
+    })));
+    if (!isCurrent()) return;
+    if (!saved) throw new Error("Receipt persistence failed");
+    acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(bindingId.value, localStorage, activeNotices.value);
+  } catch {
+    if (isCurrent()) keys.forEach(key => noticeConfirmationErrors.value.set(key, "确认记录暂未完成本机保存，请重试。"));
+  } finally {
+    if (isCurrent()) keys.forEach(key => confirmingNoticeKeys.value.delete(key));
+  }
 }
 
 function applySettings(value) {

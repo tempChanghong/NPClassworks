@@ -7,6 +7,7 @@ import {
 } from "./prominentNotificationSound.js";
 
 const CLAIM_TTL_MS = 30_000;
+const CLAIM_CLEANUP_INTERVAL_MS = 5 * 60_000;
 
 export function notificationAlertKey(notice) {
   return `${notice?.id || "unknown"}:${notice?.revision || 0}`;
@@ -108,6 +109,34 @@ function claimStorageKey(scopeId, alertKey) {
   return `classworks-v2-notification-alert-claim:${scopeId || "unbound"}:${alertKey}`;
 }
 
+export async function pruneExpiredNotificationClaims(scopeId, storage = globalThis.localStorage,
+  navigatorRef = globalThis.navigator, now = Date.now()) {
+  // Cleanup shares the writer's per-notice lock. Without Web Locks, retain the
+  // tiny records rather than race another tab renewing a claim.
+  if (!navigatorRef?.locks?.request || !storage?.key || !storage?.removeItem) return 0;
+  const prefix = claimStorageKey(scopeId, "");
+  const expired = raw => {
+    try {
+      const claimedAt = JSON.parse(raw)?.claimedAt;
+      return Number.isFinite(claimedAt) && now - claimedAt >= CLAIM_TTL_MS;
+    } catch { return false; }
+  };
+  let removed = 0;
+  try {
+    const candidates = [];
+    for (let index = 0; index < storage.length && candidates.length < 200; index++) {
+      const key = storage.key(index);
+      if (key?.startsWith(prefix) && expired(storage.getItem(key))) candidates.push(key);
+    }
+    for (const key of candidates) {
+      await withBrowserAlertLock(scopeId, key.slice(prefix.length), () => {
+        if (expired(storage.getItem(key))) { storage.removeItem(key); removed++; }
+      }, navigatorRef);
+    }
+  } catch { /* Cleanup failure must not prevent a new alert. */ }
+  return removed;
+}
+
 export function claimNotificationAlert(scopeId, alertKey, storage = localStorage, now = Date.now()) {
   const key = claimStorageKey(scopeId, alertKey);
   try {
@@ -159,7 +188,9 @@ export function createNotificationAlertController({
   navigatorRef = globalThis.navigator,
   NotificationApi = globalThis.Notification,
   play = (filename, options) => playProminentNotificationSound(filename, options),
+  now = () => Date.now(),
 } = {}) {
+  let lastCleanupAt = null;
   async function alert(notices, {
     soundEnabled = true,
     soundFile = defaultUrgentSound,
@@ -167,6 +198,11 @@ export function createNotificationAlertController({
     systemNotificationEnabled = true,
   } = {}) {
     if (!storage || !Array.isArray(notices) || !notices.length) return false;
+    const currentTime = now();
+    if (lastCleanupAt === null || currentTime - lastCleanupAt >= CLAIM_CLEANUP_INTERVAL_MS) {
+      lastCleanupAt = currentTime;
+      await pruneExpiredNotificationClaims(scopeId, storage, navigatorRef, currentTime);
+    }
     const unseen = findUnseenNotifications(notices, scopeId, storage);
     if (!unseen.length) return false;
 

@@ -1,6 +1,90 @@
 import {test, expect, enterHomework} from "./fixture.js";
 import {api} from "../e2e/environment.js";
 import {io} from "socket.io-client";
+import {notificationDeliveryStorageKey} from "../../src/utils/notificationDeliveryQueue.js";
+
+test("offline multi-tab notice confirmations survive PWA reload and respect withdrawn and revised database rows", async ({classroom, request}) => {
+  const headers = {Authorization: `Bearer ${classroom.credentials.accessToken}`};
+  const notices = [];
+  for (const content of ["离线确认后仍有效", "离线确认后被撤回", "离线确认后被更正"]) {
+    const response = await request.post(`${api}/api/v2/publications`, {headers, data: {
+      type: "NOTICE", status: "PUBLISHED", priority: "MINOR", content, contentJson: {popupEnabled: false},
+      targetWorkspaceIds: [classroom.workspace.id],
+    }});
+    expect(response.status()).toBe(201);
+    notices.push((await response.json()).data);
+  }
+  const screen = await classroom.open("screen");
+  const other = await screen.context.newPage();
+  await other.goto(screen.page.url());
+  const key = notificationDeliveryStorageKey(api, classroom.binding);
+  const durable = page => page.evaluate(key => Object.keys(localStorage)
+    .filter(candidate => candidate === key || candidate.startsWith(`${key}:staged:`))
+    .flatMap(candidate => JSON.parse(localStorage.getItem(candidate)).items), key);
+  const delivery = notice => classroom.prisma.notificationScreenDelivery.findUnique({where: {
+    publicationId_screenBindingId: {publicationId: notice.id, screenBindingId: classroom.binding.id},
+  }, select: {publicationId: true, screenBindingId: true, revision: true, receivedAt: true, displayedAt: true, acknowledgedAt: true}});
+  for (const page of [screen.page, other]) {
+    await page.getByRole("button", {name: "通知", exact: true}).first().click();
+    await expect(page.locator(".notification-center__item")).toHaveCount(3);
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  }
+  await expect.poll(async () => (await durable(other)).length).toBe(0);
+  for (const notice of notices) expect((await delivery(notice)).acknowledgedAt).toBeNull();
+  await screen.context.setOffline(true);
+  await screen.page.evaluate(async key => {
+    await new Promise(resolve => {
+      void navigator.locks.request(key, () => { resolve(); return new Promise(() => {}); });
+    });
+  }, key);
+  for (const [index, page] of [[0, screen.page], [1, other], [2, screen.page]]) {
+    await page.locator(".notification-center__item").filter({hasText: notices[index].content})
+      .getByRole("button", {name: "知道了", exact: true}).click();
+  }
+  const replay = (await durable(other)).filter(item => item.acknowledged);
+  expect(replay.map(item => item.publicationId).sort()).toEqual(notices.map(item => item.id).sort());
+  const reload = await other.reload({waitUntil: "domcontentloaded"});
+  expect(reload.fromServiceWorker()).toBe(true);
+  await expect(other.getByRole("button", {name: "录入作业", exact: true}).first()).toBeVisible();
+  // Reload may stage the displayed/confirmed snapshot again before consolidation.
+  // Require each original revision, without assuming one physical record per item.
+  expect([...new Set((await durable(other)).filter(item => item.acknowledged)
+    .map(item => `${item.publicationId}:${item.revision}`))].sort()).toEqual(notices.map(item => `${item.id}:1`).sort());
+  await screen.page.close(); // Releases the lock; only durable records can recover.
+  const withdrawn = await request.post(`${api}/api/v2/publications/${notices[1].id}/withdraw`, {
+    headers: {...headers, "If-Match": '"1"'}, data: {},
+  });
+  expect(withdrawn.ok()).toBe(true);
+  const updated = await request.patch(`${api}/api/v2/publications/${notices[2].id}`, {
+    headers: {...headers, "If-Match": '"1"'}, data: {content: "更正后的第二版通知"},
+  });
+  expect(updated.ok()).toBe(true);
+  const revised = (await updated.json()).data;
+  expect(revised.revision).toBe(2);
+  await screen.context.setOffline(false);
+  await expect.poll(async () => Boolean((await delivery(notices[0]))?.acknowledgedAt)).toBe(true);
+  await other.getByRole("button", {name: "通知", exact: true}).first().click();
+  const center = other.locator(".notification-center");
+  await expect(center.locator(".notification-center__item")).toHaveCount(2);
+  await expect(center).toContainText("更正后的第二版通知");
+  await expect.poll(async () => (await durable(other)).length).toBe(0);
+  expect((await delivery(notices[1])).acknowledgedAt).toBeNull();
+  const beforeConfirm = await delivery(notices[2]);
+  expect(beforeConfirm.revision).toBe(2);
+  expect(beforeConfirm.acknowledgedAt).toBeNull();
+  await center.locator(".notification-center__item").filter({hasText: revised.content})
+    .getByRole("button", {name: "知道了", exact: true}).click();
+  await expect.poll(async () => Boolean((await delivery(notices[2]))?.acknowledgedAt)).toBe(true);
+  const finalRows = await Promise.all(notices.map(delivery));
+  const repeated = await request.post(`${api}/api/v2/classroom-screens/notification-deliveries`, {
+    headers: {"X-Classworks-Screen-Token": classroom.screenToken}, data: {items: replay},
+  });
+  expect(repeated.ok()).toBe(true);
+  expect(await Promise.all(notices.map(delivery))).toEqual(finalRows);
+  expect(await classroom.prisma.notificationScreenDelivery.count({where: {screenBindingId: classroom.binding.id}})).toBe(3);
+  expect(screen.errors).toEqual([]);
+});
 
 test("restoring notice targets refreshes both the removed screen and the retained classroom", async ({classroom, request}) => {
   const other = await classroom.prisma.workspace.create({data: {termId: classroom.workspace.termId,

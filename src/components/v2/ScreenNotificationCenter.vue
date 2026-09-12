@@ -56,11 +56,13 @@
           <v-spacer />
           <v-btn
             v-if="summary.pending > 1"
+            :loading="hasPendingConfirmation"
+            :disabled="hasPendingConfirmation"
             prepend-icon="mdi-check-all"
             variant="tonal"
             @click="acknowledgeAll"
           >
-            全部确认
+            {{ hasPendingConfirmation ? "正在确认" : "全部确认" }}
           </v-btn>
         </div>
 
@@ -92,6 +94,15 @@
               </v-chip>
             </v-card-title>
             <v-card-text>
+              <v-alert
+                v-if="confirmationErrors.get(notificationAlertKey(notice))"
+                class="mb-3"
+                type="warning"
+                variant="tonal"
+                role="alert"
+              >
+                {{ confirmationErrors.get(notificationAlertKey(notice)) }}
+              </v-alert>
               <div class="notification-center__content">
                 {{ notice.content }}
               </div>
@@ -126,11 +137,13 @@
               <v-spacer />
               <v-btn
                 color="primary"
+                :loading="pendingKeys.has(notificationAlertKey(notice))"
+                :disabled="pendingKeys.has(notificationAlertKey(notice))"
                 prepend-icon="mdi-check-bold"
                 variant="flat"
                 @click="acknowledge(notice)"
               >
-                知道了
+                {{ pendingKeys.has(notificationAlertKey(notice)) ? "正在确认" : "知道了" }}
               </v-btn>
             </v-card-actions>
           </v-card>
@@ -149,6 +162,7 @@
 
 <script setup>
 import {computed} from "vue";
+import {notificationAlertKey} from "@/utils/notificationAlerts";
 import {
   screenNotificationCenterItems,
   screenNotificationCenterSummary,
@@ -158,6 +172,8 @@ const props = defineProps({
   modelValue: Boolean,
   notices: {type: Array, default: () => []},
   acknowledgedKeys: {type: Set, default: () => new Set()},
+  pendingKeys: {type: Set, default: () => new Set()},
+  confirmationErrors: {type: Map, default: () => new Map()},
 });
 const emit = defineEmits(["update:modelValue", "acknowledge", "acknowledge-all"]);
 
@@ -167,6 +183,7 @@ const dialogOpen = computed({
 });
 const items = computed(() => screenNotificationCenterItems(props.notices, props.acknowledgedKeys));
 const summary = computed(() => screenNotificationCenterSummary(items.value));
+const hasPendingConfirmation = computed(() => items.value.some(notice => props.pendingKeys.has(notificationAlertKey(notice))));
 
 function acknowledge(notice) {
   emit("acknowledge", notice);

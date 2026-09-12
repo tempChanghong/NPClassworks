@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   alertableScreenNotifications,
   claimNotificationAlert,
+  pruneExpiredNotificationClaims,
   createNotificationAlertController,
   findUnseenNotifications,
   notificationAlertKey,
@@ -46,6 +47,9 @@ function memoryStorage() {
   return {
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, value),
+    key: index => [...values.keys()][index] ?? null,
+    removeItem: key => values.delete(key),
+    get length() { return values.size; },
   };
 }
 
@@ -165,6 +169,57 @@ test("an alert claim suppresses duplicate tabs during the lease", () => {
   assert.equal(claimNotificationAlert("screen-a", "notice-a:1", storage, 1_000), true);
   assert.equal(claimNotificationAlert("screen-a", "notice-a:1", storage, 2_000), false);
   assert.equal(claimNotificationAlert("screen-a", "notice-a:1", storage, 32_000), true);
+});
+
+test("claim cleanup retains active leases, other scopes and all receipt/confirmation data", async () => {
+  const storage = memoryStorage();
+  const prefix = "classworks-v2-notification-alert-claim:screen-a:";
+  claimNotificationAlert("screen-a", "expired:1", storage, 1);
+  claimNotificationAlert("screen-a", "active:1", storage, 40_000);
+  claimNotificationAlert("screen-b", "expired:1", storage, 1);
+  storage.setItem(`${prefix}malformed`, "broken");
+  storage.setItem(notificationAcknowledgedStorageKey("screen-a"), '["expired:1"]');
+  storage.setItem("classworks-v2-notification-delivery:api:screen-a:1:staged:test", "pending receipt");
+  const before = Array.from({length: storage.length}, (_, i) => storage.key(i));
+  const navigatorRef = {locks: {request: async (name, options, callback) => callback({name})}};
+  assert.equal(await pruneExpiredNotificationClaims("screen-a", storage, navigatorRef, 50_000), 1);
+  assert.equal(storage.getItem(`${prefix}expired:1`), null);
+  for (const key of before.filter(key => key !== `${prefix}expired:1`)) assert.notEqual(storage.getItem(key), null);
+});
+
+test("claim cleanup skips held locks and rechecks a renewed lease after acquiring the writer lock", async () => {
+  const storage = memoryStorage();
+  claimNotificationAlert("screen-a", "held:1", storage, 1);
+  claimNotificationAlert("screen-a", "renewed:1", storage, 1);
+  const navigatorRef = {locks: {request: async (name, options, callback) => {
+    assert.equal(options.ifAvailable, true);
+    if (name.endsWith("held:1")) return callback(null);
+    claimNotificationAlert("screen-a", "renewed:1", storage, 50_000);
+    return callback({name});
+  }}};
+  assert.equal(await pruneExpiredNotificationClaims("screen-a", storage, navigatorRef, 50_000), 0);
+  assert.equal(storage.length, 2);
+  assert.equal(await pruneExpiredNotificationClaims("screen-a", storage, {}, 100_000), 0);
+  const broken = {...storage, key: () => { throw new Error("Storage unavailable"); }};
+  assert.equal(await pruneExpiredNotificationClaims("screen-a", broken, navigatorRef, 100_000), 0);
+});
+
+test("cleanup is throttled to five minutes and makes progress across batches of old claims", async () => {
+  const storage = memoryStorage();
+  for (let i = 0; i < 205; i++) claimNotificationAlert("screen-a", `old-${i}:1`, storage, 1);
+  let clock = 50_000;
+  const navigatorRef = {locks: {request: async (name, options, callback) => callback({name})}};
+  const controller = createNotificationAlertController({scopeId: "screen-a", storage, navigatorRef, now: () => clock, play: () => {}});
+  const notices = [{id: "current", revision: 1}];
+  await controller.alert(notices);
+  const remaining = () => Array.from({length: storage.length}, (_, i) => storage.key(i)).filter(key => key.includes(":old-")).length;
+  assert.equal(remaining(), 5);
+  clock += 1000;
+  await controller.alert(notices);
+  assert.equal(remaining(), 5);
+  clock += 300_000;
+  await controller.alert(notices);
+  assert.equal(remaining(), 0);
 });
 
 test("a local screen acknowledgement survives reload for later delivery", () => {
