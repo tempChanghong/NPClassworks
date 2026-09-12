@@ -2,9 +2,9 @@
   "name": "classworks",
   "private": true,
   "type": "module",
-  "version": "1.0.1",
-  "codename": "Nijika",
-  "codenameZh": "伊地知虹夏",
+  "version": "1.1.0",
+  "codename": "Ikuyo",
+  "codenameZh": "喜多郁代",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "vite --host",
