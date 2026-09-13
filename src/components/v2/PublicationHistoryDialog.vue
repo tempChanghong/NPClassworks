@@ -1,8 +1,9 @@
 <template>
   <v-dialog
     :model-value="modelValue"
+    :persistent="writeBusy"
     max-width="820"
-    @update:model-value="$emit('update:modelValue', $event)"
+    @update:model-value="requestVisibility"
   >
     <v-card class="rounded-xl">
       <v-card-title class="d-flex align-center pa-5 pb-2">
@@ -13,9 +14,10 @@
         不可删除的版本历史
         <v-spacer />
         <v-btn
-          v-if="mode === 'teacher' && workingPublication && !workingPublication.isCertified"
+          v-if="canCertifyCurrent"
           color="success"
           :loading="certifying"
+          :disabled="writeBusy"
           prepend-icon="mdi-check-decagram-outline"
           variant="tonal"
           @click="certifyCurrent"
@@ -97,7 +99,7 @@
                 />
                 <div class="d-flex justify-end mt-3">
                   <v-btn
-                    :disabled="item.revision === workingPublication?.revision || item.snapshot.status === 'WITHDRAWN' || Boolean(item.purgedAt)"
+                    :disabled="writeBusy || item.revision === workingPublication?.revision || item.snapshot.status === 'WITHDRAWN' || Boolean(item.purgedAt)"
                     :loading="restoringRevision === item.revision"
                     prepend-icon="mdi-backup-restore"
                     size="small"
@@ -115,6 +117,7 @@
           <v-btn
             v-if="nextBeforeRevision !== null && !loading"
             :loading="loadingMore"
+            :disabled="writeBusy"
             variant="tonal"
             @click="loadMore"
           >
@@ -139,7 +142,10 @@
       </v-card-text>
       <v-card-actions class="px-5 pb-5">
         <v-spacer />
-        <v-btn @click="$emit('update:modelValue', false)">
+        <v-btn
+          :disabled="writeBusy"
+          @click="requestVisibility(false)"
+        >
           关闭
         </v-btn>
       </v-card-actions>
@@ -151,7 +157,8 @@
 import {correctionOf} from "@/utils/homeworkInstructions";
 import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
-import {onBeforeUnmount, ref, watch} from "vue";
+import {computed, onBeforeUnmount, ref, watch} from "vue";
+import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {isPublicationRevisionConflict} from "@/utils/publicationConflict";
 import {publicationDisplayState} from "@/utils/publicationStatus";
@@ -173,7 +180,15 @@ let requestGeneration = 0;
 let dialogGeneration = 0;
 const certifying = ref(false);
 const restoringRevision = ref(null);
+const writeBusy = computed(() => certifying.value || restoringRevision.value !== null);
+const canCertifyCurrent = computed(() => props.mode === "teacher"
+  && workingPublication.value?.status === "PUBLISHED" && !workingPublication.value.isCertified);
 const error = ref("");
+
+function requestVisibility(open) {
+  if (!open && writeBusy.value) return;
+  emit("update:modelValue", open);
+}
 
 function revisionState(item) {
   return publicationDisplayState({...item.snapshot, isCertified: item.isCertified});
@@ -229,7 +244,7 @@ async function load({append = false} = {}) {
 }
 
 function loadMore() {
-  if (loading.value || loadingMore.value || nextBeforeRevision.value === null) return;
+  if (writeBusy.value || loading.value || loadingMore.value || nextBeforeRevision.value === null) return;
   return load({append: true});
 }
 
@@ -248,8 +263,10 @@ function formatDateTime(value) {
 }
 
 async function certifyCurrent() {
+  if (writeBusy.value || !props.modelValue || !canCertifyCurrent.value) return;
   const isCurrent = currentDialog();
   certifying.value = true;
+  const releaseReload = registerAppReloadBlocker(() => "正在确认作业版本，请等待操作完成后再刷新。");
   error.value = "";
   try {
     const changed = await store.certify(workingPublication.value);
@@ -262,13 +279,16 @@ async function certifyCurrent() {
     if (isPublicationRevisionConflict(caught)) await refreshConflict("教师确认", isCurrent);
     else error.value = store.teacherError;
   } finally {
+    releaseReload();
     if (isCurrent()) certifying.value = false;
   }
 }
 
 async function restore(item) {
+  if (writeBusy.value || !props.modelValue || !workingPublication.value) return;
   const isCurrent = currentDialog();
   restoringRevision.value = item.revision;
+  const releaseReload = registerAppReloadBlocker(() => "正在恢复作业历史版本，请等待操作完成后再刷新。");
   error.value = "";
   try {
     const changed = await store.restoreRevision(workingPublication.value, item.revision, props.mode);
@@ -281,6 +301,7 @@ async function restore(item) {
     if (isPublicationRevisionConflict(caught)) await refreshConflict("恢复", isCurrent);
     else error.value = props.mode === "screen" ? store.screenError : store.teacherError;
   } finally {
+    releaseReload();
     if (isCurrent()) restoringRevision.value = null;
   }
 }

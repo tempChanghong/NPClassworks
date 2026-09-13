@@ -10,6 +10,7 @@ beforeEach(() => h.reset());
 const endpoint = "GET /api/v2/classroom-screens/feed";
 test("healthy network and socket do not imply content success; retry and cached failures have distinct sync states", async () => {
   const store = h.newStore({screen: true});
+  store.boardDate = "2026-09-12";
   store.screenNetworkOnline = true;
   store.screenRealtimeConnected = true;
   assert.equal(store.screenSyncState, "awaiting");

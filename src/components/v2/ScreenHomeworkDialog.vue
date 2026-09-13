@@ -6,7 +6,11 @@
     scrollable
     @update:model-value="requestVisibility"
   >
-    <v-card class="screen-composer rounded-t-xl">
+    <v-card
+      class="screen-composer rounded-t-xl"
+      :inert="requestBusy || undefined"
+      :aria-busy="requestBusy"
+    >
       <v-card-title class="screen-composer__title d-flex align-center pa-5 pb-3">
         <v-icon
           class="mr-3"
@@ -389,6 +393,7 @@ import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
 import {openScreenDraftStorage} from "@/utils/screenDraftSession";
 import {useClassworksV2Store} from "@/stores/classworksV2";
+import {describeApiError} from "@/utils/classworksV2Client";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {todayBoardDate} from "@/utils/boardDate";
 import {
@@ -429,6 +434,7 @@ const conflict = ref(null);
 const conflictReloading = ref(false);
 const conflictCopying = ref(false);
 const conflictApplying = ref(false);
+const requestBusy = computed(() => saving.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 const duplicateWarning = ref(null);
 const contentFocused = ref(false);
 const contentInput = ref(null);
@@ -548,7 +554,7 @@ function draftSnapshot() {
 }
 
 function requestVisibility(open) {
-  if (!open && (saving.value || conflictApplying.value || conflictCopying.value || conflictReloading.value)) return;
+  if (!open && requestBusy.value) return;
   if (!open && draftSaveFailed.value) {
     // Recheck storage before closing; the latest keystroke may not have reached its watcher yet.
     const saved = saveScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftSnapshot(), draftStorage);
@@ -660,7 +666,7 @@ function setQuickDeadline(preset) {
 }
 
 async function save(allowDuplicate = false) {
-  if (!draftReady.value || draftReadError.value || conflict.value) return;
+  if (requestBusy.value || !draftReady.value || draftReadError.value || conflict.value) return;
   localError.value = "";
   if (!form.subjectId || !form.targetWorkspaceId) {
     localError.value = "请选择科目和具体班级";
@@ -717,7 +723,7 @@ async function save(allowDuplicate = false) {
         conflict.value = nextConflict;
       }
     } else {
-      localError.value = error.message || "保存失败，当前输入已保留，请重试。";
+      localError.value = describeApiError(error, "保存失败，当前输入已保留，请重试。");
     }
   } finally {
     saving.value = false;
@@ -726,7 +732,7 @@ async function save(allowDuplicate = false) {
 
 async function applyLocalOnLatest() {
   const latest = conflict.value?.latestPublication;
-  if (!latest) return;
+  if (requestBusy.value || !latest) return;
   if (!await confirmAction({
     title: "用本机输入生成新版本",
     message: "服务器当前版本会保留在历史中，本机输入将成为下一个待教师确认版本。提交说明和需带物品等本页不可编辑的信息保留服务器最新版。",
@@ -749,9 +755,17 @@ async function applyLocalOnLatest() {
   } catch (error) {
     const nextConflict = publicationConflictState(error, latest.revision);
     if (nextConflict) {
-      const latestPublication = await store.latestPublication(basePublication.value.id, "screen");
-      conflict.value = {...nextConflict, latestPublication};
-      localError.value = "保存期间内容再次变化，已更新对比，请重新确认。";
+      // Discard the obsolete comparison before fetching; a failed read must not
+      // leave a stale merge action available or escape this event handler.
+      conflict.value = nextConflict;
+      try {
+        const latestPublication = await store.latestPublication(basePublication.value.id, "screen");
+        conflict.value = {...nextConflict, latestPublication};
+        localError.value = "保存期间内容再次变化，已更新对比，请重新确认。";
+      } catch (failure) {
+        const message = failure.response?.data?.message || failure.message || "载入最新版失败";
+        localError.value = `保存期间内容再次变化，${message}。本机输入已保留，请重试载入最新版，或另存为一项新作业。`;
+      }
     } else {
       localError.value = store.screenError;
     }
@@ -761,7 +775,7 @@ async function applyLocalOnLatest() {
 }
 
 async function reloadLatest() {
-  if (!basePublication.value || !conflict.value) return;
+  if (requestBusy.value || !basePublication.value || !conflict.value) return;
   if (!await confirmAction({
     title: "载入服务器最新版",
     message: "当前输入会被替换。需要保留时，可以先将其另存为一项新作业。",
@@ -783,7 +797,7 @@ async function reloadLatest() {
 }
 
 async function saveConflictCopy() {
-  if (!conflict.value) return;
+  if (requestBusy.value || !conflict.value) return;
   conflictCopying.value = true;
   localError.value = "";
   try {
