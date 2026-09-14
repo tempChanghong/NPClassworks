@@ -428,11 +428,12 @@ export const classworksV2Api = {
       input,
     ));
   },
-  async feed(workspaceIds, boardDate, {isCurrent = () => true} = {}) {
+  async feed(workspaceIds, boardDate, {isCurrent = () => true, signal} = {}) {
     const server = baseUrl();
     return splitPreparationFeed(await completePublicationFeed(async page => unwrap(await client.get("/api/v2/publications/feed", {
       params: {workspaceIds: workspaceIds.join(","), boardDate, includePreparations: true, ...page},
-    })), {isCurrent: () => isCurrent() && baseUrl() === server}), boardDate);
+      signal,
+    })), {isCurrent: () => !signal?.aborted && isCurrent() && baseUrl() === server}), boardDate);
   },
   async publicationWeek(workspaceIds, params, {screen = false, signal} = {}) {
     return unwrap(await client.get(screen ? "/api/v2/classroom-screens/feed" : "/api/v2/publications/feed", {
@@ -512,12 +513,12 @@ export const classworksV2Api = {
       {headers: screenHeaders()},
     ));
   },
-  async classroomScreenFeed(boardDate, {isCurrent = () => true} = {}) {
+  async classroomScreenFeed(boardDate, {isCurrent = () => true, signal} = {}) {
     const server = baseUrl(), token = getClassroomScreenToken();
     return splitPreparationFeed(await completePublicationFeed(async page => unwrap(await client.get("/api/v2/classroom-screens/feed", {
       params: {boardDate, includePreparations: true, ...page},
-      headers: screenHeaders(),
-    })), {isCurrent: () => isCurrent() && baseUrl() === server && getClassroomScreenToken() === token}), boardDate);
+      headers: screenHeaders(), signal,
+    })), {isCurrent: () => !signal?.aborted && isCurrent() && baseUrl() === server && getClassroomScreenToken() === token}), boardDate);
   },
   async acknowledgeScreenNotifications(items) {
     return unwrap(await client.post(

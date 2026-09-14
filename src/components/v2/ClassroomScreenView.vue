@@ -139,6 +139,7 @@
 
     <ScreenNoiseStatus @open="$emit('noise')" />
     <div class="d-flex flex-wrap ga-2 mt-3">
+      <HomeworkTomorrowButton :class-name="className" />
       <HomeworkHolidayButton :class-name="className" />
       <HomeworkCorrectionsButton :class-name="className" />
     </div>
@@ -384,6 +385,7 @@ import ScreenHomeworkChanges from "@/components/v2/ScreenHomeworkChanges.vue";
 import ScreenHomeworkFocus from "@/components/v2/ScreenHomeworkFocus.vue";
 import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
 import HomeworkHolidayButton from "@/components/v2/HomeworkHolidayButton.vue";
+import HomeworkTomorrowButton from "@/components/v2/HomeworkTomorrowButton.vue";
 import HomeworkCorrectionsButton from "@/components/v2/HomeworkCorrectionsButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import ScreenNoticePopup from "@/components/v2/ScreenNoticePopup.vue";

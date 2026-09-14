@@ -85,6 +85,7 @@ function* planImageSteps(snapshot, measure, maxPages) {
     yield;
     const continuation = `第 ${index + 1} 项（续）`;
     if (y + 180 > BOTTOM && page.rows.length) nextPage();
+    if (item.group && item.group !== snapshot.items[index - 1]?.group) append(yield* rows(item.group, "heading"), continuation);
     append(yield* rows(`${index + 1}. ${item.subject}${item.title ? " · " + item.title : ""}`, "heading"), continuation);
     append(yield* rows(`${item.targets} · ${item.certification} · ${item.priority}`, "meta"), continuation);
     if (!item.noHomework) append(yield* rows(`截止：${item.deadline}`, "meta"), continuation);
@@ -94,7 +95,7 @@ function* planImageSteps(snapshot, measure, maxPages) {
     if (item.preparation) append(yield* rows(`${item.preparation.date} 需带：${item.preparation.text}`, "body"), continuation);
     y += 24;
   }
-  if (!snapshot.items.length) append(yield* rows("当前已加载内容中没有该日期的作业。", "body"));
+  if (!snapshot.items.length) append(yield* rows(snapshot.emptyMessage || "当前已加载内容中没有该日期的作业。", "body"));
   return pages;
 }
 

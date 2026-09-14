@@ -146,6 +146,7 @@
             <div class="selection-summary__actions">
               <HomeworkWeekButton :class-name="store.selectedClassName" />
               <HomeworkHolidayButton :class-name="store.selectedClassName" />
+              <HomeworkTomorrowButton :class-name="store.selectedClassName" />
               <HomeworkCorrectionsButton :class-name="store.selectedClassName" />
               <HomeworkPrintButton
                 :class-name="store.selectedClassName"
@@ -411,6 +412,7 @@
             <v-spacer />
             <div class="teacher-session-summary__actions">
               <HomeworkHolidayButton teacher />
+              <HomeworkTomorrowButton teacher />
               <v-btn
                 v-if="canOpenAdmin"
                 prepend-icon="mdi-school-outline"
@@ -648,6 +650,7 @@ import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
 import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
 import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
 import HomeworkHolidayButton from "@/components/v2/HomeworkHolidayButton.vue";
+import HomeworkTomorrowButton from "@/components/v2/HomeworkTomorrowButton.vue";
 import HomeworkCorrectionsButton from "@/components/v2/HomeworkCorrectionsButton.vue";
 import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
@@ -1340,7 +1343,7 @@ async function copyScreenBoardToToday() {
 }
 
 .teacher-session-summary__actions {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   gap: 4px;
   justify-content: flex-end;
@@ -1359,6 +1362,7 @@ async function copyScreenBoardToToday() {
 .selection-summary__content {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   height: 100%;
   justify-content: space-between;
@@ -1373,6 +1377,7 @@ async function copyScreenBoardToToday() {
 }
 
 .selection-summary__identity {
+  flex: 1 1 230px;
   gap: 14px;
   min-width: 0;
 }
@@ -1393,7 +1398,7 @@ async function copyScreenBoardToToday() {
 }
 
 .selection-summary__actions {
-  flex: 0 0 auto;
+  flex: 1 1 360px;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
@@ -1433,6 +1438,11 @@ async function copyScreenBoardToToday() {
 
   .selection-summary__actions {
     justify-content: flex-start;
+  }
+
+  .selection-summary__identity,
+  .selection-summary__actions {
+    flex: 0 1 auto;
   }
 }
 

@@ -45,7 +45,7 @@ export function homeworkPrintSnapshot({publications, preparations = [], workspac
 
 export function homeworkPrintDocument(snapshot) {
   const e = escapeHtml;
-  const rows = snapshot.items.map((item, index) => `<section class="assignment">
+  const rows = snapshot.items.map((item, index) => `${item.group && item.group !== snapshot.items[index - 1]?.group ? `<h2 class="group-heading">${e(item.group)}</h2>` : ""}<section class="assignment">
     <h2><span class="checkbox" aria-hidden="true">□</span> ${index + 1}. ${e(item.subject)}${item.title ? ` · ${e(item.title)}` : ""}</h2>
     <p class="details">${e(item.targets)} · ${e(item.priority)} · ${e(item.certification)}</p>
     <p class="content">${e(item.content || "（正文为空，请参阅标题）")}</p>
@@ -67,6 +67,7 @@ main { max-width: 180mm; margin: auto; }
 header { border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 16px; }
 h1 { font-size: 22pt; margin: 0 0 8px; }
 h2 { font-size: 13pt; margin: 0 0 4px; break-after: avoid; }
+.group-heading { margin-top: 20px; }
 p { margin: 4px 0; }
 .details, .deadline, footer { font-size: 9pt; color: #444; }
 .assignment .details { break-after: avoid; }
@@ -82,7 +83,7 @@ footer { border-top: 1px solid #111; margin-top: 20px; padding-top: 8px; }
 ${snapshot.cached ? '<p class="warning">离线缓存内容，可能不是最新作业。请核对后使用。</p>' : ""}
 ${snapshot.warning ? `<p class="warning">${e(snapshot.warning)}</p>` : ""}
 ${snapshot.preparations?.length ? `<section class="assignment"><h2>需带物品</h2>${snapshot.preparations.map(item => `<p class="content">${e(item.date)} · ${e(item.subject)} · ${e(item.targets)} · ${item.certified ? "教师已确认" : "待教师确认"}<br>${e(item.text)}</p>`).join("")}</section>` : ""}
-${rows || '<p>当前已加载内容中没有该日期的作业。</p>'}
+${rows || `<p>${e(snapshot.emptyMessage || "当前已加载内容中没有该日期的作业。")}</p>`}
 <footer>NPClassworks · 生成于 ${e(snapshot.createdAt)}<br>按当前班级选择整理已加载作业；不含通知及本机尚未上传的作业。内容以生成时为准。</footer>
 </main></body></html>`;
 }
