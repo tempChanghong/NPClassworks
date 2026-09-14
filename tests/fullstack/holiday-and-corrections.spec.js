@@ -68,6 +68,10 @@ test("late screens can review server corrections while draft history, private fi
   const response = await request.get(url, {params});
   expect(response.status()).toBe(200);
   const data = (await response.json()).data;
+  expect((await request.get(url, {params: {...params, date: "2026-13-01"}})).status()).toBe(400);
+  const padded = await request.get(url, {params: {...params, date: ` ${today()} `}});
+  expect(padded.status()).toBe(200);
+  expect((await padded.json()).data).toEqual(data);
   expect(data.items).toHaveLength(1);
   expect(JSON.stringify(data)).not.toMatch(/私密|editorAccountId|targetWorkspaceIds/);
   expect((await request.get(url, {params: {...params, workspaceIds: "missing"}})).status()).toBe(403);
@@ -80,6 +84,8 @@ test("late screens can review server corrections while draft history, private fi
   await expect(dialog).not.toContainText("私密草稿");
   expect((await request.post(endpoint + "/withdraw", {headers: {...auth(classroom), "If-Match": '"3"'}, data: {}})).status()).toBe(200);
   expect((await request.get(url, {params})).status()).toBe(404);
+  await expect(dialog.locator(".correction-entry")).toHaveCount(0);
+  await expect(dialog).toContainText("作业已变化");
   await dialog.getByRole("button", {name: "刷新更正", exact: true}).click();
   await expect(dialog.locator(".correction-entry")).toHaveCount(0);
   expect(screen.errors).toEqual([]);

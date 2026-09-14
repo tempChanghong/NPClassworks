@@ -79,8 +79,12 @@ const props = defineProps({className: {type: String, default: ""}});
 const store = useClassworksV2Store();
 const opened = ref(false), loading = ref(false), error = ref(""), items = ref([]), date = ref("");
 const scope = computed(() => JSON.stringify([store.feedAudience, store.activeWorkspaceIds, store.boardDate, store.screenSession?.binding?.id, props.className]));
-let controller, generation = 0;
-function cancel() { generation++; controller?.abort(); loading.value = false; items.value = []; }
+const feedVersion = computed(() => JSON.stringify([
+  store.feedLoadError, store.feedUsingCache,
+  store.feed.map(item => [item.id, item.revision, item.status]),
+]));
+let controller, generation = 0, reviewedFeed = null;
+function cancel() { generation++; reviewedFeed = null; controller?.abort(); loading.value = false; items.value = []; }
 function open() { opened.value = true; void reload(); }
 const formatDate = value => new Date(value).toLocaleString("zh-CN", {timeZone: "Asia/Shanghai"});
 const fields = item => homeworkChangedFields(item.before, item.after);
@@ -95,7 +99,9 @@ async function reload() {
   try {
     await store.loadActiveFeed();
     if (current !== generation || token !== getClassroomScreenToken()) return;
-    if (store.feedLoadError || store.feedUsingCache) throw new Error("无法读取最新作业，请联网后重试更正回顾。");
+    if (store.feedLoading) throw new Error("作业正在更新，请稍后刷新更正回顾。");
+    if (!store.feedGeneratedAt || store.feedLoadError || store.feedUsingCache) throw new Error("无法读取最新作业，请联网后重试更正回顾。");
+    reviewedFeed = feedVersion.value;
     const result = [];
     for (const publication of store.feed.filter(item => item.type === "ASSIGNMENT" && item.status === "PUBLISHED" && item.revision > 1)) {
       let beforeRevision;
@@ -115,6 +121,12 @@ async function reload() {
 }
 watch(opened, value => { if (!value) cancel(); });
 watch(scope, () => { opened.value = false; cancel(); }, {flush: "sync"});
+watch(feedVersion, value => {
+  if (opened.value && reviewedFeed !== null && value !== reviewedFeed) {
+    cancel();
+    error.value = "作业已变化，请刷新更正回顾后重新核对。";
+  }
+}, {flush: "sync"});
 onUnmounted(cancel);
 </script>
 <style scoped>
