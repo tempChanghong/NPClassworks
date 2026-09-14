@@ -150,7 +150,7 @@
             autofocus
             class="screen-content-input"
             hide-details="auto"
-            label="作业内容"
+            :label="optionalHomeworkOf(basePublication) ? '必做内容' : '作业内容'"
             :placeholder="contentFocused ? '例如：完成练习册第 10～12 页' : ''"
             rows="4"
             variant="outlined"
@@ -163,6 +163,13 @@
             :subject-id="form.subjectId"
             @insert="insertQuickInput"
           />
+          <p
+            v-if="optionalHomeworkOf(basePublication)"
+            class="text-body-2 mt-3"
+            style="white-space: pre-wrap; overflow-wrap: anywhere"
+          >
+            选做（由教师维护）：{{ optionalHomeworkOf(basePublication) }}
+          </p>
         </section>
 
         <section class="composer-section">
@@ -389,6 +396,7 @@
 </template>
 
 <script setup>
+import {optionalHomeworkOf} from "@/utils/homeworkInstructions";
 import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
 import {openScreenDraftStorage} from "@/utils/screenDraftSession";

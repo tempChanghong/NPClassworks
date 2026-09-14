@@ -145,6 +145,8 @@
             </div>
             <div class="selection-summary__actions">
               <HomeworkWeekButton :class-name="store.selectedClassName" />
+              <HomeworkHolidayButton :class-name="store.selectedClassName" />
+              <HomeworkCorrectionsButton :class-name="store.selectedClassName" />
               <HomeworkPrintButton
                 :class-name="store.selectedClassName"
                 :scope-label="selectionDescription"
@@ -408,6 +410,7 @@
             </div>
             <v-spacer />
             <div class="teacher-session-summary__actions">
+              <HomeworkHolidayButton teacher />
               <v-btn
                 v-if="canOpenAdmin"
                 prepend-icon="mdi-school-outline"
@@ -644,6 +647,8 @@ import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import ClassroomScreenView from "@/components/v2/ClassroomScreenView.vue";
 import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
 import HomeworkWeekButton from "@/components/v2/HomeworkWeekButton.vue";
+import HomeworkHolidayButton from "@/components/v2/HomeworkHolidayButton.vue";
+import HomeworkCorrectionsButton from "@/components/v2/HomeworkCorrectionsButton.vue";
 import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";

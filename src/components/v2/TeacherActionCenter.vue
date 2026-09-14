@@ -123,8 +123,9 @@
                 {{ item.publication.title }}
               </div>
               <div class="action-content">
-                {{ item.publication.content || "（无正文）" }}
+                {{ requiredHomeworkContent(item.publication) || "（无正文）" }}
               </div>
+              <SubmissionDetails :publication="item.publication" />
 
               <div
                 v-if="item.changedFields?.length"
@@ -208,6 +209,8 @@
 </template>
 
 <script setup>
+import {requiredHomeworkContent} from "@/utils/homeworkInstructions";
+import SubmissionDetails from "./SubmissionDetails.vue";
 import {computed, ref} from "vue";
 import {PUBLICATION_STATUS} from "@/utils/publicationStatus";
 

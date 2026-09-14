@@ -125,7 +125,7 @@
                 {{ targetNames(item) }} · {{ item.isCertified ? '教师已确认' : '待教师确认' }}
               </p>
               <p class="week-content">
-                {{ item.content }}
+                {{ requiredHomeworkContent(item) }}
               </p>
               <SubmissionDetails :publication="item" />
               <PreparationDetails :publication="item" />
@@ -154,6 +154,7 @@
   </v-dialog>
 </template>
 <script setup>
+import {requiredHomeworkContent} from "@/utils/homeworkInstructions";
 import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, onUnmounted, ref, watch} from "vue";

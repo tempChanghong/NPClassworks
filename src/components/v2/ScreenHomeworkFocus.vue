@@ -79,7 +79,7 @@
           {{ publication.title }}
         </h3>
         <div class="focus-content">
-          {{ publication.content || '（正文为空，请参阅标题）' }}
+          {{ requiredHomeworkContent(publication) || '（正文为空，请参阅标题）' }}
         </div>
         <SubmissionDetails :publication="publication" />
         <PreparationDetails :publication="publication" />
@@ -98,6 +98,7 @@
   </v-dialog>
 </template>
 <script setup>
+import {requiredHomeworkContent} from "@/utils/homeworkInstructions";
 import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, ref, watch} from "vue";

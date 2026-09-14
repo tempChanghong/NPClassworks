@@ -86,8 +86,6 @@
           {{ publication.title }}
         </v-card-subtitle>
         <v-card-text class="publication-body">
-          <SubmissionDetails :publication="publication" />
-          <PreparationDetails :publication="publication" />
           <component
             :is="screenMode && !previewMode && publication.type === 'ASSIGNMENT' ? 'button' : 'div'"
             class="publication-content"
@@ -96,8 +94,10 @@
             :aria-label="screenMode && !previewMode && publication.type === 'ASSIGNMENT' ? `放大查看${publication.subject?.name || ''}作业` : undefined"
             @click="screenMode && !previewMode && publication.type === 'ASSIGNMENT' && $emit('focus', {publication, activator: $event.currentTarget})"
           >
-            {{ publication.content }}
+            {{ requiredHomeworkContent(publication) }}
           </component>
+          <SubmissionDetails :publication="publication" />
+          <PreparationDetails :publication="publication" />
           <v-divider class="publication-divider" />
           <div class="publication-metadata d-flex flex-wrap text-medium-emphasis">
             <span v-if="settings.showSecondaryMetadata">
@@ -186,6 +186,7 @@
 </template>
 
 <script setup>
+import {requiredHomeworkContent} from "@/utils/homeworkInstructions";
 import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from "vue";

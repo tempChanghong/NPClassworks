@@ -1,3 +1,21 @@
+export function optionalHomeworkOf(publication) {
+  return publication?.type === "ASSIGNMENT" && typeof publication.contentJson?.optionalContent === "string"
+    ? publication.contentJson.optionalContent.trim() : "";
+}
+
+export function requiredHomeworkContent(publication) {
+  const content = publication?.content || "";
+  return optionalHomeworkOf(publication) ? `必做：\n${content || '（请参阅标题）'}` : content;
+}
+
+export function withOptionalHomework(metadata, text = "") {
+  if (typeof text !== "string" || text.length > 6000) throw new Error("选做内容不能超过6000字。");
+  const result = {...metadata};
+  delete result.optionalContent;
+  if (text.trim()) result.optionalContent = text.trim();
+  return Object.keys(result).length ? result : null;
+}
+
 export function submissionOf(publication) {
   return publication?.type === "ASSIGNMENT" && typeof publication.contentJson?.submission === "string"
     ? publication.contentJson.submission.trim() : "";

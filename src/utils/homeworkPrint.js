@@ -1,4 +1,4 @@
-import {submissionOf} from "./homeworkInstructions.js";
+import {submissionOf, optionalHomeworkOf, requiredHomeworkContent} from "./homeworkInstructions.js";
 import {isNoHomework} from "./noHomework.js";
 import {preparationOf, preparationList, preparationToday} from "./homeworkPreparation.js";
 
@@ -30,7 +30,7 @@ export function homeworkPrintSnapshot({publications, preparations = [], workspac
     subject: item.subject?.name || "未指定科目",
     targets: [...new Set(item.targets.filter(target => targets.has(target.workspaceId))
       .map(target => target.workspace?.name || "所选教学班"))].join("、"),
-    title: item.title || "", content: item.content || "",
+    title: item.title || "", content: requiredHomeworkContent(item), optionalContent: optionalHomeworkOf(item),
     noHomework: isNoHomework(item),
     preparation: preparationOf(item),
     submission: submissionOf(item),
@@ -49,6 +49,7 @@ export function homeworkPrintDocument(snapshot) {
     <h2><span class="checkbox" aria-hidden="true">□</span> ${index + 1}. ${e(item.subject)}${item.title ? ` · ${e(item.title)}` : ""}</h2>
     <p class="details">${e(item.targets)} · ${e(item.priority)} · ${e(item.certification)}</p>
     <p class="content">${e(item.content || "（正文为空，请参阅标题）")}</p>
+    ${item.optionalContent ? `<p class="content">选做：${e(item.optionalContent)}</p>` : ""}
     ${item.submission ? `<p class="content">提交说明：${e(item.submission)}</p>` : ""}
     ${item.preparation ? `<p class="content">${e(item.preparation.date)} 需带：${e(item.preparation.text)}</p>` : ""}
     <p class="deadline">截止：${e(item.deadline)}</p>
@@ -76,7 +77,7 @@ p { margin: 4px 0; }
 footer { border-top: 1px solid #111; margin-top: 20px; padding-top: 8px; }
 @media print { body { padding: 0; } main { max-width: none; } }
 </style></head><body><main>
-<header><h1>作业清单</h1><p><strong>${e(snapshot.className)}</strong> · ${e(snapshot.boardDate)}</p>
+<header><h1>${e(snapshot.title || "作业清单")}</h1><p><strong>${e(snapshot.className)}</strong> · ${e(snapshot.boardDate)}</p>
 <p>${e(snapshot.scopeLabel)}</p><p class="details">共 ${snapshot.items.length} 项 · 数据更新于 ${e(snapshot.generatedAt)}</p></header>
 ${snapshot.cached ? '<p class="warning">离线缓存内容，可能不是最新作业。请核对后使用。</p>' : ""}
 ${snapshot.warning ? `<p class="warning">${e(snapshot.warning)}</p>` : ""}

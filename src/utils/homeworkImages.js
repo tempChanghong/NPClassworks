@@ -52,7 +52,7 @@ function* planImageSteps(snapshot, measure, maxPages) {
     return lines.map(text => ({text, kind, height: styles[kind].height}));
   }
   const headers = [
-    ...yield* rows("作业清单", "title"), ...yield* rows(`${snapshot.className} · ${snapshot.boardDate}`, "heading"),
+    ...yield* rows(snapshot.title || "作业清单", "title"), ...yield* rows(`${snapshot.className} · ${snapshot.boardDate}`, "heading"),
     ...yield* rows(snapshot.scopeLabel, "meta"), ...yield* rows(`数据更新于 ${snapshot.generatedAt}`, "meta"),
     ...yield* rows(`共 ${snapshot.items.filter(item => !item.noHomework).length} 项作业 · ${snapshot.items.filter(item => item.noHomework).length} 项无作业标记`, "meta"),
     ...(snapshot.cached ? yield* rows("离线缓存内容，可能不是最新作业，请核对。", "warning") : []),
@@ -89,6 +89,7 @@ function* planImageSteps(snapshot, measure, maxPages) {
     append(yield* rows(`${item.targets} · ${item.certification} · ${item.priority}`, "meta"), continuation);
     if (!item.noHomework) append(yield* rows(`截止：${item.deadline}`, "meta"), continuation);
     append(yield* rows(item.content || "（正文为空，请参阅标题）", "body"), continuation);
+    if (item.optionalContent) append(yield* rows(`选做：${item.optionalContent}`, "body"), continuation);
     if (item.submission) append(yield* rows(`提交说明：${item.submission}`, "body"), continuation);
     if (item.preparation) append(yield* rows(`${item.preparation.date} 需带：${item.preparation.text}`, "body"), continuation);
     y += 24;

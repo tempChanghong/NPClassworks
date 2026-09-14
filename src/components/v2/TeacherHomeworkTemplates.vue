@@ -92,6 +92,14 @@
             auto-grow
           />
           <v-textarea
+            v-model="draft.optionalContent"
+            :disabled="busy"
+            label="模板选做内容（可选）"
+            maxlength="6000"
+            auto-grow
+            rows="3"
+          />
+          <v-textarea
             v-model="draft.submission"
             :disabled="busy"
             label="模板提交说明（可选）"
@@ -138,6 +146,9 @@
             class="template-preview mb-4"
           >
             <h4>{{ preview.title }}</h4><p>{{ preview.content }}</p>
+            <p v-if="preview.optionalContent">
+              选做：{{ preview.optionalContent }}
+            </p>
             <p v-if="preview.submission">
               提交说明：{{ preview.submission }}
             </p>
@@ -146,7 +157,7 @@
             </p>
           </div>
           <p class="mb-3">
-            套用将替换标题、正文、提交说明和需带物品；空字段会清空已有内容。请重新选择携带日期，并核对科目、班级和截止时间，再保存或发布。
+            套用将替换标题、正文、选做内容、提交说明和需带物品；空字段会清空已有内容。请重新选择携带日期，并核对科目、班级和截止时间，再保存或发布。
           </p>
           <v-btn
             :disabled="Boolean(previewError) || applying"
@@ -183,10 +194,10 @@ import {confirmAction} from "@/utils/actionDialog";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import {fillHomeworkTemplate, templateFields} from "@/utils/homeworkTemplates";
 
-const props = defineProps({title: {type: String, default: ""}, content: {type: String, default: ""}, materials: {type: String, default: ""}, submission: {type: String, default: ""}, applying: Boolean});
+const props = defineProps({title: {type: String, default: ""}, content: {type: String, default: ""}, materials: {type: String, default: ""}, submission: {type: String, default: ""}, optionalContent: {type: String, default: ""}, applying: Boolean});
 const emit = defineEmits(["close", "apply"]);
 const items = ref([]), busy = ref(false), error = ref(""), mode = ref("list"), selected = ref(null);
-const draft = reactive({name: "", title: "", content: "", materials: "", submission: ""}), values = reactive(new Map()), fields = ref([]);
+const draft = reactive({name: "", title: "", content: "", materials: "", submission: "", optionalContent: ""}), values = reactive(new Map()), fields = ref([]);
 let alive = true, clean = "";
 const dirty = computed(() => mode.value === "edit" ? JSON.stringify(draft) !== clean : mode.value === "use" && [...values.values()].some(Boolean));
 const previewError = computed(() => { try { fillHomeworkTemplate(selected.value || {}, values); return ""; } catch (e) { return e.message; } });
@@ -208,7 +219,7 @@ async function run(operation) {
 function load() { return run(async () => { const result = await classworksV2Api.homeworkTemplates(); if (alive) items.value = result; }); }
 function edit(item = null) {
   selected.value = item;
-  Object.assign(draft, {name: item?.name || "", title: item?.title ?? props.title, content: item?.content ?? props.content, materials: item ? item.materials || "" : props.materials, submission: item ? item.submission || "" : props.submission});
+  Object.assign(draft, {name: item?.name || "", title: item?.title ?? props.title, content: item?.content ?? props.content, materials: item ? item.materials || "" : props.materials, optionalContent: item ? item.optionalContent || "" : props.optionalContent, submission: item ? item.submission || "" : props.submission});
   clean = JSON.stringify(draft); mode.value = "edit"; error.value = "";
 }
 function use(item) {

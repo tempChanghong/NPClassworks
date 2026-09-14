@@ -440,6 +440,12 @@ export const classworksV2Api = {
       ...(screen ? {headers: screenHeaders()} : {}), signal,
     }));
   },
+  async homeworkCorrections(id, workspaceIds, params, {screen = false, signal} = {}) {
+    return unwrap(await client.get(`${screen ? "/api/v2/classroom-screens" : "/api/v2/publications"}/feed/${encodeURIComponent(id)}/corrections`, {
+      params: {...params, ...(screen ? {} : {workspaceIds: workspaceIds.join(",")})},
+      ...(screen ? {headers: screenHeaders()} : {}), signal,
+    }));
+  },
   async profile() {
     return unwrap(await client.get("/accounts/profile"));
   },

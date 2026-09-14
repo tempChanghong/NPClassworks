@@ -77,7 +77,7 @@
             {{ current.title }}
           </h3>
           <div class="copy-content">
-            {{ current?.content || '（正文为空，请参阅标题）' }}
+            {{ requiredHomeworkContent(current) || '（正文为空，请参阅标题）' }}
           </div>
           <SubmissionDetails :publication="current" />
           <PreparationDetails :publication="current" />
@@ -127,6 +127,7 @@
   </v-dialog>
 </template>
 <script setup>
+import {requiredHomeworkContent} from "@/utils/homeworkInstructions";
 import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from "vue";

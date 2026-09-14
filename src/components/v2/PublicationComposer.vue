@@ -153,9 +153,26 @@
         v-model="form.content"
         :disabled="form.noHomework"
         auto-grow
-        label="正文"
+        :label="form.type === 'ASSIGNMENT' && (optionalExpanded || form.optionalContent) ? '必做内容' : '正文'"
         placeholder="使用换行分条填写"
         rows="5"
+        variant="outlined"
+      />
+      <v-btn
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework && !optionalExpanded && !form.optionalContent"
+        variant="text"
+        @click="optionalExpanded = true"
+      >
+        添加选做内容
+      </v-btn>
+      <v-textarea
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework && (optionalExpanded || form.optionalContent)"
+        v-model="form.optionalContent"
+        label="选做内容（可选）"
+        maxlength="6000"
+        counter
+        auto-grow
+        rows="3"
         variant="outlined"
       />
       <v-btn
@@ -233,6 +250,7 @@
         :content="form.content"
         :materials="form.materials"
         :submission="form.submission"
+        :optional-content="form.optionalContent"
         :applying="templateApplying"
         @close="templatesOpen = false"
         @apply="applyTemplate"
@@ -546,7 +564,7 @@ import {computed, defineAsyncComponent, nextTick, onUnmounted, reactive, ref, wa
 import {useNow} from "@vueuse/core";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import {publicationDraftInput} from "@/utils/publicationDraft";
-import {submissionOf} from "@/utils/homeworkInstructions";
+import {submissionOf, optionalHomeworkOf} from "@/utils/homeworkInstructions";
 import {preparationOf} from "@/utils/homeworkPreparation";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
@@ -605,16 +623,18 @@ async function applyTemplate(input) {
   const generation = editorGeneration, session = store.teacherSessionVersion, snapshot = JSON.stringify(form);
   templateApplying.value = true;
   try {
-    if ((form.title || form.content || form.materials || form.submission) && !await confirmAction({title: "替换当前作业内容？", message: "将替换标题、正文、提交说明和需带物品，模板中的空字段也会清空对应内容。携带日期将清空，含物品时请重新选择。班级、科目、作业日期和截止时间保持当前设置。", confirmText: "替换内容"})) return;
+    if ((form.title || form.content || form.materials || form.submission || form.optionalContent) && !await confirmAction({title: "替换当前作业内容？", message: "将替换标题、正文、选做内容、提交说明和需带物品，模板中的空字段也会清空对应内容。携带日期将清空，含物品时请重新选择。班级、科目、作业日期和截止时间保持当前设置。", confirmText: "替换内容"})) return;
     if (!mounted || generation !== editorGeneration || session !== store.teacherSessionVersion || !templatesOpen.value || templatesDisabled.value || snapshot !== JSON.stringify(form)) return;
     form.title = input.title; form.content = input.content;
     form.submission = input.submission;
+    form.optionalContent = input.optionalContent || ""; optionalExpanded.value = Boolean(form.optionalContent);
     form.materials = input.materials;
     form.materialsDate = "";
     templatesOpen.value = false;
   } finally { templateApplying.value = false; }
 }
 let previousHomework = null;
+const optionalExpanded = ref(false);
 let originalContentJson = null;
 
 function setNoHomework(value) {
@@ -656,6 +676,7 @@ const form = reactive({
   materials: "",
   materialsDate: "",
   submission: "",
+  optionalContent: "",
   correctionReason: "",
   expiresAt: "",
   priority: "NORMAL",
@@ -797,6 +818,8 @@ watch(() => props.editingPublication, (publication) => {
   form.title = publication.title || "";
   form.content = publication.content || "";
   form.submission = submissionOf(publication);
+  form.optionalContent = optionalHomeworkOf(publication);
+  optionalExpanded.value = Boolean(form.optionalContent);
   form.correctionReason = "";
   form.materials = preparationOf(publication)?.text || "";
   form.materialsDate = preparationOf(publication)?.date || "";
@@ -903,6 +926,7 @@ function reset() {
   form.materials = "";
   form.materialsDate = "";
   form.submission = "";
+  form.optionalContent = ""; optionalExpanded.value = false;
   form.correctionReason = "";
   screenPreview.value = null;
   form.expiresAt = "";

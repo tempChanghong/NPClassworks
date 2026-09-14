@@ -81,7 +81,7 @@
                   {{ item.snapshot.title }}
                 </div>
                 <div class="revision-content">
-                  {{ item.purgedAt ? "该待教师确认备份已按三天保留策略清理正文" : (item.snapshot.content || "（无正文）") }}
+                  {{ item.purgedAt ? "该待教师确认备份已按三天保留策略清理正文" : (requiredHomeworkContent(item.snapshot) || "（无正文）") }}
                 </div>
                 <SubmissionDetails
                   v-if="!item.purgedAt"
@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import {correctionOf} from "@/utils/homeworkInstructions";
+import {correctionOf, requiredHomeworkContent} from "@/utils/homeworkInstructions";
 import SubmissionDetails from "@/components/v2/SubmissionDetails.vue";
 import PreparationDetails from "@/components/v2/PreparationDetails.vue";
 import {computed, onBeforeUnmount, ref, watch} from "vue";

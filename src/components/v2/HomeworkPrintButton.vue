@@ -97,6 +97,7 @@ const props = defineProps({
   className: {type: String, required: true},
   scopeLabel: {type: String, default: ""},
   hideButton: Boolean,
+  customSnapshot: {type: Object, default: null},
 });
 const store = useClassworksV2Store();
 const opened = ref(false);
@@ -110,7 +111,7 @@ function clearImages() {
   imageController?.abort(); imageController = null; generating.value = false;
   images.value.forEach(item => URL.revokeObjectURL(item.url)); images.value = [];
 }
-const disabled = computed(() => store.feedLoading || store.studentLoading
+const disabled = computed(() => props.customSnapshot ? false : store.feedLoading || store.studentLoading
   || !store.activeWorkspaceIds.length || !store.feedGeneratedAt
   || Boolean(store.feedLoadError && !store.feedUsingCache));
 
@@ -127,7 +128,7 @@ function openPreview() {
     ? "本机待上传队列读取异常，无法确认是否还有未上传的作业。"
     : screen && store.screenPendingUploads.length
       ? `本机还有 ${store.screenPendingUploads.length} 项待处理作业，未包含在本清单中。` : "";
-  snapshot = homeworkPrintSnapshot({
+  snapshot = props.customSnapshot ? JSON.parse(JSON.stringify(props.customSnapshot)) : homeworkPrintSnapshot({
     publications: store.feed, preparations: store.feedPreparations, workspaceIds: store.activeWorkspaceIds, boardDate: store.boardDate,
     className: props.className, scopeLabel: props.scopeLabel, generatedAt: store.feedGeneratedAt,
     cached: store.feedUsingCache, warning,

@@ -1,4 +1,5 @@
 import {publicationDisplayState} from "./publicationStatus.js";
+import {optionalHomeworkOf} from "./homeworkInstructions.js";
 
 const STATE_ORDER = Object.freeze({pending: 0, changed: 0, draft: 1, scheduled: 2, published: 3, expired: 4, withdrawn: 5});
 
@@ -43,6 +44,7 @@ function searchableText(publication) {
   return [
     publication.title,
     publication.content,
+    optionalHomeworkOf(publication),
     publication.subject?.name,
     publication.author?.name,
     ...(publication.targets || []).map((target) => target.workspace?.name),

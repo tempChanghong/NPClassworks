@@ -1,5 +1,5 @@
 import {withPreparation, validPreparationDate} from "./homeworkPreparation.js";
-import {withSubmission} from "./homeworkInstructions.js";
+import {withSubmission, withOptionalHomework} from "./homeworkInstructions.js";
 import {NO_HOMEWORK_META} from "./noHomework.js";
 
 // Preview and submit serialize the same form, without any API/storage effects.
@@ -24,7 +24,7 @@ export function publicationDraftInput(form, metadata, status, correctionEligible
     type: form.type, subjectId: assignment ? form.subjectId : null,
     targetWorkspaceIds: [...form.targetWorkspaceIds], title: form.title, content: form.content,
     contentJson: assignment
-      ? withSubmission(withPreparation(form.noHomework ? {...NO_HOMEWORK_META} : metadata, form.materials, form.materialsDate), form.noHomework ? "" : form.submission || "")
+      ? withOptionalHomework(withSubmission(withPreparation(form.noHomework ? {...NO_HOMEWORK_META} : metadata, form.materials, form.materialsDate), form.noHomework ? "" : form.submission || ""), form.noHomework ? "" : form.optionalContent || "")
       : {...metadata, popupEnabled: form.priority !== "MINOR" || form.popupEnabled},
     boardDate: assignment ? form.boardDate : null,
     publishAt, dueAt, expiresAt, priority: form.priority, status,
