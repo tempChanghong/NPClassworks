@@ -55,3 +55,14 @@ test("tomorrow fails closed on incomplete day support, page failure or cancellat
   const controller = new AbortController(); controller.abort();
   await assert.rejects(loadTomorrowHomework({now, workspaceIds: ["class"], loadDay: async () => day(), loadWeek: async () => {throw new Error("must not run");}}, controller.signal), /取消/);
 });
+
+test("tomorrow rejects contradictory revisions across board and due queries", async () => {
+  const old = item("edited", {revision: 1, dueAt: null, contentJson: {preparation: {text: "旧物品", date: "2026-09-15"}}});
+  const updated = {...old, revision: 2, dueAt: "2026-09-15T00:00:00Z", contentJson: null};
+  await assert.rejects(load(day([old], [old]), [updated]), /版本.*变化|变化.*版本/);
+  await assert.rejects(load(day([updated], []), [old]), /版本.*变化|变化.*版本/);
+  await assert.rejects(load(day(), [old, updated]), /版本.*变化|变化.*版本/);
+  const consistent = await load(day([updated], []), [updated]);
+  assert.deepEqual(consistent.due.map(row => row.id), ["edited"]);
+  assert.equal(consistent.unknown.length, 0);
+});

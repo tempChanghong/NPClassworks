@@ -17,8 +17,26 @@ function visibleAssignments(items, workspaceIds, now) {
 // Read the complete due-date query independently from today's board, so older work is included.
 export async function loadTomorrowHomework({loadDay, loadWeek, workspaceIds, now = new Date()}, signal) {
   const today = preparationToday(now), tomorrow = shiftBoardDate(today, 1);
+  const revisions = new Map();
+  function checkRevisions(items) {
+    for (const item of items) {
+      if (revisions.has(item.id) && revisions.get(item.id) !== item.revision) {
+        throw new Error("读取期间作业版本发生变化，请刷新核对清单。");
+      }
+      revisions.set(item.id, item.revision);
+    }
+  }
   const [day, week] = await Promise.all([
-    loadDay(today), loadHomeworkWeek(loadWeek, {weekStart: tomorrow, weekView: "due"}, signal),
+    loadDay(today).then(result => {
+      if (Array.isArray(result?.items) && Array.isArray(result?.preparations)) checkRevisions([...result.items, ...result.preparations]);
+      return result;
+    }),
+    loadHomeworkWeek(async params => {
+      const result = await loadWeek(params);
+      // Check each raw page before the weekly loader deduplicates by ID.
+      if (Array.isArray(result?.items)) checkRevisions(result.items);
+      return result;
+    }, {weekStart: tomorrow, weekView: "due"}, signal),
   ]);
   if (signal?.aborted) throw new Error("查询已取消");
   if (day.boardDate !== today || day.includesPreparations !== true || !Array.isArray(day.items) || !Array.isArray(day.preparations)) {

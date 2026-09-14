@@ -125,7 +125,7 @@ const workspaceIds = computed(() => props.teacher ? (teacherWorkspace.value ? [t
 const selectedClassName = computed(() => props.teacher ? store.teacherWorkspaces.find(w => w.id === teacherWorkspace.value)?.name || "请选择班级" : props.className);
 const scope = computed(() => JSON.stringify([store.feedAudience, store.activeWorkspaceIds, store.screenSession?.binding?.id, store.account?.id,
   store.teacherSessionVersion, store.teacherWorkspaces.map(w => w.id), props.className]));
-const feedVersion = computed(() => JSON.stringify([store.feedLoadError, store.feedUsingCache, store.feed.map(item => [item.id, item.revision, item.status]),
+const feedVersion = computed(() => JSON.stringify([store.feedLoadError, store.feedUsingCache, store.feed.filter(item => item.type === "ASSIGNMENT").map(item => [item.id, item.revision, item.status]),
   store.feedPreparations.map(item => [item.id, item.revision, item.status])]));
 const queueWarning = computed(() => !props.teacher && store.feedAudience === "screen" && (store.screenQueueReadError || store.screenPendingUploads.length)
   ? "本机待上传作业未包含在清单中，请核对同步状态。" : "");
@@ -178,7 +178,7 @@ watch(opened, value => {
     timer = setInterval(checkDate, 60_000);
     // The changed assignment may be older than the currently displayed board date.
     subscriptions = ["publication.created", "publication.updated", "publication.withdrawn", "publication.certified", "publication.restored", "connect"]
-      .map(event => socketOn(event, payload => { if (payload?.publicationType !== "NOTICE") invalidate(); }));
+      .map(event => socketOn(event, payload => { if ((payload?.content || payload)?.publicationType !== "NOTICE") invalidate(); }));
   }
   else clear();
 }, {flush: "sync"});

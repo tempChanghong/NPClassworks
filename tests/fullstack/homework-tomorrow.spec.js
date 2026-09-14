@@ -39,6 +39,15 @@ test("tomorrow checklist reads old due work and packing items from PostgreSQL an
   for (const text of ["放学前核对清单", "明日要交", "截止未设置，请核对", "很早布置明天上交", "早读前交给课代表", "选做拓展题", "圆规和实验材料"]) await expect(body).toContainText(text);
   await print.getByRole("button", {name: "生成清单图片", exact: true}).click();
   await expect(print.locator(".homework-image-results img").first()).toBeVisible();
+  const noticeRefresh = screen.page.waitForResponse(async response => {
+    if (!response.url().includes("/classroom-screens/feed?") || !response.ok()) return false;
+    try { return (await response.json()).data.items.some(item => item.content === "不影响清单的次要通知"); } catch { return false; }
+  });
+  await create({type: "NOTICE", subjectId: null, priority: "MINOR", content: "不影响清单的次要通知", publishAt: new Date().toISOString(),
+    contentJson: {popupEnabled: false}});
+  await noticeRefresh;
+  await expect(print).toBeVisible();
+  await expect(print.locator(".homework-image-results img").first()).toBeVisible();
   await print.getByRole("button", {name: "关闭", exact: true}).click();
   await dialog.getByRole("button", {name: "关闭", exact: true}).click();
   await screen.page.getByLabel("选择日期").fill(today);

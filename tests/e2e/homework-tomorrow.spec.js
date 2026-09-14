@@ -16,7 +16,7 @@ for (const role of ["screen", "student"]) {
     const page = await context.newPage(), errors = [];
     page.on("pageerror", e => errors.push(e.message));
     const fixed = new Date(`${preparationToday()}T12:00:00+08:00`), tomorrow = shiftBoardDate(preparationToday(fixed), 1);
-    let fail = false, hold = false, entered = false, release;
+    let fail = false, mixed = false, hold = false, entered = false, release;
     const gate = new Promise(resolve => { release = resolve; });
     try {
       await page.clock.setFixedTime(fixed);
@@ -34,7 +34,9 @@ for (const role of ["screen", "student"]) {
             targets: [{workspaceId: "class-a", workspace: {name: "高一一班"}}], contentJson: {submission: "交课代表"},
           }]}}});
         }
-        return route.fulfill({json: {data: {boardDate: params.get("boardDate"), includesPreparations: true, total: 0, items: [], nextAfterId: null,
+        return route.fulfill({json: {data: {boardDate: params.get("boardDate"), includesPreparations: true, total: mixed ? 1 : 0,
+          items: mixed ? [{id: "due", revision: 2, type: "ASSIGNMENT", status: "PUBLISHED", boardDate: params.get("boardDate"), dueAt: null,
+            content: "另一个版本未设截止", targets: [{workspaceId: "class-a"}]}] : [], nextAfterId: null,
           generatedAt: new Date().toISOString()}}});
       });
       const button = page.getByRole("button", {name: "明日要交与需带", exact: true}), dialog = page.locator(".homework-tomorrow-dialog");
@@ -47,7 +49,12 @@ for (const role of ["screen", "student"]) {
       await expect(dialog).toContainText("清单服务暂不可用");
       await expect(dialog.locator(".tomorrow-row")).toHaveCount(0);
       await expect(dialog.getByRole("button", {name: "打印作业清单", exact: true})).toHaveCount(0);
-      fail = false; hold = true;
+      fail = false; mixed = true;
+      await dialog.getByRole("button", {name: "刷新核对清单", exact: true}).click();
+      await expect(dialog).toContainText("作业版本发生变化");
+      await expect(dialog.locator(".tomorrow-row")).toHaveCount(0);
+      await expect(dialog.getByRole("button", {name: "打印作业清单", exact: true})).toHaveCount(0);
+      mixed = false; hold = true;
       await dialog.getByRole("button", {name: "刷新核对清单", exact: true}).click();
       await expect.poll(() => entered).toBe(true);
       await dialog.getByRole("button", {name: "关闭", exact: true}).click();
