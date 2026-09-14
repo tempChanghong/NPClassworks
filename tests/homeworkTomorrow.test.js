@@ -9,7 +9,7 @@ const item = (id, fields = {}) => ({id, type: "ASSIGNMENT", status: "PUBLISHED",
   subject: {name: "数学"}, targets: [{workspaceId: "class", workspace: {name: "一班"}}],
   publishAt: "2026-09-01T00:00:00Z", ...fields});
 const day = (items = [], preparations = []) => ({boardDate: "2026-09-14", includesPreparations: true, items, preparations});
-const load = (board, rows, extra = {}) => loadTomorrowHomework({now, workspaceIds: ["class"], loadDay: async () => board,
+const load = (board, rows, extra = {}) => loadTomorrowHomework({now, getNow: () => now, workspaceIds: ["class"], loadDay: async () => board,
   loadWeek: async params => ({...params, items: rows.slice(params.skip, params.skip + 1), total: rows.length}), ...extra});
 
 test("tomorrow uses Beijing boundaries, includes old due work across pages and isolates missing deadlines", async () => {
@@ -29,6 +29,18 @@ test("tomorrow uses Beijing boundaries, includes old due work across pages and i
   const nextDay = await loadTomorrowHomework({now: new Date("2026-09-14T16:00:00Z"), workspaceIds: ["class"],
     loadDay: async date => ({...day(), boardDate: date}), loadWeek: async params => ({...params, items: [], total: 0})});
   assert.equal(nextDay.tomorrow, "2026-09-16");
+});
+
+test("items published while a request is running are not silently removed after the response arrives", async () => {
+  const finished = new Date(now.getTime() + 20_000), publishAt = new Date(now.getTime() + 10_000).toISOString();
+  const due = item("newly-visible", {revision: 1, publishAt, dueAt: "2026-09-15T00:00:00Z"});
+  const unknown = item("new-unknown", {publishAt});
+  const pack = item("new-pack", {publishAt, contentJson: {preparation: {text: "实验材料", date: "2026-09-15"}}});
+  const future = item("still-future", {publishAt: new Date(finished.getTime() + 10_000).toISOString(), dueAt: due.dueAt});
+  const result = await load(day([unknown], [pack]), [due, future], {getNow: () => finished});
+  assert.deepEqual(result.due.map(row => row.id), [due.id]);
+  assert.deepEqual(result.unknown.map(row => row.id), [unknown.id]);
+  assert.deepEqual(result.preparations.map(row => row.id), [pack.id]);
 });
 
 test("tomorrow export preserves group labels, submission, optional content and preparation in print and every image page", async () => {

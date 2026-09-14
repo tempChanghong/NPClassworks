@@ -15,7 +15,7 @@ function visibleAssignments(items, workspaceIds, now) {
 }
 
 // Read the complete due-date query independently from today's board, so older work is included.
-export async function loadTomorrowHomework({loadDay, loadWeek, workspaceIds, now = new Date()}, signal) {
+export async function loadTomorrowHomework({loadDay, loadWeek, workspaceIds, now = new Date(), getNow = () => new Date()}, signal) {
   const today = preparationToday(now), tomorrow = shiftBoardDate(today, 1);
   const revisions = new Map();
   function checkRevisions(items) {
@@ -42,11 +42,13 @@ export async function loadTomorrowHomework({loadDay, loadWeek, workspaceIds, now
   if (day.boardDate !== today || day.includesPreparations !== true || !Array.isArray(day.items) || !Array.isArray(day.preparations)) {
     throw new Error("清单数据不完整，请确认服务已更新后重试。");
   }
-  const due = visibleAssignments(week, workspaceIds, now).filter(item => deadlineBoardDate(item.dueAt) === tomorrow)
+  // Visibility is evaluated after all responses arrive, not before a slow request starts.
+  const visibleAt = getNow();
+  const due = visibleAssignments(week, workspaceIds, visibleAt).filter(item => deadlineBoardDate(item.dueAt) === tomorrow)
     .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt) || (a.subject?.name || "").localeCompare(b.subject?.name || "", "zh-CN"));
-  const unknown = visibleAssignments(day.items, workspaceIds, now)
+  const unknown = visibleAssignments(day.items, workspaceIds, visibleAt)
     .filter(item => String(item.boardDate).slice(0, 10) === today && !deadlineBoardDate(item.dueAt));
-  const preparations = preparationList(visibleAssignments(day.preparations, workspaceIds, now), workspaceIds, tomorrow, now)
+  const preparations = preparationList(visibleAssignments(day.preparations, workspaceIds, visibleAt), workspaceIds, tomorrow, visibleAt)
     .filter(item => item.date === tomorrow);
   return {today, tomorrow, due, unknown, preparations};
 }

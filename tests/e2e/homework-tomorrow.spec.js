@@ -16,7 +16,7 @@ for (const role of ["screen", "student"]) {
     const page = await context.newPage(), errors = [];
     page.on("pageerror", e => errors.push(e.message));
     const fixed = new Date(`${preparationToday()}T12:00:00+08:00`), tomorrow = shiftBoardDate(preparationToday(fixed), 1);
-    let fail = false, mixed = false, hold = false, entered = false, release;
+    let fail = false, mixed = false, publishDuringRequest = false, hold = false, entered = false, release;
     const gate = new Promise(resolve => { release = resolve; });
     try {
       await page.clock.setFixedTime(fixed);
@@ -28,9 +28,11 @@ for (const role of ["screen", "student"]) {
           if (fail) return route.fulfill({status: 503, json: {message: "清单服务暂不可用"}});
           const delayed = hold;
           if (delayed) { entered = true; await gate; }
+          const publishAt = publishDuringRequest ? new Date(fixed.getTime() + 10_000).toISOString() : null;
+          if (publishDuringRequest) await page.clock.setFixedTime(new Date(fixed.getTime() + 20_000));
           return route.fulfill({json: {data: {weekStart: params.get("weekStart"), weekView: "due", total: 1, items: [{
             id: "due", revision: 1, type: "ASSIGNMENT", status: "PUBLISHED", content: delayed ? "旧请求不应显示" : "明天上交练习册",
-            boardDate: shiftBoardDate(tomorrow, -30), dueAt: `${tomorrow}T07:30:00+08:00`, subject: {name: "数学"}, isCertified: true,
+            boardDate: shiftBoardDate(tomorrow, -30), dueAt: `${tomorrow}T07:30:00+08:00`, publishAt, subject: {name: "数学"}, isCertified: true,
             targets: [{workspaceId: "class-a", workspace: {name: "高一一班"}}], contentJson: {submission: "交课代表"},
           }]}}});
         }
@@ -44,6 +46,10 @@ for (const role of ["screen", "student"]) {
       await expect(dialog.locator(".tomorrow-due")).toContainText("明天上交练习册");
       await expect(dialog).toBeVisible();
       await page.screenshot({path: testInfo.outputPath("tomorrow-checklist.png"), animations: "disabled"});
+      publishDuringRequest = true;
+      await dialog.getByRole("button", {name: "刷新核对清单", exact: true}).click();
+      await expect(dialog.locator(".tomorrow-due")).toContainText("明天上交练习册");
+      publishDuringRequest = false;
       fail = true;
       await dialog.getByRole("button", {name: "刷新核对清单", exact: true}).click();
       await expect(dialog).toContainText("清单服务暂不可用");
