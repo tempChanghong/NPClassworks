@@ -7,7 +7,10 @@ for (const role of ["screen", "student"]) {
   test(`${role} tomorrow checklist rejects failed refreshes and late responses and expires across midnight`, async ({browser, request}, testInfo) => {
     await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
     await request.post(`${api}/__test/reset`);
-    await request.post(`${api}/api/v2/publications`, {data: {content: "作业板就绪", boardDate: preparationToday()}});
+    const seeded = await request.post(`${api}/api/v2/publications`, {data: {content: "作业板就绪", boardDate: preparationToday(),
+      publishAt: `${preparationToday()}T00:00:00+08:00`}});
+    expect(seeded.ok()).toBe(true);
+    const seed = (await seeded.json()).data;
     const values = {"classworks-v2-oobe": JSON.stringify({version: 1, completed: true, roleHint: role}),
       ...(role === "screen" ? {"classworks-v2-screen-token": "screen-token", "classworks-v2-screen-oobe:screen-a": JSON.stringify({version: 1, completed: true})}
         : {"classworks-v2-student-selection": JSON.stringify({schoolId: "school", administrativeClassId: "class-a", administrativeClassName: "高一一班", courseGroupIds: {}, declinedSubjectIds: []})})};
@@ -20,8 +23,8 @@ for (const role of ["screen", "student"]) {
     const gate = new Promise(resolve => { release = resolve; });
     try {
       await page.clock.setFixedTime(fixed);
-      await page.goto(origin);
-      await expect(page.locator(".publication-content")).toContainText("作业板就绪");
+      // The board and checklist share this endpoint. Keep its day response stable,
+      // including during background refreshes; inject conflicts in the week response only.
       await page.route("**/api/v2/**/feed?**", async route => {
         const params = new URL(route.request().url()).searchParams;
         if (params.has("weekStart")) {
@@ -31,21 +34,30 @@ for (const role of ["screen", "student"]) {
           const publishAt = publishDuringRequest ? new Date(fixed.getTime() + 10_000).toISOString() : null;
           if (publishDuringRequest) await page.clock.setFixedTime(new Date(fixed.getTime() + 20_000));
           return route.fulfill({json: {data: {weekStart: params.get("weekStart"), weekView: "due", total: 1, items: [{
-            id: "due", revision: 1, type: "ASSIGNMENT", status: "PUBLISHED", content: delayed ? "旧请求不应显示" : "明天上交练习册",
+            id: mixed ? seed.id : "due", revision: mixed ? seed.revision + 1 : 1, type: "ASSIGNMENT", status: "PUBLISHED", content: delayed ? "旧请求不应显示" : "明天上交练习册",
             boardDate: shiftBoardDate(tomorrow, -30), dueAt: `${tomorrow}T07:30:00+08:00`, publishAt, subject: {name: "数学"}, isCertified: true,
             targets: [{workspaceId: "class-a", workspace: {name: "高一一班"}}], contentJson: {submission: "交课代表"},
           }]}}});
         }
-        return route.fulfill({json: {data: {boardDate: params.get("boardDate"), includesPreparations: true, total: mixed ? 1 : 0,
-          items: mixed ? [{id: "due", revision: 2, type: "ASSIGNMENT", status: "PUBLISHED", boardDate: params.get("boardDate"), dueAt: null,
-            content: "另一个版本未设截止", targets: [{workspaceId: "class-a"}]}] : [], nextAfterId: null,
+        return route.fulfill({json: {data: {boardDate: params.get("boardDate"), includesPreparations: true, total: 1,
+          items: [seed], nextAfterId: null,
           generatedAt: new Date().toISOString()}}});
       });
+      await page.goto(origin);
+      await expect(page.locator(".publication-content")).toContainText("作业板就绪");
+      await expect.poll(async () => (await (await request.get(`${api}/__test/state`)).json()).data.roomJoins).toBeGreaterThan(0);
       const button = page.getByRole("button", {name: "明日要交与需带", exact: true}), dialog = page.locator(".homework-tomorrow-dialog");
       await button.click();
       await expect(dialog.locator(".tomorrow-due")).toContainText("明天上交练习册");
       await expect(dialog).toBeVisible();
       await page.screenshot({path: testInfo.outputPath("tomorrow-checklist.png"), animations: "disabled"});
+      const backgroundRefresh = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname.endsWith("/feed") && url.searchParams.has("boardDate") && response.ok();
+      });
+      await page.evaluate(() => window.dispatchEvent(new window.Event("visibilitychange")));
+      await backgroundRefresh;
+      await expect(dialog.locator(".tomorrow-due")).toContainText("明天上交练习册");
       publishDuringRequest = true;
       await dialog.getByRole("button", {name: "刷新核对清单", exact: true}).click();
       await expect(dialog.locator(".tomorrow-due")).toContainText("明天上交练习册");
