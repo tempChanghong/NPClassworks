@@ -16,14 +16,27 @@ async function create(classroom, request, contentJson = {}) {
 }
 
 for (const clearMetadata of [false, true]) {
-test(`screen conflict saves local text while retaining ${clearMetadata ? "cleared" : "updated"} server metadata`, async ({classroom, request}) => {
+for (const localFields of ["unchanged", "edited", "cleared"]) {
+test(`screen conflict saves ${localFields} editable fields while retaining ${clearMetadata ? "cleared" : "updated"} server submission`, async ({classroom, request}) => {
   const date = shiftBoardDate(preparationToday(), 1);
-  const old = {submission: "交给课代表", preparation: {text: "圆规", date}};
-  const latest = clearMetadata ? null : {submission: "改交给老师", preparation: {text: "实验材料", date: shiftBoardDate(date, 1)}};
+  const old = {submission: "交给课代表", optionalContent: "旧选做", preparation: {text: "圆规", date}};
+  const latest = clearMetadata ? null : {submission: "改交给老师", optionalContent: "服务器选做", preparation: {text: "实验材料", date: shiftBoardDate(date, 1)}};
   const {row, headers} = await create(classroom, request, old);
   const screen = await classroom.open("screen");
   await screen.page.getByRole("button", {name: "修改", exact: true}).click();
-  await screen.page.getByRole("textbox", {name: "作业内容 作业内容", exact: true}).fill("大屏只想修改正文");
+  const composer = screen.page.locator(".screen-composer");
+  await composer.getByLabel("必做内容", {exact: true}).fill("大屏确认的正文");
+  await expect(composer.getByLabel("选做内容（可选）", {exact: true})).toHaveValue(old.optionalContent);
+  await expect(composer.getByLabel("需带物品（可选）", {exact: true})).toHaveValue(old.preparation.text);
+  const local = localFields === "unchanged" ? {optionalContent: old.optionalContent, preparation: old.preparation}
+    : localFields === "edited" ? {optionalContent: "本机选做", preparation: {text: "本机直尺", date: shiftBoardDate(date, 2)}} : {};
+  if (localFields !== "unchanged") {
+    await composer.getByLabel("选做内容（可选）", {exact: true}).fill(local.optionalContent || "");
+    await composer.getByLabel("需带物品（可选）", {exact: true}).fill(local.preparation?.text || "");
+    await composer.getByLabel("携带日期", {exact: true}).fill(local.preparation?.date || "");
+  }
+  const expectedMetadata = {...(latest?.submission ? {submission: latest.submission} : {}), ...local};
+  const expectedJson = Object.keys(expectedMetadata).length ? expectedMetadata : null;
   expect((await request.patch(`${api}/api/v2/publications/${row.id}`, {headers: {...headers, "If-Match": '"1"'}, data: {contentJson: latest}})).status()).toBe(200);
   await screen.page.getByRole("button", {name: "保存作业", exact: true}).click();
   await expect(screen.page.getByRole("button", {name: "以本机输入生成新版本", exact: true})).toBeVisible();
@@ -32,14 +45,17 @@ test(`screen conflict saves local text while retaining ${clearMetadata ? "cleare
   await screen.page.getByRole("button", {name: "保存新版本", exact: true}).click();
   const saved = await savedResponse;
   expect(saved.status()).toBe(200);
-  expect(saved.request().postDataJSON()).not.toHaveProperty("contentJson");
+  expect(saved.request().postDataJSON().contentJson).toEqual(expectedJson);
   await expect(screen.page.locator(".screen-composer")).not.toBeVisible();
   const current = (await classroom.rows())[0];
   expect(current.revision).toBe(3);
-  expect(current.content).toBe("大屏只想修改正文");
-  expect(current.contentJson).toEqual(latest);
+  expect(current.content).toBe("大屏确认的正文");
+  expect(current.contentJson).toEqual(expectedJson);
+  expect(current.isCertified).toBe(false);
+  expect(current.revisions.map(item => item.snapshot.contentJson)).toEqual([old, latest, expectedJson]);
   expect(screen.errors).toEqual([]);
 });
+}
 }
 
 for (const newReason of ["", "下一次更正的新原因"]) {
