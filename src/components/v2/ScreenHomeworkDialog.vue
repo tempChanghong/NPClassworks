@@ -147,7 +147,6 @@
             ref="contentInput"
             v-model="form.content"
             auto-grow
-            autofocus
             class="screen-content-input"
             hide-details="auto"
             :label="form.optionalContent.trim() ? '必做内容' : '作业内容'"

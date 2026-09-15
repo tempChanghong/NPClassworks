@@ -22,6 +22,40 @@ async function seed(request) {
 }
 const textBox = page => page.getByRole("textbox", {name: "作业内容 作业内容", exact: true});
 
+test("a late textarea visibility callback cannot steal focus from optional homework", async ({browser, request}) => {
+  await seed(request);
+  const s = await openScreen(browser), dialog = s.page.locator(".screen-composer");
+  try {
+    await s.page.addInitScript(() => {
+      const NativeObserver = window.IntersectionObserver;
+      const pending = [];
+      window.releaseHomeworkVisibility = () => pending.splice(0).forEach(deliver => deliver());
+      window.homeworkVisibilityPending = () => pending.length;
+      window.IntersectionObserver = class extends NativeObserver {
+        constructor(callback, options) {
+          super((entries, observer) => {
+            if (entries.some(entry => entry.isIntersecting && entry.target.matches(".screen-content-input textarea"))) {
+              pending.push(() => callback(entries, observer));
+            } else callback(entries, observer);
+          }, options);
+        }
+      };
+    });
+    await s.page.reload();
+    await s.page.getByRole("button", {name: "修改", exact: true}).click();
+    const optional = dialog.getByLabel("选做内容（可选）", {exact: true});
+    await optional.fill("挑战题");
+    await expect.poll(() => s.page.evaluate(() => window.homeworkVisibilityPending())).toBeGreaterThan(0);
+    await optional.focus();
+    await s.page.evaluate(() => window.releaseHomeworkVisibility());
+    await expect(optional).toBeFocused();
+    await s.page.keyboard.insertText("继续填写");
+    await expect(optional).toHaveValue("挑战题继续填写");
+    await expect(dialog.getByLabel("必做内容", {exact: true})).toHaveValue("原始正文");
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
 test("converting no-homework to actual homework clears the marker before sending optional content", async ({browser, request}) => {
   await request.post(`${api}/api/v2/publications`, {data: {
     subjectId: "math", targetWorkspaceIds: ["class-a"], type: "ASSIGNMENT", boardDate: todayBoardDate(),
@@ -143,7 +177,9 @@ test("screen conflict applies editable metadata while retaining latest submissio
       contentJson: {submission: "最新提交说明", optionalContent: "服务器选做"},
     }})).status()).toBe(200);
     await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
-    await expect(dialog.locator(".screen-conflict-comparison")).toContainText("本机选做");
+    const optionalRow = dialog.locator(".screen-conflict-comparison__row").filter({has: s.page.locator("strong", {hasText: /^选做内容$/})});
+    await expect(optionalRow).toContainText("本机：本机选做");
+    await expect(dialog.getByLabel("必做内容", {exact: true})).toHaveValue("原始正文");
     await dialog.getByRole("button", {name: "以本机输入生成新版本", exact: true}).click();
     await s.page.getByRole("button", {name: "保存新版本", exact: true}).click();
     await expect(dialog).not.toBeVisible();
