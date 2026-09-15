@@ -303,7 +303,10 @@
       class="screen-action-dock"
       :class="`screen-action-dock--${settings.actionPosition}`"
     >
-      <div class="screen-action-dock__surface">
+      <div
+        class="screen-action-dock__surface"
+        :style="burnInStyle"
+      >
         <v-btn
           class="screen-action-dock__compact"
           icon="mdi-chevron-left"
@@ -523,7 +526,9 @@ const burnInStyle = computed(() => {
   if (!settings.value.antiBurnInShift) return {};
   const offsets = [[0, 0], [1, -1], [-1, 1], [2, 0], [0, 2], [-2, 0], [0, -2]];
   const [x, y] = offsets[burnInStep.value % offsets.length];
-  return {transform: `translate(${x}px, ${y}px)`};
+  // A transform on the board makes its fixed dock relative to the whole page.
+  // Relative offsets preserve viewport anchoring; shift the dock surface separately.
+  return {left: `${x}px`, top: `${y}px`};
 });
 
 function updatePerformanceClass() {
@@ -661,7 +666,13 @@ onUnmounted(() => {
   padding-bottom: var(--screen-dock-space, 114px);
   width: calc(100% - 4px);
   margin: 2px;
-  transition: transform 1.2s ease;
+}
+.classroom-screen-view,
+.screen-action-dock__surface {
+  position: relative;
+  left: 0;
+  top: 0;
+  transition: left 1.2s ease, top 1.2s ease;
 }
 .screen-action-dock {
   bottom: max(18px, env(safe-area-inset-bottom));
@@ -797,7 +808,8 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .classroom-screen-view { transition: none; }
+  .classroom-screen-view,
+  .screen-action-dock__surface { transition: none; }
 }
 </style>
 

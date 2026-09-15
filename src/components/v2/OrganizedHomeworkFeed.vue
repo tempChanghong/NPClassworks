@@ -302,10 +302,11 @@ const organized = computed(() => organizePublicationFeed(visiblePublications.val
 const screenAssignments = computed(() => organized.value.assignmentGroups
   .flatMap((group) => group.publications));
 const completionStats = computed(() => studentHomeworkCompletionStats(props.publications, completionRecords.value));
+const hasFilters = computed(() => Boolean(subjectId.value || workspaceId.value || sortMode.value !== "smart"));
 const showControls = computed(() => props.completionEnabled
+  || hasFilters.value
   || options.value.subjects.length > 1
   || options.value.workspaces.length > 1);
-const hasFilters = computed(() => Boolean(subjectId.value || workspaceId.value || sortMode.value !== "smart"));
 const showEmptyState = computed(() => {
   if (organized.value.visibleCount) return false;
   if (hasFilters.value || !props.excludeUrgentNotices) return true;
