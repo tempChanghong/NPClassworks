@@ -28,6 +28,7 @@ async function seed(request, data) {
     subjectId: "math", targetWorkspaceIds: ["class-a"], title: "数学练习", ...data,
   }});
   expect(response.ok()).toBe(true);
+  return (await response.json()).data;
 }
 
 async function preview(page, role) {
@@ -44,6 +45,80 @@ async function preview(page, role) {
 test.beforeEach(async ({request}) => {
   expect((await request.post(`${origin}/__test/release`, {data: {release: "previous"}})).ok()).toBe(true);
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
+});
+
+async function textPreview(page, role) {
+  if (role === "screen") {
+    await page.getByRole("button", {name: "更多", exact: true}).click();
+    await page.getByText("复制文字清单", {exact: true}).click();
+  } else await page.getByRole("button", {name: "复制文字清单", exact: true}).click();
+  return page.locator(".homework-print-dialog");
+}
+
+test("text sharing copies exactly the selected subjects with instructions and no-homework state through the real clipboard", async ({browser, request}) => {
+  await seed(request, {content: "第一题\n第二题", dueAt: "2026-09-07T08:00:00Z", contentJson: {optionalContent: "挑战题", submission: "交课代表", preparation: {text: "圆规", date: "2099-01-02"}}});
+  const none = await seed(request, {title: "今日无作业", content: "本日该科目无作业。", contentJson: {kind: "NO_HOMEWORK", version: 1}});
+  expect((await request.patch(`${api}/api/v2/publications/${none.id}`, {headers: {"If-Match": '"1"'}, data: {subject: {id: "chinese", name: "语文"}, subjectId: "chinese", isCertified: false}})).ok()).toBe(true);
+  const board = await openBoard(browser, "student");
+  try {
+    await board.context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const dialog = await textPreview(board.page, "student"), input = dialog.getByLabel("文字清单预览", {exact: true});
+    await expect(input).toHaveValue(/必做：\n第一题\n第二题/);
+    for (const value of ["挑战题", "交课代表", "2099-01-02 需带：圆规", "今日无作业", "待教师确认"]) expect(await input.inputValue()).toContain(value);
+    await dialog.getByRole("checkbox", {name: "语文", exact: true}).uncheck();
+    await expect(input).not.toHaveValue(/今日无作业/);
+    await dialog.getByRole("button", {name: "复制文字", exact: true}).click();
+    await expect(dialog).toContainText("文字清单已复制");
+    // Windows' native clipboard uses CRLF; textarea values normalize it to LF.
+    const copied = await board.page.evaluate(() => navigator.clipboard.readText());
+    expect(copied.replace(/\r\n/g, "\n")).toBe(await input.inputValue());
+    await dialog.getByRole("checkbox", {name: "数学", exact: true}).uncheck();
+    await expect(dialog.getByRole("button", {name: "复制文字", exact: true})).toBeDisabled();
+    await expect(dialog).not.toContainText("文字清单已复制");
+    await dialog.getByRole("button", {name: "打印 / 图片", exact: true}).click();
+    await expect(board.page.frameLocator('iframe[title="作业清单打印预览"]').locator("body")).toContainText("今日无作业");
+    expect(board.errors).toEqual([]);
+  } finally { await board.context.close(); }
+});
+
+test("screen text sharing opens offline and clipboard denial keeps selectable text and cache warnings", async ({browser, request}) => {
+  await seed(request, {content: "离线文字内容"});
+  const board = await openBoard(browser, "screen");
+  try {
+    await expect(board.page.getByText("离线文字内容", {exact: true})).toBeVisible();
+    await expect.poll(() => board.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    await board.context.setOffline(true);
+    await board.page.getByRole("button", {name: "刷新", exact: true}).first().click();
+    await expect(board.page.getByText("当前无法连接服务器，正在显示这台大屏上次同步的内容")).toBeVisible();
+    await board.page.evaluate(() => Object.defineProperty(navigator, "clipboard", {configurable: true, value: {writeText: async () => { throw new Error("denied"); }}}));
+    const dialog = await textPreview(board.page, "screen"), input = dialog.getByLabel("文字清单预览", {exact: true});
+    await expect(input).toHaveValue(/离线缓存内容/);
+    await dialog.getByRole("button", {name: "复制文字", exact: true}).click();
+    await expect(dialog).toContainText("浏览器未允许自动复制");
+    await dialog.getByRole("button", {name: "全选文字", exact: true}).click();
+    expect(await input.evaluate(el => el.selectionEnd - el.selectionStart)).toBe((await input.inputValue()).length);
+    await expect(input).toHaveValue(/离线文字内容/);
+    await expect(dialog).not.toContainText("文字清单已复制");
+    expect(board.errors).toEqual([]);
+  } finally { await board.context.close(); }
+});
+
+test("a late clipboard result cannot report success for a newly opened text preview", async ({browser, request}) => {
+  await seed(request, {content: "延迟复制正文"});
+  const board = await openBoard(browser, "student");
+  try {
+    await board.page.evaluate(() => Object.defineProperty(navigator, "clipboard", {configurable: true, value: {writeText: () => new Promise(resolve => { window.finishClipboardWrite = resolve; })}}));
+    let dialog = await textPreview(board.page, "student");
+    await dialog.getByRole("button", {name: "复制文字", exact: true}).click();
+    await expect.poll(() => board.page.evaluate(() => typeof window.finishClipboardWrite)).toBe("function");
+    await dialog.getByRole("button", {name: "关闭", exact: true}).click();
+    dialog = await textPreview(board.page, "student");
+    await expect(dialog.getByRole("button", {name: "复制文字", exact: true})).toBeDisabled();
+    await board.page.evaluate(() => window.finishClipboardWrite());
+    await expect(dialog.getByRole("button", {name: "复制文字", exact: true})).toBeEnabled();
+    await expect(dialog).not.toContainText("文字清单已复制");
+    expect(board.errors).toEqual([]);
+  } finally { await board.context.close(); }
 });
 
 test("image export draws every line across PNG pages, downloads a real image and frees closed previews", async ({browser, request}, testInfo) => {

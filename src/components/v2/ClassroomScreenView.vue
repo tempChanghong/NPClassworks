@@ -115,6 +115,12 @@
               />
               <v-list-item
                 :disabled="!printTool || printTool.disabled"
+                prepend-icon="mdi-content-copy"
+                title="复制文字清单"
+                @click="printTool.openPreview('text')"
+              />
+              <v-list-item
+                :disabled="!printTool || printTool.disabled"
                 prepend-icon="mdi-printer-outline"
                 title="打印作业清单"
                 @click="printTool.openPreview()"
