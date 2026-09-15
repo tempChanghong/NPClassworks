@@ -22,6 +22,68 @@ async function seed(request) {
 }
 const textBox = page => page.getByRole("textbox", {name: "作业内容 作业内容", exact: true});
 
+test("converting no-homework to actual homework clears the marker before sending optional content", async ({browser, request}) => {
+  await request.post(`${api}/api/v2/publications`, {data: {
+    subjectId: "math", targetWorkspaceIds: ["class-a"], type: "ASSIGNMENT", boardDate: todayBoardDate(),
+    title: "今日无作业", content: "本日该科目无作业。", contentJson: {kind: "NO_HOMEWORK", version: 1},
+  }});
+  const s = await openScreen(browser), dialog = s.page.locator(".screen-composer");
+  try {
+    await s.page.getByRole("button", {name: "修改", exact: true}).click();
+    await dialog.getByLabel("选做内容（可选）", {exact: true}).fill("挑战题");
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog).toContainText("请先将“今日无作业”改为实际作业内容");
+    await dialog.getByLabel("必做内容", {exact: true}).fill("完成第一题");
+    await dialog.getByLabel("标题（可选）", {exact: true}).fill("数学练习");
+    const write = s.page.waitForRequest(r => r.method() === "PATCH" && r.url().includes("/classroom-screens/publications/"));
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    expect((await write).postDataJSON().contentJson).toEqual({optionalContent: "挑战题"});
+    await expect(dialog).not.toBeVisible();
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test("an invalid draft deadline keeps optional and preparation input recoverable without render errors", async ({browser}) => {
+  const s = await openScreen(browser), dialog = s.page.locator(".screen-composer");
+  try {
+    await s.page.evaluate(date => localStorage.setItem("classworks-v2-screen-homework-draft:screen-a:new", JSON.stringify({
+      subjectId: "math", targetWorkspaceId: "class-a", content: "保留必做", optionalContent: "保留选做",
+      materials: "圆规", materialsDate: date, boardDate: date, dueAt: "invalid-date", updatedAt: Date.now(),
+    })), todayBoardDate());
+    await s.page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    await expect(dialog.getByLabel("选做内容（可选）", {exact: true})).toHaveValue("保留选做");
+    expect(s.errors).toEqual([]);
+    await s.context.setOffline(true);
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog).toContainText("截止时间无效");
+    await expect(dialog.getByLabel("需带物品（可选）", {exact: true})).toHaveValue("圆规");
+    await dialog.getByRole("button", {name: "清除", exact: true}).click();
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog).not.toBeVisible();
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test("conflict copies reject empty required input before entering the offline queue", async ({browser, request}) => {
+  const row = await seed(request), s = await openScreen(browser), dialog = s.page.locator(".screen-composer");
+  try {
+    await s.page.getByRole("button", {name: "修改", exact: true}).click();
+    await textBox(s.page).fill("本机修改");
+    expect((await request.patch(`${api}/api/v2/publications/${row.id}`, {headers: {"If-Match": '"1"'}, data: {content: "教师新版本"}})).status()).toBe(200);
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog.getByRole("button", {name: "另存为一项新作业", exact: true})).toBeVisible();
+    await textBox(s.page).fill("");
+    await dialog.getByLabel("选做内容（可选）", {exact: true}).fill("仍保留的选做");
+    await s.context.setOffline(true);
+    await dialog.getByRole("button", {name: "另存为一项新作业", exact: true}).click();
+    await expect(dialog).toContainText("标题和作业内容不能同时为空");
+    const queue = await s.page.evaluate(() => JSON.parse(localStorage.getItem("classworks-v2-screen-publication-queue:screen-a") || "[]"));
+    expect(queue).toEqual([]);
+    await expect(dialog.getByLabel("选做内容（可选）", {exact: true})).toHaveValue("仍保留的选做");
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
 test("screen optional homework and preparation survive drafts, validate dates and can be cleared without losing teacher instructions", async ({browser, request}) => {
   const row = await seed(request);
   const endpoint = `${api}/api/v2/publications/${row.id}`;
@@ -55,8 +117,13 @@ test("screen optional homework and preparation survive drafts, validate dates an
     const read = async () => (await (await request.get(endpoint)).json()).data;
     expect((await read()).contentJson).toEqual({submission: "交给课代表", optionalContent: "本机挑战题", preparation: {text: "圆规和直尺", date: todayBoardDate()}});
     await s.page.getByRole("button", {name: "修改", exact: true}).click();
+    // Wait for the reopened controls to finish receiving the saved values before
+    // clearing them; fill("") on a still-empty textarea can dispatch no input.
+    await expect(dialog.getByLabel("选做内容（可选）", {exact: true})).toHaveValue("本机挑战题");
+    await expect(dialog.getByLabel("需带物品（可选）", {exact: true})).toHaveValue("圆规和直尺");
     await dialog.getByLabel("选做内容（可选）", {exact: true}).fill("");
     await dialog.getByLabel("需带物品（可选）", {exact: true}).fill("");
+    await expect(dialog.getByLabel("需带物品（可选）", {exact: true})).toHaveValue("");
     await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
     await expect(dialog).not.toBeVisible();
     expect((await read()).contentJson).toEqual({submission: "交给课代表"});

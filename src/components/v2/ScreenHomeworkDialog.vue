@@ -422,6 +422,7 @@
 <script setup>
 import {optionalHomeworkOf, withOptionalHomework} from "@/utils/homeworkInstructions";
 import {preparationOf, withPreparation} from "@/utils/homeworkPreparation";
+import {isNoHomework} from "@/utils/noHomework";
 import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
 import {openScreenDraftStorage} from "@/utils/screenDraftSession";
@@ -518,13 +519,14 @@ const canSave = computed(() => Boolean(
   (form.title.trim() || form.content.trim()),
 ));
 const conflictMessage = computed(() => publicationConflictMessage(conflict.value));
+const validDeadline = computed(() => !form.dueAt || Number.isFinite(Date.parse(form.dueAt)));
 const screenWriteInput = computed(() => ({
   subjectId: form.subjectId,
   targetWorkspaceIds: [form.targetWorkspaceId],
   title: form.title,
   content: form.content,
   boardDate: form.boardDate,
-  dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
+  dueAt: form.dueAt && validDeadline.value ? new Date(form.dueAt).toISOString() : null,
   priority: form.priority,
   publishAt: basePublication.value?.publishAt,
   status: "PUBLISHED",
@@ -544,7 +546,7 @@ const screenConflictRows = computed(() => buildConflictComparison(
   PUBLICATION_CONFLICT_FIELDS,
 ));
 const dueAtLabel = computed(() => form.dueAt
-  ? new Intl.DateTimeFormat("zh-CN", {
+  ? !validDeadline.value ? "截止时间无效，请清除后重新填写" : new Intl.DateTimeFormat("zh-CN", {
       month: "numeric",
       day: "numeric",
       hour: "2-digit",
@@ -593,9 +595,21 @@ function draftSnapshot() {
 }
 
 function writeInput(publication = basePublication.value) {
+  // All save paths, including offline conflict copies, share validation.
+  if (!form.subjectId || !form.targetWorkspaceId) throw new Error("请选择科目和具体班级");
+  if (!form.title.trim() && !form.content.trim()) throw new Error("标题和作业内容不能同时为空");
+  if (!validDeadline.value) throw new Error("截止时间无效，请清除后重新填写。当前输入已保留。");
   // On conflict, preserve the latest noneditable teacher metadata.
   const metadata = {...publication?.contentJson};
   delete metadata.correctionReason;
+  if (metadata.kind === "NO_HOMEWORK") {
+    if (!isNoHomework({type: "ASSIGNMENT", ...screenWriteInput.value, contentJson: metadata})) {
+      delete metadata.kind;
+      delete metadata.version;
+    } else if (form.optionalContent.trim()) {
+      throw new Error("请先将“今日无作业”改为实际作业内容，再填写选做内容。");
+    }
+  }
   return {
     ...screenWriteInput.value,
     contentJson: withPreparation(withOptionalHomework(metadata, form.optionalContent), form.materials, form.materialsDate),
