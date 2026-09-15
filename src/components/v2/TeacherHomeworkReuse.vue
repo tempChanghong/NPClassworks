@@ -168,6 +168,7 @@ const targetDate = ref(todayBoardDate()), selected = ref([]), queue = ref([]), r
 const preparing = ref(false), error = ref(""), composer = ref(null);
 const busy = computed(() => preparing.value || Boolean(composer.value?.requestBusy));
 const candidates = computed(() => sources.value.filter(item => String(item.boardDate).slice(0, 10) === sourceDate.value));
+const selectableIds = computed(() => new Set(candidates.value.filter(eligible).map(item => item.id)));
 const current = computed(() => queue.value[index.value]);
 const currentResult = computed(() => results.value[index.value]);
 const pending = computed(() => preparing.value || queue.value.length > results.value.length);
@@ -178,7 +179,14 @@ onUnmounted(() => { mounted = false; generation++; releaseBlocker(); });
 watch([() => store.teacherSessionVersion, () => store.account?.id], () => {
   generation++; queue.value = []; selected.value = []; results.value = []; emit("close");
 }, {flush: "sync"});
-watch(sourceDate, () => { selected.value = []; });
+watch(sourceDate, () => { selected.value = []; error.value = ""; }, {flush: "sync"});
+watch(selectableIds, (allowed) => {
+  if (queue.value.length) return;
+  const remaining = selected.value.filter(id => allowed.has(id));
+  if (remaining.length === selected.value.length) return;
+  selected.value = remaining;
+  error.value = "部分所选作业已不在当前日期或已不可复用，请重新核对选择。";
+}, {flush: "sync"});
 function eligible(item) {
   return store.teacherSubjects.some(subject => subject.id === item.subjectId)
     && store.eligibleTeacherWorkspaces("ASSIGNMENT", item.subjectId).length > 0;
@@ -192,7 +200,7 @@ async function prepare() {
   if (busy.value || !selected.value.length) return;
   error.value = "";
   if (!validPreparationDate(targetDate.value)) { error.value = "请选择有效的新作业板日期。"; return; }
-  const ids = [...selected.value], date = targetDate.value;
+  const ids = [...selected.value], date = targetDate.value, originalDate = sourceDate.value;
   if (ids.length > HOMEWORK_REUSE_LIMIT) return;
   const version = ++generation, session = store.teacherSessionVersion, account = store.account?.id;
   preparing.value = true;
@@ -201,9 +209,14 @@ async function prepare() {
     for (const id of ids) {
       const item = await store.latestPublication(id);
       if (!alive(version, session, account)) return;
+      if (String(item.boardDate).slice(0, 10) !== originalDate) {
+        selected.value = selected.value.filter(value => value !== id);
+        throw new Error("所选作业的历史日期已变化，请刷新后重新选择。");
+      }
       if (!eligible(item)) throw new Error("部分历史作业的科目或发布权限已变化，请刷新后重新选择。");
       next.push({title: sourceTitle(item), draft: homeworkReuseDraft(item, date)});
     }
+    if (ids.some(id => !selected.value.includes(id))) throw new Error("历史作业列表已变化，请重新核对选择。");
     queue.value = next;
   } catch (failure) {
     if (alive(version, session, account)) error.value = describeApiError(failure, "读取历史作业失败，请重试。");

@@ -18,6 +18,40 @@ async function chooseTarget(page, dialog, name) {
   await page.keyboard.press("Escape");
 }
 
+for (const refresh of [true, false]) {
+test(`history reuse rejects a source moved to another date (${refresh ? "refreshed list" : "late detail read"})`, async ({classroom, request}) => {
+  const source = await create(classroom, request, "改期源作业");
+  const {page, context, errors} = await classroom.open("teacher");
+  await page.getByRole("button", {name: "复用历史作业", exact: true}).click();
+  const dialog = page.locator(".homework-reuse-dialog");
+  await dialog.getByRole("checkbox", {name: "数学 · 改期源作业", exact: true}).check();
+  if (!refresh) {
+    // Keep the list genuinely stale even if a Socket event refreshes it. Detail
+    // reads below still use the real, updated database record.
+    const snapshot = await request.get(`${api}/api/v2/publications`, {headers: {Authorization: `Bearer ${classroom.credentials.accessToken}`}});
+    expect(snapshot.status()).toBe(200);
+    const json = await snapshot.json();
+    await context.route(/\/api\/v2\/publications(?:\?.*)?$/, route => route.fulfill({json}));
+  }
+  const response = await request.patch(`${api}/api/v2/publications/${source.id}`, {
+    headers: {Authorization: `Bearer ${classroom.credentials.accessToken}`, "If-Match": '"1"'}, data: {boardDate: "2020-01-03"},
+  });
+  expect(response.status()).toBe(200);
+  if (refresh) {
+    await dialog.getByRole("button", {name: "刷新历史记录", exact: true}).click();
+    await expect(dialog.getByRole("checkbox", {name: "数学 · 改期源作业", exact: true})).toHaveCount(0);
+    await expect(dialog.getByRole("button", {name: "核对所选 0 项作业", exact: true})).toBeDisabled();
+    await expect(dialog).toContainText("所选作业已不在当前日期或已不可复用");
+  } else {
+    await dialog.getByRole("button", {name: "核对所选 1 项作业", exact: true}).click();
+    await expect(dialog).toContainText("所选作业的历史日期已变化");
+  }
+  await expect(dialog.locator(".publication-composer")).toHaveCount(0);
+  expect((await classroom.rows()).length).toBe(1);
+  expect(errors).toEqual([]);
+});
+}
+
 test("batch history reuse reviews each new class and date, retains metadata and never repeats earlier successes after failure", async ({classroom, request}) => {
   const metadata = {optionalContent: "挑战题", submission: "交课代表", preparation: {text: "圆规", date: "2020-01-02"}};
   const first = await create(classroom, request, "历史甲", metadata);
