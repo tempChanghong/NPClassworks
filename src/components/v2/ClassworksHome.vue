@@ -1,5 +1,6 @@
 <template>
   <v-app-bar
+    v-if="mode !== 'screen' || !store.screenSession || !appReady || oobeLanding || screenOobePending || screenTemporarilyUnlocked"
     class="classworks-app-bar px-2"
     :class="{'classworks-app-bar--with-nav': showMainNavigation}"
     color="surface"

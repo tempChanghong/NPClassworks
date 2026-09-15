@@ -217,7 +217,7 @@ test("unacknowledged notification popup survives offline PWA reload and confirma
     await screen.page.reload({waitUntil: "domcontentloaded"});
     await expect(screen.page.getByRole("button", {name: "录入作业", exact: true}).first()).toBeVisible();
     await expect(popup).not.toBeVisible();
-    await screen.page.getByRole("button", {name: "通知", exact: true}).first().click();
+    await screen.page.getByTitle("通知中心", {exact: true}).click();
     await expect(screen.page.locator(".notification-center")).toContainText("次要离线通知");
     expect(screen.errors).toEqual([]);
   } finally { await screen.context.close(); }
@@ -244,7 +244,7 @@ test("offline notice expiry survives reload and continues removing later popups 
     await screen.page.clock.fastForward(3600000);
     await expect(popup).not.toBeVisible();
     await expect(screen.page.getByText("仍须保留的作业", {exact: true})).toBeVisible();
-    await screen.page.getByRole("button", {name: "通知", exact: true}).first().click();
+    await screen.page.getByTitle("通知中心", {exact: true}).click();
     await expect(screen.page.locator(".notification-center")).not.toContainText("到期通知");
     expect(screen.errors).toEqual([]);
   } finally { await screen.context.close(); }

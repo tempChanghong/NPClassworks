@@ -27,7 +27,8 @@ for (const pending of [false, true]) {
       });
       await page.goto(origin);
       await expect(page.locator(".publication-content")).toContainText("第二版正文");
-      await page.getByRole("button", {name: "查看今日更正", exact: true}).click();
+      await page.getByTitle("更多", {exact: true}).click();
+      await page.getByText("查看今日更正", {exact: true}).click();
       await expect.poll(() => started).toBe(true);
       const dialog = page.locator(".homework-corrections-dialog");
       if (!pending) await expect(dialog.locator(".correction-entry")).toHaveCount(1);

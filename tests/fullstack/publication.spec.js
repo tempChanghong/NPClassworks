@@ -25,7 +25,7 @@ test("offline multi-tab notice confirmations survive PWA reload and respect with
     publicationId_screenBindingId: {publicationId: notice.id, screenBindingId: classroom.binding.id},
   }, select: {publicationId: true, screenBindingId: true, revision: true, receivedAt: true, displayedAt: true, acknowledgedAt: true}});
   for (const page of [screen.page, other]) {
-    await page.getByRole("button", {name: "通知", exact: true}).first().click();
+    await page.getByTitle("通知中心", {exact: true}).click();
     await expect(page.locator(".notification-center__item")).toHaveCount(3);
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
@@ -64,7 +64,7 @@ test("offline multi-tab notice confirmations survive PWA reload and respect with
   expect(revised.revision).toBe(2);
   await screen.context.setOffline(false);
   await expect.poll(async () => Boolean((await delivery(notices[0]))?.acknowledgedAt)).toBe(true);
-  await other.getByRole("button", {name: "通知", exact: true}).first().click();
+  await other.getByTitle("通知中心", {exact: true}).click();
   const center = other.locator(".notification-center");
   await expect(center.locator(".notification-center__item")).toHaveCount(2);
   await expect(center).toContainText("更正后的第二版通知");

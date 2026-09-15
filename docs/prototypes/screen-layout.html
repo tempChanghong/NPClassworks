@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPClassworks · 大屏布局预览</title>
+<style>
+:root{color-scheme:dark;--bg:#101720;--surface:#1a2431;--raised:#233144;--line:#34465b;--text:#f1f5fb;--muted:#b6c5d7;--accent:#80bfff;--green:#8adab5;--amber:#ffcf84;--red:#ffaaa6;--body-size:30px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:"Microsoft YaHei","PingFang SC",sans-serif;line-height:1.5}button,input{font:inherit}button,summary{cursor:pointer}button{min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);padding:8px 16px;font-size:17px}button:hover{background:var(--raised)}button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}button:disabled{opacity:.5;cursor:default}.primary{background:#9bceff;border-color:#9bceff;color:#09233e;font-weight:700}.primary:hover{background:#c0e0ff}.quiet{background:transparent}.muted{color:var(--muted)}
+.preview-tools{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 24px;border-bottom:1px dashed var(--line);font-size:14px;background:#080e16;color:#b8c7da}.preview-tools strong{color:#fff}.preview-tools button{font-size:14px;min-height:34px;padding:5px 12px}.scenarios{display:flex;gap:5px}.scenarios button[aria-pressed="true"]{background:#304c70;color:#fff;border-color:#80bfff}.preview-tools label{display:flex;gap:6px;align-items:center}.preview-tools input{width:86px}.preview-tools .metric{margin-left:auto;font-variant-numeric:tabular-nums}
+.screen{padding:18px 24px 30px;max-width:2400px;margin:auto}.toolbar{display:flex;align-items:center;gap:22px;min-height:68px}.identity{display:flex;align-items:center;gap:12px;margin-right:auto}.mark{display:grid;place-items:center;background:var(--accent);color:#122a44;font-size:20px;font-weight:900;width:44px;height:44px;border-radius:13px}.identity h1{font-size:26px;margin:0}.identity p{font-size:14px;color:var(--muted);margin:0}.clock{font-size:32px;font-weight:700;letter-spacing:1px;font-variant-numeric:tabular-nums}.sync{font-size:16px;color:var(--green);white-space:nowrap}.actions{display:flex;gap:8px;align-items:center}.more{position:relative}.more summary{list-style:none;min-height:44px;border:1px solid var(--line);border-radius:10px;padding:8px 16px;font-size:17px}.more summary::-webkit-details-marker{display:none}.menu{position:absolute;right:0;top:52px;z-index:4;display:grid;gap:4px;min-width:230px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 16px 40px #0006}.menu button{text-align:left;border:0}
+.context-row{display:flex;align-items:center;gap:14px;margin:12px 0 16px;flex-wrap:wrap}.date{font-size:21px;font-weight:700;white-space:nowrap}.status-button{color:var(--muted);font-size:17px;background:transparent;border-color:transparent;padding-left:4px}.status-button b{color:var(--text)}.preparation{margin-left:auto;border-left:1px solid var(--line);padding-left:18px}.preparation summary{list-style:none;font-size:19px;color:var(--amber)}.preparation summary::-webkit-details-marker{display:none}.preparation p{margin:6px 0 0;color:var(--text);font-size:20px;max-width:700px}.preparation .arrow{font-size:14px;color:var(--muted);margin-left:10px}
+.notice-area{border:1px solid #446482;background:#1d3043;border-radius:14px;margin-bottom:18px;padding:0 18px}.notice-heading{display:flex;align-items:center;gap:12px;min-height:54px}.notice-heading h2{font-size:18px;margin:0}.notice-heading .notice-lead{font-size:20px;flex:1}.notice-heading button{min-height:38px;border-color:transparent;background:transparent;padding:4px 8px}.notice-list{border-top:1px solid #446482;padding:10px 0 14px;display:flex;gap:20px;flex-wrap:wrap}.notice{font-size:20px;flex:1;min-width:220px}.notice strong{display:block;margin-bottom:3px}.notice span{font-size:17px;color:var(--muted)}.urgent{background:#422527;border:1px solid #a46b68;color:#ffe9e8;border-radius:12px;padding:12px 18px;font-size:24px;display:flex;align-items:center;gap:12px;margin-bottom:14px}.urgent[hidden],.notice-list[hidden]{display:none}.urgent button{margin-left:auto;color:#ffe9e8;background:transparent;border-color:#a46b68;flex-shrink:0}
+.board-heading{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}.board-heading h2{font-size:18px;font-weight:500;color:var(--muted);margin:0}.board-heading span{font-size:15px;color:var(--muted);margin-left:auto}.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}.homework{border:1px solid var(--line);border-top:4px solid var(--subject,var(--accent));border-radius:14px;background:var(--surface);min-width:0;overflow-wrap:anywhere}.homework.wide{grid-column:span 2}.card-head{padding:16px 20px 10px;display:flex;align-items:center;gap:12px}.card-head h3{font-size:25px;margin:0}.tag{font-size:15px;border:1px solid var(--line);border-radius:7px;padding:2px 8px;color:var(--muted);white-space:nowrap}.tag.pending{border-color:#8d7048;color:var(--amber)}.card-head button{margin-left:auto;border:0;background:transparent;min-height:40px;padding:6px 8px;font-size:16px;color:var(--accent)}.card-body{padding:0 20px 18px}.content{font-size:var(--body-size);line-height:1.58;white-space:pre-wrap;margin:0}.optional{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);font-size:calc(var(--body-size) - 4px);white-space:pre-wrap;line-height:1.6}.optional b{font-size:16px;border-radius:5px;padding:2px 6px;background:var(--raised);color:var(--accent);margin-right:7px}.card-foot{border-top:1px solid var(--line);padding:12px 20px;display:flex;flex-wrap:wrap;gap:5px 14px;font-size:17px;color:var(--muted)}.card-foot strong{color:var(--text);font-weight:500}.no-homework{color:var(--green);padding:10px 0;font-size:29px}.unrecorded{padding:10px 0;font-size:27px;color:var(--amber)}.explain{font-size:18px;color:var(--muted);margin:8px 0 0}.end-note{color:var(--muted);font-size:14px;text-align:center;margin:22px 0 0}
+.board.has-long{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}.long-column,.short-column{display:grid;gap:16px;min-width:0}.board.has-long .homework.wide{grid-column:auto}.empty-subjects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.toolbar{min-height:60px}.context-row{margin:4px 0 10px}.notice-area{margin-bottom:12px}
+dialog{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:18px;width:min(1000px,calc(100% - 40px));max-height:90vh;padding:0;box-shadow:0 24px 80px #0009}dialog::backdrop{background:#000a}.dialog-head{padding:18px 24px;display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:1}.dialog-head h2{margin:0;font-size:25px}.dialog-head button{margin-left:auto}.dialog-body{padding:24px;overflow-wrap:anywhere}.dialog-body p{white-space:pre-wrap;margin:0 0 18px;font-size:24px}.dialog-body .focus-content{font-size:38px;line-height:1.65}.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.status-grid p{border:1px solid var(--line);padding:12px;border-radius:10px;font-size:23px}.focus-dialog{width:min(1400px,calc(100% - 40px))}.copy-mode .preview-tools,.copy-mode .toolbar,.copy-mode .context-row,.copy-mode .notice-area,.copy-mode .board-heading{display:none}.copy-mode .screen{padding-top:80px}.copy-exit{display:none;position:fixed;right:24px;top:18px;z-index:3}.copy-mode .copy-exit{display:block}
+body.light{color-scheme:light;--bg:#eef2f6;--surface:#fff;--raised:#e9f0f8;--line:#c9d4e0;--text:#152536;--muted:#4e6379;--accent:#185c9f;--green:#166d49;--amber:#8b4e05;--red:#a92f2a}body.light .notice-area{background:#e7f1fc;border-color:#afc7df}body.light .notice-list{border-color:#afc7df}body.light .tag.pending{border-color:#d5aa70}body.light .primary{background:#175f9f;color:#fff;border-color:#175f9f}body.light .mark{color:#fff}
+@media(min-width:1800px){.screen{padding:20px 32px}.board{gap:20px}.card-body{padding:0 24px 22px}.card-head{padding:18px 24px 12px}.card-foot{padding:12px 24px}.identity h1{font-size:28px}}
+@media(max-width:1350px){.toolbar{gap:14px;flex-wrap:wrap}.clock{font-size:27px}.sync{display:none}.preparation{margin-left:0}.board{grid-template-columns:repeat(2,minmax(0,1fr))}.preview-tools .metric{display:none}}
+@media(max-width:740px){.screen{padding:12px}.preview-tools{padding:10px 12px;gap:8px}.preview-tools .scenarios{flex-wrap:wrap}.toolbar{gap:12px}.identity h1{font-size:24px}.identity p{font-size:12px}.clock{font-size:25px}.actions{width:100%;flex-wrap:wrap}.actions button{flex:1}.board{grid-template-columns:1fr}.homework.wide{grid-column:auto}.preparation{border-left:0;padding-left:0;width:100%}.date{font-size:19px}.context-row{gap:8px}.notice-heading{flex-wrap:wrap;padding:10px 0;gap:6px}.notice-heading .notice-lead{flex-basis:75%}.notice-list{display:block}.notice{margin-top:10px}.status-grid{grid-template-columns:1fr}.dialog-body .focus-content{font-size:30px}.urgent{flex-wrap:wrap}.card-head{padding:14px}.card-body{padding:0 14px 16px}.card-foot{padding:12px 14px}}
+</style>
+<style>
+.screen{padding-bottom:var(--dock-space,116px)}
+.action-dock{position:fixed;bottom:18px;right:clamp(20px,3vw,64px);z-index:5;display:flex;align-items:center;gap:4px;padding:7px;max-width:calc(100% - 24px);border:1px solid var(--line);border-radius:22px;background:var(--surface);box-shadow:0 10px 34px #0005}
+.action-dock button{border:0;min-width:52px;min-height:56px;padding:8px 12px;background:transparent;white-space:nowrap}.action-dock button:hover{background:var(--raised)}.action-dock .primary{background:#9bceff;color:#09233e;min-width:154px;font-size:20px}.action-dock .divider{height:38px;width:1px;background:var(--line);margin:0 4px}.copy-mode .action-dock{display:none}
+@media(max-width:900px){.action-dock{left:50%;right:auto;transform:translateX(-50%);width:max-content;flex-wrap:wrap;justify-content:center}.action-dock button{min-height:48px;font-size:16px;padding:8px}.action-dock .primary{min-width:124px}.action-dock .divider{display:none}}
+@media(max-width:1500px){.board.has-long{grid-template-columns:1fr}.short-column{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:740px){.short-column,.empty-subjects{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="preview-tools" aria-label="布局方案预览控制">
+  <strong>布局方案 A · 示例数据</strong>
+  <div class="scenarios" aria-label="示例场景">
+    <button data-scenario="daily" aria-pressed="true">日常作业</button>
+    <button data-scenario="long" aria-pressed="false">长作业</button>
+    <button data-scenario="busy" aria-pressed="false">通知较多</button>
+  </div>
+  <button id="new-notice">模拟新通知</button>
+  <button id="theme" aria-pressed="false">切换浅色</button>
+  <label>正文字号 <input id="font" type="range" min="26" max="40" value="30"><output id="font-value">30px</output></label>
+  <span class="metric" id="metric"></span>
+</div>
+<button class="copy-exit" id="exit-copy">退出抄写预览</button>
+<main class="screen">
+  <header class="toolbar">
+    <div class="identity"><div class="mark" aria-hidden="true">NP</div><div><h1>高二 4 班</h1><p>NPClassworks 作业板 · 行政班及所选走班</p></div></div>
+    <span class="sync">● 已同步 · 16:32</span>
+    <time class="clock">16:35</time>
+    <div class="actions">
+      <button id="copy">抄写模式</button><button class="primary" data-tool="录入作业">＋ 录入作业</button>
+      <details class="more"><summary>更多 ▾</summary><div class="menu">
+        <button data-tool="一周总览">一周总览</button><button data-tool="明日上交与需带">明日上交与需带</button><button data-tool="放假作业汇总">放假作业汇总</button><button data-tool="更正记录">更正记录</button><button data-tool="复制文字清单">复制文字清单</button><button data-tool="打印与图片清单">打印与图片清单</button><button data-tool="课堂工具">课堂工具</button><button data-tool="显示设置">显示设置</button><button data-tool="同步详情">同步详情</button>
+      </div></details>
+    </div>
+  </header>
+  <div class="context-row">
+    <span class="date">9 月 15 日 · 星期二 · 今日作业</span>
+    <button class="status-button" id="statuses"><b>4 科已录入</b> · 1 科无作业 · 1 科待录入　⌄</button>
+    <details class="preparation"><summary>明日需带：圆规、实验报告 <span class="arrow">展开 ⌄</span></summary><p>数学：圆规、直尺。<br>物理：完成的实验报告。携带日期：9 月 16 日。</p></details>
+  </div>
+  <div class="urgent" id="urgent" hidden><strong>紧急</strong><span>放学后请从东侧楼梯有序离校，西侧楼梯临时检修。</span><button id="urgent-detail">查看详情</button></div>
+  <section class="notice-area" aria-label="班级通知">
+    <div class="notice-heading"><h2 id="notice-label">班级通知 · 1 条</h2><span class="notice-lead" id="notice-lead">明天下午体育课，请穿运动鞋。</span><button id="toggle-notices" aria-expanded="false" aria-controls="notice-list">展开通知 ▾</button></div>
+    <div class="notice-list" id="notice-list" hidden></div>
+  </section>
+  <div class="board-heading"><h2>各科作业</h2><span>点击“放大”查看完整内容 · 字号不随作业数量缩小</span></div>
+  <section class="board" id="board" aria-label="各科作业"></section>
+  <p class="end-note">独立交互原型 · 所有班级、作业与通知均为示例，不连接账号或服务器。</p>
+</main>
+<nav class="action-dock" aria-label="底部快捷栏">
+  <button data-tool="前一天" aria-label="前一天" title="前一天">‹</button>
+  <button data-tool="回到今天">今天</button>
+  <button data-tool="后一天" aria-label="后一天" title="后一天">›</button>
+  <span class="divider" aria-hidden="true"></span>
+  <button data-tool="通知中心">通知</button>
+  <button data-tool="课堂工具">工具</button>
+  <button data-tool="显示设置">设置</button>
+  <button data-tool="刷新">刷新</button>
+  <button class="primary" data-tool="录入作业">＋ 录入作业</button>
+</nav>
+<dialog id="dialog"><div class="dialog-head"><h2 id="dialog-title"></h2><button id="close-dialog" autofocus>关闭</button></div><div class="dialog-body" id="dialog-body"></div></dialog>
+<script>
+const $ = id => document.getElementById(id);
+const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const base = [
+  {subject:'数学', color:'#8abaff', content:'完成练习册 P41—43 A组。\n第 6 题写出完整解题过程。', optional:'B组第 2、3 题。', due:'明日 07:30', submission:'交数学课代表'},
+  {subject:'语文', color:'#e4a995', content:'背诵《赤壁赋》第三段。\n完成配套练习第 12 页。', due:'明日早读', submission:'练习本交至讲台'},
+  {subject:'英语', color:'#bbadf5', content:'完成 Unit 3 阅读练习。\n订正今天的听写。', optional:'朗读课文两遍。', due:'明日第一节课前'},
+  {subject:'物理', color:'#82cbbd', content:'整理“探究加速度”实验数据。\n完成实验报告中的图像与结论。', due:'明日 08:00', pending:true, submission:'明日携带实验报告'},
+  {subject:'化学', color:'#d9c37f', state:'none'},
+  {subject:'生物', color:'#8fc598', state:'missing'}
+];
+let scenario = 'daily', jobs = [], notices = [], noticesExpanded = false;
+const longContent = '完成以下分层练习，并在作业本上保留解题步骤：\n1. 课本 P68 第 3、5、7 题。画图时标注已知条件。\n2. 练习册 P41—43 A组，错题用另一种颜色订正。\n3. 第 6 题分别尝试几何法与代数法，比较两种方法的适用条件。\n4. 整理本周函数单调性的判断方法，至少写出一个易错例子。\n5. 不会的题目圈出卡住的步骤，明天课堂上集中讨论。\n最后核对：题号完整、图像标注清晰、结论写在等号之后。';
+function openDialog(title, html, focus = false) {
+  $('dialog-title').textContent = title; $('dialog-body').innerHTML = html;
+  $('dialog').classList.toggle('focus-dialog', focus); $('dialog').showModal();
+}
+function card(job, index) {
+  const label = job.pending ? '<span class="tag pending">待教师确认</span>' : job.state ? '' : '<span class="tag">教师已确认</span>';
+  let body = job.state === 'none' ? '<div class="no-homework">今日无作业</div><p class="explain">教师已明确标记。</p>'
+    : job.state === 'missing' ? '<div class="unrecorded">尚未录入</div><p class="explain">未录入不代表没有作业。</p>'
+    : `<p class="content">${escape(job.content)}</p>${job.optional ? `<div class="optional"><b>选做</b>${escape(job.optional)}</div>` : ''}`;
+  return `<article class="homework ${job.content?.length > 160 ? 'wide' : ''}" style="--subject:${job.color}"><header class="card-head"><h3>${job.subject}</h3>${label}${!job.state ? `<button data-focus="${index}">放大 ↗</button>` : ''}</header><div class="card-body">${body}</div>${!job.state ? `<footer class="card-foot"><strong>截止 · ${job.due}</strong>${job.submission ? `<span>${job.submission}</span>` : ''}</footer>` : ''}</article>`;
+}
+function renderNotices() {
+  $('notice-label').textContent = `班级通知 · ${notices.length} 条`;
+  $('notice-lead').textContent = notices[0].title;
+  $('notice-list').innerHTML = notices.map(item => `<div class="notice"><strong>${escape(item.title)}</strong><span>${escape(item.detail)}</span></div>`).join('');
+  $('notice-list').hidden = !noticesExpanded;
+  $('toggle-notices').textContent = noticesExpanded ? '收起通知 ▴' : '展开通知 ▾';
+  $('toggle-notices').setAttribute('aria-expanded', String(noticesExpanded));
+  requestAnimationFrame(measure);
+}
+function loadScenario(name) {
+  scenario = name; jobs = base.map(item => ({...item}));
+  if (name === 'long') { jobs[0].content = longContent; jobs[0].optional = '证明题：尝试推广第 6 题中的结论，并说明适用范围。'; }
+  notices = [{title:'明天下午体育课，请穿运动鞋。',detail:'班主任 · 16:20 · 普通通知'}];
+  if (name === 'busy') notices.push({title:'周五进行英语听写。',detail:'英语教师 · 15:50 · 请复习 Unit 3 单词'}, {title:'明日交实验报告。',detail:'物理教师 · 15:30 · 已同步到需带物品'});
+  noticesExpanded = name === 'busy'; $('urgent').hidden = name !== 'busy';
+  document.querySelectorAll('[data-scenario]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.scenario === name)));
+  const indexed = jobs.map((job, index) => ({job, index}));
+  const long = indexed.filter(({job}) => job.content?.length > 160);
+  $('board').classList.toggle('has-long', long.length > 0);
+  const cards = items => items.map(({job, index}) => card(job, index)).join('');
+  $('board').innerHTML = long.length
+    ? `<div class="long-column" aria-label="长作业与科目录入状态">${cards(long)}<div class="empty-subjects">${cards(indexed.filter(({job}) => job.state))}</div></div><div class="short-column" aria-label="其他科目作业">${cards(indexed.filter(({job}) => !job.state && job.content.length <= 160))}</div>`
+    : jobs.map(card).join('');
+  renderNotices();
+}
+function measure() {
+  const top = Math.round($('board').getBoundingClientRect().top + window.scrollY);
+  $('metric').textContent = `${innerWidth} × ${innerHeight} · 作业区起点 ${top}px（含预览工具条）`;
+}
+document.addEventListener('click', event => {
+  const button = event.target.closest('button'); if (!button) return;
+  if (button.dataset.scenario) loadScenario(button.dataset.scenario);
+  if (button.dataset.focus !== undefined) {
+    const job = jobs[Number(button.dataset.focus)];
+    openDialog(`${job.subject} · ${job.pending ? '待教师确认' : '教师已确认'}`, `<p class="focus-content">${escape(job.content)}</p>${job.optional ? `<p>选做：${escape(job.optional)}</p>` : ''}<p>截止：${escape(job.due)}</p>`, true);
+  }
+  if (button.dataset.tool) {
+    document.querySelector('.more').open = false;
+    openDialog(button.dataset.tool, '<p>这里展示入口位置。此独立原型不执行录入、打印、设置或账号操作。</p><p>正式接入时沿用现有功能流程。</p>');
+  }
+});
+$('close-dialog').onclick = () => $('dialog').close();
+$('statuses').onclick = () => openDialog('各科录入状态', `<div class="status-grid">${jobs.map(job => `<p><strong>${job.subject}</strong><br>${job.state === 'none' ? '今日无作业 · 教师已确认' : job.state === 'missing' ? '尚未录入' : job.pending ? '已录入 · 待教师确认' : '已录入 · 教师已确认'}</p>`).join('')}</div><p class="muted">尚未录入不代表没有作业。</p>`);
+$('toggle-notices').onclick = () => { noticesExpanded = !noticesExpanded; renderNotices(); };
+$('new-notice').onclick = () => {
+  document.body.classList.remove('copy-mode');
+  notices.unshift({title:'新通知：明天请带好学生证。', detail:'班主任 · 刚刚发布 · 普通通知'});
+  noticesExpanded = true; renderNotices();
+  openDialog('新通知 · 普通', '<p>明天请带好学生证。</p><p class="muted">班主任 · 示例通知</p>');
+};
+$('urgent-detail').onclick = () => openDialog('紧急通知', '<p class="focus-content">放学后请从东侧楼梯有序离校，西侧楼梯临时检修。</p>');
+$('theme').onclick = () => { const light = document.body.classList.toggle('light'); $('theme').textContent = light ? '切换深色' : '切换浅色'; $('theme').setAttribute('aria-pressed', String(light)); };
+$('font').oninput = event => { document.documentElement.style.setProperty('--body-size', `${event.target.value}px`); $('font-value').textContent = `${event.target.value}px`; };
+$('copy').onclick = () => { document.body.classList.add('copy-mode'); scrollTo(0,0); };
+$('exit-copy').onclick = () => document.body.classList.remove('copy-mode');
+document.querySelector('.preparation').addEventListener('toggle', measure);
+addEventListener('resize', measure);
+new ResizeObserver(([entry]) => {
+  if (entry.target.offsetHeight) document.documentElement.style.setProperty('--dock-space', `${entry.target.offsetHeight + 44}px`);
+}).observe(document.querySelector('.action-dock'));
+loadScenario(scenario);
+</script>
+</body>
+</html>

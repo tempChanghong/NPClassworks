@@ -1,33 +1,51 @@
 <template>
   <v-card
     v-if="rows.length && !store.feedLoading && (!store.feedLoadError || store.feedUsingCache)"
-    class="my-3 rounded-xl"
+    :class="compact ? 'subject-status--compact' : 'my-3 rounded-xl'"
     variant="tonal"
   >
-    <v-card-text>
-      <div class="font-weight-bold mb-2">
-        各科录入状态
-      </div>
-      <div class="d-flex flex-wrap ga-2">
-        <v-chip
-          v-for="row in rows"
-          :key="row.key"
-          :color="row.state === 'conflict' ? 'error' : row.state === 'none' ? 'success' : undefined"
-          variant="outlined"
+    <component
+      :is="compact ? 'details' : 'div'"
+      :open="expanded"
+      @toggle="expanded = $event.target.open"
+    >
+      <summary
+        v-if="compact"
+        class="subject-status-summary"
+      >
+        各科录入状态 · {{ summary }}
+        <span v-if="store.feedUsingCache"> · 离线缓存，请核对</span>
+      </summary>
+      <v-card-text>
+        <div
+          v-if="!compact"
+          class="font-weight-bold mb-2"
         >
-          {{ row.subject }} · {{ row.workspace }}：{{ label(row) }}
-        </v-chip>
-      </div>
-      <p class="text-caption mt-2">
-        按当前已加载内容判断；“尚未录入”不代表无作业。{{ store.feedUsingCache ? '当前为离线缓存，请核对。' : '' }}
-      </p>
-    </v-card-text>
+          各科录入状态
+        </div>
+        <div class="d-flex flex-wrap ga-2">
+          <v-chip
+            v-for="row in rows"
+            :key="row.key"
+            :color="row.state === 'conflict' ? 'error' : row.state === 'none' ? 'success' : undefined"
+            variant="outlined"
+          >
+            {{ row.subject }} · {{ row.workspace }}：{{ label(row) }}
+          </v-chip>
+        </div>
+        <p class="text-caption mt-2">
+          按当前已加载内容判断；“尚未录入”不代表无作业。{{ store.feedUsingCache ? '当前为离线缓存，请核对。' : '' }}
+        </p>
+      </v-card-text>
+    </component>
   </v-card>
 </template>
 <script setup>
-import {computed} from "vue";
+import {computed, ref} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {dailyHomeworkStatuses} from "@/utils/noHomework";
+defineProps({compact: Boolean});
+const expanded = ref(false);
 const store = useClassworksV2Store();
 const rows = computed(() => {
   const allowed = new Set(store.activeWorkspaceIds);
@@ -39,6 +57,12 @@ const rows = computed(() => {
   const subjects = store.feedAudience === "screen" ? store.screenSession?.subjects || [] : store.studentSubjects;
   return dailyHomeworkStatuses(store.feed, workspaces.filter(item => allowed.has(item.id)), subjects, store.boardDate);
 });
+const summary = computed(() => [
+  ["assigned", "项有作业"], ["none", "项无作业标记"], ["unknown", "项尚未录入"], ["conflict", "项冲突，请核对"],
+].map(([state, title]) => {
+  const count = rows.value.filter(row => row.state === state).length;
+  return count ? `${count} ${title}` : "";
+}).filter(Boolean).join(" · "));
 function label(row) {
   if (row.state === "conflict") return "作业与无作业标记并存，请核对";
   if (row.state === "assigned") return `${row.count} 项作业`;
@@ -46,3 +70,9 @@ function label(row) {
   return "尚未录入";
 }
 </script>
+
+<style scoped>
+.subject-status--compact { min-width: 0; border-radius: 12px; }
+.subject-status-summary { padding: 12px 16px; cursor: pointer; font-size: 1rem; overflow-wrap: anywhere; }
+.subject-status-summary:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: -2px; }
+</style>

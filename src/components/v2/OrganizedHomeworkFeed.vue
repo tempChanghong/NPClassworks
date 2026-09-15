@@ -1,91 +1,100 @@
 <template>
   <section class="organized-homework-feed">
-    <v-card
+    <component
+      :is="screenMode ? 'details' : 'div'"
       v-if="showControls"
-      class="feed-controls rounded-xl mb-4"
-      variant="tonal"
+      :open="!screenMode"
+      :class="{'screen-filter-disclosure': screenMode}"
     >
-      <v-card-text class="d-flex align-center flex-wrap ga-2 py-3 px-4">
-        <v-icon icon="mdi-filter-variant" />
-        <span class="font-weight-bold mr-1">筛选作业</span>
-        <v-select
-          v-if="options.subjects.length > 1"
-          v-model="subjectId"
-          class="feed-control-select"
-          clearable
-          density="compact"
-          hide-details
-          :items="options.subjects"
-          label="科目"
-          variant="outlined"
-        />
-        <v-select
-          v-if="options.workspaces.length > 1"
-          v-model="workspaceId"
-          class="feed-control-select feed-control-select--workspace"
-          clearable
-          density="compact"
-          hide-details
-          :items="options.workspaces"
-          label="班级"
-          variant="outlined"
-        />
-        <v-select
-          v-model="sortMode"
-          class="feed-control-select"
-          density="compact"
-          hide-details
-          :items="sortOptions"
-          label="排序"
-          variant="outlined"
-        />
-        <v-spacer />
-        <template v-if="completionEnabled && completionStats.total">
+      <summary v-if="screenMode">
+        筛选与排序 · {{ organized.visibleCount }} 项{{ hasFilters ? ' · 已启用筛选' : '' }}
+      </summary>
+      <v-card
+        class="feed-controls rounded-xl mb-4"
+        variant="tonal"
+      >
+        <v-card-text class="d-flex align-center flex-wrap ga-2 py-3 px-4">
+          <v-icon icon="mdi-filter-variant" />
+          <span class="font-weight-bold mr-1">筛选作业</span>
+          <v-select
+            v-if="options.subjects.length > 1"
+            v-model="subjectId"
+            class="feed-control-select"
+            clearable
+            density="compact"
+            hide-details
+            :items="options.subjects"
+            label="科目"
+            variant="outlined"
+          />
+          <v-select
+            v-if="options.workspaces.length > 1"
+            v-model="workspaceId"
+            class="feed-control-select feed-control-select--workspace"
+            clearable
+            density="compact"
+            hide-details
+            :items="options.workspaces"
+            label="班级"
+            variant="outlined"
+          />
+          <v-select
+            v-model="sortMode"
+            class="feed-control-select"
+            density="compact"
+            hide-details
+            :items="sortOptions"
+            label="排序"
+            variant="outlined"
+          />
+          <v-spacer />
+          <template v-if="completionEnabled && completionStats.total">
+            <v-chip
+              color="success"
+              prepend-icon="mdi-check-circle-outline"
+              size="small"
+              title="此设备的完成标记"
+              variant="tonal"
+            >
+              本机已完成 {{ completionStats.completed }}/{{ completionStats.total }}
+            </v-chip>
+            <v-chip
+              v-if="completionStats.updated"
+              color="warning"
+              prepend-icon="mdi-update"
+              size="small"
+              variant="tonal"
+            >
+              {{ completionStats.updated }} 项完成后有更新
+            </v-chip>
+            <v-btn
+              v-if="completionStats.completed"
+              :prepend-icon="hideCompleted ? 'mdi-eye-outline' : 'mdi-eye-off-outline'"
+              size="small"
+              variant="text"
+              @click="hideCompleted = !hideCompleted"
+            >
+              {{ hideCompleted ? "显示已完成" : "隐藏已完成" }}
+            </v-btn>
+          </template>
           <v-chip
-            color="success"
-            prepend-icon="mdi-check-circle-outline"
             size="small"
-            title="此设备的完成标记"
             variant="tonal"
           >
-            本机已完成 {{ completionStats.completed }}/{{ completionStats.total }}
-          </v-chip>
-          <v-chip
-            v-if="completionStats.updated"
-            color="warning"
-            prepend-icon="mdi-update"
-            size="small"
-            variant="tonal"
-          >
-            {{ completionStats.updated }} 项完成后有更新
+            {{ organized.visibleCount }} 项
           </v-chip>
           <v-btn
-            v-if="completionStats.completed"
-            :prepend-icon="hideCompleted ? 'mdi-eye-outline' : 'mdi-eye-off-outline'"
+            v-if="hasFilters"
+            prepend-icon="mdi-filter-remove-outline"
             size="small"
             variant="text"
-            @click="hideCompleted = !hideCompleted"
+            @click="resetFilters"
           >
-            {{ hideCompleted ? "显示已完成" : "隐藏已完成" }}
+            清除
           </v-btn>
-        </template>
-        <v-chip
-          size="small"
-          variant="tonal"
-        >
-          {{ organized.visibleCount }} 项
-        </v-chip>
-        <v-btn
-          v-if="hasFilters"
-          prepend-icon="mdi-filter-remove-outline"
-          size="small"
-          variant="text"
-          @click="resetFilters"
-        >
-          清除
-        </v-btn>
-      </v-card-text>
-    </v-card>
+        </v-card-text>
+      </v-card>
+    </component>
 
     <section
       v-if="organized.notices.length"
@@ -116,6 +125,12 @@
           {{ noticesCollapsed ? "展开通知栏" : "折叠通知栏" }}
         </v-btn>
       </div>
+      <p
+        v-if="screenMode && noticesCollapsed"
+        class="notice-collapsed-summary"
+      >
+        {{ organized.notices[0].title || organized.notices[0].content?.slice(0, 100) }}
+      </p>
       <div
         v-show="!screenMode || !noticesCollapsed"
         :id="noticeContentId"
@@ -345,6 +360,11 @@ function toggleCompletion(publication) {
 </script>
 
 <style scoped>
+.screen-filter-disclosure { margin-bottom: 12px; }
+.screen-filter-disclosure > summary { cursor: pointer; padding: 8px 12px; font-size: 1rem; color: rgba(var(--v-theme-on-surface), 0.8); }
+.screen-filter-disclosure[open] > summary { margin-bottom: 8px; }
+.notice-collapsed-summary { margin: 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
 .feed-controls {
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }

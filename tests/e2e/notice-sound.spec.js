@@ -35,11 +35,12 @@ test("screen notice bar stays collapsed on refresh/removal and expands for new n
   await expect(bar.getByText(original.content, {exact: true})).toBeVisible();
   await collapse().click();
   await expect(expand()).toHaveAttribute("aria-expanded", "false");
-  await expect(bar.getByText(original.content, {exact: true})).toBeHidden();
+  await expect(bar.locator(".publication-content").filter({hasText: original.content})).toBeHidden();
+  await expect(bar.locator(".notice-collapsed-summary")).toHaveText(original.content);
   await expect(page.locator(".organized-homework-feed").getByText("折叠后作业仍然显示", {exact: true})).toBeVisible();
   // A completed refresh containing the same notices must preserve the choice.
   const refresh = page.waitForResponse(response => response.url().includes("/classroom-screens/feed"));
-  await page.locator(".screen-toolbar").getByRole("button", {name: "刷新", exact: true}).click();
+  await page.locator(".screen-action-dock").getByRole("button", {name: "刷新", exact: true}).click();
   await refresh;
   await expect(page.locator(".classroom-screen-view > .v-progress-linear")).toBeHidden();
   await expect(expand()).toBeVisible();
@@ -80,7 +81,7 @@ test("confirmation pending state is shared by popup and center and blocks repeat
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
   await request.post(`${api}/__test/reset`);
   await page.goto(origin);
-  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  await page.getByTitle("通知中心", {exact: true}).click();
   const center = page.locator(".notification-center");
   await expect(center).toContainText("当前 0 条");
   const response = await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content: "确认处理中验证"}});
@@ -158,7 +159,7 @@ test(`two tabs preserve offline acknowledgements across reload without the feed 
   const other = await context.newPage();
   await other.goto(origin);
   for (const tab of [page, other]) {
-    await tab.getByRole("button", {name: "通知", exact: true}).first().click();
+    await tab.getByTitle("通知中心", {exact: true}).click();
     await expect(tab.locator(".notification-center__item")).toHaveCount(2);
   }
   await expect.poll(async () => (await read(page)).length).toBe(0);
@@ -200,7 +201,7 @@ test("popup confirmation immediately updates an open notification center, includ
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
   await request.post(`${api}/__test/reset`);
   await page.goto(origin);
-  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  await page.getByTitle("通知中心", {exact: true}).click();
   const center = page.locator(".notification-center");
   await expect(center).toContainText("当前 0 条");
   const response = await request.post(`${api}/api/v2/publications`, {data: {
@@ -234,14 +235,14 @@ test("opening the center reloads confirmations saved by another tab", async ({pa
     type: "NOTICE", priority: "MINOR", content: "其他页面已确认的通知", contentJson: {popupEnabled: false},
   }});
   await page.goto(origin);
-  await expect(page.getByRole("button", {name: "通知", exact: true}).first()).toBeVisible();
+  await expect(page.getByTitle("通知中心", {exact: true})).toBeVisible();
   const other = await context.newPage();
   await other.goto(origin);
-  await other.getByRole("button", {name: "通知", exact: true}).first().click();
+  await other.getByTitle("通知中心", {exact: true}).click();
   await other.locator(".notification-center").getByRole("button", {name: "知道了", exact: true}).click();
   await expect(other.locator(".notification-center")).toContainText("待确认 0 条");
   await other.close();
-  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  await page.getByTitle("通知中心", {exact: true}).click();
   await expect(page.locator(".notification-center")).toContainText("待确认 0 条");
 });
 
@@ -252,7 +253,7 @@ test("already open centers and popups immediately share confirmations but retain
   const other = await context.newPage();
   await other.goto(origin);
   for (const tab of [page, other]) {
-    await tab.getByRole("button", {name: "通知", exact: true}).first().click();
+    await tab.getByTitle("通知中心", {exact: true}).click();
     await expect(tab.locator(".notification-center")).toContainText("当前 0 条");
   }
   const response = await request.post(`${api}/api/v2/publications`, {data: {type: "NOTICE", content: "两页同步确认"}});
@@ -327,7 +328,7 @@ test("a batch of 105 confirmed notices stays confirmed and silent after screen r
   });
   await page.goto(origin);
   await expect.poll(() => page.evaluate(() => window.noticeSounds.length)).toBe(1);
-  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  await page.getByTitle("通知中心", {exact: true}).click();
   const center = page.locator(".notification-center");
   await expect(center).toContainText("当前 105 条");
   await center.getByRole("button", {name: "全部确认", exact: true}).click();
@@ -336,7 +337,7 @@ test("a batch of 105 confirmed notices stays confirmed and silent after screen r
   await page.clock.install({time: new Date(Date.now() + 31000)});
   await page.reload();
   await expect(page.getByRole("button", {name: "录入作业", exact: true}).first()).toBeVisible();
-  await page.getByRole("button", {name: "通知", exact: true}).first().click();
+  await page.getByTitle("通知中心", {exact: true}).click();
   await expect(center).toContainText("待确认 0 条");
   expect(await page.evaluate(() => window.noticeSounds)).toEqual([]);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("classworks-v2-notification-acknowledged:screen-a")));

@@ -1,5 +1,6 @@
 <template>
   <v-btn
+    v-if="!hideButton"
     :disabled="!teacher && !store.activeWorkspaceIds.length"
     prepend-icon="mdi-bag-checked"
     variant="tonal"
@@ -118,7 +119,7 @@ import {on as socketOn} from "@/utils/socketClient";
 import SubmissionDetails from "./SubmissionDetails.vue";
 import HomeworkPrintButton from "./HomeworkPrintButton.vue";
 
-const props = defineProps({className: {type: String, default: ""}, teacher: Boolean});
+const props = defineProps({hideButton: Boolean, className: {type: String, default: ""}, teacher: Boolean});
 const store = useClassworksV2Store();
 const opened = ref(false), loading = ref(false), error = ref(""), checklist = ref(null), loadedAt = ref(null), teacherWorkspace = ref("");
 const workspaceIds = computed(() => props.teacher ? (teacherWorkspace.value ? [teacherWorkspace.value] : []) : store.activeWorkspaceIds);
@@ -189,6 +190,7 @@ watch(feedVersion, () => {
 }, {flush: "sync"});
 document.addEventListener("visibilitychange", checkDate);
 onUnmounted(() => { clear(); clearInterval(timer); unsubscribe(); document.removeEventListener("visibilitychange", checkDate); });
+defineExpose({open});
 </script>
 <style scoped>
 .tomorrow-content { white-space: pre-wrap; overflow-wrap: anywhere; }

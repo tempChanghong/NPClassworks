@@ -19,8 +19,7 @@ async function publish(request, input) {
   return (await response.json()).data;
 }
 async function openCopy(page) {
-  await page.getByTitle("更多", {exact: true}).click();
-  await page.getByText("抄写模式", {exact: true}).click();
+  await page.getByRole("button", {name: "抄写模式", exact: true}).click();
   await expect(page.locator(".screen-copy-mode")).toBeVisible();
 }
 test.beforeEach(async ({request}) => {

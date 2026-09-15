@@ -46,7 +46,8 @@ for (const role of ["screen", "student"]) {
       await page.goto(origin);
       await expect(page.locator(".publication-content")).toContainText("作业板就绪");
       await expect.poll(async () => (await (await request.get(`${api}/__test/state`)).json()).data.roomJoins).toBeGreaterThan(0);
-      const button = page.getByRole("button", {name: "明日要交与需带", exact: true}), dialog = page.locator(".homework-tomorrow-dialog");
+      if (role === "screen") await page.getByTitle("更多", {exact: true}).click();
+      const button = page.getByText("明日要交与需带", {exact: true}), dialog = page.locator(".homework-tomorrow-dialog");
       await button.click();
       await expect(dialog.locator(".tomorrow-due")).toContainText("明天上交练习册");
       await expect(dialog).toBeVisible();
@@ -77,6 +78,7 @@ for (const role of ["screen", "student"]) {
       await expect.poll(() => entered).toBe(true);
       await dialog.getByRole("button", {name: "关闭", exact: true}).click();
       hold = false;
+      if (role === "screen") await page.getByTitle("更多", {exact: true}).click();
       await button.click();
       await expect(dialog).toContainText("明天上交练习册");
       release();

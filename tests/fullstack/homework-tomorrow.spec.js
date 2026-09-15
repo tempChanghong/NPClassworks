@@ -22,7 +22,8 @@ test("tomorrow checklist reads old due work and packing items from PostgreSQL an
   const screen = await classroom.open("screen");
   await screen.page.getByLabel("选择日期").fill(old);
   await expect(screen.page.locator(".publication-content").filter({hasText: "很早布置明天上交"})).toBeVisible();
-  await screen.page.getByRole("button", {name: "明日要交与需带", exact: true}).click();
+  await screen.page.getByTitle("更多", {exact: true}).click();
+  await screen.page.getByText("明日要交与需带", {exact: true}).click();
   const dialog = screen.page.locator(".homework-tomorrow-dialog");
   await expect(dialog.locator(".tomorrow-due .tomorrow-row")).toHaveCount(1);
   await expect(dialog.locator(".tomorrow-due")).toContainText("很早布置明天上交");
@@ -52,7 +53,8 @@ test("tomorrow checklist reads old due work and packing items from PostgreSQL an
   await dialog.getByRole("button", {name: "关闭", exact: true}).click();
   await screen.page.getByLabel("选择日期").fill(today);
   await expect(screen.page.locator(".publication-content").filter({hasText: "今日截止时间未设置"})).toBeVisible();
-  await screen.page.getByRole("button", {name: "明日要交与需带", exact: true}).click();
+  await screen.page.getByTitle("更多", {exact: true}).click();
+  await screen.page.getByText("明日要交与需带", {exact: true}).click();
   await expect(dialog.locator(".tomorrow-due")).toContainText("很早布置明天上交");
   expect((await request.post(`${api}/api/v2/publications/${due.id}/withdraw`, {headers: {...headers, "If-Match": '"1"'}, data: {}})).status()).toBe(200);
   await expect(dialog).toContainText("作业已变化");

@@ -1,5 +1,6 @@
 <template>
   <v-btn
+    v-if="!hideButton"
     :disabled="!store.activeWorkspaceIds.length"
     prepend-icon="mdi-text-box-check-outline"
     variant="tonal"
@@ -75,7 +76,7 @@ import {useClassworksV2Store} from "@/stores/classworksV2";
 import {classworksV2Api, getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {deadlineBoardDate} from "@/utils/homeworkWeek";
 import {homeworkChangedFields} from "@/utils/homeworkChanges";
-const props = defineProps({className: {type: String, default: ""}});
+const props = defineProps({hideButton: Boolean, className: {type: String, default: ""}});
 const store = useClassworksV2Store();
 const opened = ref(false), loading = ref(false), error = ref(""), items = ref([]), date = ref("");
 const scope = computed(() => JSON.stringify([store.feedAudience, store.activeWorkspaceIds, store.boardDate, store.screenSession?.binding?.id, props.className]));
@@ -128,6 +129,7 @@ watch(feedVersion, value => {
   }
 }, {flush: "sync"});
 onUnmounted(cancel);
+defineExpose({open});
 </script>
 <style scoped>
 .correction-text { white-space: pre-wrap; overflow-wrap: anywhere; }

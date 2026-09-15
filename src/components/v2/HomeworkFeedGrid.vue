@@ -13,6 +13,7 @@
       :key="publication.id"
       ref="gridItems"
       class="publication-grid-item"
+      :data-publication-type="publication.type"
     >
       <v-card
         :color="publication.type === 'NOTICE' ? priorityColor(publication.priority) : undefined"
@@ -232,6 +233,7 @@ const gridItems = ref([]);
 const containerWidth = ref(0);
 let resizeObserver;
 let resizeFrame;
+let textMeasurer;
 const resizeQueue = new Set();
 const contentOwners = new WeakMap();
 
@@ -255,6 +257,34 @@ function resizeGridItems(items) {
   const styles = window.getComputedStyle(grid);
   const rowHeight = Number.parseFloat(styles.gridAutoRows) || 1;
   const rowGap = Number.parseFloat(styles.rowGap) || 0;
+  // A former span-2 card can create an implicit column after narrowing to one
+  // column. Count the configured tracks, not those implicit computed tracks.
+  const settings = normalizedSettings.value;
+  const columns = window.innerWidth <= 700 ? 1 : settings.columns === "auto"
+    ? calculateScreenFeedColumns(grid.clientWidth, settings.fontScale) : Number(settings.columns);
+  const columnWidth = (grid.clientWidth - (columns - 1) * (Number.parseFloat(styles.columnGap) || 0)) / columns;
+  // Measure against the ordinary column width, not the currently widened card.
+  // This keeps the decision stable after a card gains width and loses height.
+  const spans = items.filter(Boolean).map(item => {
+    let lines = 0;
+    if (props.screenMode && !props.previewMode && normalizedSettings.value.columns === "auto"
+      && columns > 1 && item.dataset.publicationType === "ASSIGNMENT" && textMeasurer) {
+      const body = item.querySelector(".publication-body");
+      const padding = body ? window.getComputedStyle(body) : null;
+      const available = Math.max(1, columnWidth - (Number.parseFloat(padding?.paddingLeft) || 0)
+        - (Number.parseFloat(padding?.paddingRight) || 0) - 2);
+      item.querySelectorAll(".publication-content, .submission-details, .preparation-details").forEach(content => {
+        const font = window.getComputedStyle(content);
+        textMeasurer.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+        lines += content.textContent.trim().split("\n").reduce((count, line) =>
+          count + Math.max(1, Math.ceil(textMeasurer.measureText(line).width / available)), 0);
+      });
+    }
+    return {item, span: lines > 9 ? "span 2" : ""};
+  });
+  spans.forEach(({item, span}) => {
+    if (item.style.gridColumnEnd !== span) item.style.gridColumnEnd = span;
+  });
   const measurements = items.map((item) => ({
     item,
     height: item?.firstElementChild?.getBoundingClientRect().height || 0,
@@ -298,6 +328,7 @@ async function observeGridItems() {
 }
 
 onMounted(() => {
+  textMeasurer = document.createElement("canvas").getContext("2d");
   resizeObserver = new window.ResizeObserver((entries) => {
     const changedItems = [];
     entries.forEach((entry) => {
@@ -447,12 +478,12 @@ function targetNames(publication) {
   gap: 0 10px;
 }
 .screen-feed .publication-content,
-.screen-feed .submission-details,
+.screen-feed :deep(.submission-details),
 .screen-feed .preparation-details,
 .screen-feed .publication-divider {
   flex: 1 0 100%;
 }
-.screen-feed .submission-details,
+.screen-feed :deep(.submission-details),
 .screen-feed .preparation-details {
   min-width: 0;
   font-size: calc(1rem * var(--screen-font-scale));

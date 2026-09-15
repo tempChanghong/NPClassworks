@@ -1,7 +1,7 @@
 <template>
   <section
     class="classroom-screen-view"
-    :style="burnInStyle"
+    :style="[burnInStyle, {'--screen-dock-space': `${dockHeight + 40}px`}]"
   >
     <v-alert
       v-if="deliveryState.storageError || deliveryState.status === 'blocked'"
@@ -46,35 +46,13 @@
         </div>
         <ClassroomTimeCard inline />
         <div class="screen-toolbar-actions">
-          <v-badge
-            color="error"
-            :content="pendingNoticeCount"
-            :model-value="pendingNoticeCount > 0"
-          >
-            <v-btn
-              prepend-icon="mdi-bell-outline"
-              title="通知"
-              variant="tonal"
-              @click="notificationCenterOpen = true"
-            >
-              <span class="screen-toolbar-action-label">通知</span>
-            </v-btn>
-          </v-badge>
           <v-btn
-            prepend-icon="mdi-monitor-eye"
-            title="显示设置"
+            :disabled="!store.feed.some(item => item.type === 'ASSIGNMENT')"
+            prepend-icon="mdi-book-open-page-variant"
             variant="tonal"
-            @click="$emit('settings')"
+            @click="copyModeOpen = true"
           >
-            <span class="screen-toolbar-action-label">设置</span>
-          </v-btn>
-          <v-btn
-            prepend-icon="mdi-toolbox-outline"
-            title="课堂工具"
-            variant="tonal"
-            @click="$emit('tools')"
-          >
-            <span class="screen-toolbar-action-label">课堂工具</span>
+            抄写模式
           </v-btn>
           <v-btn
             color="primary"
@@ -85,13 +63,6 @@
           >
             <span class="screen-toolbar-action-label">录入作业</span>
           </v-btn>
-          <v-btn
-            :loading="store.feedLoading"
-            icon="mdi-refresh"
-            title="刷新"
-            variant="text"
-            @click="store.loadActiveFeed()"
-          />
           <v-menu>
             <template #activator="{props}">
               <v-btn
@@ -103,10 +74,21 @@
             </template>
             <v-list>
               <v-list-item
-                prepend-icon="mdi-book-open-page-variant"
-                title="抄写模式"
-                :disabled="!store.feed.some(item => item.type === 'ASSIGNMENT')"
-                @click="copyModeOpen = true"
+                :disabled="!store.activeWorkspaceIds.length"
+                prepend-icon="mdi-bag-checked"
+                title="明日要交与需带"
+                @click="tomorrowTool.open()"
+              />
+              <v-list-item
+                prepend-icon="mdi-calendar-range"
+                title="放假作业汇总"
+                @click="holidayTool.open()"
+              />
+              <v-list-item
+                :disabled="!store.activeWorkspaceIds.length"
+                prepend-icon="mdi-text-box-check-outline"
+                title="查看今日更正"
+                @click="correctionsTool.open()"
               />
               <v-list-item
                 prepend-icon="mdi-calendar-week"
@@ -144,11 +126,21 @@
     </v-card>
 
     <ScreenNoiseStatus @open="$emit('noise')" />
-    <div class="d-flex flex-wrap ga-2 mt-3">
-      <HomeworkTomorrowButton :class-name="className" />
-      <HomeworkHolidayButton :class-name="className" />
-      <HomeworkCorrectionsButton :class-name="className" />
-    </div>
+    <HomeworkTomorrowButton
+      ref="tomorrowTool"
+      :class-name="className"
+      hide-button
+    />
+    <HomeworkHolidayButton
+      ref="holidayTool"
+      :class-name="className"
+      hide-button
+    />
+    <HomeworkCorrectionsButton
+      ref="correctionsTool"
+      :class-name="className"
+      hide-button
+    />
     <HomeworkPrintButton
       ref="printTool"
       :class-name="className"
@@ -210,16 +202,18 @@
       @acknowledge-all="acknowledgeNotices"
     />
 
-    <BoardDateNavigator
-      class="screen-date-navigator mt-3"
-      can-copy-to-today
-      :date="store.boardDate"
-      @change="store.setBoardDate"
-      @copy-to-today="$emit('copy-board')"
-    />
-
-    <HomeworkSubjectStatus />
-    <PreparationBoard />
+    <div class="screen-context-row">
+      <BoardDateNavigator
+        class="screen-date-navigator"
+        compact
+        can-copy-to-today
+        :date="store.boardDate"
+        @change="store.setBoardDate"
+        @copy-to-today="$emit('copy-board')"
+      />
+      <HomeworkSubjectStatus compact />
+      <PreparationBoard compact />
+    </div>
     <ScreenHomeworkChanges :font-scale="settings.fontScale" />
     <ScreenHomeworkFocus
       ref="focusTool"
@@ -305,6 +299,7 @@
     />
 
     <div
+      ref="actionDock"
       class="screen-action-dock"
       :class="`screen-action-dock--${settings.actionPosition}`"
     >
@@ -384,6 +379,7 @@
 <script setup>
 import PreparationBoard from "@/components/v2/PreparationBoard.vue";
 import {computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch} from "vue";
+import {useResizeObserver} from "@vueuse/core";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
@@ -426,11 +422,20 @@ import {
 defineEmits(["create", "edit", "history", "tools", "noise", "copy-board", "settings", "exit", "diagnostics"]);
 const store = useClassworksV2Store();
 const focusTool = ref(null);
+const actionDock = ref(null);
+const dockHeight = ref(74);
+useResizeObserver(actionDock, () => {
+  const height = actionDock.value?.offsetHeight;
+  if (height) dockHeight.value = height;
+});
 const ScreenCopyMode = defineAsyncComponent(() => import("@/components/v2/ScreenCopyMode.vue"));
 const copyModeOpen = ref(false);
 const copyModeSuspended = computed(() => activeNotices.value.some(notice => !acknowledgedNoticeKeys.value.has(notificationAlertKey(notice)) && screenNotificationPopupEnabled(notice)));
 const printTool = ref(null);
 const weekTool = ref(null);
+const tomorrowTool = ref(null);
+const holidayTool = ref(null);
+const correctionsTool = ref(null);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
 const notificationCenterOpen = ref(false);
 const acknowledgedNoticeKeys = ref(readAcknowledgedNotificationKeys(store.screenSession?.binding?.id));
@@ -653,7 +658,7 @@ onUnmounted(() => {
 
 <style scoped>
 .classroom-screen-view {
-  padding-bottom: 104px;
+  padding-bottom: var(--screen-dock-space, 114px);
   width: calc(100% - 4px);
   margin: 2px;
   transition: transform 1.2s ease;
@@ -705,10 +710,10 @@ onUnmounted(() => {
 .screen-toolbar-content {
   align-items: center;
   display: grid;
-  gap: 18px;
+  gap: 14px;
   grid-template-columns: minmax(220px, 1fr) max-content max-content;
-  min-height: 82px;
-  padding: 10px 16px;
+  min-height: 64px;
+  padding: 6px 16px;
 }
 .screen-class-block,
 .screen-toolbar-actions {
@@ -734,6 +739,19 @@ onUnmounted(() => {
   padding: 4px 22px;
 }
 
+.screen-context-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: start; margin: 12px 0; }
+.screen-context-row > * { flex: 1 1 300px; min-width: 0; }
+.screen-context-row > .screen-date-navigator { flex: 1.5 1 500px; }
+.screen-toolbar-actions :deep(.v-btn) { min-height: 44px; }
+.screen-action-dock { max-width: calc(100vw - 24px); }
+.screen-action-dock__surface { flex-wrap: wrap; justify-content: center; }
+@media (max-width: 600px) {
+  .screen-toolbar-content { padding: 8px; gap: 8px; }
+  .screen-class-block { flex-wrap: wrap; }
+  .screen-identity { min-width: 0; overflow-wrap: anywhere; }
+  .screen-action-dock { width: max-content; }
+}
+
 @media (min-width: 2300px) {
   .screen-toolbar-content { padding: 12px 18px; }
 }
@@ -745,12 +763,6 @@ onUnmounted(() => {
   }
   .screen-toolbar-actions {
     gap: 8px;
-  }
-  .screen-toolbar-action-label {
-    display: none;
-  }
-  .screen-toolbar-actions :deep(.v-btn__prepend) {
-    margin-inline: 0;
   }
 }
 
@@ -771,7 +783,6 @@ onUnmounted(() => {
 }
 
 @media (max-width: 900px) {
-  .classroom-screen-view { padding-bottom: 92px; }
   .screen-action-dock--left,
   .screen-action-dock--center,
   .screen-action-dock--right {

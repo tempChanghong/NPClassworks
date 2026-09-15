@@ -76,7 +76,8 @@ test("late screens can review server corrections while draft history, private fi
   expect(JSON.stringify(data)).not.toMatch(/私密|editorAccountId|targetWorkspaceIds/);
   expect((await request.get(url, {params: {...params, workspaceIds: "missing"}})).status()).toBe(403);
   const screen = await classroom.open("screen");
-  await screen.page.getByRole("button", {name: "查看今日更正", exact: true}).click();
+  await screen.page.getByTitle("更多", {exact: true}).click();
+  await screen.page.getByText("查看今日更正", {exact: true}).click();
   const dialog = screen.page.locator(".homework-corrections-dialog");
   await expect(dialog).toContainText("公开前五题");
   await expect(dialog).toContainText("公开前三题");
@@ -96,7 +97,8 @@ test("holiday selection includes older due work and manually selected pre-holida
   await create(classroom, request, {boardDate: shiftBoardDate(today(), -20), content: "很早布置假期截止", dueAt: `${end}T08:00:00+08:00`, contentJson: {optionalContent: "假期选做拓展"}});
   await create(classroom, request, {boardDate: shiftBoardDate(today(), -1), content: "放假前补充内容"});
   const screen = await classroom.open("screen");
-  await screen.page.getByRole("button", {name: "放假作业汇总", exact: true}).click();
+  await screen.page.getByTitle("更多", {exact: true}).click();
+  await screen.page.getByText("放假作业汇总", {exact: true}).click();
   const dialog = screen.page.locator(".homework-holiday-dialog");
   await dialog.getByLabel("清单名称", {exact: true}).fill("假期核对清单");
   await dialog.getByRole("button", {name: "查找作业", exact: true}).click();

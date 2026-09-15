@@ -1,6 +1,7 @@
 <template>
   <v-card
     class="board-date-navigator rounded-xl"
+    :class="{'board-date-navigator--compact': compact}"
     variant="tonal"
   >
     <v-card-text class="d-flex align-center flex-wrap ga-2 py-3 px-4">
@@ -71,6 +72,7 @@ import {
 
 const props = defineProps({
   date: {type: String, default: todayBoardDate},
+  compact: Boolean,
   canCopyToToday: Boolean,
   copying: Boolean,
 });
@@ -96,4 +98,7 @@ function changeBy(days) {
 }
 .board-date-title { min-width: 7.5rem; }
 .board-date-input { max-width: 12rem; }
+.board-date-navigator--compact :deep(.v-card-text) { padding: 6px 10px !important; }
+.board-date-navigator--compact .board-date-title { min-width: 5rem; }
+.board-date-navigator--compact .board-date-input { max-width: 10rem; }
 </style>

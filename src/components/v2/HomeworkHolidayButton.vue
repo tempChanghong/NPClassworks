@@ -1,5 +1,6 @@
 <template>
   <v-btn
+    v-if="!hideButton"
     prepend-icon="mdi-calendar-range"
     variant="tonal"
     @click="open"
@@ -123,7 +124,7 @@ import {requiredHomeworkContent} from "@/utils/homeworkInstructions";
 import SubmissionDetails from "./SubmissionDetails.vue";
 import PreparationDetails from "./PreparationDetails.vue";
 import HomeworkPrintButton from "./HomeworkPrintButton.vue";
-const props = defineProps({className: {type: String, default: ""}, teacher: Boolean});
+const props = defineProps({hideButton: Boolean, className: {type: String, default: ""}, teacher: Boolean});
 const store = useClassworksV2Store();
 const opened = ref(false), loading = ref(false), error = ref(""), title = ref("放假作业汇总");
 const start = ref(store.boardDate), end = ref(shiftBoardDate(store.boardDate, 6)), searchStart = ref(shiftBoardDate(store.boardDate, -14));
@@ -156,6 +157,7 @@ watch([start, end, searchStart, teacherWorkspace], clear, {flush: "sync"});
 watch(opened, value => { if (!value) clear(); });
 watch(scope, () => { opened.value = false; teacherWorkspace.value = ""; clear(); }, {flush: "sync"});
 onUnmounted(clear);
+defineExpose({open});
 </script>
 <style scoped>
 .holiday-dates { display: flex; flex-wrap: wrap; gap: 12px; }

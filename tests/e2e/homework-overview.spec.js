@@ -82,6 +82,7 @@ test("real-shaped screen session resolves missing subject names; new homework is
   try {
     // Reload starts on today; seed that date instead of a historical fixed day.
     const boardDate = await board.page.getByLabel("选择日期").inputValue();
+    await board.page.locator(".subject-status-summary").click();
     await expect(board.page.getByText("数学 · 高一一班：尚未录入", {exact: true})).toBeVisible();
     const session = (await (await request.get(`${api}/api/v2/classroom-screens/session`, {
       headers: {"X-Classworks-Screen-Token": "screen-token"},
@@ -102,6 +103,7 @@ test("real-shaped screen session resolves missing subject names; new homework is
     await expect.poll(() => board.page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
     await board.context.setOffline(true);
     await board.page.reload();
+    await board.page.locator(".subject-status-summary").click();
     await expect(board.page.getByText("数学 · 高一一班：1 项作业", {exact: true})).toBeVisible();
     await board.page.getByRole("button", {name: "录入作业", exact: true}).first().click();
     const composer = board.page.locator(".screen-composer");
@@ -123,6 +125,7 @@ test("teacher explicitly declares no homework, screen distinguishes missing and 
   const teacher = await openBoard(browser, "teacher"), screen = await openBoard(browser, "screen");
   try {
     await screen.page.getByLabel("选择日期").fill("2026-09-07");
+    await screen.page.locator(".subject-status-summary").click();
     await expect(screen.page.getByText("数学 · 高一一班：尚未录入", {exact: true})).toBeVisible();
     await teacher.page.locator(".v-select").filter({hasText: "科目"}).first().click();
     await teacher.page.getByRole("option", {name: "数学", exact: true}).click();
