@@ -150,7 +150,7 @@
             autofocus
             class="screen-content-input"
             hide-details="auto"
-            :label="optionalHomeworkOf(basePublication) ? '必做内容' : '作业内容'"
+            :label="form.optionalContent.trim() ? '必做内容' : '作业内容'"
             :placeholder="contentFocused ? '例如：完成练习册第 10～12 页' : ''"
             rows="4"
             variant="outlined"
@@ -163,13 +163,37 @@
             :subject-id="form.subjectId"
             @insert="insertQuickInput"
           />
-          <p
-            v-if="optionalHomeworkOf(basePublication)"
-            class="text-body-2 mt-3"
-            style="white-space: pre-wrap; overflow-wrap: anywhere"
-          >
-            选做（由教师维护）：{{ optionalHomeworkOf(basePublication) }}
-          </p>
+          <v-textarea
+            v-model="form.optionalContent"
+            auto-grow
+            class="mt-4"
+            counter="6000"
+            label="选做内容（可选）"
+            rows="2"
+            variant="outlined"
+          />
+        </section>
+
+        <section class="composer-section">
+          <div class="composer-section__label">
+            需带清单
+          </div>
+          <v-textarea
+            v-model="form.materials"
+            auto-grow
+            counter="500"
+            label="需带物品（可选）"
+            rows="2"
+            variant="outlined"
+          />
+          <v-text-field
+            v-model="form.materialsDate"
+            hint="填写需带物品时，请同时选择携带日期。"
+            label="携带日期"
+            persistent-hint
+            type="date"
+            variant="outlined"
+          />
         </section>
 
         <section class="composer-section">
@@ -396,7 +420,8 @@
 </template>
 
 <script setup>
-import {optionalHomeworkOf} from "@/utils/homeworkInstructions";
+import {optionalHomeworkOf, withOptionalHomework} from "@/utils/homeworkInstructions";
+import {preparationOf, withPreparation} from "@/utils/homeworkPreparation";
 import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
 import {openScreenDraftStorage} from "@/utils/screenDraftSession";
@@ -462,6 +487,9 @@ const form = reactive({
   targetWorkspaceId: "",
   title: "",
   content: "",
+  optionalContent: "",
+  materials: "",
+  materialsDate: "",
   boardDate: todayBoardDate(),
   dueAt: "",
   priority: "NORMAL",
@@ -501,11 +529,14 @@ const screenWriteInput = computed(() => ({
   publishAt: basePublication.value?.publishAt,
   status: "PUBLISHED",
 }));
-// Metadata participates in comparison, but this editor cannot change it.
-// Omit it from writes so the server keeps the latest teacher-maintained fields.
+// Comparison remains available while the preparation date is incomplete.
 const screenConflictInput = computed(() => ({
   ...screenWriteInput.value,
-  contentJson: basePublication.value?.contentJson,
+  contentJson: {
+    ...basePublication.value?.contentJson,
+    optionalContent: form.optionalContent.trim(),
+    preparation: form.materials.trim() ? {text: form.materials.trim(), date: form.materialsDate} : null,
+  },
 }));
 const screenConflictRows = computed(() => buildConflictComparison(
   screenConflictInput.value,
@@ -561,6 +592,17 @@ function draftSnapshot() {
     basePublishAt: basePublication.value?.publishAt ?? null};
 }
 
+function writeInput(publication = basePublication.value) {
+  // On conflict, preserve the latest noneditable teacher metadata.
+  const metadata = {...publication?.contentJson};
+  delete metadata.correctionReason;
+  return {
+    ...screenWriteInput.value,
+    contentJson: withPreparation(withOptionalHomework(metadata, form.optionalContent), form.materials, form.materialsDate),
+    publishAt: publication?.publishAt || new Date().toISOString(),
+  };
+}
+
 function requestVisibility(open) {
   if (!open && requestBusy.value) return;
   if (!open && draftSaveFailed.value) {
@@ -591,6 +633,10 @@ function loadPublication(publication) {
     || "";
   form.title = publication?.title || "";
   form.content = publication?.content || "";
+  form.optionalContent = optionalHomeworkOf(publication);
+  const preparation = preparationOf(publication);
+  form.materials = preparation?.text || "";
+  form.materialsDate = preparation?.date || "";
   form.boardDate = publication?.boardDate
     ? String(publication.boardDate).slice(0, 10)
     : store.boardDate;
@@ -692,14 +738,7 @@ async function save(allowDuplicate = false) {
       operation: basePublication.value ? "updated" : "created",
     };
     const saved = await store.saveScreenPublication({
-      subjectId: form.subjectId,
-      targetWorkspaceIds: [form.targetWorkspaceId],
-      title: form.title,
-      content: form.content,
-      boardDate: form.boardDate,
-      dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
-      priority: form.priority,
-      publishAt: basePublication.value?.publishAt || new Date().toISOString(),
+      ...writeInput(),
       ...(allowDuplicate ? {allowDuplicate: true} : {}),
     }, basePublication.value, savedContext);
     clearScreenHomeworkDraft(
@@ -743,7 +782,7 @@ async function applyLocalOnLatest() {
   if (requestBusy.value || !latest) return;
   if (!await confirmAction({
     title: "用本机输入生成新版本",
-    message: "服务器当前版本会保留在历史中，本机输入将成为下一个待教师确认版本。提交说明和需带物品等本页不可编辑的信息保留服务器最新版。",
+    message: "服务器当前版本会保留在历史中，本机输入（含选做内容、需带物品及携带日期）将成为下一个待教师确认版本。提交说明等本页不可编辑的信息保留服务器最新版。",
     confirmText: "保存新版本",
     color: "warning",
   })) return;
@@ -755,7 +794,7 @@ async function applyLocalOnLatest() {
       targetName: eligibleTargets.value.find((workspace) => workspace.id === form.targetWorkspaceId)?.name || "目标班级",
       operation: "updated",
     };
-    const saved = await store.saveScreenPublication(screenWriteInput.value, latest, context);
+    const saved = await store.saveScreenPublication(writeInput(latest), latest, context);
     clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftStorage);
     conflict.value = null;
     emit("saved", saved, context);
@@ -775,7 +814,7 @@ async function applyLocalOnLatest() {
         localError.value = `保存期间内容再次变化，${message}。本机输入已保留，请重试载入最新版，或另存为一项新作业。`;
       }
     } else {
-      localError.value = store.screenError;
+      localError.value = describeApiError(error, "保存失败，当前输入已保留，请重试。");
     }
   } finally {
     conflictApplying.value = false;
@@ -815,13 +854,7 @@ async function saveConflictCopy() {
       operation: "created",
     };
     const saved = await store.saveScreenPublication({
-      subjectId: form.subjectId,
-      targetWorkspaceIds: [form.targetWorkspaceId],
-      title: form.title,
-      content: form.content,
-      boardDate: form.boardDate,
-      dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
-      priority: form.priority,
+      ...writeInput(),
       publishAt: new Date().toISOString(),
       allowDuplicate: true,
     }, null, savedContext);
@@ -829,8 +862,8 @@ async function saveConflictCopy() {
     conflict.value = null;
     emit("saved", saved, savedContext);
     emit("update:modelValue", false);
-  } catch {
-    localError.value = store.screenError;
+  } catch (error) {
+    localError.value = describeApiError(error, "保存失败，当前输入已保留，请重试。");
   } finally {
     conflictCopying.value = false;
   }

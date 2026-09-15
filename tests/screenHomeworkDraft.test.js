@@ -17,6 +17,23 @@ function memoryStorage() {
   };
 }
 
+test("optional homework and preparation drafts round trip, including explicit clears, without filling legacy fields", () => {
+  const storage = memoryStorage();
+  for (const fields of [
+    {optionalContent: "挑战题", materials: "圆规", materialsDate: "2026-09-16"},
+    {optionalContent: "", materials: "", materialsDate: ""},
+  ]) {
+    saveScreenHomeworkDraft("screen", "pub", {content: "必做", ...fields}, storage);
+    const draft = loadScreenHomeworkDraft("screen", "pub", storage);
+    for (const key of Object.keys(fields)) assert.equal(draft[key], fields[key]);
+  }
+  saveScreenHomeworkDraft("screen", "pub", {content: "旧版草稿"}, storage);
+  const legacy = loadScreenHomeworkDraft("screen", "pub", storage);
+  for (const key of ["optionalContent", "materials", "materialsDate"]) assert.equal(Object.hasOwn(legacy, key), false);
+  saveScreenHomeworkDraft("screen", "new", {materials: "实验材料"}, storage);
+  assert.equal(loadScreenHomeworkDraft("screen", "new", storage).materials, "实验材料");
+});
+
 test("draft persistence preserves its source revision and treats legacy metadata as unknown", () => {
   const storage = memoryStorage();
   saveScreenHomeworkDraft("screen", "pub", {content: "旧草稿", baseRevision: 1, basePublishAt: "2026-09-08T00:00:00Z"}, storage, 1000);

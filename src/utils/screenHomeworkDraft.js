@@ -18,6 +18,10 @@ export function sanitizeScreenHomeworkDraft(value = {}) {
     targetWorkspaceId: typeof value.targetWorkspaceId === "string" ? value.targetWorkspaceId : "",
     title: typeof value.title === "string" ? value.title : "",
     content: typeof value.content === "string" ? value.content : "",
+    // Absence in legacy drafts must preserve the publication's existing values.
+    ...Object.fromEntries(["optionalContent", "materials", "materialsDate"]
+      .filter(key => Object.hasOwn(value, key))
+      .map(key => [key, typeof value[key] === "string" ? value[key] : ""])),
     boardDate: typeof value.boardDate === "string" ? value.boardDate : "",
     dueAt: typeof value.dueAt === "string" ? value.dueAt : "",
     priority: ["NORMAL", "IMPORTANT", "URGENT"].includes(value.priority) ? value.priority : "NORMAL",
@@ -30,7 +34,8 @@ export function sanitizeScreenHomeworkDraft(value = {}) {
 
 export function hasMeaningfulScreenHomeworkDraft(value) {
   const draft = sanitizeScreenHomeworkDraft(value);
-  return Boolean(draft.subjectId || draft.targetWorkspaceId || draft.title.trim() || draft.content.trim() || draft.dueAt);
+  return Boolean(draft.subjectId || draft.targetWorkspaceId || draft.title.trim() || draft.content.trim() || draft.dueAt
+    || draft.optionalContent?.trim() || draft.materials?.trim() || draft.materialsDate);
 }
 
 export function loadScreenHomeworkDraft(bindingId, publicationId, storage, now = Date.now()) {

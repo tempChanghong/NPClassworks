@@ -21,6 +21,91 @@ async function seed(request) {
   return (await response.json()).data;
 }
 const textBox = page => page.getByRole("textbox", {name: "作业内容 作业内容", exact: true});
+
+test("screen optional homework and preparation survive drafts, validate dates and can be cleared without losing teacher instructions", async ({browser, request}) => {
+  const row = await seed(request);
+  const endpoint = `${api}/api/v2/publications/${row.id}`;
+  expect((await request.patch(endpoint, {headers: {"If-Match": '"1"'}, data: {
+    contentJson: {submission: "交给课代表", optionalContent: "教师选做", preparation: {text: "教师物品", date: todayBoardDate()}},
+  }})).status()).toBe(200);
+  const s = await openScreen(browser), dialog = s.page.locator(".screen-composer");
+  try {
+    await s.page.evaluate(({id, date}) => localStorage.setItem(`classworks-v2-screen-homework-draft:screen-a:${id}`, JSON.stringify({
+      subjectId: "math", targetWorkspaceId: "class-a", content: "旧版草稿正文", boardDate: date,
+      baseRevision: 2, updatedAt: Date.now(),
+    })), {id: row.id, date: todayBoardDate()});
+    await s.page.getByRole("button", {name: "修改", exact: true}).click();
+    await expect(dialog).toContainText("已自动恢复");
+    await expect(dialog.getByLabel("选做内容（可选）", {exact: true})).toHaveValue("教师选做");
+    await expect(dialog.getByLabel("需带物品（可选）", {exact: true})).toHaveValue("教师物品");
+    await dialog.getByLabel("选做内容（可选）", {exact: true}).fill("本机挑战题");
+    await dialog.getByLabel("需带物品（可选）", {exact: true}).fill("圆规和直尺");
+    await dialog.getByLabel("携带日期", {exact: true}).fill("");
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog).toContainText("有效的携带日期");
+    await dialog.getByRole("button", {name: "取消", exact: true}).click();
+    await s.page.reload();
+    await s.page.getByRole("button", {name: "修改", exact: true}).click();
+    await expect(dialog).toContainText("已自动恢复");
+    await expect(dialog.getByLabel("选做内容（可选）", {exact: true})).toHaveValue("本机挑战题");
+    await expect(dialog.getByLabel("需带物品（可选）", {exact: true})).toHaveValue("圆规和直尺");
+    await dialog.getByLabel("携带日期", {exact: true}).fill(todayBoardDate());
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog).not.toBeVisible();
+    const read = async () => (await (await request.get(endpoint)).json()).data;
+    expect((await read()).contentJson).toEqual({submission: "交给课代表", optionalContent: "本机挑战题", preparation: {text: "圆规和直尺", date: todayBoardDate()}});
+    await s.page.getByRole("button", {name: "修改", exact: true}).click();
+    await dialog.getByLabel("选做内容（可选）", {exact: true}).fill("");
+    await dialog.getByLabel("需带物品（可选）", {exact: true}).fill("");
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog).not.toBeVisible();
+    expect((await read()).contentJson).toEqual({submission: "交给课代表"});
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test("screen conflict applies editable metadata while retaining latest submission instructions", async ({browser, request}) => {
+  const row = await seed(request), s = await openScreen(browser), dialog = s.page.locator(".screen-composer");
+  const endpoint = `${api}/api/v2/publications/${row.id}`;
+  try {
+    await s.page.getByRole("button", {name: "修改", exact: true}).click();
+    await dialog.getByLabel("选做内容（可选）", {exact: true}).fill("本机选做");
+    await dialog.getByLabel("需带物品（可选）", {exact: true}).fill("直尺");
+    await dialog.getByLabel("携带日期", {exact: true}).fill(todayBoardDate());
+    expect((await request.patch(endpoint, {headers: {"If-Match": '"1"'}, data: {
+      contentJson: {submission: "最新提交说明", optionalContent: "服务器选做"},
+    }})).status()).toBe(200);
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog.locator(".screen-conflict-comparison")).toContainText("本机选做");
+    await dialog.getByRole("button", {name: "以本机输入生成新版本", exact: true}).click();
+    await s.page.getByRole("button", {name: "保存新版本", exact: true}).click();
+    await expect(dialog).not.toBeVisible();
+    const saved = (await (await request.get(endpoint)).json()).data;
+    expect(saved.contentJson).toEqual({submission: "最新提交说明", optionalContent: "本机选做", preparation: {text: "直尺", date: todayBoardDate()}});
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test("screen offline creation replays optional homework and preparation", async ({browser, request}) => {
+  const s = await openScreen(browser), dialog = s.page.locator(".screen-composer");
+  try {
+    await s.page.getByRole("button", {name: "录入作业", exact: true}).first().click();
+    await s.page.getByRole("button", {name: "数学", exact: true}).click();
+    await textBox(s.page).fill("离线必做");
+    await dialog.getByLabel("选做内容（可选）", {exact: true}).fill("离线选做");
+    await dialog.getByLabel("需带物品（可选）", {exact: true}).fill("实验材料");
+    await dialog.getByLabel("携带日期", {exact: true}).fill(todayBoardDate());
+    await s.context.setOffline(true);
+    await dialog.getByRole("button", {name: "保存作业", exact: true}).click();
+    await expect(dialog).not.toBeVisible();
+    await s.context.setOffline(false);
+    await expect.poll(async () => {
+      const data = (await (await request.get(`${api}/api/v2/publications`)).json()).data;
+      return data.items.find(item => item.content === "离线必做")?.contentJson;
+    }).toEqual({optionalContent: "离线选做", preparation: {text: "实验材料", date: todayBoardDate()}});
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
 test.beforeEach(async ({request}) => {
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
   await request.post(`${api}/__test/reset`);
