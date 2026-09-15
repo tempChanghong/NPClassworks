@@ -17,6 +17,13 @@
       </v-chip>
       <v-spacer />
       <v-btn
+        prepend-icon="mdi-content-copy"
+        variant="tonal"
+        @click="reuseOpen = true"
+      >
+        复用历史作业
+      </v-btn>
+      <v-btn
         icon="mdi-information-outline"
         title="查看统一状态说明"
         variant="text"
@@ -284,11 +291,15 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <TeacherHomeworkReuse
+      v-if="reuseOpen"
+      @close="reuseOpen = false"
+    />
   </v-card>
 </template>
 
 <script setup>
-import {computed, ref, watch} from "vue";
+import {computed, defineAsyncComponent, ref, watch} from "vue";
 import {useNow} from "@vueuse/core";
 import {
   filterTeacherPublications,
@@ -305,6 +316,8 @@ const props = defineProps({
 defineEmits(["refresh", "certify", "history", "edit", "clone", "withdraw", "delivery"]);
 
 const query = ref("");
+const reuseOpen = ref(false);
+const TeacherHomeworkReuse = defineAsyncComponent(() => import("@/components/v2/TeacherHomeworkReuse.vue"));
 const now = useNow({interval: 1000});
 const stateFilter = ref("");
 const typeFilter = ref("");

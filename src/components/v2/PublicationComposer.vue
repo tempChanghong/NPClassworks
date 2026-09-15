@@ -1,5 +1,6 @@
 <template>
   <v-card
+    :inert="Boolean(reuseDraft && requestBusy)"
     class="publication-composer rounded-xl"
     variant="flat"
   >
@@ -9,9 +10,18 @@
         color="primary"
         icon="mdi-pencil-box-multiple-outline"
       />
-      {{ isEditing ? "编辑发布" : "新建发布" }}
+      {{ isEditing ? "编辑发布" : reuseDraft ? "核对复用作业" : "新建发布" }}
     </v-card-title>
     <v-card-text class="px-5">
+      <template v-if="reuseDraft">
+        <v-alert
+          class="mb-3"
+          type="info"
+          variant="tonal"
+        >
+          已带入历史内容。请重新选择发布班级，并核对新日期；旧截止时间与携带日期已清空。
+        </v-alert>
+      </template>
       <v-alert
         v-if="isEditing && confirmAfterSave"
         class="mb-5"
@@ -23,7 +33,7 @@
       </v-alert>
       <v-btn-toggle
         v-model="form.type"
-        :disabled="isEditing || requestBusy"
+        :disabled="isEditing || requestBusy || Boolean(reuseDraft)"
         class="mb-5"
         color="primary"
         mandatory
@@ -500,6 +510,13 @@
         </div>
       </v-alert>
 
+      <v-checkbox
+        v-if="reuseDraft"
+        v-model="reuseDatesConfirmed"
+        label="已重新核对截止时间（可留空）和携带日期"
+        hide-details
+        class="mb-4"
+      />
       <v-alert
         v-if="saveNotice"
         class="mb-3"
@@ -593,6 +610,7 @@ const props = defineProps({
     default: null,
   },
   confirmAfterSave: Boolean,
+  reuseDraft: {type: Object, default: null},
 });
 const emit = defineEmits(["published", "cancel", "reload-latest"]);
 const store = useClassworksV2Store();
@@ -612,6 +630,8 @@ const conflictApplying = ref(false);
 const duplicateWarning = ref(null);
 const duplicateStatus = ref("PUBLISHED");
 const requestBusy = computed(() => saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
+const reuseDatesConfirmed = ref(false);
+defineExpose({requestBusy});
 const contentInput = ref(null);
 const TeacherHomeworkTemplates = defineAsyncComponent(() => import("@/components/v2/TeacherHomeworkTemplates.vue"));
 const PublicationScreenPreview = defineAsyncComponent(() => import("@/components/v2/PublicationScreenPreview.vue"));
@@ -834,6 +854,20 @@ watch(() => props.editingPublication, (publication) => {
   cleanForm.value = JSON.stringify(form);
 }, {immediate: true});
 
+watch(() => props.reuseDraft, (draft) => {
+  if (!draft) return;
+  editorGeneration++;
+  reset();
+  editingBase.value = null;
+  Object.assign(form, draft);
+  form.targetWorkspaceIds = [...draft.targetWorkspaceIds];
+  optionalExpanded.value = Boolean(form.optionalContent);
+  reuseDatesConfirmed.value = false;
+}, {immediate: true});
+watch(() => [form.dueAt, form.materialsDate, form.materials, form.noHomework, form.boardDate, form.publishAt], () => {
+  reuseDatesConfirmed.value = false;
+});
+
 function captureEditor(savedForm) {
   const generation = editorGeneration;
   const accountVersion = store.teacherSessionVersion;
@@ -951,6 +985,10 @@ async function submit(status, allowDuplicate = false) {
   if (requestBusy.value) return;
   localError.value = "";
   saveNotice.value = "";
+  if (props.reuseDraft && !reuseDatesConfirmed.value) {
+    localError.value = "请重新核对截止时间和携带日期，并勾选确认。";
+    return;
+  }
   if (form.type === "ASSIGNMENT" && !form.subjectId) {
     localError.value = "作业必须选择科目";
     return;
