@@ -374,6 +374,16 @@
         >
           录入作业
         </v-btn>
+        <v-btn
+          v-if="classroomToolSettings.enabledToolIds.includes('attendance')"
+          class="screen-action-dock__button"
+          color="success"
+          prepend-icon="mdi-account-check-outline"
+          variant="tonal"
+          @click="$emit('attendance')"
+        >
+          录入考勤
+        </v-btn>
       </div>
     </div>
   </section>
@@ -382,7 +392,7 @@
 <script setup>
 import PreparationBoard from "@/components/v2/PreparationBoard.vue";
 import {computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch} from "vue";
-import {useResizeObserver} from "@vueuse/core";
+import {useEventListener, useResizeObserver} from "@vueuse/core";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassroomTimeCard from "@/components/v2/ClassroomTimeCard.vue";
 import HomeworkSubjectStatus from "@/components/v2/HomeworkSubjectStatus.vue";
@@ -416,13 +426,14 @@ import {
   screenNotificationPopupEnabled,
 } from "@/utils/notificationAlerts";
 import {getSetting} from "@/utils/settings";
+import {CLASSROOM_TOOLS_SETTINGS_EVENT, classroomToolSettingsKey, loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 import {
   loadScreenDisplaySettings,
   saveScreenDisplaySettings,
   sanitizeScreenDisplaySettings,
 } from "@/utils/screenDisplaySettings";
 
-defineEmits(["create", "edit", "history", "tools", "noise", "copy-board", "settings", "exit", "diagnostics"]);
+defineEmits(["create", "edit", "history", "tools", "noise", "attendance", "copy-board", "settings", "exit", "diagnostics"]);
 const store = useClassworksV2Store();
 const focusTool = ref(null);
 const actionDock = ref(null);
@@ -440,6 +451,14 @@ const tomorrowTool = ref(null);
 const holidayTool = ref(null);
 const correctionsTool = ref(null);
 const settings = ref(loadScreenDisplaySettings(store.screenSession?.binding?.id));
+const classroomToolSettings = ref(loadClassroomToolSettings(store.screenSession?.binding?.id));
+function reloadClassroomToolSettings() {
+  classroomToolSettings.value = loadClassroomToolSettings(store.screenSession?.binding?.id);
+}
+useEventListener(window, CLASSROOM_TOOLS_SETTINGS_EVENT, reloadClassroomToolSettings);
+useEventListener(window, "storage", event => {
+  if (event.key === null || event.key === classroomToolSettingsKey(store.screenSession?.binding?.id)) reloadClassroomToolSettings();
+});
 const notificationCenterOpen = ref(false);
 const acknowledgedNoticeKeys = ref(readAcknowledgedNotificationKeys(store.screenSession?.binding?.id));
 const confirmingNoticeKeys = ref(new Set());
@@ -542,6 +561,7 @@ watch([bindingId, () => store.screenSession?.binding?.credentialVersion], ([id])
   notificationDeliveryQueue.dispose();
   notificationDeliveryQueue = createDeliveryQueue();
   settings.value = loadScreenDisplaySettings(id);
+  reloadClassroomToolSettings();
   acknowledgedNoticeKeys.value = readAcknowledgedNotificationKeys(id);
   confirmingNoticeKeys.value = new Set();
   noticeConfirmationErrors.value = new Map();

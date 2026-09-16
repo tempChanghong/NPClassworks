@@ -49,7 +49,7 @@ test("screen layout preserves dock access, full long homework and expandable con
     await expect(page.locator(".screen-homework-focus")).toBeHidden();
     await expect(long.getByRole("button", {name: "放大查看", exact: true})).toBeFocused();
     const dock = page.locator(".screen-action-dock");
-    await expect(dock.getByRole("button")).toHaveCount(8);
+    await expect(dock.getByRole("button")).toHaveCount(9);
     for (const position of ["left", "center", "right"]) {
       await page.evaluate(position => localStorage.setItem("classworks-v2-screen-display:screen-a", JSON.stringify({actionPosition: position, antiBurnInShift: true})), position);
       await page.reload();
@@ -93,6 +93,8 @@ test("screen layout preserves dock access, full long homework and expandable con
     await page.clock.install();
     await page.reload();
     await expect(cards).toHaveCount(6);
+    await expect(page.locator(".classworks-app-bar")).toContainText("NPClassworks 作业板");
+    await expect(page.locator(".classworks-app-bar")).toContainText("热爱创造奇迹。");
     await page.clock.fastForward(5 * 60 * 1000);
     await expect(page.locator(".classroom-screen-view")).toHaveCSS("left", "1px");
     await expect(dock.locator(".screen-action-dock__surface")).toHaveCSS("left", "1px");
@@ -107,6 +109,14 @@ test("screen layout preserves dock access, full long homework and expandable con
     await page.reload();
     await expect(cards).toHaveCount(6);
     await expect.poll(async () => Math.abs((await long.boundingBox()).width - (await short.boundingBox()).width)).toBeLessThan(2);
+    const attendanceButton = dock.getByRole("button", {name: "录入考勤", exact: true});
+    for (const enabled of [false, true]) {
+      await page.evaluate(enabled => {
+        localStorage.setItem("classworks-v2-classroom-tools:screen-a", JSON.stringify({enabledToolIds: enabled ? ["attendance", "noise"] : ["noise"]}));
+        window.dispatchEvent(new CustomEvent("classworks-v2-classroom-tools-changed", {detail: {bindingId: "screen-a"}}));
+      }, enabled);
+      await expect(attendanceButton).toHaveCount(enabled ? 1 : 0);
+    }
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });

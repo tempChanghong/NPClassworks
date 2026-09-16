@@ -290,8 +290,7 @@ for (const [state, label] of [["absent", "缺勤"], ["late", "迟到"], ["exclud
       });
       await page.goto(origin);
       async function openAttendance() {
-        await page.getByRole("button", {name: "课堂工具", exact: true}).first().click();
-        await page.locator(".tool-entry").filter({hasText: "考勤"}).click();
+        await page.locator(".screen-action-dock").getByRole("button", {name: "录入考勤", exact: true}).click();
         await expect(page.locator(".student-row").filter({hasText: "李四"})).toBeVisible();
       }
       await openAttendance();

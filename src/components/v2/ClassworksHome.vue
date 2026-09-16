@@ -258,6 +258,7 @@
         @settings="openSettings('screen')"
         @tools="openClassroomTools()"
         @noise="openClassroomTools('noise')"
+        @attendance="openClassroomTools('attendance')"
         @copy-board="copyScreenBoardToToday"
         @diagnostics="openScreenDiagnosticDialog"
         @exit="openScreenExitDialog"
