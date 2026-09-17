@@ -102,7 +102,7 @@
               class="ml-3"
               :loading="attendanceLoading"
               variant="text"
-              @click="loadAttendance"
+              @click="retryAttendance"
             >
               重新读取考勤
             </v-btn>
@@ -566,8 +566,14 @@ async function checkRoster() {
   finally { checkingRoster = false; }
 }
 async function reloadChangedRoster() {
+  const scope = attendanceScope();
   if (!await confirmAction({title: "重新载入名单与考勤？", message: "当前未保存的名单和考勤修改会丢弃，请先复制保留需要的内容。", confirmText: "重新载入"})) return;
+  if (toolsDisposed || !props.modelValue || scope !== attendanceScope()) return;
   rosterDialog.value = false;
+  await loadAttendance();
+}
+async function retryAttendance() {
+  if (hasAttendanceDraft() || rosterDialog.value) return reloadChangedRoster();
   await loadAttendance();
 }
 const stopRosterEvent = socketOn("classroom.roster.updated", event => {

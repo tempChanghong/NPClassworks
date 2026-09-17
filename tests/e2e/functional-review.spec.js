@@ -135,6 +135,79 @@ test("remote roster events refresh a clean screen and preserve an open roster dr
   } finally { await context.close(); }
 });
 
+test("attendance retry after remote roster changes confirms before discarding unsaved attendance", async ({browser, request}) => {
+  const {context, page} = await openRole(browser, "screen");
+  let revision = "v1", reads = 0, saves = 0;
+  try {
+    await page.route(`${api}/api/v2/classroom-screens/students`, route => route.fulfill({json: {
+      data: [{id: "s1", name: revision === "v1" ? "张三" : "远程改名", sortOrder: 0}], rosterRevision: revision,
+    }}));
+    await page.route(`${api}/api/v2/classroom-screens/attendance/*`, route => {
+      if (route.request().method() === "PUT") saves++;
+      else reads++;
+      return route.fulfill({json: {data: {absent: [], late: [], excluded: []}}});
+    });
+    await page.goto(origin);
+    await page.getByRole("button", {name: "录入考勤", exact: true}).click();
+    await page.locator(".student-row").getByRole("button", {name: "缺勤", exact: true}).click();
+    await expect(page.locator(".classroom-tools-container")).toContainText("缺勤 1");
+    revision = "v2";
+    await request.post(`${api}/__test/roster-updated`);
+    await expect(page.getByText("班级名单已在其他设备更新，当前输入已保留", {exact: false})).toBeVisible();
+    const beforeRetry = reads;
+    const retry = page.getByRole("button", {name: "重新读取考勤", exact: true});
+    await retry.click();
+    const confirmation = page.getByRole("dialog").filter({hasText: "重新载入名单与考勤？"});
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole("button", {name: "取消", exact: true}).click();
+    await expect(confirmation).toBeHidden();
+    expect(reads).toBe(beforeRetry);
+    await expect(page.getByText("班级名单已在其他设备更新，当前输入已保留", {exact: false})).toBeVisible();
+    await retry.click();
+    await confirmation.getByRole("button", {name: "重新载入", exact: true}).click();
+    await expect(page.locator(".student-row")).toContainText("远程改名");
+    await expect(page.locator(".classroom-tools-container")).toContainText("到校 1");
+    await expect.poll(() => reads).toBe(beforeRetry + 1);
+    expect(saves).toBe(0);
+  } finally { await context.close(); }
+});
+
+test("attendance midnight reload protects drafts and rejects a confirmation from a previous date", async ({browser}) => {
+  const {context, page} = await openRole(browser, "screen");
+  let reads = 0;
+  try {
+    await page.clock.install({time: new Date("2026-09-17T12:00:00+08:00")});
+    await page.route(`${api}/api/v2/classroom-screens/students`, route => route.fulfill({json: {
+      data: [{id: "s1", name: "张三", sortOrder: 0}], rosterRevision: "v1",
+    }}));
+    await page.route(`${api}/api/v2/classroom-screens/attendance/*`, route => {
+      expect(route.request().method()).toBe("GET");
+      reads++;
+      return route.fulfill({json: {data: {absent: [], late: [], excluded: []}}});
+    });
+    await page.goto(origin);
+    await page.getByRole("button", {name: "录入考勤", exact: true}).click();
+    await page.locator(".student-row").getByRole("button", {name: "迟到", exact: true}).click();
+    await expect(page.locator(".classroom-tools-container")).toContainText("迟到 1");
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+    await expect(page.getByRole("button", {name: "保存今日考勤", exact: true})).toBeDisabled();
+    const beforeRetry = reads;
+    await page.getByRole("button", {name: "重新读取考勤", exact: true}).click();
+    const confirmation = page.getByRole("dialog").filter({hasText: "重新载入名单与考勤？"});
+    await expect(confirmation).toBeVisible();
+    // A delayed confirmation must not apply to a different day's attendance.
+    await page.clock.fastForward(24 * 60 * 60 * 1000);
+    await confirmation.getByRole("button", {name: "重新载入", exact: true}).click();
+    await expect(confirmation).toBeHidden();
+    expect(reads).toBe(beforeRetry);
+    await expect(page.getByRole("button", {name: "保存今日考勤", exact: true})).toBeDisabled();
+    await page.getByRole("button", {name: "重新读取考勤", exact: true}).click();
+    await confirmation.getByRole("button", {name: "重新载入", exact: true}).click();
+    await expect(page.getByRole("button", {name: "保存今日考勤", exact: true})).toBeEnabled();
+    await expect.poll(() => reads).toBe(beforeRetry + 1);
+  } finally { await context.close(); }
+});
+
 test("attendance read failure and a pending retry cannot overwrite a cached saved record", async ({browser}) => {
   const {context, page} = await openRole(browser, "screen");
   let fail = false, saves = 0, release = () => {};
