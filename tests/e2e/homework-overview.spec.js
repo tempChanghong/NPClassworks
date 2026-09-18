@@ -1,5 +1,6 @@
 import {test, expect} from "@playwright/test";
 import {origin, api} from "./environment.js";
+import {todayBoardDate} from "../../src/utils/boardDate.js";
 
 async function openBoard(browser, role, serviceWorkers = "allow") {
   const values = {
@@ -38,6 +39,31 @@ test.beforeEach(async ({request}) => {
   expect((await request.post(`${origin}/__test/release`, {data: {release: "previous"}})).ok()).toBe(true);
   expect((await request.post(`${api}/__test/reset`)).ok()).toBe(true);
 });
+
+for (const role of ["screen", "student"]) {
+  test(`${role} shows only confirmed badges while retaining uncertified homework and preparations`, async ({browser, request}) => {
+    const date = todayBoardDate();
+    const pending = await seed(request, {boardDate: date, content: "仍然展示的未确认作业",
+      contentJson: {preparation: {date, text: "未确认的需带物品"}}});
+    expect((await request.patch(`${api}/api/v2/publications/${pending.id}`, {
+      headers: {"If-Match": '"1"'}, data: {isCertified: false},
+    })).ok()).toBe(true);
+    await seed(request, {boardDate: date, content: "已确认作业正文"});
+    const board = await openBoard(browser, role, "block");
+    try {
+      const cards = board.page.locator(".publication-card");
+      const pendingCard = cards.filter({hasText: "仍然展示的未确认作业"});
+      await expect(pendingCard).toBeVisible();
+      await expect(pendingCard).not.toContainText("待教师确认");
+      await expect(pendingCard).not.toContainText("教师已确认");
+      await expect(cards.filter({hasText: "已确认作业正文"})).toContainText("教师已确认");
+      if (role === "screen") await board.page.locator(".preparation-summary").click();
+      await expect(board.page.locator(".preparation-board")).toContainText("未确认的需带物品");
+      await expect(board.page.locator(".preparation-board")).not.toContainText("待教师确认");
+      expect(board.errors).toEqual([]);
+    } finally { await board.context.close(); }
+  });
+}
 
 test("screen separates a connected socket from failed content refresh and reports the cached content timestamp", async ({browser, request}) => {
   const board = await openBoard(browser, "screen", "block");
@@ -142,7 +168,7 @@ test("teacher explicitly declares no homework, screen distinguishes missing and 
     await expect(content).toHaveValue("切换回来不能丢失的输入");
     await toggle.check();
     await teacher.page.getByRole("button", {name: "正式发布", exact: true}).click();
-    await expect(screen.page.getByText("数学 · 高一一班：今日无作业", {exact: true})).toBeVisible();
+    await expect(screen.page.getByText("数学 · 高一一班：今日无作业 · 教师已确认", {exact: true})).toBeVisible();
     const state = (await (await request.get(`${api}/__test/state`)).json()).data;
     expect(state.items[0].contentJson).toEqual({kind: "NO_HOMEWORK", version: 1});
     expect(state.items[0].dueAt).toBeNull();

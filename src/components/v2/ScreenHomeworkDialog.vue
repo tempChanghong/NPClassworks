@@ -393,7 +393,7 @@
 
       <v-card-actions class="screen-composer__actions px-5 py-4">
         <div class="text-body-2 text-medium-emphasis">
-          大屏保存后默认为“待教师确认”
+          大屏保存后会同步到作业板
         </div>
         <v-spacer />
         <v-btn
@@ -795,7 +795,7 @@ async function applyLocalOnLatest() {
   if (requestBusy.value || !latest) return;
   if (!await confirmAction({
     title: "用本机输入生成新版本",
-    message: "服务器当前版本会保留在历史中，本机输入（含选做内容、需带物品及携带日期）将成为下一个待教师确认版本。提交说明等本页不可编辑的信息保留服务器最新版。",
+    message: "服务器当前版本会保留在历史中，本机输入（含选做内容、需带物品及携带日期）将成为下一个版本。提交说明等本页不可编辑的信息保留服务器最新版。",
     confirmText: "保存新版本",
     color: "warning",
   })) return;

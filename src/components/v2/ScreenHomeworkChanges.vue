@@ -35,7 +35,7 @@
         >
           <summary>
             <strong>{{ item.after.subject }} · 作业更正</strong>
-            · {{ item.after.targets }} · {{ item.after.isCertified ? '教师已确认' : '待教师确认' }}
+            · {{ item.after.targets }}{{ item.after.isCertified ? ' · 教师已确认' : '' }}
             <span
               v-for="field in item.changes"
               :key="field.key"

@@ -66,7 +66,7 @@ const summary = computed(() => [
 function label(row) {
   if (row.state === "conflict") return "作业与无作业标记并存，请核对";
   if (row.state === "assigned") return `${row.count} 项作业`;
-  if (row.state === "none") return row.confirmed ? "今日无作业" : "已标记无作业（待教师确认）";
+  if (row.state === "none") return row.confirmed ? "今日无作业 · 教师已确认" : "今日无作业";
   return "尚未录入";
 }
 </script>

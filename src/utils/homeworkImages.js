@@ -77,7 +77,7 @@ function* planImageSteps(snapshot, measure, maxPages) {
   for (const item of snapshot.preparations || []) {
     const continuation = "需带物品（续）";
     append(yield* rows(`需带物品 · ${item.date}`, "heading"), continuation);
-    append(yield* rows(`${item.subject} · ${item.targets} · ${item.certified ? "教师已确认" : "待教师确认"}`, "meta"), continuation);
+    append(yield* rows(`${item.subject} · ${item.targets}${item.certified ? " · 教师已确认" : ""}`, "meta"), continuation);
     append(yield* rows(item.text, "body"), continuation);
     y += 24;
   }
@@ -87,7 +87,7 @@ function* planImageSteps(snapshot, measure, maxPages) {
     if (y + 180 > BOTTOM && page.rows.length) nextPage();
     if (item.group && item.group !== snapshot.items[index - 1]?.group) append(yield* rows(item.group, "heading"), continuation);
     append(yield* rows(`${index + 1}. ${item.subject}${item.title ? " · " + item.title : ""}`, "heading"), continuation);
-    append(yield* rows(`${item.targets} · ${item.certification} · ${item.priority}`, "meta"), continuation);
+    append(yield* rows([item.targets, item.certification, item.priority].filter(Boolean).join(" · "), "meta"), continuation);
     if (!item.noHomework) append(yield* rows(`截止：${item.deadline}`, "meta"), continuation);
     append(yield* rows(item.content || "（正文为空，请参阅标题）", "body"), continuation);
     if (item.optionalContent) append(yield* rows(`选做：${item.optionalContent}`, "body"), continuation);

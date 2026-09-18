@@ -27,10 +27,11 @@
         <p>{{ targetNames }} · {{ store.boardDate }}</p>
         <div class="d-flex flex-wrap align-center ga-3 mt-2">
           <v-chip
-            :color="publication.isCertified ? 'success' : 'warning'"
+            v-if="publication.isCertified"
+            color="success"
             variant="tonal"
           >
-            {{ publication.isCertified ? '教师已确认' : '待教师确认' }}
+            教师已确认
           </v-chip>
           <strong v-if="!isNoHomework(publication)">截止：{{ deadline }}</strong>
           <v-spacer />

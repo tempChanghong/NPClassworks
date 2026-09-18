@@ -60,7 +60,9 @@
               class="tomorrow-row"
             >
               <h3>{{ item.subject }} · {{ item.targets }}</h3>
-              <p>{{ item.certified ? '教师已确认' : '待教师确认' }}</p>
+              <p v-if="item.certified">
+                教师已确认
+              </p>
               <p class="tomorrow-content">
                 {{ item.text }}
               </p>
@@ -84,7 +86,7 @@
               class="tomorrow-row"
             >
               <h3>{{ item.subject?.name || '未指定科目' }}{{ item.title ? ' · ' + item.title : '' }}</h3>
-              <p>{{ targetNames(item) }} · {{ item.isCertified ? '教师已确认' : '待教师确认' }} · 作业日期 {{ String(item.boardDate).slice(0, 10) }}</p>
+              <p>{{ targetNames(item) }}{{ item.isCertified ? ' · 教师已确认' : '' }} · 作业日期 {{ String(item.boardDate).slice(0, 10) }}</p>
               <p>截止：{{ item.dueAt ? tomorrowDeadline(item.dueAt) : '未设置，不能确定是否明天要交' }}</p>
               <p class="tomorrow-content">
                 {{ requiredHomeworkContent(item) }}

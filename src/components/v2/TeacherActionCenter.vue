@@ -25,7 +25,7 @@
           </v-chip>
         </div>
         <div class="text-caption text-medium-emphasis font-weight-regular">
-          {{ summary.total ? "集中检查大屏录入和教师确认后发生的修改" : "目前没有需要教师确认的内容" }}
+          {{ summary.total ? "仅显示今日作业板的未确认内容；历史内容可在发布记录中查看" : "今日没有需要教师确认的内容" }}
         </div>
       </div>
       <v-spacer />

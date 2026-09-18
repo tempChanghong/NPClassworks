@@ -93,7 +93,7 @@
               :label="`${item.subject?.name || '未指定科目'} · ${item.title || '作业'} · ${String(item.boardDate).slice(0, 10)}`"
               hide-details
             />
-            <p>{{ item.isCertified ? '教师已确认' : '待教师确认' }} · 截止：{{ item.dueAt ? new Date(item.dueAt).toLocaleString('zh-CN') : '未设置' }}</p>
+            <p>{{ item.isCertified ? '教师已确认 · ' : '' }}截止：{{ item.dueAt ? new Date(item.dueAt).toLocaleString('zh-CN') : '未设置' }}</p>
             <p class="holiday-content">
               {{ requiredHomeworkContent(item) }}
             </p>

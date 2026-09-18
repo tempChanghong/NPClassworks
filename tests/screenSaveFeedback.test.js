@@ -6,11 +6,11 @@ import {
   teacherPublicationSaveFeedback,
 } from "../src/utils/screenSaveFeedback.js";
 
-test("screen save feedback names the subject, target and pending certification state", () => {
+test("screen save feedback names the subject and target without a pending certification label", () => {
   assert.equal(screenHomeworkSaveMessage(
     {isCertified: false, priority: "IMPORTANT", revision: 2},
     {subjectName: "物理", targetName: "物理A1", operation: "updated"},
-  ), "重要作业修改已保存；当前状态：待教师确认 · 版本 2 · 物理 · 物理A1 · 历史版本已保留");
+  ), "重要作业修改已保存；版本 2 · 物理 · 物理A1 · 历史版本已保留");
 });
 
 test("screen save feedback describes restored certified revisions", () => {
@@ -56,10 +56,10 @@ test("scheduled teacher publications report the display time explicitly", () => 
   assert.match(feedback.detail, /自动显示/);
 });
 
-test("screen feedback exposes color and icon for pending certification", () => {
+test("screen feedback reports a successful save without a pending certification warning", () => {
   const feedback = screenHomeworkSaveFeedback({isCertified: false, priority: "URGENT", revision: 1});
-  assert.equal(feedback.color, "warning");
-  assert.equal(feedback.icon, "mdi-clock-alert-outline");
+  assert.equal(feedback.color, "success");
+  assert.equal(feedback.icon, "mdi-content-save-check-outline");
 });
 
 test("offline screen saves explain that submission is still pending", () => {

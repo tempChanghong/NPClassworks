@@ -392,7 +392,8 @@ test("screen enlarges complete homework, preserves scroll/focus and follows live
     expect(changed.ok()).toBe(true);
     await expect(focus.locator(".focus-content")).toHaveText("老师更正后的完整正文\n仍需完成最后一题");
     await expect(focus).toContainText("作业信息已更新");
-    await expect(focus).toContainText("待教师确认");
+    await expect(focus).not.toContainText("待教师确认");
+    await expect(focus).not.toContainText("教师已确认");
     await screen.page.screenshot({path: testInfo.outputPath("homework-focus.png")});
     const withdrawn = await request.patch(`${api}/api/v2/publications/${item.id}`, {headers: {"If-Match": '"2"'}, data: {status: "WITHDRAWN"}});
     expect(withdrawn.ok()).toBe(true);

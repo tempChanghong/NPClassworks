@@ -14,7 +14,8 @@ const snapshot = () => homeworkPrintSnapshot({publications: [work, {...work, id:
 
 test("text sharing preserves instructions, dates, no-homework, certification and cache warnings", () => {
   const text = homeworkTextDocument(snapshot());
-  for (const value of ["一班", "2026-09-06", "必做：\n第一题\n第二题", "选做：\n挑战题", "提交说明：交课代表", "2026-09-07 需带：圆规", "截止：2026/09/07", "今日无作业", "待教师确认", "教师已确认", "离线缓存内容", "本机还有待上传作业"]) assert.ok(text.includes(value), value);
+  for (const value of ["一班", "2026-09-06", "必做：\n第一题\n第二题", "选做：\n挑战题", "提交说明：交课代表", "2026-09-07 需带：圆规", "截止：2026/09/07", "今日无作业", "教师已确认", "离线缓存内容", "本机还有待上传作业"]) assert.ok(text.includes(value), value);
+  assert.doesNotMatch(text, /待教师确认/);
   assert.ok(!text.includes("必做：\n必做："));
 });
 test("subject selection covers preparation-only subjects and removes excluded content without changing the source", () => {

@@ -14,21 +14,24 @@ test("publication status uses the same language for drafts, schedules and certif
   }, {now: new Date("2026-08-28T10:00:00.000Z")}).key, "scheduled");
 });
 
-test("large screens hide ordinary confirmed indicators but retain actionable states", () => {
+test("boards show confirmed indicators and hide pending certification without hiding sync warnings", () => {
   assert.deepEqual(publicationIndicatorVisibility({
     status: "PUBLISHED",
     isCertified: true,
     priority: "NORMAL",
   }, {screenMode: true}), {
     state: publicationDisplayState({status: "PUBLISHED", isCertified: true, priority: "NORMAL"}),
-    showState: false,
+    showState: true,
     showPriority: false,
   });
   assert.equal(publicationIndicatorVisibility({
     status: "PUBLISHED",
     isCertified: false,
     priority: "NORMAL",
-  }, {screenMode: true}).showState, true);
+  }, {screenMode: true}).showState, false);
+  assert.equal(publicationIndicatorVisibility({status: "PUBLISHED", isCertified: false}).showState, false);
+  assert.equal(publicationIndicatorVisibility({offlineQueued: true, isCertified: false}).showState, true);
+  assert.equal(publicationIndicatorVisibility({syncFailed: true, isCertified: false}).showState, true);
   assert.equal(publicationIndicatorVisibility({
     status: "PUBLISHED",
     isCertified: true,

@@ -64,7 +64,8 @@ test("text sharing copies exactly the selected subjects with instructions and no
     await board.context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const dialog = await textPreview(board.page, "student"), input = dialog.getByLabel("文字清单预览", {exact: true});
     await expect(input).toHaveValue(/必做：\n第一题\n第二题/);
-    for (const value of ["挑战题", "交课代表", "2099-01-02 需带：圆规", "今日无作业", "待教师确认"]) expect(await input.inputValue()).toContain(value);
+    for (const value of ["挑战题", "交课代表", "2099-01-02 需带：圆规", "今日无作业"]) expect(await input.inputValue()).toContain(value);
+    expect(await input.inputValue()).not.toContain("待教师确认");
     await dialog.getByRole("checkbox", {name: "语文", exact: true}).uncheck();
     await expect(input).not.toHaveValue(/今日无作业/);
     await dialog.getByRole("button", {name: "复制文字", exact: true}).click();

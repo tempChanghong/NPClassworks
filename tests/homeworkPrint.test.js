@@ -17,7 +17,8 @@ test("print snapshot includes only published assignments for the selected date a
   ]});
   assert.equal(snapshot.items.length, 1);
   assert.equal(snapshot.items[0].targets, "一班");
-  assert.equal(snapshot.items[0].certification, "待教师确认");
+  assert.equal(snapshot.items[0].certification, "");
+  assert.doesNotMatch(homeworkPrintDocument(snapshot), /待教师确认/);
   assert.equal(snapshot.items[0].content, "第一题\n第二题");
   assert.equal(homeworkPrintSnapshot({...options, workspaceIds: []}).items.length, 0);
 });

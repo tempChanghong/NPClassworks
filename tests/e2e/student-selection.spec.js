@@ -62,7 +62,7 @@ test("a selected streamed subject displays missing, assigned, no-homework and co
     subject: {id: "physics", name: "物理"}, content: "走班练习", publishAt: new Date().toISOString(), isCertified: true,
     targets: [{workspaceId: "old-group", workspace: {id: "old-group", name: "物理旧班", type: "COURSE_GROUP", subjectId: "physics"}}]};
   const marker = {...work, id: "physics-none", title: "今日无作业", content: "本日该科目无作业。", contentJson: {kind: "NO_HOMEWORK", version: 1}};
-  for (const [next, label] of [[[work], "1 项作业"], [[marker], "今日无作业"], [[work, marker], "作业与无作业标记并存，请核对"]]) {
+  for (const [next, label] of [[[work], "1 项作业"], [[marker], "今日无作业 · 教师已确认"], [[work, marker], "作业与无作业标记并存，请核对"]]) {
     items = next;
     await page.getByRole("button", {name: "刷新", exact: true}).first().click();
     await expect(status).toHaveText(`物理 · 物理旧班：${label}`);

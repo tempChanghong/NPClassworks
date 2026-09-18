@@ -4,7 +4,7 @@ import {planHomeworkImages, planHomeworkImagesAsync, renderHomeworkImages, wrapH
 import {homeworkPrintSnapshot} from "../src/utils/homeworkPrint.js";
 const measure = text => Array.from(text).length * 28;
 const snapshot = {className: "一班", scopeLabel: "行政班与数学走班", boardDate: "2026-09-07", generatedAt: "2026/09/07 16:00",
-  items: [{subject: "数学", title: "练习", targets: "数学走班", certification: "待教师确认", priority: "普通", deadline: "未设置", content: "第一行\n第二行"}]};
+  items: [{subject: "数学", title: "练习", targets: "数学走班", certification: "", priority: "普通", deadline: "未设置", content: "第一行\n第二行"}]};
 
 test("image wrapping preserves Chinese, whitespace, line breaks and emoji graphemes", () => {
   assert.deepEqual(wrapHomeworkImageText("甲乙丙\n\nAB", () => 10, 20), ["甲乙", "丙", "", "AB"]);
@@ -36,7 +36,7 @@ test("images keep explicit no-homework/confirmation status and do not count mark
   const [page] = planHomeworkImages(data, measure);
   assert.match(page.headers.map(row => row.text).join(""), /0 项作业 · 1 项无作业标记/);
   const body = page.rows.map(row => row.text).join("");
-  assert.match(body, /今日无作业/); assert.match(body, /待教师确认/); assert.doesNotMatch(body, /截止：/);
+  assert.match(body, /今日无作业/); assert.doesNotMatch(body, /待教师确认/); assert.doesNotMatch(body, /截止：/);
 });
 
 test("empty days are explicit and excessive header text fails instead of silently covering homework", () => {

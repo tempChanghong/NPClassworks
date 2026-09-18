@@ -28,7 +28,7 @@ export function homeworkTextDocument(snapshot, subjects = homeworkTextSubjects(s
   }
   if (preparations.length) {
     lines.push("", "需带物品汇总");
-    for (const item of preparations) lines.push(`${item.date} · ${item.subject} · ${item.targets} · ${item.certified ? "教师已确认" : "待教师确认"}`, item.text);
+    for (const item of preparations) lines.push(`${item.date} · ${item.subject} · ${item.targets}${item.certified ? " · 教师已确认" : ""}`, item.text);
   }
   if (!items.length) lines.push("", subjects.length ? (snapshot.emptyMessage || "当前已加载内容中没有所选科目的作业记录，不代表无作业。") : "请先选择要分享的科目。");
   lines.push("", `NPClassworks · 生成于 ${snapshot.createdAt}`, "按所选科目整理已加载内容；不含通知及本机尚未上传的作业。内容以生成时为准。");

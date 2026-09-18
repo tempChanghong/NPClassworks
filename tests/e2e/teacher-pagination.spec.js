@@ -1,11 +1,47 @@
 import {test, expect} from "@playwright/test";
 import {origin, api} from "./environment.js";
+import {todayBoardDate} from "../../src/utils/boardDate.js";
 
 test.use({serviceWorkers: "block", storageState: {cookies: [], origins: [{origin, localStorage: [
   {name: "classworks-v2-oobe", value: JSON.stringify({version: 1, completed: true, roleHint: "teacher"})},
   {name: "classworks-v2-access-token", value: "teacher-token"},
   {name: "classworks-v2-refresh-token", value: "teacher-refresh"},
 ]}]}});
+
+test("action center and teacher badge include only today and roll over even if refresh fails", async ({page, request}) => {
+  await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
+  await request.post(`${api}/__test/reset`);
+  await page.clock.install({time: new Date("2026-09-18T12:00:00+08:00")});
+  const base = (await (await request.post(`${api}/api/v2/publications`, {data: {
+    content: "历史发布记录仍然保留", boardDate: "2026-09-17", publishAt: "2026-09-01T00:00:00Z",
+  }})).json()).data;
+  const items = ["2026-09-17", "2026-09-18", "2026-09-19"].map((boardDate, i) => ({
+    id: `action-${i}`, reason: "CREATED_BY_SCREEN", severity: "LOW", changedFields: [],
+    publication: {...base, id: `action-${i}`, boardDate, isCertified: false, content: `${boardDate}的未确认作业`},
+  }));
+  let fail = false, requests = 0;
+  await page.route(`${api}/api/v2/publications/action-required?*`, route => {
+    requests++;
+    if (fail) return route.fulfill({status: 503, json: {message: "待处理刷新暂时失败"}});
+    return route.fulfill({json: {data: {items, total: 3, summary: {total: 3, createdByScreen: 3}}}});
+  });
+  await page.goto(origin);
+  const center = page.locator(".teacher-action-center");
+  await expect(center.locator(".action-item")).toHaveCount(1);
+  await expect(center).toContainText("2026-09-18的未确认作业");
+  await expect(center).not.toContainText("2026-09-17的未确认作业");
+  await expect(center.locator(".v-chip").filter({hasText: /^大屏新录入 1$/})).toBeVisible();
+  await expect(page.locator(".classworks-mode-nav .v-badge__badge")).toHaveText("1");
+  await expect(page.locator(".teacher-publication-manager")).toContainText("历史发布记录仍然保留");
+  fail = true;
+  const beforeRollover = requests;
+  await page.clock.fastForward(24 * 60 * 60 * 1000);
+  await expect.poll(() => requests).toBeGreaterThan(beforeRollover);
+  await expect(center.locator(".action-item")).toHaveCount(1);
+  await expect(center).toContainText("2026-09-19的未确认作业");
+  await expect(center).not.toContainText("2026-09-18的未确认作业");
+  await expect(page.locator(".classworks-mode-nav .v-badge__badge")).toHaveText("1");
+});
 
 test("teacher search and action filters include later pages and retain complete results on refresh failure", async ({page, request}) => {
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
@@ -15,7 +51,7 @@ test("teacher search and action filters include later pages and retain complete 
     title: i === 100 ? "最后一页的唯一作业" : `作业${i}`}));
   const actions = Array.from({length: 151}, (_, i) => ({id: `a-${i}`, severity: "WARNING", changedFields: [],
     reason: i === 150 ? "CREATED_BY_SCREEN" : "CHANGED_AFTER_CERTIFICATION",
-    publication: {...base, id: `a-${i}`, content: i === 150 ? "最后一页的大屏新录入" : `待处理作业${i}`}}));
+    publication: {...base, isCertified: false, boardDate: todayBoardDate(), id: `a-${i}`, content: i === 150 ? "最后一页的大屏新录入" : `待处理作业${i}`}}));
   const summary = {total: 151, changedAfterCertified: 150, createdByScreen: 1, other: 0, overdue: 0, dueSoon: 0};
   const pageRequests = {publications: [], actions: []};
   const errors = [];

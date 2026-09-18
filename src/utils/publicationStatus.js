@@ -67,7 +67,7 @@ export function publicationIndicatorVisibility(publication = {}, options = {}) {
   const screenMode = options.screenMode === true;
   return {
     state,
-    showState: !screenMode || state.key !== PUBLICATION_STATUS.PUBLISHED.key,
+    showState: ![PUBLICATION_STATUS.PENDING_CERTIFICATION.key, PUBLICATION_STATUS.CHANGED_AFTER_CERTIFICATION.key].includes(state.key),
     showPriority: !screenMode || (publication.priority || "NORMAL") !== "NORMAL",
   };
 }

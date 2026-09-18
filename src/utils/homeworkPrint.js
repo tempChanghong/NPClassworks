@@ -36,7 +36,7 @@ export function homeworkPrintSnapshot({publications, preparations = [], workspac
     submission: submissionOf(item),
     deadline: item.dueAt ? dateTime(item.dueAt) : "未设置",
     priority: ({URGENT: "紧急", IMPORTANT: "重要", NORMAL: "普通"})[item.priority] || "普通",
-    certification: item.isCertified ? "教师已确认" : "待教师确认",
+    certification: item.isCertified ? "教师已确认" : "",
   })).sort((a, b) => a.subject.localeCompare(b.subject, "zh-CN"));
   return {className, scopeLabel, boardDate, items,
     preparations: preparationList(preparations, workspaceIds, [boardDate, preparationToday(now)].sort().at(-1), now), generatedAt: dateTime(generatedAt),
@@ -47,7 +47,7 @@ export function homeworkPrintDocument(snapshot) {
   const e = escapeHtml;
   const rows = snapshot.items.map((item, index) => `${item.group && item.group !== snapshot.items[index - 1]?.group ? `<h2 class="group-heading">${e(item.group)}</h2>` : ""}<section class="assignment">
     <h2><span class="checkbox" aria-hidden="true">□</span> ${index + 1}. ${e(item.subject)}${item.title ? ` · ${e(item.title)}` : ""}</h2>
-    <p class="details">${e(item.targets)} · ${e(item.priority)} · ${e(item.certification)}</p>
+    <p class="details">${[item.targets, item.priority, item.certification].filter(Boolean).map(e).join(" · ")}</p>
     <p class="content">${e(item.content || "（正文为空，请参阅标题）")}</p>
     ${item.optionalContent ? `<p class="content">选做：${e(item.optionalContent)}</p>` : ""}
     ${item.submission ? `<p class="content">提交说明：${e(item.submission)}</p>` : ""}
@@ -82,7 +82,7 @@ footer { border-top: 1px solid #111; margin-top: 20px; padding-top: 8px; }
 <p>${e(snapshot.scopeLabel)}</p><p class="details">共 ${snapshot.items.length} 项 · 数据更新于 ${e(snapshot.generatedAt)}</p></header>
 ${snapshot.cached ? '<p class="warning">离线缓存内容，可能不是最新作业。请核对后使用。</p>' : ""}
 ${snapshot.warning ? `<p class="warning">${e(snapshot.warning)}</p>` : ""}
-${snapshot.preparations?.length ? `<section class="assignment"><h2>需带物品</h2>${snapshot.preparations.map(item => `<p class="content">${e(item.date)} · ${e(item.subject)} · ${e(item.targets)} · ${item.certified ? "教师已确认" : "待教师确认"}<br>${e(item.text)}</p>`).join("")}</section>` : ""}
+${snapshot.preparations?.length ? `<section class="assignment"><h2>需带物品</h2>${snapshot.preparations.map(item => `<p class="content">${e(item.date)} · ${e(item.subject)} · ${e(item.targets)}${item.certified ? " · 教师已确认" : ""}<br>${e(item.text)}</p>`).join("")}</section>` : ""}
 ${rows || `<p>${e(snapshot.emptyMessage || "当前已加载内容中没有该日期的作业。")}</p>`}
 <footer>NPClassworks · 生成于 ${e(snapshot.createdAt)}<br>按当前班级选择整理已加载作业；不含通知及本机尚未上传的作业。内容以生成时为准。</footer>
 </main></body></html>`;

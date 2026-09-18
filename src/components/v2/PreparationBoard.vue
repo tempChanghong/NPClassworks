@@ -18,7 +18,6 @@
         需带物品 · {{ items.length }} 项 · {{ items[0].date }}
         · {{ items[0].text.length > 36 ? `${items[0].text.slice(0, 36)}…` : items[0].text }}
         <span v-if="store.feedUsingCache || store.feedLoadError"> · 已加载内容，请核对</span>
-        <span v-if="items.some(item => !item.certified)"> · 含待教师确认</span>
       </summary>
       <v-card-title v-else>
         需带物品
@@ -36,7 +35,7 @@
           class="preparation-board__item"
         >
           <strong>{{ item.date === today ? '今日需带' : item.date === tomorrow ? '明日需带' : '需带' }} · {{ item.date }}</strong>
-          <span> · {{ item.subject }} · {{ item.targets }} · {{ item.certified ? '教师已确认' : '待教师确认' }}</span>
+          <span> · {{ item.subject }} · {{ item.targets }}{{ item.certified ? ' · 教师已确认' : '' }}</span>
           <p>{{ item.text }}</p>
         </div>
       </v-card-text>

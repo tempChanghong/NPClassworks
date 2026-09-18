@@ -34,8 +34,8 @@
       >
         <v-badge
           color="warning"
-          :content="store.teacherActionCenter.summary.total"
-          :model-value="store.teacherActionCenter.summary.total > 0"
+          :content="todayTeacherActions.summary.total"
+          :model-value="todayTeacherActions.summary.total > 0"
         >
           <span class="classworks-mode-nav__content">
             <v-icon icon="mdi-account-tie-outline" />
@@ -442,7 +442,7 @@
 
         <TeacherActionCenter
           :busy-id="teacherActionBusyId"
-          :center="store.teacherActionCenter"
+          :center="todayTeacherActions"
           :loading="store.teacherActionCenterLoading"
           @certify="certifyActionItem"
           @edit="openTeacherEditor($event, {certifyAfterSave: true})"
@@ -660,6 +660,7 @@ import ClassworksOobe from "@/components/v2/ClassworksOobe.vue";
 import ScreenOobeChecklist from "@/components/v2/ScreenOobeChecklist.vue";
 import {boardDateRelativeLabel} from "@/utils/boardDate";
 import {useCurrentBoardDate} from "@/composables/useCurrentBoardDate";
+import {todayActionCenter} from "@/utils/teacherActionCenter";
 import {beginScreenTemporaryExit, endScreenTemporaryExit, readScreenTemporaryExit, screenExitState} from "@/utils/screenTemporaryExit";
 import {
   screenHomeworkSaveFeedback,
@@ -738,6 +739,10 @@ const screenProtectedAction = ref("exit");
 const screenTemporarilyUnlocked = computed(() => screenExitState.value.unlocked);
 const screenUnlockRemainingSeconds = computed(() => screenExitState.value.remainingSeconds);
 const currentBoardDay = useCurrentBoardDate();
+const todayTeacherActions = computed(() => todayActionCenter(store.teacherActionCenter, currentBoardDay.value));
+watch(currentBoardDay, () => {
+  if (store.account) void store.refreshTeacherActionCenter();
+});
 
 function showFeedback({
   title,
@@ -1300,7 +1305,7 @@ async function copyScreenBoardToToday() {
     const result = await store.copyScreenBoardToToday();
     showFeedback({
       title: `已复制 ${result.createdCount} 项作业`,
-      detail: `跳过 ${result.skippedCount} 项重复作业 · 新副本等待教师确认`,
+      detail: `跳过 ${result.skippedCount} 项重复作业`,
       color: "warning",
       icon: "mdi-content-copy",
     });

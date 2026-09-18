@@ -25,8 +25,11 @@
         class="copy-meta px-6 pb-3"
       >
         <p>{{ store.boardDate }} · {{ targets }}</p>
-        <v-chip :color="current.isCertified ? 'success' : 'warning'">
-          {{ current.isCertified ? '教师已确认' : '待教师确认' }}
+        <v-chip
+          v-if="current.isCertified"
+          color="success"
+        >
+          教师已确认
         </v-chip>
         <span class="ml-3">{{ isNoHomework(current) ? '今日无作业' : `截止：${deadline}` }}</span>
         <p

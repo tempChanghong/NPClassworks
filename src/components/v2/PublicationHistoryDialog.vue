@@ -46,7 +46,7 @@
           <v-timeline-item
             v-for="item in revisions"
             :key="item.id"
-            :dot-color="revisionState(item).color"
+            :dot-color="mode === 'screen' && revisionState(item).key === 'pending' ? 'grey' : revisionState(item).color"
             size="small"
           >
             <v-card
@@ -57,6 +57,7 @@
                 <div class="d-flex align-center flex-wrap ga-2 mb-2">
                   <strong>版本 {{ item.revision }}</strong>
                   <v-chip
+                    v-if="mode !== 'screen' || revisionState(item).key !== 'pending'"
                     :color="revisionState(item).color"
                     size="small"
                     variant="tonal"
@@ -81,7 +82,7 @@
                   {{ item.snapshot.title }}
                 </div>
                 <div class="revision-content">
-                  {{ item.purgedAt ? "该待教师确认备份已按三天保留策略清理正文" : (requiredHomeworkContent(item.snapshot) || "（无正文）") }}
+                  {{ item.purgedAt ? "该备份已按三天保留策略清理正文" : (requiredHomeworkContent(item.snapshot) || "（无正文）") }}
                 </div>
                 <SubmissionDetails
                   v-if="!item.purgedAt"

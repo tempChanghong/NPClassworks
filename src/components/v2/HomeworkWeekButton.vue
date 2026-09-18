@@ -122,7 +122,7 @@
             >
               <strong>{{ item.subject?.name || '未指定科目' }} · {{ item.title || '作业' }}</strong>
               <p class="text-caption">
-                {{ targetNames(item) }} · {{ item.isCertified ? '教师已确认' : '待教师确认' }}
+                {{ targetNames(item) }}{{ item.isCertified ? ' · 教师已确认' : '' }}
               </p>
               <p class="week-content">
                 {{ requiredHomeworkContent(item) }}

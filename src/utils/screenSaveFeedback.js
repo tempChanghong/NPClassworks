@@ -45,9 +45,9 @@ export function screenHomeworkSaveFeedback(publication = {}, context = {}) {
   }
   return {
     title: `${priorityLabel(publication)}作业${operation}`,
-    detail: `当前状态：待教师确认 · 版本 ${publication.revision || "—"} · ${target} · 历史版本已保留`,
-    color: "warning",
-    icon: "mdi-clock-alert-outline",
+    detail: `版本 ${publication.revision || "—"} · ${target} · 历史版本已保留`,
+    color: "success",
+    icon: "mdi-content-save-check-outline",
   };
 }
 
