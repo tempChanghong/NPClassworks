@@ -42,6 +42,20 @@ for (const status of ["DRAFT", "PUBLISHED"]) {
   });
 }
 
+test("notice preview defaults to one day and respects an explicit expiry", async () => {
+  const {state} = await composer();
+  state.form.type = "NOTICE";
+  await nextTick();
+  state.form.publishAt = "2099-09-20T08:30";
+  state.form.expiresAt = "";
+  assert.equal(state.lifecyclePreview.value, `未指定失效时间，将在 ${state.formatPreviewDateTime(new Date("2099-09-21T08:30"))} 自动停止显示`);
+  state.form.publishAt = new Date(Date.now() - 2 * 86400000).toISOString();
+  assert.equal(state.expiredNotice.value, true);
+  state.form.expiresAt = "2099-09-25T08:30";
+  assert.equal(state.expiredNotice.value, false);
+  assert.equal(state.lifecyclePreview.value, `通知将在 ${state.formatPreviewDateTime(new Date("2099-09-25T08:30"))} 自动停止显示`);
+});
+
 test("local submission failures show their own error instead of stale store state", async () => {
   const {store, state} = await composer();
   store.teacherError = "之前的无关错误";

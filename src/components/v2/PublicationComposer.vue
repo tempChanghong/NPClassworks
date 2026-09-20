@@ -299,7 +299,7 @@
           <v-text-field
             v-else-if="form.type === 'NOTICE'"
             v-model="form.expiresAt"
-            hint="留空时默认在发布三天后的同一时间自动消失"
+            hint="留空时默认在发布一天后的同一时间自动消失"
             label="自动失效时间（可选）"
             persistent-hint
             type="datetime-local"
@@ -730,7 +730,7 @@ const selectedSubject = computed(() => store.teacherSubjects.find((item) => item
 const priorityPreview = computed(() => publicationPriorityMeta(form.priority));
 const now = useNow({interval: 1000});
 const expiredNotice = computed(() => isNoticeExpired({type: form.type,
-  expiresAt: form.expiresAt || new Date(new Date(form.publishAt).getTime() + 3 * 86400000)}, now.value));
+  expiresAt: form.expiresAt || new Date(new Date(form.publishAt).getTime() + 86400000)}, now.value));
 const publishTimePreview = computed(() => {
   if (expiredNotice.value) return "通知已过期，保存后不会显示；如需再次展示，请调整失效时间";
   const time = new Date(form.publishAt);
@@ -751,8 +751,8 @@ const lifecyclePreview = computed(() => {
       : `通知将在 ${formatPreviewDateTime(new Date(form.expiresAt))} 自动停止显示`;
   }
   const publishAt = new Date(form.publishAt);
-  if (Number.isNaN(publishAt.getTime())) return "填写发布时间后，将默认显示三天";
-  const defaultExpiry = new Date(publishAt.getTime() + 3 * 24 * 60 * 60 * 1000);
+  if (Number.isNaN(publishAt.getTime())) return "填写发布时间后，将默认显示一天";
+  const defaultExpiry = new Date(publishAt.getTime() + 24 * 60 * 60 * 1000);
   return `未指定失效时间，将在 ${formatPreviewDateTime(defaultExpiry)} 自动停止显示`;
 });
 const correctionEligible = computed(() => form.type === "ASSIGNMENT" && editingBase.value?.status === "PUBLISHED");
