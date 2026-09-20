@@ -1,5 +1,7 @@
 import {createServer} from "node:http";
-import {readFile, stat} from "node:fs/promises";
+import {readFile, stat, mkdtemp, writeFile} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {randomUUID} from "node:crypto";
 import {resolve, extname, sep} from "node:path";
 import {spawnSync} from "node:child_process";
 import {api, apiPort, origin, webPort} from "../tests/e2e/environment.js";
@@ -11,6 +13,14 @@ const [{default: app}, {initSocket}, {prisma}] = await Promise.all([
 ]);
 // Require an empty migrated database rather than resetting any existing records.
 if (await prisma.school.count() || await prisma.account.count()) throw new Error("Fullstack database must be empty");
+if (process.env.FULLSTACK_NPEP === "true") {
+  const directory = await mkdtemp(resolve(tmpdir(), "npclassworks-npep-web-"));
+  const identity = {serverInstanceId: randomUUID(), deploymentEpoch: randomUUID()};
+  process.env.NPEP_ENABLED = "true";
+  process.env.NPEP_DEPLOYMENT_FILE = resolve(directory, "deployment.json");
+  await writeFile(process.env.NPEP_DEPLOYMENT_FILE, JSON.stringify({...identity, enabled: true}));
+  await prisma.npepDeployment.create({data: {id: "current", ...identity}});
+} else process.env.NPEP_ENABLED = "false";
 process.env.VITE_DEFAULT_KV_SERVER = api;
 process.env.VITE_ENABLE_ANALYTICS = "false";
 const upgrade = process.env.FULLSTACK_RELEASE_UPGRADE === "true";

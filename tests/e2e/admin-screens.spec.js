@@ -1,6 +1,7 @@
 import {test, expect} from "@playwright/test";
 import {readFile} from "node:fs/promises";
 import {origin, api} from "./environment.js";
+import {randomUUID} from "node:crypto";
 
 // Production Vue page and real buttons, with explicit admin API fixtures.
 // Backend authorization remains covered by the separate backend integration tests.
@@ -148,6 +149,110 @@ for (const mode of ["append", "replace"]) {
     } finally { await context.close(); }
   });
 }
+
+test("NPEP approval retries retain identity; device pagination, stale observations and revocation use real controls", async ({browser}) => {
+  const pairingId = randomUUID(), deviceId = randomUUID(), requests = [], approvalIds = [];
+  let approved = false, failList = false, failApproval = true, revoked = false;
+  const expiresAt = new Date(Date.now() + 600000).toISOString();
+  const setup = await openAdmin(browser, 1100, "ADMIN", {}, "screens", async context => {
+    await context.route(`${api}/api/v2/npep/**`, async route => {
+      const request = route.request(), url = new URL(request.url()), path = url.pathname;
+      const body = request.method() === "POST" ? request.postDataJSON() : null;
+      requests.push(path);
+      expect(request.headers()["x-npep-version"]).toBe("0.1");
+      expect(request.headers().authorization).toBe("Bearer admin-token");
+      const reply = data => route.fulfill({json: {protocolVersion: "0.1", requestId: body?.requestId || request.headers()["x-request-id"], serverTime: new Date().toISOString(), data}});
+      if (path.endsWith("/info")) return reply({supportedCapabilities: ["device.status"]});
+      if (path.endsWith("/resolve")) {
+        expect(body.userCode).toBe("ABCD2345");
+        return reply({pairingId, deviceName: "教室本地工具", appVersion: "1.0", expiresAt, requestedCapabilities: ["device.status"]});
+      }
+      if (path.endsWith("/approve")) {
+        approvalIds.push(body.requestId); expect(body.capabilities).toEqual(["device.status"]); expect(body.screenBindingId).toBe("screen-a");
+        if (failApproval) { failApproval = false; return route.fulfill({status: 503, json: {error: {code: "TEMPORARILY_UNAVAILABLE"}}}); }
+        approved = true;
+        return reply({pairingId, schoolName: "测试学校", administrativeClassName: "一班", screenBindingName: "一班大屏", expiresAt});
+      }
+      if (path.endsWith("/revoke")) { expect(body.expectedBindingRevision).toBe(2); revoked = true; return reply({deviceId, state: "REVOKED"}); }
+      if (path.endsWith("/devices")) {
+        if (failList) return route.fulfill({status: 503, json: {error: {code: "TEMPORARILY_UNAVAILABLE"}}});
+        const item = {deviceId, deviceName: "教室本地工具", screenBindingId: "screen-a", bindingRevision: 2, state: revoked ? "REVOKED" : "ACTIVE",
+          lastSeenAt: new Date(Date.now() - 90000).toISOString(), credentialExpiresAt: new Date(Date.now() + 86400000).toISOString(), connectivity: "OFFLINE",
+          status: {appVersion: "1.0", mode: "EXAM", recording: "IDLE", automaticRecording: "ENABLED"}};
+        return reply({items: approved ? [url.searchParams.has("cursor") ? {...item, deviceId: "older", deviceName: "另一台工具"} : item] : [], nextCursor: approved && !url.searchParams.has("cursor") ? "next-page" : null});
+      }
+      return route.fulfill({status: 404, json: {error: {code: "NOT_FOUND"}}});
+    });
+  });
+  const {page, context, errors} = setup;
+  try {
+    await expect(page.getByRole("button", {name: "打开 NPEP 设备互联"})).toBeVisible();
+    expect(requests).toEqual([]);
+    await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
+    const panel = page.locator(".npep-device-manager");
+    await expect(panel).toContainText("当前没有已登记");
+    await panel.getByLabel("8 位配对短码").fill("abcd-2345");
+    await panel.getByRole("button", {name: "核对配对申请", exact: true}).click();
+    await expect(panel.locator(".npep-candidate")).toContainText("教室本地工具");
+    await panel.locator(".v-select").filter({hasText: "关联的大屏与班级"}).click();
+    await page.getByRole("option", {name: "一班大屏 · 一班", exact: true}).click();
+    const approve = panel.getByRole("button", {name: "批准并等待现场确认", exact: true});
+    await expect(approve).toBeDisabled();
+    await panel.getByLabel("已核对设备、学校和班级，仅授权查看状态").check();
+    await approve.click();
+    await expect(panel).toContainText("互联服务未启用或暂时不可用");
+    await approve.click();
+    await expect(panel).toContainText("批准已保存");
+    expect(approvalIds).toHaveLength(2); expect(approvalIds[0]).toBe(approvalIds[1]);
+    await panel.getByRole("button", {name: "刷新互联设备", exact: true}).click();
+    await expect(panel.locator(".npep-device")).toHaveCount(1);
+    await expect(panel.locator(".npep-device")).toContainText("已失联");
+    await expect(panel.locator(".npep-device")).toContainText("上次观测模式：考试模式");
+    await expect(panel.locator(".npep-device")).toContainText("录制状态：未录制");
+    await panel.getByRole("button", {name: "加载更多互联设备"}).click();
+    await expect(panel.locator(".npep-device")).toHaveCount(2);
+    failList = true;
+    await panel.getByRole("button", {name: "刷新互联设备", exact: true}).click();
+    await expect(panel).toContainText("刷新未完成");
+    await expect(panel.locator(".npep-device")).toHaveCount(2);
+    await expect(panel.getByRole("button", {name: "撤销互联授权", exact: true}).first()).toBeDisabled();
+    failList = false;
+    await panel.getByRole("button", {name: "刷新互联设备", exact: true}).click();
+    await panel.getByRole("button", {name: "撤销互联授权", exact: true}).first().click();
+    expect(revoked).toBe(false);
+    await page.getByRole("button", {name: "确认撤销互联授权", exact: true}).click();
+    await expect(panel.locator(".npep-device")).toContainText("已撤销");
+    expect(revoked).toBe(true); expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+test("NPEP ignores a late short-code response after the panel closes", async ({browser}) => {
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  let entered = false;
+  const {page, context, errors} = await openAdmin(browser, 390, "ADMIN", {}, "screens", async context => {
+    await context.route(`${api}/api/v2/npep/**`, async route => {
+      const request = route.request(), body = request.method() === "POST" ? request.postDataJSON() : null;
+      const path = new URL(request.url()).pathname;
+      if (path.endsWith("/resolve")) { entered = true; await held; }
+      await route.fulfill({json: {protocolVersion: "0.1", requestId: body?.requestId || request.headers()["x-request-id"], serverTime: new Date().toISOString(),
+        data: path.endsWith("/devices") ? {items: [], nextCursor: null} : path.endsWith("/resolve") ? {pairingId: randomUUID(), deviceName: "迟到的旧设备", expiresAt: new Date(Date.now() + 600000).toISOString()} : {supportedCapabilities: ["device.status"]}}}).catch(() => {});
+    });
+  });
+  try {
+    await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
+    await expect(page.locator(".npep-device-manager")).toContainText("当前没有已登记");
+    await page.getByLabel("8 位配对短码").fill("ABCD2345");
+    await page.getByRole("button", {name: "核对配对申请", exact: true}).click();
+    await expect.poll(() => entered).toBe(true);
+    await page.getByRole("button", {name: "收起 NPEP 设备互联"}).click();
+    release();
+    await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
+    await expect(page.locator(".npep-device-manager")).toContainText("当前没有已登记");
+    await expect(page.locator(".npep-candidate")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  } finally { release(); await context.close(); }
+});
 
 test("screen list preserves its snapshot after HTTP failure and shows fresh status on retry", async ({browser}) => {
   const m = await openAdmin(browser, 1440);

@@ -841,6 +841,22 @@
             :administrative-class-options="administrativeClassOptions"
             :manager="screenManager"
           />
+          <template v-if="tab === 'screens' && selectedSchoolId && selectedSchool">
+            <v-btn
+              class="mt-4"
+              variant="tonal"
+              prepend-icon="mdi-link-variant"
+              @click="npepVisible = !npepVisible"
+            >
+              {{ npepVisible ? '收起 NPEP 设备互联' : '打开 NPEP 设备互联' }}
+            </v-btn>
+            <NpepDeviceManager
+              v-if="npepVisible"
+              :key="selectedSchoolId"
+              :school-id="selectedSchoolId"
+              :school-name="selectedSchool.school.name"
+            />
+          </template>
         </v-window-item>
 
         <v-window-item value="migration">
@@ -1181,7 +1197,7 @@
 </template>
 
 <script setup>
-import {computed, onMounted, onUnmounted, ref, watch} from "vue";
+import {computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch} from "vue";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import {onBeforeRouteLeave, useRoute, useRouter} from "vue-router";
 import {screenAccountAccessAllowed} from "@/utils/screenTemporaryExit";
@@ -1189,6 +1205,8 @@ import ValidationReport from "@/components/v2/ValidationReport.vue";
 import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
 import AdminNavigationPanel from "@/components/admin/AdminNavigationPanel.vue";
 import AdminScreenAccountPanel from "@/components/admin/AdminScreenAccountPanel.vue";
+const NpepDeviceManager = defineAsyncComponent(() => import("@/components/admin/NpepDeviceManager.vue"));
+const npepVisible = ref(false);
 import {useScreenAccountManager} from "@/composables/admin/useScreenAccountManager";
 import AdminHomeworkQuickInputs from "@/components/admin/AdminHomeworkQuickInputs.vue";
 import AdminHomeworkQuickDeadlines from "@/components/admin/AdminHomeworkQuickDeadlines.vue";

@@ -65,9 +65,9 @@ export async function createFlowHarness() {
       const request = {method: req.method, path: url.pathname, query: url.searchParams,
         headers: req.headers, body: raw ? JSON.parse(raw) : null};
       requests.push(request);
-      const reply = (data, status = 200) => {
+      const reply = (data, status = 200, rawEnvelope = false) => {
         res.writeHead(status, {"Content-Type": "application/json"});
-        res.end(JSON.stringify(status >= 400 ? data : {data}));
+        res.end(JSON.stringify(status >= 400 || rawEnvelope ? data : {data}));
       };
       const handler = routes.get(`${req.method} ${url.pathname}`);
       if (handler) await handler(request, reply);

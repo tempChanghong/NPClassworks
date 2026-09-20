@@ -288,6 +288,7 @@ client.interceptors.request.use((config) => {
 });
 
 client.interceptors.response.use((response) => {
+  if (response.config.url?.startsWith("/api/v2/npep/") && !isCurrentAccountSession(response.config._accountSession)) throw staleAccountRequest();
   if (!response.config.headers?.["X-Classworks-Screen-Token"]
     && response.config._screenAccountContext !== screenAccountContext()) throw staleAccountRequest();
   const renewedToken = response.headers["x-new-access-token"];
@@ -323,7 +324,7 @@ client.interceptors.response.use((response) => {
     const status = Number(error.response?.status) || null;
     const endpoint = sanitizeDiagnosticEndpoint(original?.url);
     // 心跳包含更有用的大屏同步上下文，由 store 单独记录，避免同一故障重复两次。
-    if (endpoint !== "/api/v2/classroom-screens/heartbeat") {
+    if (endpoint !== "/api/v2/classroom-screens/heartbeat" && !original?.url?.startsWith("/api/v2/npep/")) {
       recordDiagnosticEvent({
         category: "API",
         severity: !status || status >= 500 ? "ERROR" : "WARNING",
@@ -347,6 +348,29 @@ export function describeApiError(error, fallback = "请求失败") {
   const validation = data?.details?.errors?.[0];
   return validation?.message || data?.message || error?.message || fallback;
 }
+
+// Only school-management operations are available to the web UI. Device and
+// pairing secrets remain in the native client; never persist a short code here.
+async function npepAdminRequest(method, path, {body, signal, params, requestId = globalThis.crypto.randomUUID()} = {}) {
+  const response = await client.request({method, url: `/api/v2/npep${path}`, signal, params, timeout: 10000,
+    headers: {"X-NPEP-Version": "0.1", ...(method === "get" ? {"X-Request-Id": requestId} : {})},
+    ...(body ? {data: {...body, requestId}} : {}),
+  });
+  const value = response.data;
+  if (value?.protocolVersion !== "0.1" || value.requestId !== requestId || !Number.isFinite(Date.parse(value.serverTime)) || !value.data) {
+    throw new Error("互联服务响应不兼容，请刷新后重试");
+  }
+  return value;
+}
+const npepSchoolPath = schoolId => `/schools/${encodeURIComponent(schoolId)}`;
+export const npepAdminApi = {
+  info: options => npepAdminRequest("get", "/info", options),
+  devices: (schoolId, options) => npepAdminRequest("get", `${npepSchoolPath(schoolId)}/devices`, options),
+  resolve: (schoolId, userCode, options) => npepAdminRequest("post", `${npepSchoolPath(schoolId)}/pairings/resolve`, {...options, body: {userCode}}),
+  approve: (schoolId, pairingId, screenBindingId, options) => npepAdminRequest("post", `${npepSchoolPath(schoolId)}/pairings/${encodeURIComponent(pairingId)}/approve`, {...options, body: {screenBindingId, capabilities: ["device.status"]}}),
+  cancel: (schoolId, pairingId, options) => npepAdminRequest("post", `${npepSchoolPath(schoolId)}/pairings/${encodeURIComponent(pairingId)}/cancel`, {...options, body: {}}),
+  revoke: (schoolId, device, options) => npepAdminRequest("post", `${npepSchoolPath(schoolId)}/devices/${encodeURIComponent(device.deviceId)}/revoke`, {...options, body: {expectedBindingRevision: device.bindingRevision}}),
+};
 
 export async function getOAuthProviders() {
   return unwrap(await client.get("/accounts/oauth/providers"));
