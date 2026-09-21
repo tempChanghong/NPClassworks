@@ -1,0 +1,19 @@
+{
+  "src/assets/logo.svg": "npclassworks-logo.svg",
+  "src/assets/logo.png": "png/npclassworks-512.png",
+  "src/assets/cslogo.png": "png/npclassworks-256.png",
+  "src/assets/favicon.ico": "npclassworks.ico",
+  "public/favicon.ico": "npclassworks.ico",
+  "public/pwa/image/favicon.ico": "npclassworks.ico",
+  "public/pwa/image/logo.svg": "npclassworks-logo.svg",
+  "public/pwa/image/logo-small.svg": "npclassworks-logo-small.svg",
+  "public/pwa/image/safari-pinned-tab.svg": "safari-pinned-tab.svg",
+  "public/pwa/image/badge-64x64.png": "png/npclassworks-mono-light-64.png",
+  "public/pwa/image/apple-touch-icon-180x180.png": "png/apple-touch-icon-180x180.png",
+  "public/pwa/image/social-icon-512x512.png": "png/social-icon-512x512.png",
+  "public/pwa/image/pwa-64x64.png": "png/npclassworks-64.png",
+  "public/pwa/image/pwa-192x192.png": "png/npclassworks-192.png",
+  "public/pwa/image/pwa-512x512.png": "png/npclassworks-512.png",
+  "public/pwa/image/maskable-icon-512x512.png": "png/maskable-icon-512x512.png",
+  "public/pwa/image/maskable-icon-1024x1024.png": "png/maskable-icon-1024x1024.png"
+}

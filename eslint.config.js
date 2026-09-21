@@ -70,6 +70,10 @@ export default [
     },
   },
   {
+    // Adobe ExtendScript host directives (#target) are not browser/Node JavaScript.
+    ignores: ['images/branding/source/build-illustrator.jsx', 'images/branding/source/verify-illustrator.jsx'],
+  },
+  {
     files: ['public/noise-meter-worklet.js'],
     languageOptions: {
       globals: {

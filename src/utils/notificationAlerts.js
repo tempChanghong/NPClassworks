@@ -159,7 +159,7 @@ export function showSystemNotification(notice, NotificationApi = globalThis.Noti
   const notification = new NotificationApi(notice.title || `NPClassworks ${label}通知`, {
     body: notice.content || `收到一条新的${label}通知`,
     icon: "/pwa/image/pwa-192x192.png",
-    badge: "/pwa/image/pwa-64x64.png",
+    badge: "/pwa/image/badge-64x64.png",
     tag: `classworks-notice-${notificationAlertKey(notice)}`,
     renotify: true,
     requireInteraction: true,

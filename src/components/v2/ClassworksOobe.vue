@@ -1,16 +1,12 @@
 <template>
   <section class="oobe-shell">
     <div class="oobe-heading text-center">
-      <v-avatar
-        color="primary"
-        size="76"
-        variant="tonal"
+      <img
+        src="@/assets/logo.svg"
+        alt="NPClassworks 标志"
+        width="76"
+        height="76"
       >
-        <v-icon
-          icon="mdi-lightning-bolt-outline"
-          size="44"
-        />
-      </v-avatar>
       <h1>欢迎使用 NPClassworks</h1>
       <p>请选择这台设备的使用方式。</p>
     </div>

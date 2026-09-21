@@ -1,0 +1,68 @@
+{
+  "ico": {
+    "16": {
+      "variant": "small",
+      "exact_rgba_match": true
+    },
+    "24": {
+      "variant": "small",
+      "exact_rgba_match": true
+    },
+    "32": {
+      "variant": "small",
+      "exact_rgba_match": true
+    },
+    "48": {
+      "variant": "small",
+      "exact_rgba_match": true
+    },
+    "64": {
+      "variant": "small",
+      "exact_rgba_match": true
+    },
+    "256": {
+      "variant": "standard",
+      "exact_rgba_match": true
+    }
+  },
+  "maskable": {
+    "512": {
+      "max_foreground_radius_px": 200.61031877747465,
+      "allowed_radius_px": 204.8,
+      "opaque": true
+    },
+    "1024": {
+      "max_foreground_radius_px": 401.17140974899996,
+      "allowed_radius_px": 409.6,
+      "opaque": true
+    }
+  },
+  "geometry": {
+    "npclassworks-logo.svg": {
+      "paths": 4,
+      "same_geometry_as_npedutools": true,
+      "embedded_images": 0
+    },
+    "npclassworks-logo-small.svg": {
+      "paths": 3,
+      "same_geometry_as_npedutools": true,
+      "embedded_images": 0
+    },
+    "npclassworks-logo-mono.svg": {
+      "paths": 2,
+      "same_geometry_as_npedutools": true,
+      "embedded_images": 0
+    },
+    "npclassworks-logo-mono-light.svg": {
+      "paths": 2,
+      "same_geometry_as_npedutools": true,
+      "embedded_images": 0
+    }
+  },
+  "colors": {
+    "main": "#D97732",
+    "fold": "#A94E24",
+    "page": "#F2B56B",
+    "tile_background": "#FFF7ED"
+  }
+}

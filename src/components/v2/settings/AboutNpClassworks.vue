@@ -7,8 +7,8 @@
     >
       <div class="about-hero__content">
         <img
-          :src="novarkLogo"
-          alt="星火动力标志"
+          :src="classworksLogo"
+          alt="NPClassworks 标志"
           class="about-hero__logo"
         >
         <div class="about-hero__copy">
@@ -228,7 +228,7 @@
 
 <script setup>
 import packageInfo from "../../../../package.json";
-import novarkLogo from "../../../../images/星火动力0702.svg";
+import classworksLogo from "@/assets/logo.svg";
 
 const features = [
   {
@@ -299,6 +299,7 @@ const acknowledgements = [
 }
 .about-hero__logo {
   flex: 0 0 auto;
+  object-fit: contain;
   height: clamp(84px, 10vw, 124px);
   width: clamp(76px, 9vw, 112px);
 }

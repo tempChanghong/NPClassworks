@@ -279,6 +279,12 @@ export default defineConfig(({ mode }) => {
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
+          },
+          {
+            src: './pwa/image/maskable-icon-1024x1024.png',
+            sizes: '1024x1024',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ],
         shortcuts: [

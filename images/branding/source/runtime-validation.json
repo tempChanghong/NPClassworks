@@ -1,0 +1,127 @@
+{
+  "copies": {
+    "public/favicon.ico": {
+      "http": 200,
+      "sha256": "1211976b64897528355f4bb98d1df5e38a80f88e1ae9d6428de75f2b7bb03344"
+    },
+    "public/pwa/image/favicon.ico": {
+      "http": 200,
+      "sha256": "1211976b64897528355f4bb98d1df5e38a80f88e1ae9d6428de75f2b7bb03344"
+    },
+    "public/pwa/image/logo.svg": {
+      "http": 200,
+      "sha256": "63691be0048e4b416c0899789382bdbec4e73cdf2d28f96e97d8ad7ac1feaac7"
+    },
+    "public/pwa/image/logo-small.svg": {
+      "http": 200,
+      "sha256": "5c23795b7bfdec4542d019ea85b1a59d5e25fd5041a3d10ba4ffd3a193661240"
+    },
+    "public/pwa/image/safari-pinned-tab.svg": {
+      "http": 200,
+      "sha256": "a2e2c0748d3953a4ed339a9c0fed0d03ffd36a93c90ecd24191261145339e8f1"
+    },
+    "public/pwa/image/badge-64x64.png": {
+      "http": 200,
+      "sha256": "56f5a3c01b0e94b479dc2e3b456650f64cb836fccd1c62708495f00b771aca59"
+    },
+    "public/pwa/image/apple-touch-icon-180x180.png": {
+      "http": 200,
+      "sha256": "9e129307e7a29510926d322ffbf2eea7b08148a374e99a65ce9f303ca42fd292"
+    },
+    "public/pwa/image/social-icon-512x512.png": {
+      "http": 200,
+      "sha256": "6cb28567e1262d76b248b179b796ef095ab2adf5501d7ffb8a2acd542f4c96cf"
+    },
+    "public/pwa/image/pwa-64x64.png": {
+      "http": 200,
+      "sha256": "d79d938af6351bb69a0224718687b5dd235d44f7464e1968e4d0cdb8c314ee4d"
+    },
+    "public/pwa/image/pwa-192x192.png": {
+      "http": 200,
+      "sha256": "11744c3fe239040a6966ab3f110954b345d8af89809b673f5e22109e4d25d943"
+    },
+    "public/pwa/image/pwa-512x512.png": {
+      "http": 200,
+      "sha256": "ca3fc7d7644f6d4b94520f5f2cb93023d4469244c64983e4393b98fba39449c4"
+    },
+    "public/pwa/image/maskable-icon-512x512.png": {
+      "http": 200,
+      "sha256": "24caa3995400699fb04cac4bcd79512abf294132095bd7a4cb00ac7a903aaf07"
+    },
+    "public/pwa/image/maskable-icon-1024x1024.png": {
+      "http": 200,
+      "sha256": "1dc74550bb96d67e1e6e9dc287822caf57d539c6579ed3519ada6e799e3f2f4b"
+    },
+    "KV/public/favicon.ico": {
+      "http": 200,
+      "sha256": "1211976b64897528355f4bb98d1df5e38a80f88e1ae9d6428de75f2b7bb03344"
+    },
+    "KV/public/branding/logo.svg": {
+      "http": 200,
+      "sha256": "63691be0048e4b416c0899789382bdbec4e73cdf2d28f96e97d8ad7ac1feaac7"
+    },
+    "KV/public/branding/logo-small.svg": {
+      "http": 200,
+      "sha256": "5c23795b7bfdec4542d019ea85b1a59d5e25fd5041a3d10ba4ffd3a193661240"
+    }
+  },
+  "manifestErrors": [
+    {
+      "message": "The scheme 'cs' doesn't belong to the scheme allowlist. Please prefix non-allowlisted schemes with the string 'web+'.",
+      "critical": 0,
+      "line": 0,
+      "column": 0
+    },
+    {
+      "message": "protocol_handlers entry ignored, required property 'protocol' is invalid.",
+      "critical": 0,
+      "line": 0,
+      "column": 0
+    }
+  ],
+  "installabilityErrors": [],
+  "manifestUrl": "http://127.0.0.1:4182/manifest.webmanifest",
+  "icons": [
+    {
+      "src": "./pwa/image/pwa-64x64.png",
+      "declared": "64x64",
+      "actual": "64x64",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa/image/pwa-192x192.png",
+      "declared": "192x192",
+      "actual": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa/image/pwa-512x512.png",
+      "declared": "512x512",
+      "actual": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa/image/maskable-icon-512x512.png",
+      "declared": "512x512",
+      "actual": "512x512",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./pwa/image/maskable-icon-1024x1024.png",
+      "declared": "1024x1024",
+      "actual": "1024x1024",
+      "purpose": "maskable"
+    }
+  ],
+  "serviceWorkers": [
+    {
+      "scope": "http://127.0.0.1:4182/",
+      "active": "activated"
+    }
+  ],
+  "logo": {
+    "loaded": true,
+    "objectFit": "contain"
+  },
+  "kvMode": "isolated Express static/template fixture; no database or backend business routes"
+}

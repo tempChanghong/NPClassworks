@@ -1,0 +1,2 @@
+# Preserve the native Illustrator/PDF byte offsets and embedded edit data.
+images/branding/*.ai binary
