@@ -4,6 +4,12 @@ on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      backend_ref:
+        description: Backend branch, tag or full commit SHA to test
+        default: main
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -15,6 +21,8 @@ concurrency:
 jobs:
   contracts:
     uses: ./.github/workflows/contracts.yml
+    with:
+      backend_ref: ${{ inputs.backend_ref || 'main' }}
 
   test:
     runs-on: ubuntu-latest
