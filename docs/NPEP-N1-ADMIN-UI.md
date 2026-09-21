@@ -46,4 +46,6 @@ node scripts/run-fullstack.js tests/fullstack/npep.spec.js
 
 ## 尚未验收
 
+2026-09-21 分离部署准备复核见配套后端 [NPEP-N1-DEPLOYMENT-READINESS.md](../../NPClassworksKV/docs/NPEP-N1-DEPLOYMENT-READINESS.md)。用户确认 NPEP 仍在功能分支，main 才触发自动部署；协作任务在 API origin 只读观测到的 404 属于当前未上线状态，不作为部署故障。未来合入并推送 main 即生产发布动作，须先审核迁移、外部代际目录、启用顺序与恢复流程。本轮未合并或部署。
+
 没有部署到真实学校；生产反代 TLS、外部 deploymentEpoch 挂载与恢复运维、真实大屏现场体验仍待单独验收。N1 仍只授权 `device.status`，不实现远程通知、模式切换或录制控制。
