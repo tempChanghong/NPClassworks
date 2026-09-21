@@ -5,12 +5,14 @@ import {preparationToday} from "../../src/utils/homeworkPreparation.js";
 test("screen layout preserves dock access, full long homework and expandable context across viewport sizes", async ({browser, request}, testInfo) => {
   await request.post(`${origin}/__test/release`, {data: {release: "previous"}});
   await request.post(`${api}/__test/reset`);
-  const date = preparationToday();
+  // A UTC board can still be on the previous day after Shanghai midnight.
+  const fixed = new Date("2026-09-21T16:30:00Z");
+  const date = "2026-09-21", preparationDate = preparationToday(fixed);
   const content = Array.from({length: 12}, (_, i) => `第 ${i + 1} 项：完成练习并写出完整步骤，核对答案与单位。`).join("\n");
   for (const [index, name] of ["数学", "语文", "英语", "物理", "化学", "生物"].entries()) {
-    const created = await request.post(`${api}/api/v2/publications`, {data: {boardDate: date, subjectId: "math",
+    const created = await request.post(`${api}/api/v2/publications`, {data: {boardDate: date, subjectId: "math", publishAt: "2026-01-01T00:00:00Z",
       title: `${name}练习`, content: index ? `${name}：完成今日练习，订正错题。` : content,
-      contentJson: index ? null : {optionalContent: "拓展题任选一题。", submission: "交课代表", preparation: {date, text: "圆规、实验报告"}},
+      contentJson: index ? null : {optionalContent: "拓展题任选一题。", submission: "交课代表", preparation: {date: preparationDate, text: "圆规、实验报告"}},
     }});
     expect(created.ok()).toBe(true);
     const item = (await created.json()).data;
@@ -19,9 +21,10 @@ test("screen layout preserves dock access, full long homework and expandable con
   const values = {"classworks-v2-screen-token": "screen-token",
     "classworks-v2-oobe": JSON.stringify({version: 1, completed: true, roleHint: "screen"}),
     "classworks-v2-screen-oobe:screen-a": JSON.stringify({version: 1, completed: true})};
-  const context = await browser.newContext({viewport: {width: 1920, height: 1080}, serviceWorkers: "block",
+  const context = await browser.newContext({viewport: {width: 1920, height: 1080}, serviceWorkers: "block", timezoneId: "UTC",
     storageState: {cookies: [], origins: [{origin, localStorage: Object.entries(values).map(([name, value]) => ({name, value}))}]}});
   const page = await context.newPage(), errors = [];
+  await page.clock.install({time: fixed});
   page.on("pageerror", error => errors.push(error.message));
   try {
     await page.goto(origin);
@@ -90,7 +93,6 @@ test("screen layout preserves dock access, full long homework and expandable con
     await expect.poll(async () => (await long.boundingBox()).width / (await short.boundingBox()).width).toBeGreaterThan(1.8);
     // Advance one real anti-burn-in interval: the board and dock still shift,
     // but scrolling must not move the dock out of the viewport.
-    await page.clock.install();
     await page.reload();
     await expect(cards).toHaveCount(6);
     await expect(page.locator(".classworks-app-bar")).toContainText("NPClassworks 作业板");

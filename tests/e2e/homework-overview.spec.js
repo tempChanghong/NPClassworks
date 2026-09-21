@@ -1,8 +1,8 @@
 import {test, expect} from "@playwright/test";
 import {origin, api} from "./environment.js";
-import {todayBoardDate} from "../../src/utils/boardDate.js";
+import {preparationToday} from "../../src/utils/homeworkPreparation.js";
 
-async function openBoard(browser, role, serviceWorkers = "allow") {
+async function openBoard(browser, role, serviceWorkers = "allow", fixedTime = null) {
   const values = {
     "classworks-v2-oobe": JSON.stringify({version: 1, completed: true, roleHint: role}),
     ...(role === "teacher" ? {"classworks-v2-access-token": "teacher-token", "classworks-v2-refresh-token": "teacher-refresh"}
@@ -11,8 +11,10 @@ async function openBoard(browser, role, serviceWorkers = "allow") {
           administrativeClassName: "高一一班", courseGroupIds: {}, declinedSubjectIds: []})}),
   };
   const context = await browser.newContext({viewport: {width: 1440, height: 1000}, serviceWorkers,
+    ...(fixedTime ? {timezoneId: "UTC"} : {}),
     storageState: {cookies: [], origins: [{origin, localStorage: Object.entries(values).map(([name, value]) => ({name, value}))}]}});
   const page = await context.newPage(), errors = [];
+  if (fixedTime) await page.clock.setFixedTime(fixedTime);
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(origin);
   return {page, context, errors};
@@ -41,28 +43,34 @@ test.beforeEach(async ({request}) => {
 });
 
 for (const role of ["screen", "student"]) {
-  test(`${role} shows only confirmed badges while retaining uncertified homework and preparations`, async ({browser, request}) => {
-    const date = todayBoardDate();
-    const pending = await seed(request, {boardDate: date, content: "仍然展示的未确认作业",
-      contentJson: {preparation: {date, text: "未确认的需带物品"}}});
-    expect((await request.patch(`${api}/api/v2/publications/${pending.id}`, {
-      headers: {"If-Match": '"1"'}, data: {isCertified: false},
-    })).ok()).toBe(true);
-    await seed(request, {boardDate: date, content: "已确认作业正文"});
-    const board = await openBoard(browser, role, "block");
-    try {
-      const cards = board.page.locator(".publication-card");
-      const pendingCard = cards.filter({hasText: "仍然展示的未确认作业"});
-      await expect(pendingCard).toBeVisible();
-      await expect(pendingCard).not.toContainText("待教师确认");
-      await expect(pendingCard).not.toContainText("教师已确认");
-      await expect(cards.filter({hasText: "已确认作业正文"})).toContainText("教师已确认");
-      if (role === "screen") await board.page.locator(".preparation-summary").click();
-      await expect(board.page.locator(".preparation-board")).toContainText("未确认的需带物品");
-      await expect(board.page.locator(".preparation-board")).not.toContainText("待教师确认");
-      expect(board.errors).toEqual([]);
-    } finally { await board.context.close(); }
-  });
+  for (const hour of [15, 16]) {
+    test(`${role} shows only confirmed badges while retaining uncertified homework and preparations at ${hour}:30 UTC`, async ({browser, request}) => {
+      // The board uses browser-local dates; preparations use Asia/Shanghai dates.
+      // Keep both sides of Shanghai midnight independent of the runner's clock.
+      const fixed = new Date(`2026-09-21T${hour}:30:00Z`);
+      const date = "2026-09-21", preparationDate = preparationToday(fixed);
+      const pending = await seed(request, {boardDate: date, content: "仍然展示的未确认作业",
+        contentJson: {preparation: {date: preparationDate, text: "未确认的需带物品"}}});
+      expect((await request.patch(`${api}/api/v2/publications/${pending.id}`, {
+        headers: {"If-Match": '"1"'}, data: {isCertified: false},
+      })).ok()).toBe(true);
+      await seed(request, {boardDate: date, content: "已确认作业正文"});
+      const board = await openBoard(browser, role, "block", fixed);
+      try {
+        await expect(board.page.getByLabel("选择日期")).toHaveValue(date);
+        const cards = board.page.locator(".publication-card");
+        const pendingCard = cards.filter({hasText: "仍然展示的未确认作业"});
+        await expect(pendingCard).toBeVisible();
+        await expect(pendingCard).not.toContainText("待教师确认");
+        await expect(pendingCard).not.toContainText("教师已确认");
+        await expect(cards.filter({hasText: "已确认作业正文"})).toContainText("教师已确认");
+        if (role === "screen") await board.page.locator(".preparation-summary").click();
+        await expect(board.page.locator(".preparation-board")).toContainText("未确认的需带物品");
+        await expect(board.page.locator(".preparation-board")).not.toContainText("待教师确认");
+        expect(board.errors).toEqual([]);
+      } finally { await board.context.close(); }
+    });
+  }
 }
 
 test("screen separates a connected socket from failed content refresh and reports the cached content timestamp", async ({browser, request}) => {
