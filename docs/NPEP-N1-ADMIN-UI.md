@@ -40,7 +40,9 @@ $env:FULLSTACK_NPEP = 'true'
 node scripts/run-fullstack.js tests/fullstack/npep.spec.js
 ```
 
-如默认端口被占用，可分别配置 `E2E_WEB_PORT`、`E2E_API_PORT` 和 `FULLSTACK_POSTGRES_PORT`。脚本只接受 localhost 的 `npclassworks_test_fullstack*` 库，创建本次专用配置代际；默认不打开 NPEP。由于配套后端尚在独立分支，现有 CI 未显式开启此新增全链路场景；双方集成后应把该场景纳入部署门槛，不能将默认跳过说成已在 CI 验收。
+如默认端口被占用，可分别配置 `E2E_WEB_PORT`、`E2E_API_PORT` 和 `FULLSTACK_POSTGRES_PORT`。脚本只接受 localhost 的 `npclassworks_test_fullstack*` 库，创建本次专用配置代际；通用 fullstack 默认不打开 NPEP。
+
+新增显式门槛 `pnpm test:e2e:npep`：强制隔离环境启用 N1、拒绝测试筛选参数、检查两端 N1 代码存在，解析实际 Playwright JSON 报告并拒绝空结果、跳过及 flaky。前端 contracts 与后端生产 fullstack 都必须通过该步骤才能部署。`test-results/npep-metadata/` 保存配对版本及结果；生产开关仍默认关闭。现有 contracts 手动入口增加 `frontend_ref`，可与 `backend_ref` 同时传完整 SHA 进行仅测试验收，不会调用部署代理。首次仅一端 main 包含 N1 时检查会明确阻断，需两端配齐后重跑；不自动跳过兼容检查。
 
 另已按设备端任务请求重新开放原 `https://localhost:34439` 隔离服务供 NPEduTools Runtime 联调。对端报告真实 Runtime 验收 17/17 通过，涵盖现场确认前不报告、确认后常驻报告、暂停跨重启、恢复新会话、撤销与本机清理；这些数字来自对端验收，本任务没有将其视为双端正式界面的现场验收。临时管理员凭据、证书、虚构学校绑定保存在后端 ignored 的 `deploy/runtime/npep-n1/`，不纳入本提交。联调后仅停止该 HTTPS 进程，保留数据库与夹具。
 
