@@ -61,6 +61,10 @@ pnpm run lint
 
 ## 部署
 
+页面的 canonical、Open Graph 地址及分享图片由 `vite.config.mjs` 统一生成，默认前端站点为 `https://newfires.top`。自建部署可在构建环境或 `.env.production.local` 中设置 `VITE_SITE_ORIGIN=https://your-school.example`；Docker 构建使用 `--build-arg VITE_SITE_ORIGIN=https://your-school.example`（Compose 对应 `frontend.build.args.VITE_SITE_ORIGIN`）。它必须是仅含协议、主机及可选端口的 HTTP(S) 地址，不接受路径、查询参数或账号密码。
+
+该变量表示用户访问的**前端站点**，与 `VITE_DEFAULT_KV_SERVER` 指定的 API 服务地址不同；修改后需要重新构建并部署前端，容器运行时设置不会改写已生成的 HTML。`robots` 继续使用 `noindex, follow`。
+
 生产环境建议让前后端保持同源，由反向代理统一提供 HTTPS，并将 `/api`、`/accounts`、`/socket.io`、健康检查和指标路径转发至 NPClassworksKV。部署前请先阅读后端仓库的生产配置说明并执行数据库迁移。
 
 联合生产栈由同级的 NPClassworksKV 仓库统一启动，必须显式加载生产环境文件：

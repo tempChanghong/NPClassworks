@@ -17,6 +17,14 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  // Public page metadata uses the frontend origin, independently of the API server.
+  const siteUrl = new URL(env.VITE_SITE_ORIGIN || 'https://newfires.top')
+  if (!['http:', 'https:'].includes(siteUrl.protocol)
+    || siteUrl.username || siteUrl.password
+    || siteUrl.pathname !== '/' || siteUrl.search || siteUrl.hash) {
+    throw new Error('VITE_SITE_ORIGIN must be an HTTP(S) origin without credentials, path, query or fragment.')
+  }
+  const socialImageUrl = new URL('/pwa/image/social-icon-512x512.png', siteUrl).href
   const analyticsModule = env.VITE_ENABLE_ANALYTICS === 'true'
     ? './src/utils/analyticsEnabled.js'
     : './src/utils/analyticsDisabled.js'
@@ -29,6 +37,17 @@ export default defineConfig(({ mode }) => {
   return ({
   base: './',
   plugins: [
+    {
+      name: 'site-metadata',
+      transformIndexHtml() {
+        return [
+          { tag: 'link', attrs: { rel: 'canonical', href: siteUrl.href } },
+          { tag: 'meta', attrs: { property: 'og:url', content: siteUrl.href } },
+          { tag: 'meta', attrs: { property: 'og:image', content: socialImageUrl } },
+          { tag: 'meta', attrs: { name: 'twitter:image', content: socialImageUrl } },
+        ]
+      },
+    },
     VueRouter({
       // 调试页只参与开发构建，生产包不生成对应路由或异步代码块。
       exclude: mode === 'development'
