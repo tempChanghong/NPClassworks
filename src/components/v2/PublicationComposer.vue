@@ -326,8 +326,8 @@
         :model-value="form.priority !== 'MINOR' || form.popupEnabled"
         :disabled="form.priority !== 'MINOR'"
         color="primary"
-        label="大屏弹窗提示"
-        :hint="form.priority === 'MINOR' ? '次要通知使用 Teams 默认提示音，可选择是否弹窗' : '普通、重要、紧急通知必须弹窗提示'"
+        label="网页大屏与 NPEduTools 弹窗提示"
+        :hint="form.priority === 'MINOR' ? '此开关同时控制网页大屏与已连接的 NPEduTools；关闭后仍可接收通知，网页使用 Teams 默认提示音' : '普通、重要、紧急通知在网页大屏与已连接的 NPEduTools 中均须弹窗提示'"
         persistent-hint
         class="mb-4"
         @update:model-value="form.popupEnabled = $event"

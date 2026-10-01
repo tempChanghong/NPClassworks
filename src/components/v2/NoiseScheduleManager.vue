@@ -8,6 +8,7 @@
 <script setup>
 import {onMounted, onUnmounted, watch} from "vue";
 import {noiseMonitoring} from "@/utils/noiseMonitoring";
+import {nativeNoise, nativeNoiseState} from '@/utils/nativeNoise';
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {loadClassroomToolSettings, classroomToolSettingsKey, CLASSROOM_TOOLS_SETTINGS_EVENT} from "@/utils/classroomToolSettings";
 import {loadMicrophoneDeviceSettings, microphoneDeviceSettingsKey, MICROPHONE_DEVICE_SETTINGS_EVENT} from "@/utils/microphoneDeviceSettings";
@@ -21,6 +22,12 @@ import {
 const store = useClassworksV2Store();
 let timer = null;
 let detach = null;
+let nativeTimer = null;
+function syncNative() {
+  const binding = store.screenSession?.binding;
+  nativeNoise.context(binding?.id ? `${getServerUrl()}:${binding.id}:${binding.credentialVersion || 1}` : '');
+  void nativeNoise.poll();
+}
 
 function readContext() {
   const binding = store.screenSession?.binding;
@@ -29,7 +36,7 @@ function readContext() {
   return {
     bindingId,
     scopeKey: `${getServerUrl()}:${bindingId}:${binding?.credentialVersion || 1}:${getClassroomScreenToken()}`,
-    enabled: Boolean(bindingId && !screenExitState.value.unlocked
+    enabled: Boolean(nativeNoiseState.value.provider === 'browser' && bindingId && !screenExitState.value.unlocked
       && loadClassroomToolSettings(bindingId).enabledToolIds.includes("noise")),
     scheduleKey: noiseScheduleWindowKey(schedule),
     endTime: schedule.endTime,
@@ -57,9 +64,12 @@ function handleStorage(event) {
   }
 }
 watch(() => [store.screenSession?.binding?.id, store.screenSession?.binding?.credentialVersion, screenExitState.value.unlocked],
-  evaluate, {flush: "sync"});
+  () => { syncNative(); evaluate(); }, {flush: "sync"});
+watch(() => nativeNoiseState.value.provider, evaluate, {flush: 'sync'});
 
 onMounted(() => {
+  syncNative();
+  nativeTimer = window.setInterval(syncNative, 3000);
   detach = noiseMonitoring.attach(readContext);
   window.addEventListener(NOISE_SCHEDULE_SETTINGS_EVENT, handleScheduleChange);
   window.addEventListener(CLASSROOM_TOOLS_SETTINGS_EVENT, handleScheduleChange);
@@ -71,6 +81,8 @@ onMounted(() => {
   timer = window.setInterval(evaluate, 15 * 1000);
 });
 onUnmounted(() => {
+  window.clearInterval(nativeTimer);
+  nativeNoise.context('');
   window.removeEventListener(NOISE_SCHEDULE_SETTINGS_EVENT, handleScheduleChange);
   window.removeEventListener(CLASSROOM_TOOLS_SETTINGS_EVENT, handleScheduleChange);
   window.removeEventListener(MICROPHONE_DEVICE_SETTINGS_EVENT, handleMicrophoneChange);

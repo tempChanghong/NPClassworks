@@ -280,7 +280,8 @@ client.interceptors.request.use((config) => {
     "/api/v2/setup/status", "/api/v2/classroom-screens/login",
   ].includes(config.url);
   if (!screenRequest && !publicRequest) assertScreenAccountContext();
-  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  const nativeScreenRequest = screenRequest && config.url?.startsWith('/api/v2/npep/screen/');
+  if (accessToken && !nativeScreenRequest) config.headers.Authorization = `Bearer ${accessToken}`;
   else delete config.headers.Authorization;
   config._accountSession = accountSession();
   config._screenAccountContext = screenAccountContext();
@@ -288,7 +289,7 @@ client.interceptors.request.use((config) => {
 });
 
 client.interceptors.response.use((response) => {
-  if (response.config.url?.startsWith("/api/v2/npep/") && !isCurrentAccountSession(response.config._accountSession)) throw staleAccountRequest();
+  if (response.config.url?.startsWith("/api/v2/npep/") && !response.config.headers?.["X-Classworks-Screen-Token"] && !isCurrentAccountSession(response.config._accountSession)) throw staleAccountRequest();
   if (!response.config.headers?.["X-Classworks-Screen-Token"]
     && response.config._screenAccountContext !== screenAccountContext()) throw staleAccountRequest();
   const renewedToken = response.headers["x-new-access-token"];
@@ -351,18 +352,68 @@ export function describeApiError(error, fallback = "请求失败") {
 
 // Only school-management operations are available to the web UI. Device and
 // pairing secrets remain in the native client; never persist a short code here.
-async function npepAdminRequest(method, path, {body, signal, params, requestId = globalThis.crypto.randomUUID()} = {}) {
+async function npepAdminRequest(method, path, {body, signal, params, version = "0.1", requestId = globalThis.crypto.randomUUID()} = {}) {
   const response = await client.request({method, url: `/api/v2/npep${path}`, signal, params, timeout: 10000,
-    headers: {"X-NPEP-Version": "0.1", ...(method === "get" ? {"X-Request-Id": requestId} : {})},
+    headers: {"X-NPEP-Version": version, ...(method === "get" ? {"X-Request-Id": requestId} : {})},
     ...(body ? {data: {...body, requestId}} : {}),
   });
   const value = response.data;
-  if (value?.protocolVersion !== "0.1" || value.requestId !== requestId || !Number.isFinite(Date.parse(value.serverTime)) || !value.data) {
+  if (value?.protocolVersion !== version || value.requestId !== requestId || !Number.isFinite(Date.parse(value.serverTime)) || !value.data) {
     throw new Error("互联服务响应不兼容，请刷新后重试");
   }
   return value;
 }
 const npepSchoolPath = schoolId => `/schools/${encodeURIComponent(schoolId)}`;
+const runtimePath = (school, device) => `${npepSchoolPath(school)}/devices/${encodeURIComponent(device)}`;
+export const npepNoiseScheduleApi = {
+  async screen(body, {signal} = {}) {
+    const token = getClassroomScreenToken(), server = baseUrl();
+    if (!token) throw new Error('大屏尚未绑定');
+    const requestId = body?.requestId || globalThis.crypto.randomUUID();
+    const response = await client.request({method:body?'post':'get',url:`/api/v2/npep/screen/noise-schedule${body?'/resume':''}`,timeout:8000,signal,
+      headers:screenHeaders({'X-NPEP-Version':'0.7','X-Request-Id':requestId}),...(body?{data:{...body,requestId}}:{})});
+    if (token !== getClassroomScreenToken() || server !== baseUrl()) throw staleAccountRequest();
+    const v=response.data;
+    if(v?.protocolVersion!=='0.7'||v.requestId!==requestId||!v.data) throw new Error('排程接口响应不兼容');
+    return v.data;
+  },
+  management:(school,device,options)=>npepAdminRequest('get',`${runtimePath(school,device)}/noise-schedule`,{...options,version:'0.7'}),
+  list: (school, termId, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/noise-schedules`,
+    {...options, version: '0.7', params: termId ? {termId} : {}}),
+  preview: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/noise-schedules/preview`, {...options, version: '0.7', body}),
+  save: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/noise-schedules`,
+    {...options, version: '0.7', body, requestId: body.requestId}),
+};
+export const npepNoiseApi = {
+  async screen(body, {signal} = {}) {
+    const token = getClassroomScreenToken(), server = baseUrl();
+    if (!token) throw new Error('大屏尚未绑定');
+    const requestId = body?.requestId || globalThis.crypto.randomUUID();
+    const response = await client.request({method: body ? 'post' : 'get',
+      url: `/api/v2/npep/screen/noise${body ? '/commands' : ''}`, timeout: 8000, signal,
+      headers: screenHeaders({'X-NPEP-Version': '0.6', 'X-Request-Id': requestId}),
+      ...(body ? {data: {...body, requestId}} : {}),
+    });
+    if (token !== getClassroomScreenToken() || server !== baseUrl()) throw staleAccountRequest();
+    const value = response.data;
+    if (value?.protocolVersion !== '0.6' || value.requestId !== requestId || !value.data) throw new Error('噪音接口响应不兼容');
+    return value.data;
+  },
+  management: (school, device, options) => npepAdminRequest('get', `${runtimePath(school, device)}/noise`, {...options, version: '0.6'}),
+};
+export const npepRuntimeApi = {
+  status: (school, device, options) => npepAdminRequest("get", `${runtimePath(school, device)}/runtime-status`, {...options, version: "0.4"}),
+  operations: (school, device, options) => npepAdminRequest("get", `${runtimePath(school, device)}/runtime-operations`, {...options, version: "0.4"}),
+  create: (school, device, body, options) => npepAdminRequest("post", `${runtimePath(school, device)}/runtime-operations`, {...options, version: "0.4", body}),
+  cancel: (school, device, operation, options) => npepAdminRequest("post", `${runtimePath(school, device)}/runtime-operations/${encodeURIComponent(operation)}/cancel`, {...options, version: "0.4", body: {}}),
+};
+const examPlanPath = (school, device) => `${runtimePath(school, device)}/exam-plans`;
+export const npepExamPlanApi = {
+  status: (school, device, options) => npepAdminRequest('get', examPlanPath(school, device), {...options, version: '0.5'}),
+  create: (school, device, body, options) => npepAdminRequest('post', examPlanPath(school, device), {...options, version: '0.5', body}),
+  start: (school, device, operation, body, options) => npepAdminRequest('post', `${examPlanPath(school, device)}/${encodeURIComponent(operation)}/start`, {...options, version: '0.5', body}),
+  cancel: (school, device, operation, options) => npepAdminRequest('post', `${examPlanPath(school, device)}/${encodeURIComponent(operation)}/cancel`, {...options, version: '0.5', body: {}}),
+};
 export const npepAdminApi = {
   info: options => npepAdminRequest("get", "/info", options),
   devices: (schoolId, options) => npepAdminRequest("get", `${npepSchoolPath(schoolId)}/devices`, options),

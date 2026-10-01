@@ -307,8 +307,15 @@ test("delivery refresh is disabled while loading and recovers after a request fa
     await expect.poll(() => held.length).toBe(2);
     await expect(refresh).toBeDisabled();
     await held[1].fulfill({json: {data: {revision: 1, screens: [{binding: {id: "screen-a", name: "测试大屏"},
-      delivery: {revision: 1, acknowledgedAt: new Date().toISOString()}}]}}});
+      delivery: {revision: 1, acknowledgedAt: new Date().toISOString()}}],
+      npepDevices: [{deviceId: 'npep-test', name: '桌面联调设备', className: '测试班', receivedAt: null,
+        displayedAt: null, dismissedAt: new Date().toISOString()}]}}});
     await expect(dialog).toContainText("当前版本已由大屏确认");
+    await expect(dialog).toContainText("NPEduTools 通知回执");
+    const desktop = dialog.locator('.v-list-item').filter({hasText: '桌面联调设备'});
+    await expect(desktop).toContainText('接收：未回执');
+    await expect(desktop).toContainText('展示：未回执');
+    await expect(desktop).not.toContainText('手动关闭：未回执');
     await expect(refresh).toBeEnabled();
   } finally { await context.close(); }
 });
@@ -365,6 +372,7 @@ test("editing a published normal notice to minor persists the selected priority 
     const composer = editor.locator(".publication-composer");
     await composer.locator(".v-select").filter({hasText: "优先级"}).click();
     await editor.getByRole("option", {name: "次要", exact: true}).click();
+    await expect(composer.getByLabel('网页大屏与 NPEduTools 弹窗提示')).toBeEnabled();
     const saved = editor.waitForResponse(response => response.url() === `${api}/api/v2/publications/${notice.id}` && response.request().method() === "PATCH");
     await composer.getByRole("button", {name: "保存修改", exact: true}).click();
     const response = await saved;

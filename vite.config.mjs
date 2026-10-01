@@ -36,6 +36,8 @@ export default defineConfig(({ mode }) => {
 
   return ({
   base: './',
+  // This is a single-page app. Test builds and documentation HTML are not entries.
+  optimizeDeps: { entries: ['index.html'] },
   plugins: [
     {
       name: 'site-metadata',

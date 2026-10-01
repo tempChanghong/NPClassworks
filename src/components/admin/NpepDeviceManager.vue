@@ -13,7 +13,7 @@
     </v-card-title>
     <v-card-text>
       <p class="mb-3">
-        {{ schoolName }} · 仅查看 NPEduTools 状态，不能控制软件、切换模式或启动录制。
+        {{ schoolName }} · 查看设备状态与学校通知连接；大屏本机允许后，可单独切入考试运行环境。
       </p>
       <v-alert
         v-if="error"
@@ -39,6 +39,11 @@
       >
         刷新未完成，以下为上次成功加载的记录，请勿视为实时状态。
       </v-alert>
+      <NpepNoiseSchedules
+        :school-id="schoolId"
+        :school-name="schoolName"
+        :term-id="termId"
+      />
       <v-row>
         <v-col
           cols="12"
@@ -94,7 +99,7 @@
               <v-checkbox
                 v-model="confirmed"
                 :disabled="busy || !!expired"
-                label="已核对设备、学校和班级，仅授权查看状态"
+                label="已核对设备、学校和班级；远程控制需大屏另外允许"
                 hide-details
               />
               <v-btn
@@ -162,6 +167,30 @@
                 </v-chip>
               </div>
               <p>{{ bindingName(device) }}</p>
+              <v-btn
+                :disabled="busy || stale || effectiveState(device) !== 'ACTIVE'"
+                variant="tonal"
+                class="my-2"
+                @click="runtimeDevice = device"
+              >
+                考试模式
+              </v-btn>
+              <v-btn
+                :disabled="busy || stale || effectiveState(device) !== 'ACTIVE'"
+                variant="tonal"
+                class="ma-2"
+                @click="planDevice = device"
+              >
+                考试方案
+              </v-btn>
+              <v-btn
+                :disabled="busy || stale || effectiveState(device) !== 'ACTIVE'"
+                variant="tonal"
+                class="ma-2"
+                @click="noiseDevice = device"
+              >
+                噪音报告
+              </v-btn>
               <p>最近观测：{{ device.lastSeenAt ? time(device.lastSeenAt) : '尚未上报' }}</p>
               <p>授权到期：{{ time(device.credentialExpiresAt) }}</p>
               <p
@@ -199,6 +228,20 @@
       </v-row>
     </v-card-text>
     <v-dialog
+      :model-value="!!noiseDevice"
+      max-width="850"
+      @update:model-value="value => { if (!value) noiseDevice = null; }"
+    >
+      <NpepNoiseReports
+        v-if="noiseDevice"
+        :key="`${schoolId}:${noiseDevice.deviceId}`"
+        :school-id="schoolId"
+        :device-id="noiseDevice.deviceId"
+        :device-name="noiseDevice.deviceName"
+        @close="noiseDevice = null"
+      />
+    </v-dialog>
+    <v-dialog
       :model-value="!!revoking"
       max-width="520"
       :persistent="busy"
@@ -232,19 +275,59 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <v-dialog
+      :model-value="!!runtimeDevice"
+      max-width="760"
+      @update:model-value="value => { if (!value) runtimeDevice = null; }"
+    >
+      <NpepRuntimeControl
+        v-if="runtimeDevice"
+        :key="`${schoolId}:${runtimeDevice.deviceId}`"
+        :school-id="schoolId"
+        :device-id="runtimeDevice.deviceId"
+        :school-name="schoolName"
+        :device-name="runtimeDevice.deviceName"
+        :binding-name="bindingName(runtimeDevice)"
+        @close="runtimeDevice = null"
+      />
+    </v-dialog>
+    <v-dialog
+      :model-value="!!planDevice"
+      max-width="900"
+      @update:model-value="value => { if (!value) planDevice = null; }"
+    >
+      <NpepExamPlanControl
+        v-if="planDevice"
+        :key="`${schoolId}:${planDevice.deviceId}`"
+        :school-id="schoolId"
+        :device-id="planDevice.deviceId"
+        :school-name="schoolName"
+        :device-name="planDevice.deviceName"
+        :binding-name="bindingName(planDevice)"
+        @close="planDevice = null"
+      />
+    </v-dialog>
   </v-card>
 </template>
 
 <script setup>
 import {ref, toRef, watch} from "vue";
+import NpepRuntimeControl from './NpepRuntimeControl.vue';
+import NpepExamPlanControl from './NpepExamPlanControl.vue';
+import NpepNoiseReports from './NpepNoiseReports.vue';
+import NpepNoiseSchedules from './NpepNoiseSchedules.vue';
 import {useNpepManager} from "@/composables/admin/useNpepManager";
 import {npepConnectivity, npepStateName, npepModeName, npepRecordingName, npepAutomaticName} from "@/utils/npepPresentation";
 
-const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: "当前学校"}});
+const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: "当前学校"}, termId: {type: String, default: ''}});
 const manager = useNpepManager(toRef(props, "schoolId"));
 const {devices, bindings, candidate, approved, code, bindingId, busy, error, message, loaded, stale, nextCursor, now,
   expired, bindingOptions, refresh, more, resolve, approve, cancel, revoke} = manager;
 const confirmed = ref(false), revoking = ref(null);
+const runtimeDevice = ref(null);
+const planDevice = ref(null);
+const noiseDevice = ref(null);
+watch(() => props.schoolId, () => { runtimeDevice.value = null; planDevice.value = null; noiseDevice.value = null; });
 watch([candidate, bindingId, () => props.schoolId], () => { confirmed.value = false; revoking.value = null; });
 const time = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString("zh-CN") : "未知";
 const effectiveState = device => device.state === "ACTIVE" && Date.parse(device.credentialExpiresAt) <= now.value ? "EXPIRED" : device.state;

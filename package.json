@@ -7,7 +7,9 @@
   "codenameZh": "喜多郁代",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "node scripts/dev-local.js",
+    "dev:web": "vite --host 127.0.0.1 --strictPort",
+    "dev:doctor": "node scripts/dev-local.js --check",
     "build": "vite build",
     "build:store": "node scripts/generate-sound-list.js && vite build && node scripts/validate-pwa-build.js",
     "preview": "vite preview",

@@ -231,10 +231,13 @@
               cols="12"
             >
               <noise-monitor-card
+                v-if="nativeNoiseState.provider === 'browser'"
                 :binding-id="store.screenSession?.binding?.id || ''"
                 expanded
               />
+              <NativeNoisePanel v-else />
               <v-alert
+                v-if="nativeNoiseState.provider === 'browser'"
                 class="mt-5"
                 type="info"
                 variant="tonal"
@@ -368,6 +371,8 @@ import {useNow} from "@vueuse/core";
 import {getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import NoiseMonitorCard from "@/components/NoiseMonitorCard.vue";
+import NativeNoisePanel from '@/components/v2/NativeNoisePanel.vue';
+import {nativeNoiseState} from '@/utils/nativeNoise';
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 import {editableRoster, importRoster, rosterChanges, validateRoster} from "@/utils/classRoster";
 import {confirmAction} from "@/utils/actionDialog";
