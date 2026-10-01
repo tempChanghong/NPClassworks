@@ -203,7 +203,7 @@ test("teacher notice priorities and popup choices reach the screen and acknowled
     await teacher.page.keyboard.press("Escape");
     await composer.locator(".v-select").filter({hasText: "优先级"}).click();
     await teacher.page.getByRole("option", {name: label, exact: true}).click();
-    const toggle = composer.getByRole("checkbox", {name: "大屏弹窗提示", exact: true});
+    const toggle = composer.getByRole("checkbox", {name: "网页大屏与 NPEduTools 弹窗提示", exact: true});
     if (priority === "MINOR") {
       await expect(toggle).toBeEnabled();
       await toggle.setChecked(popup);
