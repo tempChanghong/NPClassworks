@@ -7,10 +7,17 @@ import {randomUUID, createHash} from 'node:crypto';
 import {mkdir} from 'node:fs/promises';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {resolve} from 'node:path';
+import {createServer as createPortProbe} from 'node:net';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const {validateExamPlan} = await import(pathToFileURL(resolve(root, '../NPClassworksKV/domain/npep/examPlans.js')));
 const {validateRuntime} = await import(pathToFileURL(resolve(root, '../NPClassworksKV/domain/npep/runtimeControl.js')));
 const output = resolve(root, '.artifacts/npep-exam-plans'); await mkdir(output, {recursive: true});
+// Vite treats port 0 as its default 5173, which Windows may reserve. Select an
+// available loopback port explicitly and fail rather than entering another app.
+const probe = createPortProbe();
+await new Promise((done, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', done); });
+const port = probe.address().port;
+await new Promise((done, reject) => probe.close(error => error ? reject(error) : done()));
 const server = await createServer({configFile: false, root, envFile: false, cacheDir: resolve(output, 'vite-cache'),
   optimizeDeps: {entries: ['src/components/admin/NpepExamPlanControl.vue'], include: ['vue', 'vuetify', 'vuetify/components', 'vuetify/directives']},
   resolve: {alias: {'@': resolve(root, 'src')}}, plugins: [vue(), {name: 'isolated-plan-page', configureServer(s) {
@@ -26,7 +33,7 @@ const server = await createServer({configFile: false, root, envFile: false, cach
       import Plan from '/src/components/admin/NpepExamPlanControl.vue';
       createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{},()=>h(Plan,{schoolId:'school',deviceId:'${deviceId}',schoolName:'隔离测试学校',deviceName:'测试大屏',bindingName:'高二一班'})))}).use(createVuetify({components,directives})).mount('#app');
     </script></html>`)); });
-  }}], server: {host: '127.0.0.1', port: 0, hmr: false}, define: {'import.meta.env.VITE_SERVER_URL': '""', 'import.meta.env.VITE_DEFAULT_KV_SERVER': '""'}});
+  }}], server: {host: '127.0.0.1', port, strictPort: true, hmr: false}, define: {'import.meta.env.VITE_SERVER_URL': '""', 'import.meta.env.VITE_DEFAULT_KV_SERVER': '""'}});
 const deviceId = randomUUID();
 let browser;
 try {
