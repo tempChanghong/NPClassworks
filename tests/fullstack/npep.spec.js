@@ -27,7 +27,7 @@ test("NPEP school UI approves a real pairing and revokes the confirmed PostgreSQ
   await expect(panel.locator(".npep-candidate")).toContainText("真实互联测试设备");
   await panel.locator(".v-select").filter({hasText: "关联的大屏与班级"}).click();
   await page.getByRole("option", {name: "测试大屏 · 高一一班", exact: true}).click();
-  await panel.getByLabel("已核对设备、学校和班级，仅授权查看状态").check();
+  await panel.getByLabel("已核对设备、学校和班级，同意配对并授权学校互联功能").check();
   await panel.getByRole("button", {name: "批准并等待现场确认", exact: true}).click();
   await expect(panel).toContainText("批准已保存");
   expect(await classroom.prisma.npepDevice.count({where: {schoolId: classroom.school.id}})).toBe(0);

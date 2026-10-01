@@ -13,7 +13,7 @@
     </v-card-title>
     <v-card-text>
       <p class="mb-3">
-        {{ schoolName }} · 查看设备状态与学校通知连接；大屏本机允许后，可单独切入考试运行环境。
+        {{ schoolName }} · 配对后可查看设备状态、下发通知、切换考试／日常模式并管理原生噪音监测；实际执行以设备回执为准。
       </p>
       <v-alert
         v-if="error"
@@ -99,7 +99,7 @@
               <v-checkbox
                 v-model="confirmed"
                 :disabled="busy || !!expired"
-                label="已核对设备、学校和班级；远程控制需大屏另外允许"
+                label="已核对设备、学校和班级，同意配对并授权学校互联功能"
                 hide-details
               />
               <v-btn
