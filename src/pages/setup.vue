@@ -943,8 +943,8 @@
             <v-window-item :value="6">
               <SetupCompletionPanel
                 v-model:acknowledged="credentialsAcknowledged"
-                v-model:login="loginTest"
                 v-model:show-secrets="showDeliverySecrets"
+                :login="loginTest"
                 :can-finish="canFinishSetup"
                 :count-items="countItems"
                 :credential-entries="credentialEntries"
@@ -955,6 +955,7 @@
                 :setup-context="setupContext"
                 :status="status"
                 :verified-kinds="verifiedKinds"
+                @update:login="Object.assign(loginTest, $event)"
                 @copy-credential="copyCredential"
                 @download-credentials="downloadCredentials"
                 @finish="finishSetup"

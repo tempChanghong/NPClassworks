@@ -159,8 +159,16 @@ test("NPEP approval retries retain identity; device pagination, stale observatio
       const request = route.request(), url = new URL(request.url()), path = url.pathname;
       const body = request.method() === "POST" ? request.postDataJSON() : null;
       requests.push(path);
-      expect(request.headers()["x-npep-version"]).toBe("0.1");
       expect(request.headers().authorization).toBe("Bearer admin-token");
+      // The manager also loads N4 school schedules; keep their protocol distinct
+      // from the N1 pairing requests whose retries this case exercises.
+      if (path === "/api/v2/npep/schools/school/noise-schedules") {
+        expect(request.method()).toBe("GET");
+        expect(request.headers()["x-npep-version"]).toBe("0.7");
+        return route.fulfill({json: {protocolVersion: "0.7", requestId: request.headers()["x-request-id"], serverTime: new Date().toISOString(),
+          data: {termId: "term", terms: [{id: "term", name: "当前学期"}], grades: [], classes: [], policies: [], executionEnabled: true}}});
+      }
+      expect(request.headers()["x-npep-version"]).toBe("0.1");
       const reply = data => route.fulfill({json: {protocolVersion: "0.1", requestId: body?.requestId || request.headers()["x-request-id"], serverTime: new Date().toISOString(), data}});
       if (path.endsWith("/info")) return reply({supportedCapabilities: ["device.status"]});
       if (path.endsWith("/resolve")) {
@@ -198,7 +206,7 @@ test("NPEP approval retries retain identity; device pagination, stale observatio
     await page.getByRole("option", {name: "一班大屏 · 一班", exact: true}).click();
     const approve = panel.getByRole("button", {name: "批准并等待现场确认", exact: true});
     await expect(approve).toBeDisabled();
-    await panel.getByLabel("已核对设备、学校和班级，仅授权查看状态").check();
+    await panel.getByLabel("已核对设备、学校和班级，同意配对并授权学校互联功能").check();
     await approve.click();
     await expect(panel).toContainText("互联服务未启用或暂时不可用");
     await approve.click();

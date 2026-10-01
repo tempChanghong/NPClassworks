@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const distDir = path.resolve('dist');
+// Keep the default for CI/store builds, while allowing isolated local outputs.
+const args = process.argv.slice(2);
+if (args.length !== 0 && (args.length !== 2 || args[0] !== '--dist' || !args[1].trim())) {
+  console.error('用法：node scripts/validate-pwa-build.js [--dist <构建目录>]');
+  process.exit(2);
+}
+const distDir = path.resolve(args[1] || 'dist');
 const manifestPath = path.join(distDir, 'manifest.webmanifest');
 const indexPath = path.join(distDir, 'index.html');
 const serviceWorkerPath = path.join(distDir, 'sw.js');

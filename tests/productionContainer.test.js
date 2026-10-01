@@ -44,6 +44,7 @@ test("production deployment requires frontend and browser checks before requesti
   assert.match(productionDeploy, /push:[\s\S]*branches: \["main"\]/);
   assert.match(productionDeploy, /pnpm test/);
   assert.match(productionDeploy, /pnpm run build/);
+  assert.match(productionDeploy, /- run: pnpm run build\r?\n\s*- run: pnpm pwa:validate/);
   const dependencies = productionDeploy.match(/deploy:\s*\n\s*needs: \[([^\]]+)\]/)?.[1].split(",").map(value => value.trim());
   for (const job of ["verify", "browser", "contracts"]) assert.ok(dependencies?.includes(job), `deploy must wait for ${job}`);
   assert.match(productionDeploy, /contracts:\s*\n\s*uses: \.\/\.github\/workflows\/contracts.yml/);

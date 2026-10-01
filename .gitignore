@@ -193,3 +193,5 @@ playwright-report/
 
 # Background originals are local authoring sources; publish generated WebP assets.
 /images/预设自定义背景/
+# Local isolated acceptance screenshots and caches.
+.artifacts/

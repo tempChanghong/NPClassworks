@@ -855,6 +855,7 @@
               :key="selectedSchoolId"
               :school-id="selectedSchoolId"
               :school-name="selectedSchool.school.name"
+              :term-id="selectedTermId"
             />
           </template>
         </v-window-item>

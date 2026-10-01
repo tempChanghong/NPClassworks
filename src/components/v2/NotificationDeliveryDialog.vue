@@ -67,6 +67,28 @@
           icon="mdi-monitor-off"
           text="目标行政班尚未绑定大屏，或通知只发给了没有来源行政班的教学空间。"
         />
+        <template v-if="!loading && !error && result?.npepDevices?.length">
+          <v-divider class="my-4" />
+          <h3 class="text-subtitle-1">
+            NPEduTools 通知回执
+          </h3>
+          <p class="text-caption text-medium-emphasis">
+            与网页大屏分别记录；展示或手动关闭不代表人员已读。
+          </p>
+          <v-list>
+            <v-list-item
+              v-for="device in result.npepDevices"
+              :key="device.deviceId"
+            >
+              <v-list-item-title>{{ device.className }} · {{ device.name }}</v-list-item-title>
+              <v-list-item-subtitle class="text-wrap">
+                接收：{{ device.receivedAt ? formatDateTime(device.receivedAt) : '未回执' }} ·
+                展示：{{ device.displayedAt ? formatDateTime(device.displayedAt) : '未回执' }} ·
+                手动关闭：{{ device.dismissedAt ? formatDateTime(device.dismissedAt) : '未回执' }}
+              </v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+        </template>
       </v-card-text>
       <v-card-actions class="px-5 pb-5">
         <v-spacer />

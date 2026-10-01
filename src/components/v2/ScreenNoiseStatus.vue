@@ -1,6 +1,20 @@
 <template>
   <v-alert
-    v-if="state.manualActive || state.scheduledActive || state.manualExpired"
+    v-if="native.provider === 'native'"
+    class="mt-3"
+    variant="tonal"
+    :type="native.online ? 'info' : 'warning'"
+  >
+    原生监测：{{ native.online ? stateName(native.status?.state) : '连接中断，当前状态未知' }}；学校自动排程状态请在监测面板查看。
+    <v-btn
+      variant="text"
+      @click="$emit('open')"
+    >
+      查看／停止
+    </v-btn>
+  </v-alert>
+  <v-alert
+    v-else-if="state.manualActive || state.scheduledActive || state.manualExpired"
     class="screen-noise-status mt-3"
     :type="state.manualExpired || failed ? 'warning' : 'info'"
     variant="tonal"
@@ -39,6 +53,8 @@
 <script setup>
 import {computed} from "vue";
 import {noiseMonitoring, noiseMonitoringState as state} from "@/utils/noiseMonitoring";
+import {nativeNoiseState as native} from '@/utils/nativeNoise';
+import {stateName} from '@/utils/nativeNoisePresentation';
 defineEmits(["open"]);
 const failed = computed(() => ["error", "permission-denied", "unavailable"].includes(state.value.status));
 const label = computed(() => {

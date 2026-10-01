@@ -10,7 +10,9 @@ Classworks (作业板) is a homework board widget for classroom large screens. I
 
 ```bash
 pnpm install          # Install dependencies
-pnpm run dev          # Dev server at localhost:3031 (network-accessible)
+pnpm run dev          # Unified native local web + backend (requires configured PostgreSQL)
+pnpm run dev:web      # Frontend only at localhost:3031
+pnpm run dev:doctor   # Read-only local prerequisites / migration checks
 pnpm run build        # Production build (auto-runs prebuild to regenerate sound list)
 pnpm run preview      # Preview production build
 pnpm run lint         # ESLint with auto-fix

@@ -179,6 +179,14 @@ export async function createFlowHarness() {
       app.mount({}); mounted.push(app);
       return {state, unmount() { mounted.splice(mounted.indexOf(app), 1); app.unmount(); }};
     },
+    async openNoiseScheduleEditor() {
+      const {useNoiseScheduleEditor} = await vite.ssrLoadModule('/src/composables/admin/useNoiseScheduleEditor.js');
+      const school = ref('school'), term = ref('term');
+      let state;
+      const app = renderer.createApp({setup() { state = useNoiseScheduleEditor(school, term); return () => null; }});
+      app.mount({}); mounted.push(app);
+      return {state, school, term};
+    },
     async openSchoolHomeworkSettings() {
       const {useSchoolHomeworkSettings} = await vite.ssrLoadModule("/src/composables/admin/useSchoolHomeworkSettings.js");
       const {default: inputs} = await vite.ssrLoadModule("/src/components/admin/AdminHomeworkQuickInputs.vue");
@@ -224,7 +232,12 @@ export async function createFlowHarness() {
       }};
     },
     async openNoiseScheduler() {
+      if (!routes.has('GET /api/v2/npep/screen/noise')) routes.set('GET /api/v2/npep/screen/noise', (req, reply) => reply({
+        protocolVersion: '0.6', requestId: req.headers['x-request-id'], serverTime: new Date().toISOString(),
+        data: {provider: 'browser', online: false, status: null, commands: [], reports: []},
+      }, 200, true));
       const {default: component} = await vite.ssrLoadModule("/src/components/v2/NoiseScheduleManager.vue");
+      const {nativeNoise, nativeNoiseState} = await vite.ssrLoadModule('/src/utils/nativeNoise.js');
       const {noiseService} = await vite.ssrLoadModule("/src/utils/noiseService.js");
       const app = renderer.createApp({setup() {
         component.setup({}, {expose() {}});
@@ -232,7 +245,8 @@ export async function createFlowHarness() {
       }});
       app.use(currentPinia); app.provide(ssrContextKey, {});
       app.mount({}); mounted.push(app);
-      return {noiseService, unmount() {
+      for (let i = 0; i < 100 && nativeNoiseState.value.provider === 'checking'; i++) await new Promise(resolve => setTimeout(resolve, 5));
+      return {noiseService, nativeNoise, nativeNoiseState, unmount() {
         mounted.splice(mounted.indexOf(app), 1); app.unmount();
       }};
     },
