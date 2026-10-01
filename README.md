@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./images/官网用星火动力反色.svg">
-    <img src="./images/星火动力0702.svg" width="112" alt="星火动力 NOVARK POWER">
+    <source media="(prefers-color-scheme: dark)" srcset="./images/branding/npclassworks-logo-mono-light.svg">
+    <img src="./images/branding/npclassworks-logo.svg" width="112" alt="NPClassworks 应用图标">
   </picture>
 </p>
 
@@ -18,7 +18,7 @@
 
 NPClassworks 基于 [Classworks](https://github.com/Moonrend/Classworks) 深度改造，针对高中行政班、选科定班和走班教学并存的实际场景设计。前端是一套 Vue 3 + Vuetify 3 PWA，需要与 [NPClassworksKV](https://github.com/tempChanghong/NPClassworksKV) 后端配合使用。
 
-当前发布候选：**v1.2.0 · Hitori（后藤一里）**。按正式版准备，[发版草稿](docs/release-v1.2.0.md)待审核。
+当前版本：**[v1.2.0 · Hitori（后藤一里）](https://github.com/tempChanghong/NPClassworks/releases/tag/v1.2.0)**。更新范围与升级方法见[发版说明](docs/release-v1.2.0.md)。
 
 ## 主要能力
 
@@ -80,7 +80,7 @@ NPClassworks 是 Classworks 的衍生项目，不是 Classworks 官方版本。�
 
 项目维护与部署支持：**星火动力（NOVARK POWER）**。
 
-品牌素材位于 [`images`](./images)；反色版本用于深色背景，请勿改变图形比例。
+应用图标与可编辑母版位于 [`images/branding`](./images/branding)，深色背景使用白色单色版；星火动力维护方素材仍保留在 [`images`](./images)。请勿改变图形比例。
 
 ## 开源协议
 
