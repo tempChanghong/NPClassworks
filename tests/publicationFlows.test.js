@@ -335,5 +335,8 @@ test("teacher publication reaches an independent screen store through invalidati
     await eventually(() => assert.equal(screen.feed[0]?.id, publication.id));
     assert.equal(screen.feed[0].content, "明天交数学练习");
     assert.ok(h.requests.some((req) => req.path === "/api/v2/classroom-screens/feed"));
+    h.publications.splice(0);
+    h.realtime.emitServerEvent("publication.feed.changed", {});
+    await eventually(() => assert.equal(screen.feed.length, 0));
   } finally { screen.stopRealtime(); }
 });

@@ -30,33 +30,36 @@ if (readScreenTemporaryExit().bound && window.performance.getEntriesByType('navi
   router.options.history.replace('/')
 }
 getAccountTokens()
-captureOAuthCallback()
-startPerformanceBaseline()
-installAppReloadProtection()
+async function bootstrap() {
+  await captureOAuthCallback()
+  startPerformanceBaseline()
+  installAppReloadProtection()
 
-const app = createApp(App)
+  const app = createApp(App)
 
-registerPlugins(app)
-app.use(messageService)
-installLocalDiagnostics(app)
+  registerPlugins(app)
+  app.use(messageService)
+  installLocalDiagnostics(app)
 
-app.component('GlobalMessage', GlobalMessage)
+  app.component('GlobalMessage', GlobalMessage)
 
-// 挂载 Vue app（首要目标：尽快渲染首屏）
-app.mount('#app')
-markApplicationMounted()
+  // 挂载 Vue app（首要目标：尽快渲染首屏）
+  app.mount('#app')
+  markApplicationMounted()
 
-// ====== 以下全部异步，不阻塞首屏渲染 ======
+  // ====== 以下全部异步，不阻塞首屏渲染 ======
 
-// 异步初始化 Sentry（延迟到首帧渲染完成后，防止 errorHandler 与渲染周期冲突）
-// setTimeout(() => {
-//  import('./utils/sentry').then(({ initSentry }) => {
-//    const router = app.config.globalProperties.$router
-//    initSentry(app, router)
-//  }).catch((err) => {
-//    console.warn('Sentry 初始化失败:', err)
-//  })
-//}, 1000)
+  // 异步初始化 Sentry（延迟到首帧渲染完成后，防止 errorHandler 与渲染周期冲突）
+  // setTimeout(() => {
+  //  import('./utils/sentry').then(({ initSentry }) => {
+  //    const router = app.config.globalProperties.$router
+  //    initSentry(app, router)
+  //  }).catch((err) => {
+  //    console.warn('Sentry 初始化失败:', err)
+  //  })
+  //}, 1000)
 
-// 默认构建解析到空实现；只有显式开启分析的构建才包含第三方 SDK。
-initializeAnalytics()
+  // 默认构建解析到空实现；只有显式开启分析的构建才包含第三方 SDK。
+  initializeAnalytics()
+}
+void bootstrap()

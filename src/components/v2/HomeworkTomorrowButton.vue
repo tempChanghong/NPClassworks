@@ -180,7 +180,7 @@ watch(opened, value => {
   if (value) {
     timer = setInterval(checkDate, 60_000);
     // The changed assignment may be older than the currently displayed board date.
-    subscriptions = ["publication.created", "publication.updated", "publication.withdrawn", "publication.certified", "publication.restored", "connect"]
+    subscriptions = ["publication.feed.changed", "publication.created", "publication.updated", "publication.withdrawn", "publication.certified", "publication.restored", "connect"]
       .map(event => socketOn(event, payload => { if ((payload?.content || payload)?.publicationType !== "NOTICE") invalidate(); }));
   }
   else clear();

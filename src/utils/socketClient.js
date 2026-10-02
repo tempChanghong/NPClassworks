@@ -10,6 +10,12 @@ let connectedDomain = null;
 const listeners = new Set();
 const connectionListeners = new Set();
 let connectionIssueActive = false;
+let credentialProvider = () => ({});
+
+export function setSocketCredentialProvider(provider) { credentialProvider = provider; }
+export function refreshSocketCredentials() {
+  if (socket?.connected) socket.emit("update-credentials", credentialProvider());
+}
 
 function connectionSnapshot() {
   return {
@@ -49,7 +55,7 @@ export function getSocket() {
     }
     connectedDomain = serverUrl;
 
-    socket = io(serverUrl, {transports:  ["polling","websocket"]});
+    socket = io(serverUrl, {transports:  ["polling","websocket"], auth: done => done(credentialProvider())});
     socket.on("connect", () => {
       notifyConnectionListeners();
       recordDiagnosticSnapshot("realtime", {connected: true, transport: socket.io.engine?.transport?.name || "unknown"});
@@ -126,7 +132,7 @@ export function joinWorkspaces(workspaceIds) {
   const s = getSocket();
   // The server limits each join request to 20, not the total subscribed rooms.
   for (let offset = 0; offset < ids.length; offset += 20) {
-    s.emit('join-workspaces', {workspaceIds: ids.slice(offset, offset + 20)});
+    s.emit('join-workspaces', {workspaceIds: ids.slice(offset, offset + 20), credentials: credentialProvider()});
   }
 }
 

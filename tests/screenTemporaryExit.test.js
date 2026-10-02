@@ -98,19 +98,20 @@ test("unreadable storage and failed lease writes do not unlock a screen", t => {
   assert.equal(h.screenExit.screenAccountAccessAllowed(), false);
 });
 
-test("OAuth callbacks on a screen require the current initiated exit context", () => {
+test("OAuth callbacks on a screen require the current initiated exit context", async () => {
   h.newStore({screen: true}); h.unlockScreen();
   const oldLocation = window.location, oldHistory = window.history;
-  window.location = {origin: "http://127.0.0.1", href: "http://127.0.0.1/?success=true&access_token=oauth&refresh_token=oauth-refresh", assign() {}};
+  window.location = {origin: "http://127.0.0.1", href: "http://127.0.0.1/?success=true&oauth_code=code", assign() {}};
   window.history = {replaceState() {}};
   try {
-    h.api.startOAuthLogin("provider");
-    assert.equal(h.api.captureOAuthCallback(), true);
+    h.routes.set("POST /accounts/oauth/exchange", (_req, reply) => reply({access_token: "oauth", refresh_token: "oauth-refresh"}));
+    await h.api.startOAuthLogin("provider");
+    assert.equal(await h.api.captureOAuthCallback(), true);
     assert.equal(h.api.getAccountTokens().accessToken, "oauth");
     h.api.clearAccountTokens();
-    h.api.startOAuthLogin("provider");
+    await h.api.startOAuthLogin("provider");
     h.screenExit.endScreenTemporaryExit(); h.unlockScreen();
-    h.api.captureOAuthCallback();
+    await h.api.captureOAuthCallback();
     assert.equal(h.api.getAccountTokens().accessToken, "");
     assert.match(h.api.consumeOAuthError(), /重新验证 PIN/);
   } finally { window.location = oldLocation; window.history = oldHistory; }

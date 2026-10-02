@@ -123,6 +123,8 @@ test("the actual course-options producer supplies every selected streamed subjec
 });
 
 test("the real Socket server accepts batched 21+ subscriptions and delivers events from the final batch after reconnect", async () => {
+  // Public subscriptions receive only the empty feed invalidation contract.
+  realtime.setSocketCredentialProvider(() => ({}));
   socket = realtime.getSocket();
   await until(() => socket.connected);
   const joined = new Set(), errors = [], batches = [];
@@ -138,14 +140,20 @@ test("the real Socket server accepts batched 21+ subscriptions and delivers even
     realtime.joinWorkspaces([...ids, " class-0 ", "", null]);
     await until(() => joined.size === 45);
     assert.deepEqual(batches.sort((a, b) => a - b), [5, 20, 20]); assert.deepEqual(errors, []);
-    let received = 0; const off = realtime.on("publication.updated", () => received++);
-    broadcast(["class-44"], "publication.updated", {publicationId: "work"});
+    let received = 0, privateReceived = 0;
+    const off = realtime.on("publication.feed.changed", payload => { assert.deepEqual(payload, {}); received++; });
+    const offPrivate = realtime.on("publication.updated", () => privateReceived++);
+    await broadcast(["class-44"], "publication.updated", {publicationId: "draft-secret", revision: 1, status: "DRAFT"});
+    assert.equal(received, 0, "draft changes must not invalidate anonymous feeds");
+    await broadcast(["class-44"], "publication.updated", {publicationId: "work", revision: 1, status: "PUBLISHED"});
     await until(() => received === 1);
     joined.clear(); batches.length = 0;
     socket.disconnect(); socket.connect();
     await until(() => joined.size === 45);
-    broadcast(["class-44"], "publication.updated", {publicationId: "work"});
-    await until(() => received === 2); off();
+    await broadcast(["class-44"], "publication.updated", {publicationId: "work", revision: 2, status: "PUBLISHED"});
+    await until(() => received === 2);
+    assert.equal(privateReceived, 0, "anonymous subscription must not receive publication identifiers or revisions");
+    off(); offPrivate();
     realtime.leaveWorkspaces(ids);
     await until(() => [...io.of("/").sockets.values()].every(s => s.data.workspaceIds.size === 0));
     assert.deepEqual(errors, []);
