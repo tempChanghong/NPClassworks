@@ -2,6 +2,8 @@
 const listeners = new Map();
 export const rooms = new Set();
 let serverUrl = "";
+export function setSocketCredentialProvider() {}
+export function refreshSocketCredentials() {}
 
 export function configureRealtime(url) {
   serverUrl = url;

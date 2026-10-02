@@ -418,6 +418,7 @@ export const boardActions = {
     };
     const refresh = () => requestRefresh();
     for (const event of [
+      "publication.feed.changed",
       "publication.created",
       "publication.updated",
       "publication.withdrawn",

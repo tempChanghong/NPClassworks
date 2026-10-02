@@ -1,7 +1,8 @@
 import axios from "axios";
+import {createOAuthVerifier, oauthChallenge} from "./oauthHandoff.js";
 import {completePublicationFeed} from "./completePublicationFeed.js";
 import {splitPreparationFeed} from "./homeworkPreparation.js";
-import {getServerUrl} from "@/utils/socketClient";
+import {getServerUrl, setSocketCredentialProvider, refreshSocketCredentials} from "@/utils/socketClient";
 import {recordDiagnosticEvent, sanitizeDiagnosticEndpoint} from "@/utils/localDiagnostics";
 import {endScreenTemporaryExit, readScreenTemporaryExit, screenAccountAccessAllowed, screenAccountContext} from "@/utils/screenTemporaryExit";
 
@@ -10,6 +11,7 @@ const REFRESH_TOKEN_KEY = "classworks-v2-refresh-token";
 const OAUTH_RETURN_KEY = "classworks-v2-oauth-return";
 const OAUTH_ERROR_KEY = "classworks-v2-oauth-error";
 const OAUTH_SCREEN_CONTEXT_KEY = "classworks-v2-oauth-screen-context";
+const OAUTH_VERIFIER_KEY = "classworks-v2-oauth-verifier";
 const SCREEN_TOKEN_KEY = "classworks-v2-screen-token";
 const SETUP_TOKEN_KEY = "classworks-v2-setup-token";
 
@@ -21,6 +23,7 @@ const client = axios.create({
 export const ACCOUNT_REFRESH_TIMEOUT_MS = 10000;
 let accountSessionVersion = 0;
 let refreshingSession = null;
+setSocketCredentialProvider(() => ({accessToken: getAccountTokens().accessToken, screenToken: getClassroomScreenToken()}));
 
 function accountSession() {
   return {...getAccountTokens(), version: accountSessionVersion, server: baseUrl()};
@@ -81,12 +84,14 @@ export function saveAccountTokens({accessToken, refreshToken}) {
   if (refreshToken) accountSessionVersion += 1;
   if (accessToken) localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  refreshSocketCredentials();
 }
 
 export function clearAccountTokens() {
   accountSessionVersion += 1;
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  refreshSocketCredentials();
 }
 
 export function getClassroomScreenToken() {
@@ -213,20 +218,35 @@ function screenHeaders(extra = {}) {
   };
 }
 
-export function captureOAuthCallback() {
+export async function captureOAuthCallback() {
   const url = new URL(window.location.href);
   const success = url.searchParams.get("success");
-  const accessToken = url.searchParams.get("access_token");
-  const refreshToken = url.searchParams.get("refresh_token");
-  if (success !== "true" && success !== "false" && !accessToken) return false;
+  const code = url.searchParams.get("oauth_code");
+  if (success !== "true" && success !== "false" && !code && !url.searchParams.has("access_token")) return false;
+  const verifier = sessionStorage.getItem(OAUTH_VERIFIER_KEY);
+  sessionStorage.removeItem(OAUTH_VERIFIER_KEY);
+  const returnPath = sessionStorage.getItem(OAUTH_RETURN_KEY) || "/";
+  sessionStorage.removeItem(OAUTH_RETURN_KEY);
+  window.history.replaceState({}, "", returnPath);
+  const context = screenAccountContext();
+  const sessionVersion = accountSessionVersion;
 
   const expectedScreenContext = sessionStorage.getItem(OAUTH_SCREEN_CONTEXT_KEY);
   sessionStorage.removeItem(OAUTH_SCREEN_CONTEXT_KEY);
   const screenAllowed = screenAccountAccessAllowed()
     && (!readScreenTemporaryExit().bound || expectedScreenContext === screenAccountContext());
-  if (success === "true" && accessToken && screenAllowed) {
-    saveAccountTokens({accessToken, refreshToken});
-    sessionStorage.removeItem(OAUTH_ERROR_KEY);
+  if (success === "true" && code && verifier && screenAllowed) {
+    try {
+      const response = await client.post("/accounts/oauth/exchange", {code, verifier});
+      assertScreenAccountContext(context);
+      if (accountSessionVersion !== sessionVersion) throw staleAccountRequest();
+      const result = unwrap(response);
+      if (!result.access_token || !result.refresh_token) throw new Error("登录响应无效");
+      saveAccountTokens({accessToken: result.access_token, refreshToken: result.refresh_token});
+      sessionStorage.removeItem(OAUTH_ERROR_KEY);
+    } catch {
+      sessionStorage.setItem(OAUTH_ERROR_KEY, "登录交接已过期或授权已结束，请重新登录");
+    }
   } else {
     sessionStorage.setItem(
       OAUTH_ERROR_KEY,
@@ -234,9 +254,6 @@ export function captureOAuthCallback() {
     );
   }
 
-  const returnPath = sessionStorage.getItem(OAUTH_RETURN_KEY) || "/";
-  sessionStorage.removeItem(OAUTH_RETURN_KEY);
-  window.history.replaceState({}, "", returnPath);
   return true;
 }
 
@@ -281,7 +298,7 @@ client.interceptors.request.use((config) => {
   ].includes(config.url);
   if (!screenRequest && !publicRequest) assertScreenAccountContext();
   const nativeScreenRequest = screenRequest && config.url?.startsWith('/api/v2/npep/screen/');
-  if (accessToken && !nativeScreenRequest) config.headers.Authorization = `Bearer ${accessToken}`;
+  if (accessToken && !nativeScreenRequest && config.url !== "/accounts/oauth/exchange") config.headers.Authorization = `Bearer ${accessToken}`;
   else delete config.headers.Authorization;
   config._accountSession = accountSession();
   config._screenAccountContext = screenAccountContext();
@@ -303,7 +320,7 @@ client.interceptors.response.use((response) => {
   const session = original?._accountSession;
   if (session && !isCurrentAccountSession(session)) return Promise.reject(staleAccountRequest());
   const accountAuthenticated = session?.accessToken && !original?.headers?.["X-Classworks-Screen-Token"]
-    && !["/accounts/local/login", "/accounts/local/bootstrap", "/accounts/local/recover-owner"].includes(original?.url);
+    && !["/accounts/local/login", "/accounts/local/bootstrap", "/accounts/local/recover-owner", "/accounts/oauth/exchange"].includes(original?.url);
   if (error.response?.status === 401 && !original?._v2Retried && accountAuthenticated && session.refreshToken) {
     original._v2Retried = true;
     try {
@@ -463,13 +480,18 @@ export async function recoverSchoolOwner(input) {
   return unwrap(await client.post("/accounts/local/recover-owner", input));
 }
 
-export function startOAuthLogin(provider, returnPath = "/") {
+export async function startOAuthLogin(provider, returnPath = "/") {
   assertScreenAccountContext();
+  const context = screenAccountContext();
+  const verifier = createOAuthVerifier();
+  const challenge = await oauthChallenge(verifier);
+  assertScreenAccountContext(context);
+  sessionStorage.setItem(OAUTH_VERIFIER_KEY, verifier);
   sessionStorage.setItem(OAUTH_SCREEN_CONTEXT_KEY, screenAccountContext());
   sessionStorage.setItem(OAUTH_RETURN_KEY, returnPath);
   const redirectUri = `${window.location.origin}${returnPath}`;
   window.location.assign(
-    `${baseUrl()}/accounts/oauth/${encodeURIComponent(provider)}?redirect_uri=${encodeURIComponent(redirectUri)}`,
+    `${baseUrl()}/accounts/oauth/${encodeURIComponent(provider)}?redirect_uri=${encodeURIComponent(redirectUri)}&handoff_challenge=${challenge}`,
   );
 }
 
