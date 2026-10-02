@@ -15,6 +15,16 @@ test("cross-repository checks install backend dependencies outside the parent pn
   assert.match(workflow, /run: pnpm test:contracts/);
   assert.match(workflow, /run: pnpm test:e2e:fullstack/);
   assert.doesNotMatch(workflow, /continue-on-error: true/);
+  for (const component of ["backend", "frontend"]) {
+    assert.match(workflow, new RegExp(`value: \\$\\{\\{ jobs\\.contracts\\.outputs\\.${component}_commit \\}\\}`));
+    assert.match(workflow, new RegExp(`${component}_commit: \\$\\{\\{ steps\\.tested_revisions\\.outputs\\.${component}_commit \\}\\}`));
+    assert.match(productionDeploy, new RegExp(`${component.toUpperCase()}_COMMIT: \\$\\{\\{ needs\\.contracts\\.outputs\\.${component}_commit \\}\\}`));
+  }
+  assert.match(workflow, /git -C \.contract-backend rev-parse HEAD/);
+  assert.match(workflow, /git rev-parse HEAD/);
+  assert.match(workflow, />> "\$GITHUB_OUTPUT"/);
+  assert.match(productionDeploy, /--arg backendCommit "\$BACKEND_COMMIT"/);
+  assert.match(productionDeploy, /--arg frontendCommit "\$FRONTEND_COMMIT"/);
 });
 
 test("production image builds the PWA and serves only its static output", () => {
