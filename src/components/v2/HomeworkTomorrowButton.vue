@@ -139,8 +139,8 @@ const sections = computed(() => checklist.value ? [
 const snapshot = computed(() => checklist.value ? tomorrowPrintSnapshot({checklist: checklist.value, workspaceIds: workspaceIds.value,
   className: selectedClassName.value, generatedAt: loadedAt.value, warning: queueWarning.value}) : null);
 const targetNames = item => [...new Set((item.targets || []).filter(t => workspaceIds.value.includes(t.workspaceId)).map(t => t.workspace?.name || "所选教学班"))].join("、");
-let controller, timer, generation = 0, requestedDay = "", subscriptions = [];
-function clear() { generation++; controller?.abort(); checklist.value = null; loading.value = false; error.value = ""; requestedDay = ""; }
+let controller, verificationController, timer, generation = 0, requestedDay = "", subscriptions = [];
+function clear() { generation++; controller?.abort(); verificationController?.abort(); checklist.value = null; loading.value = false; error.value = ""; requestedDay = ""; }
 function open() { opened.value = true; if (workspaceIds.value.length) void reload(); }
 async function reload() {
   clear();
@@ -173,6 +173,27 @@ function checkDate() {
 function invalidate() {
   if (opened.value && (loading.value || checklist.value)) { clear(); error.value = "作业已变化或连接已恢复，请刷新核对清单。"; }
 }
+async function verifyPublicChange() {
+  if (!opened.value) return;
+  if (loading.value) { invalidate(); return; }
+  if (!checklist.value) return;
+  // Public signals have no type or ID. Recheck authorized data before discarding
+  // an open export, so an unrelated notice cannot destroy the homework snapshot.
+  verificationController?.abort();
+  const currentController = new AbortController(); verificationController = currentController;
+  const signal = currentController.signal, current = generation, token = getClassroomScreenToken();
+  const ids = [...workspaceIds.value], screen = !props.teacher && store.feedAudience === "screen";
+  const isCurrent = () => current === generation && !signal.aborted && token === getClassroomScreenToken();
+  try {
+    const result = await loadTomorrowHomework({workspaceIds: ids,
+      loadDay: date => screen ? classworksV2Api.classroomScreenFeed(date, {signal, isCurrent}) : classworksV2Api.feed(ids, date, {signal, isCurrent}),
+      loadWeek: params => classworksV2Api.publicationWeek(ids, params, {screen, signal}),
+    }, signal);
+    if (isCurrent() && JSON.stringify(result) !== JSON.stringify(checklist.value)) invalidate();
+  } catch {
+    if (isCurrent()) invalidate();
+  }
+}
 function unsubscribe() { subscriptions.forEach(stop => stop()); subscriptions = []; }
 watch(opened, value => {
   clearInterval(timer);
@@ -180,8 +201,8 @@ watch(opened, value => {
   if (value) {
     timer = setInterval(checkDate, 60_000);
     // The changed assignment may be older than the currently displayed board date.
-    subscriptions = ["publication.feed.changed", "publication.created", "publication.updated", "publication.withdrawn", "publication.certified", "publication.restored", "connect"]
-      .map(event => socketOn(event, payload => { if ((payload?.content || payload)?.publicationType !== "NOTICE") invalidate(); }));
+    subscriptions = [socketOn("publication.feed.changed", verifyPublicChange), ...["publication.created", "publication.updated", "publication.withdrawn", "publication.certified", "publication.restored", "connect"]
+      .map(event => socketOn(event, payload => { if ((payload?.content || payload)?.publicationType !== "NOTICE") invalidate(); }))];
   }
   else clear();
 }, {flush: "sync"});

@@ -100,7 +100,7 @@ test("restoring notice targets refreshes both the removed screen and the retaine
   expect(edited.status()).toBe(200);
   const screen = await classroom.open("screen");
   await expect(screen.page.locator(".screen-notice-popup")).toContainText(original.content);
-  const socket = io(api, {autoConnect: false});
+  const socket = io(api, {autoConnect: false, auth: {accessToken: classroom.credentials.accessToken}});
   let joined = false;
   const restoredEvents = [];
   socket.on("workspaces-joined", event => { joined ||= event.workspaceIds.includes(other.id); });
@@ -110,12 +110,13 @@ test("restoring notice targets refreshes both the removed screen and the retaine
     await expect.poll(() => socket.connected).toBe(true);
     socket.emit("join-workspaces", {workspaceIds: [other.id]});
     await expect.poll(() => joined).toBe(true);
+    const refreshCount = screen.frames.filter(frame => frame.includes("publication.feed.changed")).length;
     const restored = await request.post(`${api}/api/v2/publications/${original.id}/restore`, {
       headers: {...headers, "If-Match": '"2"'}, data: {sourceRevision: 1},
     });
     expect(restored.status()).toBe(200);
     await expect.poll(() => restoredEvents.some(event => event.content.publicationId === original.id)).toBe(true);
-    await expect.poll(() => screen.frames.some(frame => frame.includes("publication.restored") && frame.includes(original.id))).toBe(true);
+    await expect.poll(() => screen.frames.filter(frame => frame.includes("publication.feed.changed")).length).toBeGreaterThan(refreshCount);
     await expect(screen.page.locator(".screen-notice-popup")).not.toBeVisible();
     const stored = await classroom.prisma.publicationTarget.findMany({where: {publicationId: original.id}});
     expect(stored.map(target => target.workspaceId)).toEqual([other.id]);
@@ -197,6 +198,7 @@ test("teacher notice priorities and popup choices reach the screen and acknowled
   const screen = await classroom.open("screen");
   const composer = teacher.page.locator(".publication-composer");
   for (const [label, priority, popup] of [["次要", "MINOR", false], ["次要", "MINOR", true], ["普通", "NORMAL", true], ["重要", "IMPORTANT", true], ["紧急", "URGENT", true]]) {
+    const refreshCount = screen.frames.filter(frame => frame.includes("publication.feed.changed")).length;
     await composer.getByRole("button", {name: "通知", exact: true}).click();
     await composer.getByRole("combobox", {name: "发布到 发布到", exact: true}).click();
     await teacher.page.getByRole("option", {name: /高一一班/}).click();
@@ -227,7 +229,7 @@ test("teacher notice priorities and popup choices reach the screen and acknowled
     expect(revision.isCertified).toBe(true);
     expect(row.contentJson.popupEnabled).toBe(popup);
     await teacher.page.getByRole("button", {name: "完成", exact: true}).click();
-    await expect.poll(() => screen.frames.some(frame => frame.includes(row.id))).toBe(true);
+    await expect.poll(() => screen.frames.filter(frame => frame.includes("publication.feed.changed")).length).toBeGreaterThan(refreshCount);
     const dialog = screen.page.locator(".screen-notice-popup");
     if (popup) {
       await expect(dialog.locator(".notice-popup-content")).toHaveText(content);
