@@ -64,8 +64,6 @@ jobs:
         env:
           DEPLOY_AGENT_URL: ${{ secrets.DEPLOY_AGENT_URL }}
           DEPLOY_AGENT_SECRET: ${{ secrets.DEPLOY_AGENT_SECRET }}
-          BACKEND_COMMIT: ${{ needs.contracts.outputs.backend_commit }}
-          FRONTEND_COMMIT: ${{ needs.contracts.outputs.frontend_commit }}
         run: |
           test -n "$DEPLOY_AGENT_URL"
           test -n "$DEPLOY_AGENT_SECRET"
@@ -73,9 +71,7 @@ jobs:
             --arg repository "$GITHUB_REPOSITORY" \
             --arg commit "$GITHUB_SHA" \
             --arg runId "$GITHUB_RUN_ID" \
-            --arg backendCommit "$BACKEND_COMMIT" \
-            --arg frontendCommit "$FRONTEND_COMMIT" \
-            '{action:"upgrade", repository:$repository, commit:$commit, runId:$runId, backendCommit:$backendCommit, frontendCommit:$frontendCommit}')"
+            '{action:"upgrade", repository:$repository, commit:$commit, runId:$runId}')"
           timestamp="$(date +%s)"
           nonce="$(openssl rand -hex 24)"
           signature="$(DEPLOY_BODY="$body" DEPLOY_TIMESTAMP="$timestamp" DEPLOY_NONCE="$nonce" node <<'NODE'

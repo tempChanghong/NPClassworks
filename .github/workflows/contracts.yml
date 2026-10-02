@@ -2,13 +2,6 @@ name: Frontend and backend contracts and fullstack smoke
 
 on:
   workflow_call:
-    outputs:
-      backend_commit:
-        description: Backend commit that passed the contract and fullstack gates
-        value: ${{ jobs.contracts.outputs.backend_commit }}
-      frontend_commit:
-        description: Frontend commit that passed the contract and fullstack gates
-        value: ${{ jobs.contracts.outputs.frontend_commit }}
     inputs:
       frontend_ref:
         description: Frontend revision to test (empty uses caller revision)
@@ -40,9 +33,6 @@ jobs:
   contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    outputs:
-      backend_commit: ${{ steps.tested_revisions.outputs.backend_commit }}
-      frontend_commit: ${{ steps.tested_revisions.outputs.frontend_commit }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,13 +44,6 @@ jobs:
           ref: ${{ inputs.backend_ref || 'main' }}
           path: .contract-backend
           persist-credentials: false
-      - name: Record the tested revisions
-        id: tested_revisions
-        shell: bash
-        run: |
-          backend_sha="$(git -C .contract-backend rev-parse HEAD)"
-          frontend_sha="$(git rev-parse HEAD)"
-          printf 'backend_commit=%s\nfrontend_commit=%s\n' "$backend_sha" "$frontend_sha" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.0
