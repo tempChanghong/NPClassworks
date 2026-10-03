@@ -61,20 +61,20 @@
           <v-chip
             v-if="indicatorVisibility(publication).showState"
             :color="publicationState(publication).color"
-            :size="screenMode ? 'x-small' : 'small'"
+            size="small"
             variant="tonal"
           >
             <v-icon
               class="mr-1"
               :icon="publicationState(publication).icon"
-              :size="screenMode ? 'x-small' : 'small'"
+              size="small"
             />
             {{ publicationState(publication).label }}
           </v-chip>
           <v-chip
-            v-if="indicatorVisibility(publication).showPriority"
+            v-if="indicatorVisibility(publication).showPriority && (!completionEnabled || (publication.priority || 'NORMAL') !== 'NORMAL')"
             :color="priorityColor(publication.priority)"
-            :size="screenMode ? 'x-small' : 'small'"
+            size="small"
             variant="tonal"
           >
             {{ priorityLabel(publication.priority) }}
@@ -123,7 +123,7 @@
               >
                 <v-icon
                   class="mr-1"
-                  size="small"
+                  :size="screenMode ? 'x-small' : 'small'"
                   :icon="dueState(publication)?.icon"
                 />
                 {{ dueState(publication)?.label }} {{ formatDateTime(publication.dueAt) }}
@@ -233,7 +233,6 @@ const gridItems = ref([]);
 const containerWidth = ref(0);
 let resizeObserver;
 let resizeFrame;
-let textMeasurer;
 const resizeQueue = new Set();
 const contentOwners = new WeakMap();
 
@@ -257,33 +256,9 @@ function resizeGridItems(items) {
   const styles = window.getComputedStyle(grid);
   const rowHeight = Number.parseFloat(styles.gridAutoRows) || 1;
   const rowGap = Number.parseFloat(styles.rowGap) || 0;
-  // A former span-2 card can create an implicit column after narrowing to one
-  // column. Count the configured tracks, not those implicit computed tracks.
-  const settings = normalizedSettings.value;
-  const columns = window.innerWidth <= 700 ? 1 : settings.columns === "auto"
-    ? calculateScreenFeedColumns(grid.clientWidth, settings.fontScale) : Number(settings.columns);
-  const columnWidth = (grid.clientWidth - (columns - 1) * (Number.parseFloat(styles.columnGap) || 0)) / columns;
-  // Measure against the ordinary column width, not the currently widened card.
-  // This keeps the decision stable after a card gains width and loses height.
-  const spans = items.filter(Boolean).map(item => {
-    let lines = 0;
-    if (props.screenMode && !props.previewMode && normalizedSettings.value.columns === "auto"
-      && columns > 1 && item.dataset.publicationType === "ASSIGNMENT" && textMeasurer) {
-      const body = item.querySelector(".publication-body");
-      const padding = body ? window.getComputedStyle(body) : null;
-      const available = Math.max(1, columnWidth - (Number.parseFloat(padding?.paddingLeft) || 0)
-        - (Number.parseFloat(padding?.paddingRight) || 0) - 2);
-      item.querySelectorAll(".publication-content, .submission-details, .preparation-details").forEach(content => {
-        const font = window.getComputedStyle(content);
-        textMeasurer.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
-        lines += content.textContent.trim().split("\n").reduce((count, line) =>
-          count + Math.max(1, Math.ceil(textMeasurer.measureText(line).width / available)), 0);
-      });
-    }
-    return {item, span: lines > 9 ? "span 2" : ""};
-  });
-  spans.forEach(({item, span}) => {
-    if (item.style.gridColumnEnd !== span) item.style.gridColumnEnd = span;
+  // Preserve subject reading order; long content grows within its own column.
+  items.filter(Boolean).forEach((item) => {
+    if (item.style.gridColumnEnd) item.style.gridColumnEnd = "";
   });
   const measurements = items.map((item) => ({
     item,
@@ -328,7 +303,6 @@ async function observeGridItems() {
 }
 
 onMounted(() => {
-  textMeasurer = document.createElement("canvas").getContext("2d");
   resizeObserver = new window.ResizeObserver((entries) => {
     const changedItems = [];
     entries.forEach((entry) => {
@@ -458,19 +432,24 @@ function targetNames(publication) {
 }
 
 .screen-feed .publication-title {
-  font-size: clamp(0.95rem, 0.25vw + 0.72rem, 1.2rem);
-  padding: 14px 18px 5px;
+  font-size: calc(1.05rem * var(--screen-font-scale));
+  line-height: 1.35;
+  padding: 12px 18px 4px;
 }
 
 .screen-feed .publication-subtitle {
-  font-size: 1rem;
-  line-height: 1.4;
+  font-size: calc(0.82rem * var(--screen-font-scale));
+  line-height: 1.45;
   padding: 0 18px;
 }
 
 .screen-feed .publication-body { padding: 12px 18px 18px; }
-.screen-feed .publication-content { font-size: calc(1rem * var(--screen-font-scale)); line-height: 1.65; }
-.screen-feed .publication-metadata { font-size: 0.75rem; }
+.screen-feed .publication-content { font-size: calc(1.1rem * var(--screen-font-scale)); line-height: 1.55; }
+.screen-feed .publication-metadata { font-size: calc(0.85rem * var(--screen-font-scale)); }
+.screen-feed .publication-metadata :deep(.v-chip) {
+  font-size: clamp(0.875rem, calc(0.68rem * var(--screen-font-scale)), 1.25rem);
+  min-height: 30px;
+}
 .screen-feed .publication-body {
   align-items: center;
   display: flex;
@@ -486,9 +465,10 @@ function targetNames(publication) {
 .screen-feed :deep(.submission-details),
 .screen-feed .preparation-details {
   min-width: 0;
-  font-size: calc(1rem * var(--screen-font-scale));
-  line-height: 1.65;
+  font-size: calc(1.1rem * var(--screen-font-scale));
+  line-height: 1.55;
 }
+.screen-feed { grid-auto-flow: row; }
 .screen-feed .publication-metadata {
   flex: 1 1 300px;
   min-width: 0;

@@ -290,12 +290,46 @@
 
             <template v-else-if="activeSection === 'screen-display'">
               <SettingsPanel
-                description="只调整当前教室大屏的作业可读性。正文会放大，学科和教师确认标签保持紧凑。"
+                description="只调整当前教室大屏的作业可读性。科目、正文和截止信息会一起调整。"
                 icon="mdi-monitor-eye"
                 title="显示与布局"
               >
+                <div class="screen-reading-presets">
+                  <div class="setting-slider-label mb-3">
+                    <strong>阅读距离预设</strong>
+                    <ScopeChip type="screen" />
+                  </div>
+                  <v-btn-toggle
+                    class="screen-reading-presets__buttons"
+                    color="primary"
+                    :model-value="screenSettings.fontScale"
+                    variant="outlined"
+                    @update:model-value="$event && saveScreenSetting('fontScale', $event)"
+                  >
+                    <v-btn :value="120">
+                      近距操作
+                    </v-btn>
+                    <v-btn :value="160">
+                      普通教室
+                    </v-btn>
+                    <v-btn :value="200">
+                      后排阅读
+                    </v-btn>
+                  </v-btn-toggle>
+                  <div
+                    class="screen-reading-preview"
+                    :style="{'--screen-preview-scale': screenSettings.fontScale / 100}"
+                  >
+                    <strong>数学 · 今日作业</strong>
+                    <p>完成课本第 86 页习题，写出关键步骤。</p>
+                    <small>明日 08:00 截止</small>
+                  </div>
+                  <div class="text-caption text-medium-emphasis mt-2">
+                    预设是起点；请在教室后排核对实际大小，再用下方滑块微调。
+                  </div>
+                </div>
                 <div class="setting-slider-label">
-                  <span>作业正文字号</span><strong>{{ screenSettings.fontScale }}%</strong>
+                  <span>作业字号微调</span><strong>{{ screenSettings.fontScale }}%</strong>
                 </div>
                 <v-slider
                   :model-value="screenSettings.fontScale"
@@ -872,12 +906,16 @@ watch(() => [context.value, screenSettings.value.performanceMode], () => {
 }, {immediate: true});
 
 onMounted(async () => {
-  const results = await Promise.allSettled([
-    store.bootstrapStudent(),
-    store.bootstrapTeacher(),
-    store.bootstrapClassroomScreen(),
-  ]);
-  if (results.every((result) => result.status === "rejected")) loadError.value = "无法连接 NPClassworks 服务器";
+  const bootstrap = {
+    student: () => store.bootstrapStudent(),
+    teacher: () => store.bootstrapTeacher(),
+    screen: () => store.bootstrapClassroomScreen(),
+  }[context.value];
+  try {
+    await bootstrap();
+  } catch {
+    loadError.value = "无法连接 NPClassworks 服务器";
+  }
   if (navigator.storage?.estimate) storageEstimate.value = await navigator.storage.estimate();
   noisePermissionState.value = await queryMicrophonePermission();
   loading.value = false;
@@ -1054,6 +1092,19 @@ async function clearResourceCaches() {
 .scope-chip--warning { background: rgba(var(--v-theme-warning), 0.14); color: rgb(var(--v-theme-warning)); }
 .settings-subsection { background: rgba(var(--v-theme-on-surface), 0.035); border-radius: 14px; margin: 4px 0 22px; padding: 20px; }
 .setting-slider-label { align-items: center; display: flex; justify-content: space-between; }
+.screen-reading-presets { padding: 20px 0 24px; }
+.screen-reading-presets__buttons { flex-wrap: wrap; height: auto; }
+.screen-reading-preview {
+  background: rgb(var(--v-theme-background));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 14px;
+  margin-top: 16px;
+  overflow-wrap: anywhere;
+  padding: 16px 18px;
+}
+.screen-reading-preview strong { display: block; font-size: calc(1.05rem * var(--screen-preview-scale)); }
+.screen-reading-preview p { font-size: calc(1.1rem * var(--screen-preview-scale)); line-height: 1.55; margin: 8px 0; }
+.screen-reading-preview small { font-size: calc(0.85rem * var(--screen-preview-scale)); }
 .column-toggle { flex-wrap: wrap; height: auto; }
 
 @media (max-width: 900px) {

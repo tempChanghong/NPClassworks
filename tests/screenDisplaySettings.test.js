@@ -54,6 +54,8 @@ test("corrupt saved screen display settings fall back safely", () => {
 });
 
 test("automatic screen columns remain readable at 1080P, 2K and 4K widths", () => {
+  assert.equal(calculateScreenFeedColumns(1250, 160), 2);
+  assert.equal(calculateScreenFeedColumns(1878, 160), 3);
   assert.equal(calculateScreenFeedColumns(1920, 130), 3);
   assert.equal(calculateScreenFeedColumns(2560, 130), 4);
   assert.equal(calculateScreenFeedColumns(3840, 130), 5);

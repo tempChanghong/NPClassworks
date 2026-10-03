@@ -1,8 +1,8 @@
 export const SCREEN_DISPLAY_DEFAULTS = Object.freeze({
-  fontScale: 130,
+  fontScale: 160,
   density: "compact",
   columns: "auto",
-  showSecondaryMetadata: true,
+  showSecondaryMetadata: false,
   urgentNoticeSound: true,
   backgroundSystemNotification: true,
   antiBurnInShift: false,
@@ -18,7 +18,9 @@ const ACTION_POSITIONS = new Set(["left", "center", "right"]);
 export function calculateScreenFeedColumns(width, fontScale = SCREEN_DISPLAY_DEFAULTS.fontScale) {
   const safeWidth = Math.max(0, Number(width) || 0);
   const safeScale = Math.min(200, Math.max(90, Number(fontScale) || SCREEN_DISPLAY_DEFAULTS.fontScale));
-  const minimumCardWidth = Math.round(390 * (safeScale / 100));
+  // Smaller classroom viewports need two usable cards before switching to a
+  // single long column. Larger panels keep wider cards for long homework text.
+  const minimumCardWidth = Math.round((safeWidth < 2300 ? 360 : 390) * (safeScale / 100));
   const maximumColumns = safeWidth >= 3400 ? 5 : safeWidth >= 2300 ? 4 : 3;
   return Math.max(1, Math.min(
     maximumColumns,

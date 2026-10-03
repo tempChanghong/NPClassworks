@@ -55,7 +55,7 @@ export const test = base.extend({
           }
         });
         await page.goto(origin);
-        await expect(page.getByRole("button", {name: role === "screen" ? "录入作业" : "退出", exact: true}).first()).toBeVisible();
+        await expect(page.getByRole("button", {name: role === "screen" ? "录入作业" : "账号", exact: true}).first()).toBeVisible();
         if (role === "teacher") await expect(page.getByText("已授权 1 个教学空间", {exact: true})).toBeVisible();
         return {page, context, errors, frames};
       }

@@ -101,4 +101,18 @@ function changeBy(days) {
 .board-date-navigator--compact :deep(.v-card-text) { padding: 6px 10px !important; }
 .board-date-navigator--compact .board-date-title { min-width: 5rem; }
 .board-date-navigator--compact .board-date-input { max-width: 10rem; }
+@media (max-width: 680px) {
+  .board-date-navigator--compact :deep(.v-card-text) {
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+  }
+  .board-date-navigator--compact .board-date-title { min-width: 2.5rem; }
+  .board-date-navigator--compact .board-date-title .text-caption { display: none; }
+  .board-date-navigator--compact .board-date-input {
+    flex: 0 1 136px;
+    min-width: 110px;
+    max-width: 136px;
+  }
+  .board-date-navigator--compact :deep(.v-spacer) { min-width: 0; }
+}
 </style>

@@ -794,46 +794,23 @@
             请先完成学校初始化或取得 OWNER/ADMIN 权限。
           </v-alert>
           <template v-else>
-            <v-card class="mb-5 rounded-xl">
-              <v-card-text class="pa-5">
-                <v-row>
-                  <v-col
-                    cols="12"
-                    md="6"
-                  >
-                    <v-select
-                      v-model="guardedSchoolId"
-                      :items="schoolOptions"
-                      item-title="title"
-                      item-value="value"
-                      label="学校"
-                      variant="outlined"
-                    />
-                  </v-col>
-                  <v-col
-                    cols="12"
-                    md="6"
-                  >
-                    <v-select
-                      v-model="guardedTermId"
-                      :items="termOptions"
-                      item-title="title"
-                      item-value="value"
-                      label="学期"
-                      variant="outlined"
-                    />
-                  </v-col>
-                </v-row>
-                <v-alert
-                  type="info"
-                  variant="tonal"
-                >
-                  每台一体机使用独立大屏账号首次登录，之后凭设备令牌自动进入。PIN 同时用于临时退出大屏界面；重置设备会立即让原浏览器失效。
-                </v-alert>
+            <v-card class="admin-screen-scope mb-4 rounded-xl">
+              <v-card-text class="d-flex align-start ga-3 pa-4">
+                <v-icon
+                  color="primary"
+                  icon="mdi-school-outline"
+                  size="28"
+                />
+                <div>
+                  <div class="font-weight-bold">
+                    {{ selectedSchool?.school.name || '未选择学校' }} · {{ selectedTermName }}
+                  </div>
+                  <div class="text-body-2 text-medium-emphasis mt-1">
+                    大屏账号按学校管理，班级与设备互联使用当前学期。首次登录需要独立账号和 PIN；重置绑定会使原设备失效。
+                  </div>
+                </div>
               </v-card-text>
             </v-card>
-
-            <AdminHomeworkQuickDeadlines :manager="homeworkSettingsManager" />
           </template>
 
           <AdminScreenAccountPanel
@@ -843,7 +820,7 @@
           />
           <template v-if="tab === 'screens' && selectedSchoolId && selectedSchool">
             <v-btn
-              class="mt-4"
+              class="mt-5"
               variant="tonal"
               prepend-icon="mdi-link-variant"
               @click="npepVisible = !npepVisible"
@@ -857,6 +834,12 @@
               :school-name="selectedSchool.school.name"
               :term-id="selectedTermId"
             />
+          </template>
+          <template v-if="managerMemberships.length">
+            <div class="text-overline text-medium-emphasis mt-7 mb-2">
+              全校作业设置
+            </div>
+            <AdminHomeworkQuickDeadlines :manager="homeworkSettingsManager" />
           </template>
         </v-window-item>
 
@@ -1390,6 +1373,8 @@ const selectedSchool = computed(() => managerMemberships.value.find(
 ));
 const selectedTeacherAuthMode = computed(() => selectedSchool.value?.school.teacherAuthMode || "LOCAL_PIN");
 const selectedSchoolTerms = computed(() => selectedSchool.value?.school.terms || []);
+const selectedTermName = computed(() => selectedSchoolTerms.value
+  .find((term) => term.id === selectedTermId.value)?.name || "未选择学期");
 const {
   localAccounts,
   accountBusy,
@@ -2164,6 +2149,7 @@ onUnmounted(() => {
 }
 
 @media (max-width: 959px) {
+  .admin-screen-scope { display: none; }
   .admin-navigation-panel {
     float: none;
     margin-bottom: 20px;

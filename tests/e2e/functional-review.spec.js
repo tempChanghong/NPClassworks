@@ -446,10 +446,8 @@ test("opening settings during a pending favorite sync recovers and manual sync r
     await page.getByRole("button", {name: "设置", exact: true}).click();
     await profile;
     release();
-    // This fresh teacher fixture has no student selection; settings also boots
-    // the student catalog and opens its optional selector.
-    await expect(page.getByRole("dialog").filter({hasText: "选择我的班级"})).toBeVisible();
-    await page.keyboard.press("Escape");
+    // Teacher settings should load its own context without requesting student selection.
+    await expect(page.getByRole("dialog").filter({hasText: "选择我的班级"})).toHaveCount(0);
     await page.locator(".settings-nav").getByText("教师账号", {exact: true}).click();
     const sync = page.getByRole("button", {name: "立即同步", exact: true});
     await expect(sync).toBeEnabled();

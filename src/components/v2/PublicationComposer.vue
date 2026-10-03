@@ -95,69 +95,16 @@
         </template>
       </v-autocomplete>
 
-      <div
-        v-if="targetShortcuts.length"
-        class="mb-4"
-      >
-        <div class="text-caption text-medium-emphasis mb-2">
-          常用与最近目标
-        </div>
-        <div class="d-flex flex-wrap ga-2">
-          <v-chip
-            v-for="shortcut in targetShortcuts"
-            :key="shortcut.id"
-            :prepend-icon="shortcut.favorite ? 'mdi-star' : 'mdi-history'"
-            :color="shortcut.favorite ? 'warning' : undefined"
-            variant="tonal"
-            @click="applyTargetShortcut(shortcut)"
-          >
-            {{ shortcut.label }}
-          </v-chip>
-        </div>
-      </div>
-
-      <v-btn
-        class="mb-4"
-        :disabled="!form.targetWorkspaceIds.length"
-        :prepend-icon="currentTargetsFavorite ? 'mdi-star' : 'mdi-star-outline'"
-        size="small"
-        variant="text"
-        @click="toggleCurrentTargetsFavorite"
-      >
-        {{ currentTargetsFavorite ? "取消收藏当前目标" : "收藏当前目标组合" }}
-      </v-btn>
-
-      <v-alert
-        class="mb-4"
-        color="info"
-        variant="tonal"
-      >
-        作业目标已按授课规则过滤：一、二班小科可选行政班，走班科目只显示对应教学班。
-      </v-alert>
-
       <v-text-field
         v-if="form.type === 'ASSIGNMENT'"
         v-model="form.boardDate"
-        hint="决定这项作业出现在哪一天的作业板上，与定时发布时间相互独立"
+        hint="作业板显示日期；与定时发布时间独立"
         label="作业板日期"
         persistent-hint
         type="date"
         variant="outlined"
       />
 
-      <v-switch
-        v-if="form.type === 'ASSIGNMENT'"
-        color="primary"
-        label="该科目在所选日期无作业"
-        :model-value="form.noHomework"
-        @update:model-value="setNoHomework"
-      />
-      <v-text-field
-        v-model="form.title"
-        :disabled="form.noHomework"
-        label="标题（可选）"
-        variant="outlined"
-      />
       <v-textarea
         ref="contentInput"
         v-model="form.content"
@@ -167,6 +114,26 @@
         placeholder="使用换行分条填写"
         rows="5"
         variant="outlined"
+      />
+      <HomeworkQuickInputBar
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
+        density="teacher"
+        :items="quickInputs"
+        :subject-id="form.subjectId"
+        @insert="insertQuickInput"
+      />
+      <v-text-field
+        v-model="form.title"
+        :disabled="form.noHomework"
+        label="标题（可选）"
+        variant="outlined"
+      />
+      <v-switch
+        v-if="form.type === 'ASSIGNMENT'"
+        color="primary"
+        label="该科目在所选日期无作业"
+        :model-value="form.noHomework"
+        @update:model-value="setNoHomework"
       />
       <v-btn
         v-if="form.type === 'ASSIGNMENT' && !form.noHomework && !optionalExpanded && !form.optionalContent"
@@ -265,13 +232,37 @@
         @close="templatesOpen = false"
         @apply="applyTemplate"
       />
-      <HomeworkQuickInputBar
-        v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
-        density="teacher"
-        :items="quickInputs"
-        :subject-id="form.subjectId"
-        @insert="insertQuickInput"
-      />
+      <details class="composer-target-tools mb-4">
+        <summary>常用目标与选择说明</summary>
+        <div
+          v-if="targetShortcuts.length"
+          class="d-flex flex-wrap ga-2 pt-3"
+        >
+          <v-chip
+            v-for="shortcut in targetShortcuts"
+            :key="shortcut.id"
+            :prepend-icon="shortcut.favorite ? 'mdi-star' : 'mdi-history'"
+            :color="shortcut.favorite ? 'warning' : undefined"
+            variant="tonal"
+            @click="applyTargetShortcut(shortcut)"
+          >
+            {{ shortcut.label }}
+          </v-chip>
+        </div>
+        <div class="text-caption text-medium-emphasis pt-3">
+          作业目标已按授课规则过滤：一、二班小科可选行政班，走班科目只显示对应教学班。
+        </div>
+      </details>
+      <v-btn
+        class="mb-4"
+        :disabled="!form.targetWorkspaceIds.length"
+        :prepend-icon="currentTargetsFavorite ? 'mdi-star' : 'mdi-star-outline'"
+        size="small"
+        variant="text"
+        @click="toggleCurrentTargetsFavorite"
+      >
+        {{ currentTargetsFavorite ? "取消收藏当前目标" : "收藏当前目标组合" }}
+      </v-btn>
 
       <v-row>
         <v-col
@@ -631,7 +622,6 @@ const duplicateWarning = ref(null);
 const duplicateStatus = ref("PUBLISHED");
 const requestBusy = computed(() => saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 const reuseDatesConfirmed = ref(false);
-defineExpose({requestBusy});
 const contentInput = ref(null);
 const TeacherHomeworkTemplates = defineAsyncComponent(() => import("@/components/v2/TeacherHomeworkTemplates.vue"));
 const PublicationScreenPreview = defineAsyncComponent(() => import("@/components/v2/PublicationScreenPreview.vue"));
@@ -703,12 +693,20 @@ const form = reactive({
   popupEnabled: false,
 });
 const cleanForm = ref("");
+const hasUnsavedChanges = computed(() => JSON.stringify(form) !== cleanForm.value);
+const submittedFormSnapshot = ref("");
+const canSwitchDuringSave = computed(() => Boolean(
+  (saving.value || publishing.value)
+  && submittedFormSnapshot.value
+  && JSON.stringify(form) === submittedFormSnapshot.value
+));
+defineExpose({requestBusy, hasUnsavedChanges, canSwitchDuringSave});
 watch(() => [store.account?.id, store.teacherSessionVersion, props.editingPublication, form.type, form.noHomework], () => { templatesOpen.value = false; screenPreview.value = null; }, {flush: "sync"});
 const releaseReloadProtection = registerAppReloadBlocker(() => {
   if (saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value) {
     return "正在保存或载入发布内容，请等待完成后再刷新。";
   }
-  return JSON.stringify(form) !== cleanForm.value ? "教师编辑器中有未保存的内容，请先保存草稿或完成发布，再刷新。" : "";
+  return hasUnsavedChanges.value ? "教师编辑器中有未保存的内容，请先保存草稿或完成发布，再刷新。" : "";
 });
 onUnmounted(() => { mounted = false; editorGeneration++; releaseReloadProtection(); });
 
@@ -1016,6 +1014,7 @@ async function submit(status, allowDuplicate = false) {
   const flag = status === "DRAFT" ? saving : publishing;
   const edit = captureEditor();
   let submittedInput = null;
+  submittedFormSnapshot.value = edit.serialized;
   flag.value = true;
   try {
     const operation = edit.base ? "updated" : "created";
@@ -1058,6 +1057,7 @@ async function submit(status, allowDuplicate = false) {
     }
   } finally {
     flag.value = false;
+    submittedFormSnapshot.value = "";
   }
 }
 
@@ -1151,6 +1151,7 @@ async function saveConflictCopy() {
 </script>
 
 <style scoped>
+.composer-target-tools > summary { cursor: pointer; font-size: 0.875rem; }
 .conflict-comparison {
   overflow: hidden;
   border: 1px solid rgba(var(--v-theme-warning), 0.35);

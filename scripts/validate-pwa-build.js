@@ -102,6 +102,11 @@ if (!fs.existsSync(indexPath)) {
   fail('dist/index.html 不存在。');
 } else {
   const html = fs.readFileSync(indexPath, 'utf8');
+  const iconFontPreloads = [...html.matchAll(/<link\b[^>]*>/g)]
+    .filter(([tag]) => /rel=["']preload["']/.test(tag) && tag.includes('materialdesignicons-webfont'));
+  if (iconFontPreloads.length) {
+    fail('图标字体应由 CSS 选择格式，不应在 HTML 中预加载所有格式。');
+  }
   if (!html.includes('rel="manifest"')) {
     fail('index.html 缺少 manifest 链接。');
   }
@@ -133,6 +138,9 @@ if (!fs.existsSync(serviceWorkerPath)) {
     fail('sw.js 中未找到 Workbox precache 清单。');
   } else if (/url:\s*["'](?:\.\/)?sounds\//.test(precacheManifest)) {
     fail('声音资源不应进入 precache，应由 sound-cache 按需缓存。');
+  }
+  if (/url:\s*["'](?:\.\/)?banner\.png["']/.test(precacheManifest)) {
+    fail('未被当前应用引用的旧 banner.png 不应进入 precache。');
   }
   if (/url:\s*["'](?:\.\/)?backgrounds\//.test(precacheManifest)) {
     fail('背景图片不应进入 precache，应在查看或选择后按需下载。');

@@ -81,7 +81,8 @@ export default defineConfig(({ mode }) => {
           // precache，否则首次安装/更新 PWA 时会一次性下载全部 MP3。
           '**/*.{js,css,html,ico,png,svg,webmanifest,txt,json,woff2}',
         ],
-        globIgnores: ['sounds/**', 'backgrounds/**'],
+        // The retained legacy banner is not used by the app or current share metadata.
+        globIgnores: ['sounds/**', 'backgrounds/**', 'banner.png'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [
           /^\/api\//,
@@ -344,6 +345,9 @@ export default defineConfig(({ mode }) => {
       exclude: [/pages\/index\.vue$/],
     }),
     Fonts({
+      // Let CSS select a supported icon font. Auto-preloading every emitted
+      // EOT/TTF/WOFF variant makes modern browsers download unused formats.
+      custom: {preload: false},
       google: {
         families: [{
           name: 'Roboto',

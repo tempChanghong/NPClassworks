@@ -375,6 +375,10 @@ for (const width of [1440, 540]) {
     try {
       const row = page.locator('.admin-entity-list .v-list-item').filter({has: page.locator('.v-list-item-title', {hasText: '一班大屏'})});
       await expect(row).toBeVisible();
+      if (width > 959) await expect(page.locator(".admin-screen-scope")).toContainText("测试学校 · 当前学期");
+      const listTop = await page.locator(".admin-entity-list").boundingBox();
+      const deadlineTop = await page.getByText("作业快捷截止时间", {exact: true}).boundingBox();
+      expect(listTop.y).toBeLessThan(deadlineTop.y);
       if (width > 959) {
         await expect(row.locator('.admin-row-actions--desktop')).toBeVisible();
         await expect(row.locator('.admin-row-actions--mobile')).toBeHidden();
@@ -391,20 +395,23 @@ for (const width of [1440, 540]) {
       await expect(edit).toBeHidden();
       expect(writes[0].body).toEqual({name: "一班新大屏", loginCode: "class-a", administrativeClassId: "class-a"});
       await expect(page.locator('.admin-entity-list')).toContainText("一班新大屏");
-      await page.getByLabel("设备名称", {exact: true}).fill("新设备");
-      await page.getByRole("button", {name: "返回教师工作台"}).click();
-      const guard = page.getByRole("dialog");
-      await expect(guard).toContainText("放弃未保存的修改？");
+      await page.getByRole("button", {name: "创建大屏账号", exact: true}).click();
+      const create = page.getByRole("dialog").filter({hasText: "创建大屏账号"});
+      await create.getByLabel("设备名称", {exact: true}).fill("新设备");
+      await create.getByRole("button", {name: "取消", exact: true}).click();
+      const guard = page.getByRole("dialog").filter({hasText: "放弃新建大屏账号？"});
+      await expect(guard).toBeVisible();
       await guard.getByRole("button", {name: "取消", exact: true}).click();
-      await expect(page.getByLabel("设备名称", {exact: true})).toHaveValue("新设备");
-      await page.getByLabel("大屏短账号", {exact: true}).fill("new-screen");
-      await page.getByLabel("大屏 PIN", {exact: true}).fill("1234");
-      await page.locator(".v-select").filter({hasText: "绑定行政班"}).getByRole("combobox").first().click();
+      await expect(create.getByLabel("设备名称", {exact: true})).toHaveValue("新设备");
+      await create.getByLabel("大屏短账号", {exact: true}).fill("new-screen");
+      await create.getByLabel("大屏 PIN", {exact: true}).fill("1234");
+      await create.locator(".v-select").filter({hasText: "绑定行政班"}).getByRole("combobox").first().click();
       await page.getByRole("option", {name: "一班 · C1"}).click();
-      await page.getByRole("button", {name: "创建账号", exact: true}).click();
-      await expect(page.getByLabel("设备名称", {exact: true})).toHaveValue("");
+      await create.getByRole("button", {name: "创建账号", exact: true}).click();
+      await expect(create).toBeHidden();
       await expect(page.locator('.admin-entity-list')).toContainText("新设备");
       expect(writes.at(-1).body).toEqual({name: "新设备", loginCode: "new-screen", pin: "1234", administrativeClassId: "class-a"});
+      if (width <= 959) await page.getByRole("button", {name: "搜索与筛选"}).click();
       await page.getByLabel("搜索设备、账号或班级", {exact: true}).fill("new-screen");
       await expect(page.locator('.admin-entity-list .v-list-item')).toHaveCount(1);
       expect(errors).toEqual([]);
@@ -416,9 +423,40 @@ test("screen admin retains the manager-only UI boundary", async ({browser}) => {
   const {context, page, writes, errors} = await openAdmin(browser, 1440, "TEACHER");
   try {
     await expect(page.getByText("请先完成学校初始化或取得 OWNER/ADMIN 权限。", {exact: true})).toBeVisible();
-    await expect(page.getByRole("button", {name: "创建账号", exact: true})).toHaveCount(0);
+    await expect(page.getByRole("button", {name: "创建大屏账号", exact: true})).toHaveCount(0);
     await expect(page.getByLabel("搜索设备、账号或班级", {exact: true})).toHaveCount(0);
     expect(writes).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+test("screen account dialog keeps input after a failed create and returns focus on Escape", async ({browser}) => {
+  const {context, page, errors} = await openAdmin(browser, 1440);
+  try {
+    const opener = page.getByRole("button", {name: "创建大屏账号", exact: true});
+    await opener.click();
+    const create = page.getByRole("dialog").filter({hasText: "创建大屏账号"});
+    await expect(create).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(create).toBeHidden();
+    await expect(opener).toBeFocused();
+
+    await opener.click();
+    await create.getByLabel("设备名称", {exact: true}).fill("新大屏");
+    await create.getByLabel("大屏短账号", {exact: true}).fill("new-screen");
+    await create.getByLabel("大屏 PIN", {exact: true}).fill("1234");
+    await create.locator(".v-select").filter({hasText: "绑定行政班"}).getByRole("combobox").first().click();
+    await page.getByRole("option", {name: "一班 · C1"}).click();
+    const endpoint = `${api}/api/v2/admin/schools/school/classroom-screen-accounts`;
+    await page.route(endpoint, route => route.fulfill({status: 503, json: {message: "暂时无法创建"}}));
+    await create.getByRole("button", {name: "创建账号", exact: true}).click();
+    await expect(create).toBeVisible();
+    await expect(create.getByLabel("设备名称", {exact: true})).toHaveValue("新大屏");
+    await expect(create.getByLabel("大屏短账号", {exact: true})).toHaveValue("new-screen");
+    await page.unroute(endpoint);
+    await create.getByRole("button", {name: "创建账号", exact: true}).click();
+    await expect(create).toBeHidden();
+    await expect(page.locator(".admin-entity-list")).toContainText("新大屏");
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });

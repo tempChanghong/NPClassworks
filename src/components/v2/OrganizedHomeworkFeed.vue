@@ -1,13 +1,16 @@
 <template>
   <section class="organized-homework-feed">
     <component
-      :is="screenMode ? 'details' : 'div'"
+      :is="screenMode || compactControls ? 'details' : 'div'"
       v-if="showControls"
-      :open="!screenMode"
-      :class="{'screen-filter-disclosure': screenMode}"
+      :open="!screenMode && !compactControls"
+      :class="{'screen-filter-disclosure': screenMode, 'student-filter-disclosure': compactControls}"
     >
-      <summary v-if="screenMode">
+      <summary v-if="screenMode || compactControls">
         筛选与排序 · {{ organized.visibleCount }} 项{{ hasFilters ? ' · 已启用筛选' : '' }}
+        <span v-if="compactControls && completionStats.total">
+          · 本机已完成 {{ completionStats.completed }}/{{ completionStats.total }}
+        </span>
       </summary>
       <v-card
         class="feed-controls rounded-xl mb-4"
@@ -154,7 +157,10 @@
       v-if="screenMode && screenAssignments.length"
       class="feed-section mb-5"
     >
-      <div class="feed-section-heading">
+      <div
+        v-if="organized.notices.length"
+        class="feed-section-heading"
+      >
         <v-icon
           color="primary"
           icon="mdi-book-open-page-variant"
@@ -188,7 +194,10 @@
         :key="group.id"
         class="feed-section mb-5"
       >
-        <div class="feed-section-heading">
+        <div
+          v-if="!compactControls || group.publications.length > 1"
+          class="feed-section-heading"
+        >
           <v-icon
             color="primary"
             icon="mdi-book-open-page-variant"
@@ -264,6 +273,7 @@ const props = defineProps({
   canEdit: {type: Function, default: () => false},
   excludeUrgentNotices: Boolean,
   completionEnabled: Boolean,
+  compactControls: Boolean,
 });
 defineEmits(["edit", "history", "focus"]);
 
@@ -364,6 +374,15 @@ function toggleCompletion(publication) {
 .screen-filter-disclosure { margin-bottom: 12px; }
 .screen-filter-disclosure > summary { cursor: pointer; padding: 8px 12px; font-size: 1rem; color: rgba(var(--v-theme-on-surface), 0.8); }
 .screen-filter-disclosure[open] > summary { margin-bottom: 8px; }
+.student-filter-disclosure { margin-bottom: 12px; }
+.student-filter-disclosure > summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 11px 12px;
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), 0.88);
+}
+.student-filter-disclosure[open] > summary { margin-bottom: 8px; }
 .notice-collapsed-summary { margin: 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .feed-controls {

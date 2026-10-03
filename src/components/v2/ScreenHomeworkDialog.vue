@@ -79,7 +79,7 @@
 
         <section class="composer-section">
           <div class="composer-section__label">
-            1. 选择科目
+            选择科目
           </div>
           <div class="subject-choice-grid">
             <v-btn
@@ -100,7 +100,7 @@
           class="composer-section"
         >
           <div class="composer-section__label">
-            2. 发布到
+            发布到
           </div>
           <v-alert
             v-if="eligibleTargets.length === 1"
@@ -141,7 +141,7 @@
 
         <section class="composer-section">
           <div class="composer-section__label">
-            3. 输入作业
+            输入作业
           </div>
           <v-textarea
             ref="contentInput"

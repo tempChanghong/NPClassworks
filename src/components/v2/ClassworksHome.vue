@@ -1,5 +1,6 @@
 <template>
   <v-app-bar
+    v-if="mode !== 'screen' || !store.screenSession"
     class="classworks-app-bar px-2"
     :class="{'classworks-app-bar--with-nav': showMainNavigation}"
     color="surface"
@@ -62,7 +63,10 @@
 
   <v-container
     class="classworks-v2-page py-6"
-    :class="{'classworks-v2-page--screen': mode === 'screen'}"
+    :class="{
+      'classworks-v2-page--screen': mode === 'screen',
+      'classworks-v2-page--student-mobile': mode === 'student' && isCompactStudent,
+    }"
     fluid
   >
     <v-alert
@@ -119,7 +123,10 @@
 
     <template v-else-if="mode === 'student'">
       <div class="classworks-overview mb-6">
-        <classroom-time-card compact />
+        <classroom-time-card
+          v-if="!isCompactStudent"
+          compact
+        />
         <v-card
           class="selection-summary rounded-xl"
           color="primary"
@@ -128,6 +135,7 @@
           <v-card-text class="selection-summary__content">
             <div class="selection-summary__identity">
               <v-avatar
+                v-if="!isCompactStudent"
                 color="primary"
                 size="48"
                 variant="flat"
@@ -139,33 +147,134 @@
                   {{ store.selectedClassName }}
                 </div>
                 <div class="selection-summary__description text-medium-emphasis">
-                  {{ selectionDescription }}
+                  {{ isCompactStudent ? mobileSelectionDescription : selectionDescription }}
                 </div>
               </div>
             </div>
             <div class="selection-summary__actions">
-              <HomeworkWeekButton :class-name="store.selectedClassName" />
-              <HomeworkHolidayButton :class-name="store.selectedClassName" />
-              <HomeworkTomorrowButton :class-name="store.selectedClassName" />
-              <HomeworkCorrectionsButton :class-name="store.selectedClassName" />
-              <HomeworkPrintButton
-                :class-name="store.selectedClassName"
-                :scope-label="selectionDescription"
-              />
-              <v-btn
-                prepend-icon="mdi-tune-variant"
-                variant="tonal"
-                @click="store.selectionDialog = true"
-              >
-                修改选班
-              </v-btn>
-              <v-btn
-                :loading="store.feedLoading"
-                icon="mdi-refresh"
-                title="刷新"
-                variant="text"
-                @click="store.loadStudentFeed()"
-              />
+              <template v-if="isCompactStudent">
+                <v-btn
+                  :disabled="!store.activeWorkspaceIds.length"
+                  prepend-icon="mdi-bag-checked"
+                  size="small"
+                  variant="tonal"
+                  @click="studentTomorrow?.open()"
+                >
+                  明日核对
+                </v-btn>
+                <v-menu
+                  v-model="studentMoreOpen"
+                  @after-leave="completeStudentTool"
+                >
+                  <template #activator="{props: menuProps}">
+                    <v-btn
+                      v-bind="menuProps"
+                      append-icon="mdi-chevron-down"
+                      size="small"
+                      variant="text"
+                    >
+                      更多
+                    </v-btn>
+                  </template>
+                  <v-list
+                    aria-label="学生作业更多操作"
+                    density="compact"
+                  >
+                    <v-list-item
+                      :disabled="!store.activeWorkspaceIds.length"
+                      prepend-icon="mdi-calendar-week"
+                      title="一周总览"
+                      @click="runStudentTool('week')"
+                    />
+                    <v-list-item
+                      :disabled="!store.activeWorkspaceIds.length"
+                      prepend-icon="mdi-beach"
+                      title="放假作业"
+                      @click="runStudentTool('holiday')"
+                    />
+                    <v-list-item
+                      :disabled="!store.activeWorkspaceIds.length"
+                      prepend-icon="mdi-file-document-edit-outline"
+                      title="今日更正"
+                      @click="runStudentTool('corrections')"
+                    />
+                    <v-list-item
+                      :disabled="studentPrint?.disabled"
+                      prepend-icon="mdi-printer-outline"
+                      title="打印清单"
+                      @click="runStudentTool('print')"
+                    />
+                    <v-list-item
+                      :disabled="studentPrint?.disabled"
+                      prepend-icon="mdi-content-copy"
+                      title="复制文字清单"
+                      @click="runStudentTool('text')"
+                    />
+                    <v-divider />
+                    <v-list-item
+                      prepend-icon="mdi-tune-variant"
+                      title="修改选班"
+                      @click="runStudentTool('selection')"
+                    />
+                    <v-list-item
+                      :disabled="store.feedLoading"
+                      prepend-icon="mdi-refresh"
+                      title="刷新作业"
+                      @click="runStudentTool('refresh')"
+                    />
+                  </v-list>
+                </v-menu>
+                <HomeworkWeekButton
+                  ref="studentWeek"
+                  :class-name="store.selectedClassName"
+                  hide-button
+                />
+                <HomeworkHolidayButton
+                  ref="studentHoliday"
+                  :class-name="store.selectedClassName"
+                  hide-button
+                />
+                <HomeworkTomorrowButton
+                  ref="studentTomorrow"
+                  :class-name="store.selectedClassName"
+                  hide-button
+                />
+                <HomeworkCorrectionsButton
+                  ref="studentCorrections"
+                  :class-name="store.selectedClassName"
+                  hide-button
+                />
+                <HomeworkPrintButton
+                  ref="studentPrint"
+                  :class-name="store.selectedClassName"
+                  :scope-label="selectionDescription"
+                  hide-button
+                />
+              </template>
+              <template v-else>
+                <HomeworkWeekButton :class-name="store.selectedClassName" />
+                <HomeworkHolidayButton :class-name="store.selectedClassName" />
+                <HomeworkTomorrowButton :class-name="store.selectedClassName" />
+                <HomeworkCorrectionsButton :class-name="store.selectedClassName" />
+                <HomeworkPrintButton
+                  :class-name="store.selectedClassName"
+                  :scope-label="selectionDescription"
+                />
+                <v-btn
+                  prepend-icon="mdi-tune-variant"
+                  variant="tonal"
+                  @click="store.selectionDialog = true"
+                >
+                  修改选班
+                </v-btn>
+                <v-btn
+                  :loading="store.feedLoading"
+                  icon="mdi-refresh"
+                  title="刷新"
+                  variant="text"
+                  @click="store.loadStudentFeed()"
+                />
+              </template>
             </div>
           </v-card-text>
         </v-card>
@@ -210,11 +319,22 @@
       <template v-else-if="store.selectedWorkspaceIds.length">
         <BoardDateNavigator
           class="mb-4"
+          :compact="isCompactStudent"
           :date="store.boardDate"
           @change="store.setBoardDate"
         />
-        <HomeworkSubjectStatus />
-        <PreparationBoard />
+        <HomeworkSubjectStatus v-if="!isCompactStudent" />
+        <PreparationBoard v-if="!isCompactStudent" />
+        <div
+          v-if="isCompactStudent"
+          class="student-mobile-context"
+        >
+          <PreparationBoard compact />
+          <HomeworkSubjectStatus
+            attention-only
+            compact
+          />
+        </div>
         <v-empty-state
           v-if="store.feedLoadError && !store.feed.length"
           class="rounded-xl"
@@ -236,6 +356,7 @@
 
         <OrganizedHomeworkFeed
           v-else-if="store.feed.length"
+          :compact-controls="isCompactStudent"
           completion-enabled
           :publications="store.feed"
         />
@@ -246,6 +367,12 @@
           icon="mdi-check-circle-outline"
           text="可以切换到前一天、后一天或选择其他日期查看"
         />
+        <div
+          v-if="isCompactStudent"
+          class="student-mobile-support"
+        >
+          <HomeworkSubjectStatus compact />
+        </div>
       </template>
     </template>
 
@@ -414,33 +541,67 @@
             <div class="teacher-session-summary__actions">
               <HomeworkHolidayButton teacher />
               <HomeworkTomorrowButton teacher />
-              <v-btn
-                v-if="canOpenAdmin"
-                prepend-icon="mdi-school-outline"
-                variant="text"
-                @click="$router.push('/classworks-admin')"
-              >
-                学校管理
-              </v-btn>
-              <v-btn
-                v-if="store.account.provider === 'school-local'"
-                prepend-icon="mdi-lock-reset"
-                variant="text"
-                @click="changePinDialog = true"
-              >
-                修改 PIN
-              </v-btn>
-              <v-btn
-                variant="text"
-                @click="store.signOutTeacher()"
-              >
-                退出
-              </v-btn>
+              <v-menu>
+                <template #activator="{props: menuProps}">
+                  <v-btn
+                    v-bind="menuProps"
+                    append-icon="mdi-chevron-down"
+                    variant="text"
+                  >
+                    账号
+                  </v-btn>
+                </template>
+                <v-list>
+                  <v-list-item
+                    v-if="canOpenAdmin"
+                    prepend-icon="mdi-school-outline"
+                    title="学校管理"
+                    @click="$router.push('/classworks-admin')"
+                  />
+                  <v-list-item
+                    v-if="store.account.provider === 'school-local'"
+                    prepend-icon="mdi-lock-reset"
+                    title="修改 PIN"
+                    @click="changePinDialog = true"
+                  />
+                  <v-list-item
+                    prepend-icon="mdi-logout"
+                    title="退出教师账号"
+                    @click="store.signOutTeacher()"
+                  />
+                </v-list>
+              </v-menu>
             </div>
           </v-card-text>
         </v-card>
 
+        <v-btn-toggle
+          v-if="isCompactTeacher"
+          v-model="teacherTask"
+          class="teacher-task-nav mb-4"
+          color="primary"
+          mandatory
+          variant="tonal"
+        >
+          <v-btn value="actions">
+            待处理
+            <v-badge
+              v-if="todayTeacherActions.summary.total"
+              color="warning"
+              inline
+              :content="todayTeacherActions.summary.total"
+            />
+          </v-btn>
+          <v-btn value="compose">
+            {{ editingPublication ? "编辑发布" : "新建发布" }}
+          </v-btn>
+          <v-btn value="records">
+            发布记录
+          </v-btn>
+        </v-btn-toggle>
+
         <TeacherActionCenter
+          v-show="!isCompactTeacher || teacherTask === 'actions'"
           :busy-id="teacherActionBusyId"
           :center="todayTeacherActions"
           :loading="store.teacherActionCenterLoading"
@@ -453,6 +614,7 @@
 
         <v-row>
           <v-col
+            v-show="!isCompactTeacher || teacherTask === 'compose'"
             cols="12"
             lg="7"
           >
@@ -466,6 +628,7 @@
             />
           </v-col>
           <v-col
+            v-show="!isCompactTeacher || teacherTask === 'records' || (teacherTask === 'actions' && !todayTeacherActions.summary.total)"
             cols="12"
             lg="5"
           >
@@ -637,6 +800,7 @@
 import PreparationBoard from "@/components/v2/PreparationBoard.vue";
 import {computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
+import {useDisplay} from "vuetify";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {
   classworksV2Api,
@@ -692,6 +856,30 @@ const NotificationDeliveryDialog = defineAsyncComponent(() => import("@/componen
 const PublicationResultDialog = defineAsyncComponent(() => import("@/components/v2/PublicationResultDialog.vue"));
 
 const store = useClassworksV2Store();
+const {width: viewportWidth} = useDisplay();
+const isCompactStudent = computed(() => viewportWidth.value <= 680);
+const isCompactTeacher = computed(() => viewportWidth.value < 1280);
+const studentWeek = ref(null);
+const studentHoliday = ref(null);
+const studentTomorrow = ref(null);
+const studentCorrections = ref(null);
+const studentPrint = ref(null);
+const studentMoreOpen = ref(false);
+const studentPendingTool = ref("");
+function runStudentTool(action) {
+  studentPendingTool.value = action;
+  studentMoreOpen.value = false;
+}
+function completeStudentTool() {
+  const action = studentPendingTool.value;
+  studentPendingTool.value = "";
+  if (action === "selection") store.selectionDialog = true;
+  if (action === "refresh") void store.loadStudentFeed();
+  if (action === "week") studentWeek.value?.open();
+  if (action === "holiday") studentHoliday.value?.open();
+  if (action === "corrections") studentCorrections.value?.open();
+  if (action === "print" || action === "text") studentPrint.value?.openPreview(action);
+}
 const route = useRoute();
 const router = useRouter();
 const mode = ref("student");
@@ -707,6 +895,7 @@ const snackbarIcon = ref("mdi-check-circle-outline");
 const editingPublication = ref(null);
 const certifyAfterEditPublicationId = ref("");
 const teacherComposer = ref(null);
+const teacherTask = ref("actions");
 const teacherActionBusyId = ref("");
 const loginSchoolId = ref("");
 const loginUsername = ref("");
@@ -796,6 +985,13 @@ const selectionDescription = computed(() => {
       .find((group) => group.id === id)?.name)
     .filter(Boolean);
   return groups.length ? `已选走班：${groups.join("、")}` : "全部课程随行政班，或尚未选择走班课程";
+});
+const mobileSelectionDescription = computed(() => {
+  if (Object.values(store.selection.courseGroupIds || {}).some(Boolean)) return selectionDescription.value;
+  const subjects = store.courseOptions?.subjects || [];
+  return subjects.length && subjects.every(item => item.followsAdministrativeClass || item.deliveryMode === "ADMIN_CLASS")
+    ? "全科随行政班"
+    : "可在更多中核对走班";
 });
 const boardDateLabel = computed(() => boardDateRelativeLabel(store.boardDate, currentBoardDay.value));
 const screenUnlockRemainingLabel = computed(() => {
@@ -1094,14 +1290,31 @@ function openNotificationDelivery(publication) {
 }
 
 async function openTeacherEditor(publication, {certifyAfterSave = false} = {}) {
+  if (teacherComposer.value?.requestBusy && !teacherComposer.value?.canSwitchDuringSave) {
+    showFeedback({title: "请等待当前保存完成", color: "warning", icon: "mdi-content-save-clock-outline"});
+    return;
+  }
+  if (teacherComposer.value?.hasUnsavedChanges && !teacherComposer.value?.canSwitchDuringSave) {
+    if (editingPublication.value?.id === publication.id) {
+      teacherTask.value = "compose";
+      return;
+    }
+    if (!await confirmAction({
+      title: "切换编辑内容？",
+      message: "当前编辑区有未保存的输入。继续会放弃这些输入；需要保留时，请先保存草稿。",
+      confirmText: "放弃输入并编辑",
+      color: "warning",
+    })) return;
+  }
   editingPublication.value = publication;
   certifyAfterEditPublicationId.value = certifyAfterSave ? publication.id : "";
+  teacherTask.value = "compose";
   await nextTick();
   teacherComposer.value?.$el?.scrollIntoView({behavior: "smooth", block: "start"});
   if (certifyAfterSave) {
     showFeedback({
       title: "已进入修改并确认流程",
-      detail: "内容已载入下方编辑区；保存后系统会继续确认刚保存的新版本",
+      detail: "内容已载入编辑区；保存后系统会继续确认刚保存的新版本",
       color: "info",
       icon: "mdi-pencil-check-outline",
     });
@@ -1355,6 +1568,16 @@ async function copyScreenBoardToToday() {
   justify-content: flex-end;
 }
 
+.teacher-task-nav {
+  display: flex;
+  width: 100%;
+}
+
+.teacher-task-nav :deep(.v-btn) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .classworks-overview {
   display: grid;
   gap: 16px;
@@ -1410,6 +1633,18 @@ async function copyScreenBoardToToday() {
   justify-content: flex-end;
 }
 
+.student-mobile-support {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.student-mobile-context {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 @media (max-width: 1050px) {
   .classworks-overview {
     grid-template-columns: 1fr;
@@ -1417,6 +1652,57 @@ async function copyScreenBoardToToday() {
 }
 
 @media (max-width: 680px) {
+  .classworks-v2-page--student-mobile {
+    padding-top: 12px !important;
+  }
+
+  .classworks-v2-page--student-mobile .classworks-overview {
+    gap: 0;
+    margin-bottom: 12px !important;
+  }
+
+  .classworks-v2-page--student-mobile .selection-summary {
+    min-height: 0;
+  }
+
+  .classworks-v2-page--student-mobile .selection-summary__content {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-height: 0;
+    padding: 10px 12px;
+  }
+
+  .classworks-v2-page--student-mobile .selection-summary__identity {
+    flex: 1 1 auto;
+  }
+
+  .classworks-v2-page--student-mobile .selection-summary__title {
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+  }
+
+  .classworks-v2-page--student-mobile .selection-summary__description {
+    font-size: 0.75rem;
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+  }
+
+  .classworks-v2-page--student-mobile .selection-summary__actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 2px;
+  }
+
+  .classworks-v2-page--student-mobile .selection-summary__actions :deep(.v-btn) {
+    min-height: 40px;
+  }
+
+  .classworks-v2-page--student-mobile :deep(.board-date-navigator) {
+    margin-bottom: 10px !important;
+  }
+
   .teacher-session-summary {
     align-items: stretch;
     flex-direction: column;
@@ -1450,6 +1736,14 @@ async function copyScreenBoardToToday() {
   .selection-summary__actions {
     flex: 0 1 auto;
   }
+
+  .classworks-v2-page--student-mobile .selection-summary__identity {
+    flex: 1 1 auto;
+  }
+
+  .classworks-v2-page--student-mobile .selection-summary__actions {
+    flex: 0 0 auto;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1477,11 +1771,19 @@ async function copyScreenBoardToToday() {
 
 @media (max-width: 460px) {
   .classworks-mode-nav__label {
-    display: none;
+    font-size: 0.75rem;
   }
 
   .classworks-mode-nav :deep(.v-btn__content) {
-    gap: 0;
+    gap: 4px;
+  }
+
+  .classworks-mode-nav :deep(.v-btn) {
+    padding-inline: 2px;
+  }
+
+  .classworks-mode-nav :deep(.v-icon) {
+    font-size: 18px;
   }
 }
 </style>
