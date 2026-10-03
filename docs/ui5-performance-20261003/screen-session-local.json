@@ -1,0 +1,494 @@
+{
+  "recordedAt": "2026-10-03T13:32:15.505Z",
+  "browser": "153.0.8010.12",
+  "machine": {
+    "os": "win32 10.0.26300",
+    "cpu": "Intel(R) Core(TM) Ultra 9 275HX",
+    "ramGiB": 31.4
+  },
+  "cpuThrottle": 4,
+  "network": "loopback",
+  "workload": {
+    "assignments": 30,
+    "notices": 20,
+    "focusCycles": 10,
+    "foregroundIdleSeconds": 30,
+    "lifecycleFreezeSeconds": 10,
+    "microphone": "off",
+    "background": "default"
+  },
+  "modes": [
+    {
+      "mode": "efficient",
+      "before": {
+        "JSEventListeners": 1552,
+        "Nodes": 6416,
+        "ScriptDuration": 0.257476,
+        "TaskDuration": 3.049116,
+        "JSHeapUsedSize": 19029264,
+        "cards": 50,
+        "efficient": true,
+        "dockBlur": "none",
+        "longTasks": {
+          "count": 14,
+          "totalMs": 1986
+        }
+      },
+      "cycles": [
+        {
+          "JSEventListeners": 1695,
+          "Nodes": 6563,
+          "ScriptDuration": 0.276425,
+          "TaskDuration": 3.576628,
+          "JSHeapUsedSize": 20792788,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 16,
+            "totalMs": 2132
+          }
+        },
+        {
+          "JSEventListeners": 1695,
+          "Nodes": 6561,
+          "ScriptDuration": 0.295196,
+          "TaskDuration": 4.106873,
+          "JSHeapUsedSize": 19974772,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 18,
+            "totalMs": 2273
+          }
+        },
+        {
+          "JSEventListeners": 1843,
+          "Nodes": 6708,
+          "ScriptDuration": 0.312544,
+          "TaskDuration": 4.627935,
+          "JSHeapUsedSize": 20864716,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 20,
+            "totalMs": 2422
+          }
+        },
+        {
+          "JSEventListeners": 1987,
+          "Nodes": 6855,
+          "ScriptDuration": 0.329469,
+          "TaskDuration": 5.143835,
+          "JSHeapUsedSize": 20494916,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 22,
+            "totalMs": 2562
+          }
+        },
+        {
+          "JSEventListeners": 2131,
+          "Nodes": 7001,
+          "ScriptDuration": 0.347873,
+          "TaskDuration": 5.658758,
+          "JSHeapUsedSize": 21305908,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 24,
+            "totalMs": 2706
+          }
+        },
+        {
+          "JSEventListeners": 2275,
+          "Nodes": 7148,
+          "ScriptDuration": 0.363495,
+          "TaskDuration": 6.15545,
+          "JSHeapUsedSize": 22079028,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 26,
+            "totalMs": 2847
+          }
+        },
+        {
+          "JSEventListeners": 2423,
+          "Nodes": 7295,
+          "ScriptDuration": 0.380106,
+          "TaskDuration": 6.660619,
+          "JSHeapUsedSize": 21706144,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 28,
+            "totalMs": 2990
+          }
+        },
+        {
+          "JSEventListeners": 2567,
+          "Nodes": 7442,
+          "ScriptDuration": 0.39625,
+          "TaskDuration": 7.146957,
+          "JSHeapUsedSize": 24089024,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 30,
+            "totalMs": 3133
+          }
+        },
+        {
+          "JSEventListeners": 2711,
+          "Nodes": 7588,
+          "ScriptDuration": 0.412641,
+          "TaskDuration": 7.632688,
+          "JSHeapUsedSize": 23163936,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 32,
+            "totalMs": 3270
+          }
+        },
+        {
+          "JSEventListeners": 2855,
+          "Nodes": 7735,
+          "ScriptDuration": 0.429706,
+          "TaskDuration": 8.160067,
+          "JSHeapUsedSize": 22784124,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 34,
+            "totalMs": 3423
+          }
+        }
+      ],
+      "afterCycles": {
+        "JSEventListeners": 2855,
+        "Nodes": 7735,
+        "ScriptDuration": 0.429706,
+        "TaskDuration": 8.161914,
+        "JSHeapUsedSize": 22793152,
+        "cards": 50,
+        "efficient": true,
+        "dockBlur": "none",
+        "longTasks": {
+          "count": 34,
+          "totalMs": 3423
+        }
+      },
+      "afterSettle": {
+        "JSEventListeners": 2860,
+        "Nodes": 7737,
+        "ScriptDuration": 0.432321,
+        "TaskDuration": 8.193536,
+        "JSHeapUsedSize": 22836604,
+        "cards": 50,
+        "efficient": true,
+        "dockBlur": "none",
+        "longTasks": {
+          "count": 34,
+          "totalMs": 3423
+        }
+      },
+      "afterIdle": {
+        "JSEventListeners": 1564,
+        "Nodes": 6425,
+        "ScriptDuration": 0.45644,
+        "TaskDuration": 8.674673,
+        "JSHeapUsedSize": 19722916,
+        "cards": 50,
+        "efficient": true,
+        "dockBlur": "none",
+        "longTasks": {
+          "count": 34,
+          "totalMs": 3423
+        }
+      },
+      "afterGc": {
+        "JSEventListeners": 1552,
+        "Nodes": 6416,
+        "ScriptDuration": 0.45644,
+        "TaskDuration": 8.77857,
+        "JSHeapUsedSize": 19535736,
+        "cards": 50,
+        "efficient": true,
+        "dockBlur": "none",
+        "longTasks": {
+          "count": 34,
+          "totalMs": 3423
+        }
+      },
+      "lifecycle": {
+        "states": [
+          "frozen",
+          "active"
+        ],
+        "afterRestore": {
+          "JSEventListeners": 1552,
+          "Nodes": 6416,
+          "ScriptDuration": 0.483038,
+          "TaskDuration": 9.692316,
+          "JSHeapUsedSize": 19551044,
+          "cards": 50,
+          "efficient": true,
+          "dockBlur": "none",
+          "longTasks": {
+            "count": 37,
+            "totalMs": 3653
+          }
+        }
+      },
+      "errors": []
+    },
+    {
+      "mode": "standard",
+      "before": {
+        "JSEventListeners": 1552,
+        "Nodes": 6416,
+        "ScriptDuration": 0.186347,
+        "TaskDuration": 2.932372,
+        "JSHeapUsedSize": 19011112,
+        "cards": 50,
+        "efficient": false,
+        "dockBlur": "blur(14px)",
+        "longTasks": {
+          "count": 13,
+          "totalMs": 1912
+        }
+      },
+      "cycles": [
+        {
+          "JSEventListeners": 1695,
+          "Nodes": 6563,
+          "ScriptDuration": 0.205246,
+          "TaskDuration": 3.469622,
+          "JSHeapUsedSize": 20768136,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 15,
+            "totalMs": 2065
+          }
+        },
+        {
+          "JSEventListeners": 1695,
+          "Nodes": 6561,
+          "ScriptDuration": 0.221677,
+          "TaskDuration": 4.011832,
+          "JSHeapUsedSize": 19955980,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 17,
+            "totalMs": 2213
+          }
+        },
+        {
+          "JSEventListeners": 1843,
+          "Nodes": 6708,
+          "ScriptDuration": 0.243331,
+          "TaskDuration": 4.584878,
+          "JSHeapUsedSize": 20844056,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 19,
+            "totalMs": 2392
+          }
+        },
+        {
+          "JSEventListeners": 1987,
+          "Nodes": 6855,
+          "ScriptDuration": 0.264051,
+          "TaskDuration": 5.096653,
+          "JSHeapUsedSize": 20472604,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 21,
+            "totalMs": 2534
+          }
+        },
+        {
+          "JSEventListeners": 2131,
+          "Nodes": 7001,
+          "ScriptDuration": 0.282154,
+          "TaskDuration": 5.638219,
+          "JSHeapUsedSize": 21295244,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 23,
+            "totalMs": 2695
+          }
+        },
+        {
+          "JSEventListeners": 2275,
+          "Nodes": 7148,
+          "ScriptDuration": 0.298212,
+          "TaskDuration": 6.149772,
+          "JSHeapUsedSize": 22063892,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 25,
+            "totalMs": 2849
+          }
+        },
+        {
+          "JSEventListeners": 2423,
+          "Nodes": 7295,
+          "ScriptDuration": 0.315736,
+          "TaskDuration": 6.675267,
+          "JSHeapUsedSize": 21659156,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 27,
+            "totalMs": 2994
+          }
+        },
+        {
+          "JSEventListeners": 2567,
+          "Nodes": 7442,
+          "ScriptDuration": 0.332071,
+          "TaskDuration": 7.159768,
+          "JSHeapUsedSize": 24028568,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 29,
+            "totalMs": 3137
+          }
+        },
+        {
+          "JSEventListeners": 2711,
+          "Nodes": 7588,
+          "ScriptDuration": 0.348712,
+          "TaskDuration": 7.656431,
+          "JSHeapUsedSize": 23080988,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 31,
+            "totalMs": 3272
+          }
+        },
+        {
+          "JSEventListeners": 2855,
+          "Nodes": 7735,
+          "ScriptDuration": 0.365058,
+          "TaskDuration": 8.171687,
+          "JSHeapUsedSize": 22804236,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 33,
+            "totalMs": 3428
+          }
+        }
+      ],
+      "afterCycles": {
+        "JSEventListeners": 2855,
+        "Nodes": 7735,
+        "ScriptDuration": 0.365058,
+        "TaskDuration": 8.173918,
+        "JSHeapUsedSize": 22813264,
+        "cards": 50,
+        "efficient": false,
+        "dockBlur": "blur(14px)",
+        "longTasks": {
+          "count": 33,
+          "totalMs": 3428
+        }
+      },
+      "afterSettle": {
+        "JSEventListeners": 2860,
+        "Nodes": 7737,
+        "ScriptDuration": 0.367646,
+        "TaskDuration": 8.201975,
+        "JSHeapUsedSize": 22865092,
+        "cards": 50,
+        "efficient": false,
+        "dockBlur": "blur(14px)",
+        "longTasks": {
+          "count": 33,
+          "totalMs": 3428
+        }
+      },
+      "afterIdle": {
+        "JSEventListeners": 1564,
+        "Nodes": 6425,
+        "ScriptDuration": 0.390286,
+        "TaskDuration": 8.661009,
+        "JSHeapUsedSize": 19704628,
+        "cards": 50,
+        "efficient": false,
+        "dockBlur": "blur(14px)",
+        "longTasks": {
+          "count": 33,
+          "totalMs": 3428
+        }
+      },
+      "afterGc": {
+        "JSEventListeners": 1552,
+        "Nodes": 6416,
+        "ScriptDuration": 0.390892,
+        "TaskDuration": 8.766125,
+        "JSHeapUsedSize": 19526252,
+        "cards": 50,
+        "efficient": false,
+        "dockBlur": "blur(14px)",
+        "longTasks": {
+          "count": 33,
+          "totalMs": 3428
+        }
+      },
+      "lifecycle": {
+        "states": [
+          "frozen",
+          "active"
+        ],
+        "afterRestore": {
+          "JSEventListeners": 1552,
+          "Nodes": 6416,
+          "ScriptDuration": 0.41905,
+          "TaskDuration": 9.678351,
+          "JSHeapUsedSize": 19538764,
+          "cards": 50,
+          "efficient": false,
+          "dockBlur": "blur(14px)",
+          "longTasks": {
+            "count": 36,
+            "totalMs": 3657
+          }
+        }
+      },
+      "errors": []
+    }
+  ]
+}
