@@ -1,6 +1,7 @@
 <template>
   <v-card
-    v-if="rows.length && (!attentionOnly || hasAttention) && !store.feedLoading && (!store.feedLoadError || store.feedUsingCache)"
+    v-if="rows.length && (!attentionOnly || hasAttention) && (!hideWhenAttention || !hasAttention)
+      && !store.feedLoading && (!store.feedLoadError || store.feedUsingCache)"
     :class="compact ? 'subject-status--compact' : 'my-3 rounded-xl'"
     variant="tonal"
   >
@@ -44,7 +45,7 @@
 import {computed, ref} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {dailyHomeworkStatuses} from "@/utils/noHomework";
-defineProps({compact: Boolean, attentionOnly: Boolean});
+defineProps({compact: Boolean, attentionOnly: Boolean, hideWhenAttention: Boolean});
 const expanded = ref(false);
 const store = useClassworksV2Store();
 const rows = computed(() => {

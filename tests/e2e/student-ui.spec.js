@@ -31,7 +31,7 @@ async function seedBoard(request, {missingSubject = ""} = {}) {
   }
 }
 
-async function openBoard(browser, role, width, height) {
+async function openBoard(browser, role, width, height, {empty = false, settings = null} = {}) {
   const storage = {
     "classworks-v2-oobe": JSON.stringify({version: 1, completed: true, roleHint: role}),
     ...(role === "student" ? {"classworks-v2-student-selection": JSON.stringify({
@@ -41,6 +41,7 @@ async function openBoard(browser, role, width, height) {
       "classworks-v2-screen-token": "screen-token",
       "classworks-v2-screen-oobe:screen-a": JSON.stringify({version: 1, completed: true}),
     }),
+    ...(settings ? {Classworks_settings: JSON.stringify(settings)} : {}),
   };
   const context = await browser.newContext({
     viewport: {width, height}, serviceWorkers: "block", timezoneId: "Asia/Shanghai",
@@ -68,7 +69,7 @@ async function openBoard(browser, role, width, height) {
   page.on("pageerror", error => errors.push(error.message));
   await page.clock.setFixedTime(fixed);
   await page.goto(origin);
-  await page.locator(".publication-card").first().waitFor();
+  await page.locator(empty ? ".student-empty-state" : ".publication-card").first().waitFor();
   return {context, page, errors};
 }
 
@@ -123,6 +124,7 @@ test("student mobile surfaces an unentered subject before the feed", async ({bro
   try {
     await expect(page.locator(".student-mobile-context .subject-status-summary"))
       .toContainText("尚未录入");
+    await expect(page.locator(".subject-status-summary")).toHaveCount(1);
     const attention = page.locator(".student-mobile-context .subject-status--compact");
     const firstCard = page.locator(".publication-card").first();
     await expect.poll(async () => {
@@ -132,6 +134,58 @@ test("student mobile surfaces an unentered subject before the feed", async ({bro
     await attention.locator("summary").click();
     await expect(attention).toContainText("物理");
     await expect(attention).toContainText("尚未录入");
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("student empty board keeps date controls and status readable on narrow phones", async ({browser, request}, testInfo) => {
+  await request.post(`${api}/__test/reset`);
+  const wallpaper = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844"><rect width="390" height="844" fill="#d8c3bb"/><circle cx="310" cy="520" r="180" fill="#a5bfd4"/></svg>');
+  const {context, page, errors} = await openBoard(browser, "student", 390, 844, {empty: true,
+    settings: {"theme.mode": "dark", "background.enabled": true, "background.imageData": wallpaper,
+      "background.blur": 0, "background.opacity": 0}});
+  try {
+    await page.getByLabel("选择日期").fill("2026-10-01");
+    await expect(page.getByLabel("选择日期")).toHaveValue("2026-10-01");
+    await expect(page.locator(".subject-status-summary")).toHaveCount(1);
+    await expect(page.locator(".student-empty-state")).toBeVisible();
+
+    for (const width of [390, 320]) {
+      await page.setViewportSize({width, height: 844});
+      await expect(page.locator(".board-date-navigator")).toBeVisible();
+      await expect(page.locator(".subject-status--compact")).toBeVisible();
+      await expect(page.locator(".student-empty-state")).toBeVisible();
+      const layout = await page.evaluate(() => {
+        const bounds = selector => document.querySelector(selector).getBoundingClientRect();
+        const nav = bounds(".board-date-navigator");
+        const stepper = bounds(".board-date-stepper");
+        const today = bounds(".board-date-today");
+        const field = bounds(".board-date-input");
+        const title = document.querySelector(".board-date-title");
+        const empty = bounds(".student-empty-state");
+        const surfaceAlpha = selector => {
+          const color = window.getComputedStyle(document.querySelector(selector)).backgroundColor;
+          return color.startsWith("rgba") ? Number(color.match(/,\s*([\d.]+)\)$/)[1]) : 1;
+        };
+        return {navRight: nav.right, stepperBottom: stepper.bottom, todayRight: today.right,
+          fieldLeft: field.left, fieldRight: field.right, fieldTop: field.top,
+          titleFits: title.scrollWidth <= title.clientWidth, emptyHeight: empty.height,
+          viewportFits: document.documentElement.scrollWidth <= window.innerWidth,
+          surfaces: [".selection-summary", ".board-date-navigator", ".subject-status--compact", ".student-empty-state"]
+            .map(surfaceAlpha)};
+      });
+      expect(layout.titleFits, `${width}px date label`).toBe(true);
+      expect(layout.fieldTop, `${width}px date row`).toBeGreaterThan(layout.stepperBottom);
+      expect(layout.fieldLeft, `${width}px date input`).toBeGreaterThan(layout.todayRight);
+      expect(layout.fieldRight, `${width}px date input`).toBeLessThanOrEqual(layout.navRight - 8);
+      expect(layout.emptyHeight, `${width}px empty state`).toBeLessThan(220);
+      expect(layout.viewportFits, `${width}px horizontal overflow`).toBe(true);
+      expect(layout.surfaces.every(alpha => alpha >= 0.9), `${width}px surfaces over wallpaper`).toBe(true);
+      await expect(page.locator(".md3-enter-active")).toHaveCount(0);
+      await page.screenshot({path: testInfo.outputPath(`student-empty-${width}.png`)});
+    }
     expect(errors).toEqual([]);
   } finally {
     await context.close();
