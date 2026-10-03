@@ -1,0 +1,1092 @@
+{
+  "at": "2026-10-03T13:05:35.171Z",
+  "browser": "153.0.8010.12",
+  "machine": "win32",
+  "cpuThrottle": 4,
+  "network": "loopback",
+  "publications": 12,
+  "scenarios": [
+    {
+      "role": "student",
+      "width": 390,
+      "height": 844,
+      "touch": true
+    },
+    {
+      "role": "teacher",
+      "width": 1440,
+      "height": 1000,
+      "touch": false
+    },
+    {
+      "role": "screen",
+      "width": 1920,
+      "height": 1080,
+      "touch": true
+    }
+  ],
+  "runs": [
+    {
+      "role": "student",
+      "cache": "cold-no-sw",
+      "iteration": 1,
+      "visibleMs": 1021,
+      "errors": [],
+      "domContentLoadedMs": 262,
+      "loadMs": 270,
+      "fcpMs": 664,
+      "lcpMs": 992,
+      "resourceCount": 30,
+      "staticTransferBytes": 4287507,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 4,
+      "longTaskTotalMs": 702,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "student",
+      "cache": "cold-no-sw",
+      "iteration": 2,
+      "visibleMs": 968,
+      "errors": [],
+      "domContentLoadedMs": 236,
+      "loadMs": 243,
+      "fcpMs": 932,
+      "lcpMs": 932,
+      "resourceCount": 30,
+      "staticTransferBytes": 4287507,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 4,
+      "longTaskTotalMs": 653,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "student",
+      "cache": "cold-no-sw",
+      "iteration": 3,
+      "visibleMs": 994,
+      "errors": [],
+      "domContentLoadedMs": 249,
+      "loadMs": 256,
+      "fcpMs": 636,
+      "lcpMs": 968,
+      "resourceCount": 30,
+      "staticTransferBytes": 4287507,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 4,
+      "longTaskTotalMs": 689,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "student",
+      "cache": "installed-pwa",
+      "iteration": 1,
+      "visibleMs": 775,
+      "errors": [],
+      "domContentLoadedMs": 151,
+      "loadMs": 180,
+      "fcpMs": 388,
+      "lcpMs": 704,
+      "resourceCount": 30,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 3,
+      "longTaskTotalMs": 402,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    },
+    {
+      "role": "student",
+      "cache": "installed-pwa",
+      "iteration": 2,
+      "visibleMs": 639,
+      "errors": [],
+      "domContentLoadedMs": 200,
+      "loadMs": 204,
+      "fcpMs": 392,
+      "lcpMs": 632,
+      "resourceCount": 30,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 3,
+      "longTaskTotalMs": 311,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    },
+    {
+      "role": "student",
+      "cache": "installed-pwa",
+      "iteration": 3,
+      "visibleMs": 619,
+      "errors": [],
+      "domContentLoadedMs": 165,
+      "loadMs": 170,
+      "fcpMs": 596,
+      "lcpMs": 596,
+      "resourceCount": 30,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 3,
+      "longTaskTotalMs": 336,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    },
+    {
+      "role": "teacher",
+      "cache": "cold-no-sw",
+      "iteration": 1,
+      "visibleMs": 1324,
+      "errors": [],
+      "domContentLoadedMs": 239,
+      "loadMs": 244,
+      "fcpMs": 720,
+      "lcpMs": 720,
+      "resourceCount": 43,
+      "staticTransferBytes": 4377604,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 6,
+      "longTaskTotalMs": 918,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "teacher",
+      "cache": "cold-no-sw",
+      "iteration": 2,
+      "visibleMs": 1331,
+      "errors": [],
+      "domContentLoadedMs": 248,
+      "loadMs": 255,
+      "fcpMs": 744,
+      "lcpMs": 744,
+      "resourceCount": 43,
+      "staticTransferBytes": 4377604,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 6,
+      "longTaskTotalMs": 919,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "teacher",
+      "cache": "cold-no-sw",
+      "iteration": 3,
+      "visibleMs": 1454,
+      "errors": [],
+      "domContentLoadedMs": 246,
+      "loadMs": 253,
+      "fcpMs": 756,
+      "lcpMs": 756,
+      "resourceCount": 43,
+      "staticTransferBytes": 4377604,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 6,
+      "longTaskTotalMs": 995,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "teacher",
+      "cache": "installed-pwa",
+      "iteration": 1,
+      "visibleMs": 1183,
+      "errors": [],
+      "domContentLoadedMs": 172,
+      "loadMs": 204,
+      "fcpMs": 448,
+      "lcpMs": 448,
+      "resourceCount": 48,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 4,
+      "longTaskTotalMs": 611,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    },
+    {
+      "role": "teacher",
+      "cache": "installed-pwa",
+      "iteration": 2,
+      "visibleMs": 1038,
+      "errors": [],
+      "domContentLoadedMs": 217,
+      "loadMs": 220,
+      "fcpMs": 468,
+      "lcpMs": 572,
+      "resourceCount": 47,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 6,
+      "longTaskTotalMs": 620,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    },
+    {
+      "role": "teacher",
+      "cache": "installed-pwa",
+      "iteration": 3,
+      "visibleMs": 1039,
+      "errors": [],
+      "domContentLoadedMs": 224,
+      "loadMs": 230,
+      "fcpMs": 576,
+      "lcpMs": 576,
+      "resourceCount": 48,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 5,
+      "longTaskTotalMs": 557,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    },
+    {
+      "role": "screen",
+      "cache": "cold-no-sw",
+      "iteration": 1,
+      "visibleMs": 1197,
+      "errors": [],
+      "domContentLoadedMs": 246,
+      "loadMs": 252,
+      "fcpMs": 1080,
+      "lcpMs": 1080,
+      "resourceCount": 30,
+      "staticTransferBytes": 4287507,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 8,
+      "longTaskTotalMs": 962,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "screen",
+      "cache": "cold-no-sw",
+      "iteration": 2,
+      "visibleMs": 1354,
+      "errors": [],
+      "domContentLoadedMs": 265,
+      "loadMs": 271,
+      "fcpMs": 1252,
+      "lcpMs": 1252,
+      "resourceCount": 30,
+      "staticTransferBytes": 4287507,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 7,
+      "longTaskTotalMs": 1006,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "screen",
+      "cache": "cold-no-sw",
+      "iteration": 3,
+      "visibleMs": 1167,
+      "errors": [],
+      "domContentLoadedMs": 262,
+      "loadMs": 269,
+      "fcpMs": 1108,
+      "lcpMs": 1108,
+      "resourceCount": 30,
+      "staticTransferBytes": 4287507,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 1307960
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 682178
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 588284
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 403516
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 300635
+        },
+        {
+          "path": "/assets/index-C7Y6WGDp.js",
+          "bytes": 175234
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 109009
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 62228
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 41575
+        }
+      ],
+      "longTaskCount": 6,
+      "longTaskTotalMs": 849,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": false
+    },
+    {
+      "role": "screen",
+      "cache": "installed-pwa",
+      "iteration": 1,
+      "visibleMs": 952,
+      "errors": [],
+      "domContentLoadedMs": 293,
+      "loadMs": 324,
+      "fcpMs": 912,
+      "lcpMs": 912,
+      "resourceCount": 30,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 4,
+      "longTaskTotalMs": 399,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    },
+    {
+      "role": "screen",
+      "cache": "installed-pwa",
+      "iteration": 2,
+      "visibleMs": 948,
+      "errors": [],
+      "domContentLoadedMs": 230,
+      "loadMs": 233,
+      "fcpMs": 888,
+      "lcpMs": 888,
+      "resourceCount": 30,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 5,
+      "longTaskTotalMs": 524,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    },
+    {
+      "role": "screen",
+      "cache": "installed-pwa",
+      "iteration": 3,
+      "visibleMs": 910,
+      "errors": [],
+      "domContentLoadedMs": 234,
+      "loadMs": 237,
+      "fcpMs": 860,
+      "lcpMs": 860,
+      "resourceCount": 30,
+      "staticTransferBytes": 0,
+      "largestTransfers": [
+        {
+          "path": "/assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-PXm3-2wK.woff",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/materialdesignicons-webfont-B7mPwVP_.ttf",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-BkdbkzrA.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vue-DmRxQin3.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-vuetify-CnryYOlx.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-utils-B9ygI19o.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/vendor-socket-TjCxX7sJ.js",
+          "bytes": 0
+        },
+        {
+          "path": "/assets/index-z8yovT6c.css",
+          "bytes": 0
+        },
+        {
+          "path": "/registerSW.js",
+          "bytes": 0
+        }
+      ],
+      "longTaskCount": 5,
+      "longTaskTotalMs": 517,
+      "heapUsedMb": 10,
+      "serviceWorkerControlled": true
+    }
+  ]
+}

@@ -102,6 +102,11 @@ if (!fs.existsSync(indexPath)) {
   fail('dist/index.html 不存在。');
 } else {
   const html = fs.readFileSync(indexPath, 'utf8');
+  const iconFontPreloads = [...html.matchAll(/<link\b[^>]*>/g)]
+    .filter(([tag]) => /rel=["']preload["']/.test(tag) && tag.includes('materialdesignicons-webfont'));
+  if (iconFontPreloads.length) {
+    fail('图标字体应由 CSS 选择格式，不应在 HTML 中预加载所有格式。');
+  }
   if (!html.includes('rel="manifest"')) {
     fail('index.html 缺少 manifest 链接。');
   }

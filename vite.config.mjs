@@ -345,6 +345,9 @@ export default defineConfig(({ mode }) => {
       exclude: [/pages\/index\.vue$/],
     }),
     Fonts({
+      // Let CSS select a supported icon font. Auto-preloading every emitted
+      // EOT/TTF/WOFF variant makes modern browsers download unused formats.
+      custom: {preload: false},
       google: {
         families: [{
           name: 'Roboto',
