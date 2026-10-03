@@ -1,0 +1,55 @@
+{
+  "entries": 108,
+  "uniqueFiles": 102,
+  "totalUniqueBytes": 3540720,
+  "largest": [
+    {
+      "url": "assets/index-z8yovT6c.css",
+      "bytes": 681878
+    },
+    {
+      "url": "banner.png",
+      "bytes": 665940
+    },
+    {
+      "url": "assets/materialdesignicons-webfont-Dp5v-WZN.woff2",
+      "bytes": 403216
+    },
+    {
+      "url": "assets/index-tTOArn5u.js",
+      "bytes": 300283
+    },
+    {
+      "url": "assets/classworks-admin-CCTPByaK.js",
+      "bytes": 211852
+    },
+    {
+      "url": "assets/index-DwfY8ZT4.js",
+      "bytes": 174934
+    },
+    {
+      "url": "assets/vendor-vue-DmRxQin3.js",
+      "bytes": 108709
+    },
+    {
+      "url": "assets/vendor-vuetify-CnryYOlx.js",
+      "bytes": 61928
+    },
+    {
+      "url": "assets/NpepDeviceManager-4c_prgPX.js",
+      "bytes": 59717
+    },
+    {
+      "url": "assets/setup-DZU_b4U6.js",
+      "bytes": 52322
+    },
+    {
+      "url": "assets/vendor-socket-TjCxX7sJ.js",
+      "bytes": 41275
+    },
+    {
+      "url": "assets/NoiseMonitorDetail-DLEpo6nd.js",
+      "bytes": 40681
+    }
+  ]
+}

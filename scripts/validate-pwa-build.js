@@ -134,6 +134,9 @@ if (!fs.existsSync(serviceWorkerPath)) {
   } else if (/url:\s*["'](?:\.\/)?sounds\//.test(precacheManifest)) {
     fail('声音资源不应进入 precache，应由 sound-cache 按需缓存。');
   }
+  if (/url:\s*["'](?:\.\/)?banner\.png["']/.test(precacheManifest)) {
+    fail('未被当前应用引用的旧 banner.png 不应进入 precache。');
+  }
   if (/url:\s*["'](?:\.\/)?backgrounds\//.test(precacheManifest)) {
     fail('背景图片不应进入 precache，应在查看或选择后按需下载。');
   }
