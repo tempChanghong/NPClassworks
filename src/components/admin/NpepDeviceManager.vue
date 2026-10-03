@@ -39,6 +39,11 @@
       >
         刷新未完成，以下为上次成功加载的记录，请勿视为实时状态。
       </v-alert>
+      <NpepPairingAccess
+        :school-id="schoolId"
+        :term-id="termId"
+        :bindings="bindings"
+      />
       <NpepNoiseSchedules
         :school-id="schoolId"
         :school-name="schoolName"
@@ -316,6 +321,7 @@ import NpepRuntimeControl from './NpepRuntimeControl.vue';
 import NpepExamPlanControl from './NpepExamPlanControl.vue';
 import NpepNoiseReports from './NpepNoiseReports.vue';
 import NpepNoiseSchedules from './NpepNoiseSchedules.vue';
+import NpepPairingAccess from './NpepPairingAccess.vue';
 import {useNpepManager} from "@/composables/admin/useNpepManager";
 import {npepConnectivity, npepStateName, npepModeName, npepRecordingName, npepAutomaticName} from "@/utils/npepPresentation";
 

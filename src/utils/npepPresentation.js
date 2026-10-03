@@ -1,4 +1,8 @@
 const messages = {
+  SCREEN_TOKEN_INVALID: '大屏登录已失效，请重新登录对应班级大屏。',
+  SCREEN_PAIRING_DISABLED: '学校尚未开放此大屏的网页配对，请联系管理员。',
+  PREAUTHORIZATION_CHANGED: '学校预授权或大屏登录凭据已变化，请刷新并重新生成配对码。',
+  PAIRING_CODE_UNAVAILABLE: '配对码已过期、使用或被替换，请重新生成。',
   CLASSISLAND_EXECUTABLE_INVALID: 'ClassIsland 程序位置无效，请在大屏设置中修正。',
   EXAMAWARE_EXECUTABLE_INVALID: 'ExamAware 程序位置无效，请在大屏设置中修正。',
   EXAMAWARE_EXECUTABLE_UNREADABLE: '无法读取 ExamAware 程序文件，请检查路径和权限。',
