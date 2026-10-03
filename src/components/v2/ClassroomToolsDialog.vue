@@ -90,6 +90,10 @@
           text="可以在大屏设置的“课堂工具”分类中重新启用。"
         />
 
+        <NpepScreenPairingCard
+          v-else-if="activeTool === 'npep'"
+          :key="`${store.screenSession?.binding?.id}:${store.screenSession?.binding?.credentialVersion}`"
+        />
         <template v-else-if="activeTool === 'attendance'">
           <v-alert
             v-if="!attendanceReady"
@@ -372,6 +376,7 @@ import {getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import NoiseMonitorCard from "@/components/NoiseMonitorCard.vue";
 import NativeNoisePanel from '@/components/v2/NativeNoisePanel.vue';
+import NpepScreenPairingCard from '@/components/v2/NpepScreenPairingCard.vue';
 import {nativeNoiseState} from '@/utils/nativeNoise';
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 import {editableRoster, importRoster, rosterChanges, validateRoster} from "@/utils/classRoster";
@@ -403,7 +408,8 @@ const allTools = [
   {id: "attendance", title: "考勤", description: "记录今日缺勤、迟到和不参与学生", icon: "mdi-account-check-outline", color: "success"},
   {id: "noise", title: "噪声监测", description: "查看教室环境噪声和本地统计", icon: "mdi-waveform", color: "info"},
 ];
-const tools = computed(() => allTools.filter((tool) => toolSettings.value.enabledToolIds.includes(tool.id)));
+const tools = computed(() => [...allTools.filter((tool) => toolSettings.value.enabledToolIds.includes(tool.id)),
+  {id: 'npep', title: '连接 NPEduTools', description: '学校预授权与大屏配对', icon: 'mdi-link-variant', color: 'primary'}]);
 
 const today = () => {
   const now = new Date();

@@ -55,9 +55,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+      - name: Render pairing management and screen flow (loopback fixtures)
+        run: pnpm test:e2e:pairing
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: browser-test-results
-          path: test-results/
+          path: |
+            test-results/
+            .artifacts/pairing-browser/**/*.png
+            .artifacts/pairing-browser/**/result.json
+          include-hidden-files: true
           retention-days: 7

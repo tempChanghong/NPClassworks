@@ -367,8 +367,8 @@ export function describeApiError(error, fallback = "请求失败") {
   return validation?.message || data?.message || error?.message || fallback;
 }
 
-// Only school-management operations are available to the web UI. Device and
-// pairing secrets remain in the native client; never persist a short code here.
+// Web uses administrator or screen credentials, never native device secrets.
+// Short pairing codes are displayed transiently, never persisted here.
 async function npepAdminRequest(method, path, {body, signal, params, version = "0.1", requestId = globalThis.crypto.randomUUID()} = {}) {
   const response = await client.request({method, url: `/api/v2/npep${path}`, signal, params, timeout: 10000,
     headers: {"X-NPEP-Version": version, ...(method === "get" ? {"X-Request-Id": requestId} : {})},
@@ -432,12 +432,36 @@ export const npepExamPlanApi = {
   cancel: (school, device, operation, options) => npepAdminRequest('post', `${examPlanPath(school, device)}/${encodeURIComponent(operation)}/cancel`, {...options, version: '0.5', body: {}}),
 };
 export const npepAdminApi = {
+  previewPairingAccessBatch: (schoolId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/pairing-access/preview`, {...options, body, requestId: body.requestId}),
+  setPairingAccessBatch: (schoolId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/pairing-access/batch`, {...options, body, requestId: body.requestId}),
+  pairingAccess: (schoolId, options) => npepAdminRequest('get', `${npepSchoolPath(schoolId)}/pairing-access`, options),
+  setPairingAccess: (schoolId, bindingId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/screen-bindings/${encodeURIComponent(bindingId)}/pairing-access`, {...options, body, requestId: body.requestId}),
   info: options => npepAdminRequest("get", "/info", options),
   devices: (schoolId, options) => npepAdminRequest("get", `${npepSchoolPath(schoolId)}/devices`, options),
   resolve: (schoolId, userCode, options) => npepAdminRequest("post", `${npepSchoolPath(schoolId)}/pairings/resolve`, {...options, body: {userCode}}),
   approve: (schoolId, pairingId, screenBindingId, options) => npepAdminRequest("post", `${npepSchoolPath(schoolId)}/pairings/${encodeURIComponent(pairingId)}/approve`, {...options, body: {screenBindingId, capabilities: ["device.status"]}}),
   cancel: (schoolId, pairingId, options) => npepAdminRequest("post", `${npepSchoolPath(schoolId)}/pairings/${encodeURIComponent(pairingId)}/cancel`, {...options, body: {}}),
   revoke: (schoolId, device, options) => npepAdminRequest("post", `${npepSchoolPath(schoolId)}/devices/${encodeURIComponent(device.deviceId)}/revoke`, {...options, body: {expectedBindingRevision: device.bindingRevision}}),
+};
+
+export const npepScreenPairingApi = {
+  async request(body, {signal} = {}) {
+    const token = getClassroomScreenToken(), server = baseUrl();
+    if (!token) throw new Error('请先登录班级大屏');
+    const requestId = body?.requestId || globalThis.crypto.randomUUID();
+    const response = await client.request({method: body ? 'post' : 'get', url: '/api/v2/npep/screen/pairing', signal, timeout: 10000,
+      headers: screenHeaders({'X-NPEP-Version': '0.1', 'X-Request-Id': requestId}), ...(body ? {data: {...body, requestId}} : {})});
+    if (token !== getClassroomScreenToken() || server !== baseUrl()) throw staleAccountRequest();
+    const value = response.data;
+    if (value?.protocolVersion !== '0.1' || value.requestId !== requestId || !Number.isFinite(Date.parse(value.serverTime)) || !value.data) throw new Error('配对服务响应不兼容');
+    const data = value.data;
+    const compatible = body
+      ? /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/.test(data.userCode) && data.state === 'READY' && Number.isFinite(Date.parse(data.expiresAt))
+      : typeof data.enabled === 'boolean' && typeof data.occupied === 'boolean' &&
+        ['screenBindingId', 'schoolName', 'administrativeClassName', 'screenBindingName'].every(key => typeof data[key] === 'string' && data[key].length > 0);
+    if (!compatible) throw new Error('配对服务响应不兼容');
+    return {...value.data, serverTime: value.serverTime, origin: new URL(server, window.location.href).origin};
+  },
 };
 
 export async function getOAuthProviders() {

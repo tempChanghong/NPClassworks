@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "test:e2e:fullstack": "node scripts/run-fullstack.js",
     "test:e2e:npep": "node scripts/run-fullstack.js --npep",
+    "test:e2e:pairing": "node scripts/test-npep-pairing-browser.mjs",
     "test:upgrade": "node scripts/run-fullstack.js --upgrade",
     "test:performance": "node scripts/run-fullstack.js --performance",
     "test:contracts": "node --test tests/contracts/core.test.js",

@@ -153,6 +153,14 @@ export async function createFlowHarness() {
   reset();
   return {
     api, screenExit, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore, configureScreenUploadRetry,
+    async openNpepPairing({management = false, bindings = [], termId = ''} = {}) {
+      const {default: component} = await vite.ssrLoadModule(management ? '/src/components/admin/NpepPairingAccess.vue' : '/src/components/v2/NpepScreenPairingCard.vue');
+      const props = reactive({schoolId:'school',bindings,termId});
+      let state;
+      const app = renderer.createApp({setup() { state = component.setup(props,{expose() {}}); return () => null; }});
+      app.provide(ssrContextKey, {}); app.mount({}); mounted.push(app);
+      return {state,props,unmount() { mounted.splice(mounted.indexOf(app),1); app.unmount(); }};
+    },
     loadDraft(bindingId, publicationId) {
       const id = sessionStorage.getItem("classworks-v2-draft-tab");
       return drafts.loadScreenHomeworkDraft(bindingId, publicationId, id ? {
