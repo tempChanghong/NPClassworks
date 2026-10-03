@@ -1,0 +1,82 @@
+[
+  {
+    "name": "admin-screens-1440",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "scrollWidth": 1440,
+    "scrollHeight": 1199,
+    "scope": {
+      "x": 296,
+      "y": 180,
+      "width": 1128,
+      "height": 76
+    },
+    "list": {
+      "x": 296,
+      "y": 452,
+      "width": 1128,
+      "height": 105
+    },
+    "firstDevice": {
+      "x": 296,
+      "y": 460,
+      "width": 1128,
+      "height": 88
+    },
+    "deadline": {
+      "x": 316,
+      "y": 781,
+      "width": 1088,
+      "height": 50
+    },
+    "createButton": {
+      "x": 1201,
+      "y": 296,
+      "width": 147,
+      "height": 40
+    },
+    "errors": []
+  },
+  {
+    "name": "admin-screens-390",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "scrollWidth": 390,
+    "scrollHeight": 1761,
+    "scope": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    },
+    "list": {
+      "x": 12,
+      "y": 666,
+      "width": 366,
+      "height": 105
+    },
+    "firstDevice": {
+      "x": 12,
+      "y": 674,
+      "width": 366,
+      "height": 88
+    },
+    "deadline": {
+      "x": 32,
+      "y": 1015,
+      "width": 326,
+      "height": 106
+    },
+    "createButton": {
+      "x": 211,
+      "y": 510,
+      "width": 147,
+      "height": 40
+    },
+    "errors": []
+  }
+]

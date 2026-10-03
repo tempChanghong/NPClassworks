@@ -106,8 +106,10 @@ export function useScreenAccountManager({selectedSchoolId, errorMessage, success
       newScreenAdministrativeClassId.value = "";
       successMessage.value = `大屏账号 ${created.loginCode} 已创建，请在对应一体机上完成首次登录。`;
       await loadScreenAccounts({afterMutation: true});
+      return true;
     } catch (error) {
       errorMessage.value = describeApiError(error, "创建大屏账号失败");
+      return false;
     } finally {
       screenMutationBusy.value = false;
     }

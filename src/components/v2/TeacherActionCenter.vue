@@ -1,13 +1,14 @@
 <template>
   <v-card
     class="teacher-action-center mb-6 rounded-xl"
+    :class="{'teacher-action-center--empty': !summary.total}"
     :color="summary.total ? undefined : 'success'"
     :variant="summary.total ? 'flat' : 'tonal'"
   >
     <v-card-title class="action-center-header d-flex align-center flex-wrap ga-2 pa-5 pb-3">
       <v-avatar
         :color="summary.total ? 'warning' : 'success'"
-        size="40"
+        :size="summary.total ? 40 : 32"
         variant="tonal"
       >
         <v-icon :icon="summary.total ? 'mdi-inbox-arrow-down-outline' : 'mdi-check-all'" />
@@ -23,9 +24,18 @@
           >
             {{ summary.total }} 项
           </v-chip>
+          <span
+            v-else
+            class="text-caption text-medium-emphasis font-weight-regular"
+          >
+            今日无需确认
+          </span>
         </div>
-        <div class="text-caption text-medium-emphasis font-weight-regular">
-          {{ summary.total ? "仅显示今日作业板的未确认内容；历史内容可在发布记录中查看" : "今日没有需要教师确认的内容" }}
+        <div
+          v-if="summary.total"
+          class="text-caption text-medium-emphasis font-weight-regular"
+        >
+          仅显示今日作业板的未确认内容；历史内容可在发布记录中查看
         </div>
       </div>
       <v-spacer />

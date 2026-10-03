@@ -54,15 +54,6 @@
           >
             抄写模式
           </v-btn>
-          <v-btn
-            color="primary"
-            prepend-icon="mdi-monitor-edit"
-            title="录入作业"
-            variant="elevated"
-            @click="$emit('create')"
-          >
-            <span class="screen-toolbar-action-label">录入作业</span>
-          </v-btn>
           <v-menu>
             <template #activator="{props}">
               <v-btn
@@ -240,24 +231,8 @@
 
     <div
       v-else-if="store.feed.length"
-      class="mt-4"
+      class="screen-feed-region"
     >
-      <div class="d-flex align-center flex-wrap ga-2 mb-3">
-        <v-chip
-          prepend-icon="mdi-update"
-          size="small"
-          variant="tonal"
-        >
-          更新于 {{ generatedAtLabel }}
-        </v-chip>
-        <v-chip
-          prepend-icon="mdi-source-branch"
-          size="small"
-          variant="tonal"
-        >
-          {{ store.screenWorkspaces.length }} 个相关教学空间
-        </v-chip>
-      </div>
       <OrganizedHomeworkFeed
         :can-edit="store.screenCanEdit"
         exclude-urgent-notices
@@ -538,9 +513,6 @@ const workspaceSummary = computed(() => {
   const groups = store.screenWorkspaces.filter((workspace) => workspace.type === "COURSE_GROUP");
   return groups.length ? `行政班及 ${groups.length} 个相关走班` : "全科随行政班";
 });
-const generatedAtLabel = computed(() => store.feedGeneratedAt
-  ? new Intl.DateTimeFormat("zh-CN", {hour: "2-digit", minute: "2-digit"}).format(new Date(store.feedGeneratedAt))
-  : "尚未同步");
 const burnInStyle = computed(() => {
   if (!settings.value.antiBurnInShift) return {};
   const offsets = [[0, 0], [1, -1], [-1, 1], [2, 0], [0, 2], [-2, 0], [0, -2]];
@@ -650,7 +622,7 @@ function handleShortcut(event) {
   let fontScale = settings.value.fontScale;
   if (["+", "=", "Add"].includes(event.key)) fontScale += 10;
   else if (["-", "Subtract"].includes(event.key)) fontScale -= 10;
-  else if (event.key === "0") fontScale = 130;
+  else if (event.key === "0") fontScale = 160;
   else return;
   event.preventDefault();
   applySettings(sanitizeScreenDisplaySettings({...settings.value, fontScale}));
@@ -711,6 +683,7 @@ onUnmounted(() => {
   min-width: 168px;
   pointer-events: auto;
 }
+.screen-feed-region { margin-top: 8px; }
 .screen-action-dock__surface {
   align-items: center;
   backdrop-filter: blur(14px);
@@ -758,7 +731,7 @@ onUnmounted(() => {
   min-width: max-content;
 }
 .screen-identity { min-width: 150px; }
-.screen-class-name { font-size: clamp(1.05rem, 0.25vw + 0.85rem, 1.35rem); }
+.screen-class-name { font-size: clamp(1.25rem, 0.2vw + 1.125rem, 1.5rem); }
 .screen-toolbar :deep(.classroom-time-inline) {
   background: transparent;
   border: 0;
@@ -775,7 +748,7 @@ onUnmounted(() => {
 .screen-context-row > .screen-date-navigator { flex: 1.5 1 500px; }
 .screen-toolbar-actions :deep(.v-btn) { min-height: 44px; }
 .screen-action-dock { max-width: calc(100vw - 24px); }
-.screen-action-dock__surface { flex-wrap: wrap; justify-content: center; }
+.screen-action-dock__surface { flex-wrap: nowrap; justify-content: center; }
 @media (max-width: 600px) {
   .screen-toolbar-content { padding: 8px; gap: 8px; }
   .screen-class-block { flex-wrap: wrap; }
@@ -821,7 +794,7 @@ onUnmounted(() => {
     right: auto;
     transform: translateX(-50%);
   }
-  .screen-action-dock__surface { padding: 5px; }
+  .screen-action-dock__surface { flex-wrap: wrap; padding: 5px; }
   .screen-action-dock__compact { min-height: 52px; min-width: 52px; }
   .screen-action-dock__today { display: none; }
   .screen-action-dock__button { min-height: 54px; min-width: 146px; }
@@ -843,5 +816,10 @@ body.classworks-screen-efficient .app-background-image {
 body.classworks-screen-active .md3-enter-active,
 body.classworks-screen-active .md3-leave-active {
   transition-duration: 0.12s;
+}
+
+body.classworks-screen-efficient .screen-action-dock__surface {
+  backdrop-filter: none;
+  background: rgb(var(--v-theme-surface));
 }
 </style>

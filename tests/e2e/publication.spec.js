@@ -15,7 +15,7 @@ async function openRole(browser, role, {time} = {}) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(origin);
-  await expect(page.getByRole("button", {name: role === "screen" ? "录入作业" : "退出", exact: true}).first()).toBeVisible();
+  await expect(page.getByRole("button", {name: role === "screen" ? "录入作业" : "账号", exact: true}).first()).toBeVisible();
   return {page, context, errors};
 }
 
@@ -290,7 +290,8 @@ test("teacher expiry status updates while open and existing publication types ar
   const teacher = await openRole(browser, "teacher", {time: new Date(now)});
   try {
     const page = teacher.page;
-    const filters = page.locator(".publication-state-filters");
+    const filters = page.locator(".manager-more-states");
+    await filters.locator("summary").click();
     await expect(filters).toContainText("已过期 1");
     await page.clock.fastForward(61000);
     await expect(filters).toContainText("已过期 2");

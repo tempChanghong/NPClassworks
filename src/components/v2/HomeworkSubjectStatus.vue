@@ -1,6 +1,6 @@
 <template>
   <v-card
-    v-if="rows.length && !store.feedLoading && (!store.feedLoadError || store.feedUsingCache)"
+    v-if="rows.length && (!attentionOnly || hasAttention) && !store.feedLoading && (!store.feedLoadError || store.feedUsingCache)"
     :class="compact ? 'subject-status--compact' : 'my-3 rounded-xl'"
     variant="tonal"
   >
@@ -44,7 +44,7 @@
 import {computed, ref} from "vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {dailyHomeworkStatuses} from "@/utils/noHomework";
-defineProps({compact: Boolean});
+defineProps({compact: Boolean, attentionOnly: Boolean});
 const expanded = ref(false);
 const store = useClassworksV2Store();
 const rows = computed(() => {
@@ -57,6 +57,7 @@ const rows = computed(() => {
   const subjects = store.feedAudience === "screen" ? store.screenSession?.subjects || [] : store.studentSubjects;
   return dailyHomeworkStatuses(store.feed, workspaces.filter(item => allowed.has(item.id)), subjects, store.boardDate);
 });
+const hasAttention = computed(() => rows.value.some(row => row.state === "unknown" || row.state === "conflict"));
 const summary = computed(() => [
   ["assigned", "项有作业"], ["none", "项无作业标记"], ["unknown", "项尚未录入"], ["conflict", "项冲突，请核对"],
 ].map(([state, title]) => {

@@ -32,7 +32,8 @@ test("screen layout preserves dock access, full long homework and expandable con
     await expect(cards).toHaveCount(6);
     const long = cards.filter({hasText: "第 12 项"});
     const short = cards.filter({hasText: "语文练习"});
-    await expect.poll(async () => (await long.boundingBox()).width / (await short.boundingBox()).width).toBeGreaterThan(1.8);
+    await expect.poll(async () => Math.abs((await long.boundingBox()).width - (await short.boundingBox()).width)).toBeLessThan(2);
+    await expect.poll(async () => (await long.boundingBox()).height / (await short.boundingBox()).height).toBeGreaterThan(2);
     await expect.poll(() => long.evaluate(card => {
       const requiredSize = window.getComputedStyle(card.querySelector(".publication-content")).fontSize;
       return [...card.querySelectorAll(".submission-details")].every(item => window.getComputedStyle(item).fontSize === requiredSize);
@@ -90,13 +91,12 @@ test("screen layout preserves dock access, full long homework and expandable con
     await expect(page.getByRole("dialog")).toContainText("通知");
     await page.keyboard.press("Escape");
     await page.setViewportSize({width: 1920, height: 1080});
-    await expect.poll(async () => (await long.boundingBox()).width / (await short.boundingBox()).width).toBeGreaterThan(1.8);
+    await expect.poll(async () => Math.abs((await long.boundingBox()).width - (await short.boundingBox()).width)).toBeLessThan(2);
     // Advance one real anti-burn-in interval: the board and dock still shift,
     // but scrolling must not move the dock out of the viewport.
     await page.reload();
     await expect(cards).toHaveCount(6);
-    await expect(page.locator(".classworks-app-bar")).toContainText("NPClassworks 作业板");
-    await expect(page.locator(".classworks-app-bar")).toContainText("热爱创造奇迹。");
+    await expect(page.locator(".classworks-app-bar")).toHaveCount(0);
     await page.clock.fastForward(5 * 60 * 1000);
     await expect(page.locator(".classroom-screen-view")).toHaveCSS("left", "1px");
     await expect(dock.locator(".screen-action-dock__surface")).toHaveCSS("left", "1px");

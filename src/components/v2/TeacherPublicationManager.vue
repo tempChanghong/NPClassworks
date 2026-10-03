@@ -41,7 +41,7 @@
     <v-card-text class="px-5 pb-3">
       <div class="publication-state-filters d-flex flex-wrap ga-2 mb-4">
         <v-chip
-          v-for="item in stateOptions"
+          v-for="item in primaryStates"
           :key="item.value || 'all'"
           :color="stateFilter === item.value ? item.color : undefined"
           :prepend-icon="item.icon"
@@ -51,6 +51,26 @@
           {{ item.title }} {{ stats[item.value || 'all'] }}
         </v-chip>
       </div>
+      <details class="manager-more-states mb-3">
+        <summary>
+          更多状态
+          <span v-if="secondaryStates.some((item) => item.value === stateFilter)">
+            · {{ secondaryStates.find((item) => item.value === stateFilter)?.title }}
+          </span>
+        </summary>
+        <div class="d-flex flex-wrap ga-2 pt-3">
+          <v-chip
+            v-for="item in secondaryStates"
+            :key="item.value"
+            :color="stateFilter === item.value ? item.color : undefined"
+            :prepend-icon="item.icon"
+            :variant="stateFilter === item.value ? 'flat' : 'tonal'"
+            @click="stateFilter = stateFilter === item.value ? '' : item.value"
+          >
+            {{ item.title }} {{ stats[item.value] }}
+          </v-chip>
+        </div>
+      </details>
 
       <v-text-field
         v-model="query"
@@ -61,55 +81,61 @@
         prepend-inner-icon="mdi-magnify"
         variant="outlined"
       />
-      <v-row
-        class="mt-1"
-        dense
-      >
-        <v-col cols="6">
-          <v-select
-            v-model="typeFilter"
-            clearable
-            density="compact"
-            hide-details
-            :items="typeOptions"
-            label="类型"
-            variant="outlined"
-          />
-        </v-col>
-        <v-col cols="6">
-          <v-select
-            v-model="subjectFilter"
-            clearable
-            density="compact"
-            hide-details
-            :items="options.subjects"
-            label="科目"
-            variant="outlined"
-          />
-        </v-col>
-        <v-col cols="12">
-          <v-select
-            v-model="workspaceFilter"
-            clearable
-            density="compact"
-            hide-details
-            :items="options.workspaces"
-            label="行政班或走班教学班"
-            variant="outlined"
-          />
-        </v-col>
-        <v-col cols="12">
-          <v-text-field
-            v-model="boardDateFilter"
-            clearable
-            density="compact"
-            hide-details
-            label="作业板日期"
-            type="date"
-            variant="outlined"
-          />
-        </v-col>
-      </v-row>
+      <details class="manager-advanced-filters mt-3">
+        <summary>
+          按类型、科目、班级或日期筛选
+          <span v-if="advancedFilterCount">· 已选 {{ advancedFilterCount }} 项</span>
+        </summary>
+        <v-row
+          class="mt-2"
+          dense
+        >
+          <v-col cols="6">
+            <v-select
+              v-model="typeFilter"
+              clearable
+              density="compact"
+              hide-details
+              :items="typeOptions"
+              label="类型"
+              variant="outlined"
+            />
+          </v-col>
+          <v-col cols="6">
+            <v-select
+              v-model="subjectFilter"
+              clearable
+              density="compact"
+              hide-details
+              :items="options.subjects"
+              label="科目"
+              variant="outlined"
+            />
+          </v-col>
+          <v-col cols="12">
+            <v-select
+              v-model="workspaceFilter"
+              clearable
+              density="compact"
+              hide-details
+              :items="options.workspaces"
+              label="行政班或走班教学班"
+              variant="outlined"
+            />
+          </v-col>
+          <v-col cols="12">
+            <v-text-field
+              v-model="boardDateFilter"
+              clearable
+              density="compact"
+              hide-details
+              label="作业板日期"
+              type="date"
+              variant="outlined"
+            />
+          </v-col>
+        </v-row>
+      </details>
       <div
         v-if="hasFilters"
         class="d-flex justify-end mt-2"
@@ -239,7 +265,7 @@
       v-else
       :headline="hasFilters ? '没有符合条件的发布' : '还没有发布记录'"
       icon="mdi-text-box-search-outline"
-      :text="hasFilters ? '清除部分筛选条件后再试' : '在左侧新建第一项作业或通知'"
+      :text="hasFilters ? '清除部分筛选条件后再试' : '切换到新建发布，创建第一项作业或通知'"
     >
       <template
         v-if="hasFilters"
@@ -334,13 +360,18 @@ const stateOptions = [
   {title: "全部", value: "", color: "primary", icon: "mdi-format-list-bulleted"},
   ...[
     PUBLICATION_STATUS.PENDING_CERTIFICATION,
+    PUBLICATION_STATUS.PUBLISHED,
     PUBLICATION_STATUS.DRAFT,
     PUBLICATION_STATUS.SCHEDULED,
-    PUBLICATION_STATUS.PUBLISHED,
     PUBLICATION_STATUS.EXPIRED,
     PUBLICATION_STATUS.WITHDRAWN,
   ].map((item) => ({title: item.label, value: item.key, color: item.color, icon: item.icon})),
 ];
+const primaryStates = stateOptions.slice(0, 4);
+const secondaryStates = stateOptions.slice(4);
+const advancedFilterCount = computed(() => [
+  typeFilter.value, subjectFilter.value, workspaceFilter.value, boardDateFilter.value,
+].filter(Boolean).length);
 
 const stats = computed(() => teacherPublicationStats(props.publications, {now: now.value}));
 const options = computed(() => teacherPublicationFilterOptions(props.publications));
@@ -400,4 +431,6 @@ function resetFilters() {
 .publication-list { max-height: 780px; overflow-y: auto; }
 .publication-list-item { min-width: 0; }
 .publication-list-subtitle { -webkit-line-clamp: unset; white-space: normal; }
+.manager-more-states > summary,
+.manager-advanced-filters > summary { cursor: pointer; font-size: 0.875rem; }
 </style>
