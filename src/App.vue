@@ -66,15 +66,18 @@ const bgOpacity = ref(30);
 let backgroundRequest = 0, backgroundKey = "", backgroundObjectUrl = "";
 let backgroundController;
 let backgroundOnlineVersion = 0;
+let backgroundRetryTimer, backgroundSelectionKey = "", backgroundRetries = 0;
 function onBackgroundOnline() {
   backgroundOnlineVersion++;
+  backgroundRetries = 2;
+  clearTimeout(backgroundRetryTimer);
   void loadBgSettings();
 }
 function releaseBackgroundObject() {
   if (backgroundObjectUrl) URL.revokeObjectURL(backgroundObjectUrl);
   backgroundObjectUrl = "";
 }
-onUnmounted(() => { backgroundRequest++; backgroundController?.abort(); releaseBackgroundObject(); });
+onUnmounted(() => { backgroundRequest++; clearTimeout(backgroundRetryTimer); backgroundController?.abort(); releaseBackgroundObject(); });
 
 async function loadBgSettings() {
   bgEnabled.value = getSetting("background.enabled") || false;
@@ -84,7 +87,9 @@ async function loadBgSettings() {
   bgOpacity.value = getSetting("background.opacity") ?? 30;
   const selection = getSetting("background.selection");
   const key = JSON.stringify([bgEnabled.value, selection, imageData, url]);
+  if (key !== backgroundSelectionKey) { backgroundSelectionKey = key; backgroundRetries = 0; }
   if (key === backgroundKey) return;
+  clearTimeout(backgroundRetryTimer);
   backgroundKey = key;
   const request = ++backgroundRequest;
   backgroundController?.abort();
@@ -98,6 +103,7 @@ async function loadBgSettings() {
       const {objectUrl} = await loadPresetBackground(preset, {signal: controller.signal});
       if (request !== backgroundRequest) { URL.revokeObjectURL(objectUrl); return; }
       releaseBackgroundObject(); backgroundObjectUrl = objectUrl; bgSrc.value = objectUrl;
+      backgroundRetries = 0;
       await pruneBackgroundCache(preset.id);
     } catch {
       if (request !== backgroundRequest) return;
@@ -105,6 +111,14 @@ async function loadBgSettings() {
       // Reconnection may precede the rejected request's catch. Retry once after
       // that request settles; repeated online events never start parallel loads.
       if (onlineVersion !== backgroundOnlineVersion) void loadBgSettings();
+      else if (backgroundRetries > 0 && navigator.onLine) {
+        // An online event can precede usable connectivity (including the SW network).
+        // Allow two delayed attempts; changed selection/unmount cancels the pending retry.
+        backgroundRetries--;
+        backgroundRetryTimer = setTimeout(() => {
+          if (request === backgroundRequest && !controller.signal.aborted) void loadBgSettings();
+        }, 500);
+      }
     }
   } else {
     releaseBackgroundObject();

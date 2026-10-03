@@ -22,3 +22,9 @@
 浏览器自动入口：`pnpm test:e2e:pairing`，使用真实配对组件及 HTTP 客户端、临时本机服务和合成响应；管理员与大屏分别置于独立 Chromium 上下文，只允许 loopback 请求，7 组实际点击检查。结果在 `.artifacts/pairing-browser/<编号>/`；这不是生产或设备验收。已接入前端 PR 浏览器 job。
 
 三仓联合入口与指定提交 SHA 的 CI 见桌面仓库 `docs/iterations/NPEP-PAIRING-AUTOMATION-20261002.md`。联合执行时浏览器收到 `--backend-root`，还校验实际请求满足后端协议；单独网页 job 不读取其他仓库。
+
+## 2026-10-03 草稿 PR 与 CI 收尾
+
+功能已提交到 `codex/npep-preauthorized-pairing-20261003`，见 [PR #3](https://github.com/tempChanghong/NPClassworks/pull/3)。本地构建和全量 lint 通过；三仓原生 PostgreSQL／浏览器／.NET 联合 CI 已通过首组提交。人工和生产均未验收，不合并或部署。
+
+既有完整浏览器 CI 152 项中发现一个离线背景恢复失败。轨迹显示 online 之后的首次重试仍报 ERR_INTERNET_DISCONNECTED，随后没有再次请求。恢复事件可能先于实际网络／Service Worker 恢复，因此增加最多两次延迟重试；选择变更与卸载取消旧重试，不无限循环，不放宽原断言。本地背景完整 11 项通过（包括新增的暂时失败后恢复、持续失败后停止两项），全量 lint 通过；提交后重跑完整浏览器 CI，并同步桌面固定网页 SHA。

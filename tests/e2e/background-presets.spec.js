@@ -70,7 +70,42 @@ test("preset gallery downloads only chosen full images and selected background s
 });
 
 test.describe("background failure handling", () => {
-  test.use({serviceWorkers: "block"});
+test.use({serviceWorkers: "block"});
+
+for (const available of [true, false]) {
+  test(`reconnection tolerates a transient failure and keeps retries bounded: available=${available}`, async ({page}) => {
+    const pending = [];
+    await page.route(`${origin}/${presets[0].image}`, route => { pending.push(route); });
+    await page.addInitScript(preset => {
+      const settings = JSON.parse(localStorage.getItem("Classworks_settings"));
+      settings["background.selection"] = {kind: "preset", id: preset.id};
+      localStorage.setItem("Classworks_settings", JSON.stringify(settings));
+    }, presets[0]);
+    await page.goto(`${origin}/settings`);
+    await expect.poll(() => pending.length).toBe(1);
+    await page.evaluate(() => window.dispatchEvent(new window.Event("online")));
+    expect(pending).toHaveLength(1);
+    await pending[0].abort("internetdisconnected");
+    await expect.poll(() => pending.length).toBe(2);
+    await pending[1].abort("internetdisconnected");
+    await expect.poll(() => pending.length).toBe(3);
+    if (available) {
+      await pending[2].fulfill({status: 200, contentType: "image/webp",
+        body: readFileSync(new URL(`../../public/${presets[0].image}`, import.meta.url))});
+      await expect(page.locator(".app-background-image")).toHaveCSS("background-image", /blob:/);
+      expect(pending).toHaveLength(3);
+    } else {
+      await pending[2].abort("internetdisconnected");
+      await expect.poll(() => pending.length).toBe(4);
+      await pending[3].abort("internetdisconnected");
+      // Beyond both backoff intervals, there must be no permanent retry loop.
+      await page.waitForTimeout(1500);
+      expect(pending).toHaveLength(4);
+      await expect(page.locator(".app-background-image")).not.toHaveCSS("background-image", /blob:/);
+    }
+    expect(await selected(page)).toEqual({kind: "preset", id: presets[0].id});
+  });
+}
 
 for (const action of ["cancel", "leave"]) {
   test(`background body download is aborted on ${action} and a new choice still works`, async ({page}) => {
