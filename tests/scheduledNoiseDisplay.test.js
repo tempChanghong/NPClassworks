@@ -49,6 +49,8 @@ test('enters only with a fresh, matching scheduled capture, regardless of applie
 });
 
 test('keeps unknown states distinct from a verified end or exam pause', () => {
+  assert.equal(nativeDisplayPhase(null, null, null), 'unknown');
+  assert.equal(nativeDisplayPhase({provider: 'native', online: true}, {online: true}, null), 'unknown');
   const {noise, schedule} = snapshots();
   const context = nativeScheduledDisplayCandidate(noise, schedule);
   assert.equal(nativeDisplayPhase(noise, schedule, context), 'active');

@@ -327,7 +327,7 @@ const policyPending = computed(() => phase.value === 'active' && displayContext.
 
 const currentReturn = computed(() => {
   tick.value;
-  return returnState.value?.windowKey === candidate.value?.windowKey
+  return returnState.value && candidate.value && returnState.value.windowKey === candidate.value.windowKey
     && scheduledReturnRemainingMs(returnState.value, window.performance.now()) > 0
     ? returnState.value : null;
 });
@@ -367,7 +367,8 @@ function acceptReturn(reply, previous = null, requestStartedAt = window.performa
   if (previous?.windowKey === key)
     remainingMs = Math.min(remainingMs, scheduledReturnRemainingMs(previous, nowMono));
   if (!active || key !== candidate.value?.windowKey || remainingMs <= 0) {
-    if (previous?.windowKey === candidate.value?.windowKey) pendingRecoveryWindow.value = previous.windowKey;
+    if (previous && candidate.value && previous.windowKey === candidate.value.windowKey)
+      pendingRecoveryWindow.value = previous.windowKey;
     saveReturn(null);
     return;
   }
@@ -586,7 +587,7 @@ onMounted(() => {
   presenceTimer = window.setInterval(reportPresence, 5000);
   timer = window.setInterval(() => {
     tick.value++;
-    if (returnState.value?.windowKey === candidate.value?.windowKey
+    if (returnState.value && candidate.value && returnState.value.windowKey === candidate.value.windowKey
       && scheduledReturnRemainingMs(returnState.value, window.performance.now()) <= 0)
       pendingRecoveryWindow.value = returnState.value.windowKey;
     if (tick.value % 15 === 0) syncReturn();

@@ -45,6 +45,7 @@ export function schoolRemainingSeconds(schoolNow, end, elapsedMilliseconds = 0) 
 }
 
 export function nativeDisplayPhase(noiseStatus, scheduleStatus, context) {
+  if (!context) return 'unknown';
   if (nativeScheduledDisplayCandidate(noiseStatus, scheduleStatus)?.windowKey === context?.windowKey) return 'active';
   if (scheduleStatus?.online && scheduleStatus.status?.reason === 'EXAM_PAUSED') return 'exam';
   if (noiseStatus?.provider !== 'native' || !noiseStatus.online || !scheduleStatus?.online) return 'unknown';
