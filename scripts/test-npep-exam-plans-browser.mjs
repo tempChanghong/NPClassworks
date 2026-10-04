@@ -25,7 +25,8 @@ const server = await createServer({configFile: false, root, envFile: false, cach
       import {createApp,h} from 'vue';
       import {createVuetify} from 'vuetify'; import * as components from 'vuetify/components'; import * as directives from 'vuetify/directives'; import 'vuetify/styles';
       import Runtime from '/src/components/admin/NpepRuntimeControl.vue';
-      createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{},()=>h(Runtime,{schoolId:'school',deviceId:'${deviceId}',schoolName:'隔离测试学校',deviceName:'测试大屏',bindingName:'高二一班'})))}).use(createVuetify({components,directives})).mount('#app');
+      const vuetify=createVuetify({components,directives});window.fixtureSetTheme=name=>{vuetify.theme.global.name.value=name;};
+      createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{},()=>h(Runtime,{schoolId:'school',deviceId:'${deviceId}',schoolName:'隔离测试学校',deviceName:'测试大屏',bindingName:'高二一班'})))}).use(vuetify).mount('#app');
     </script></html>`)); });
     s.middlewares.use('/plan-fixture', async (_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(await s.transformIndexHtml('/plan-fixture', `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>考试方案隔离测试</title><div id="app"></div><script type="module">
       import {createApp,h} from 'vue';
@@ -128,10 +129,26 @@ try {
   await expect(page.getByRole('button',{name:'结束考试／返回日常',exact:true})).toBeVisible();
   await expect(page.getByText('提交结果尚待核实。重试沿用同一请求，不会创建第二个任务。')).toHaveCount(0);
   await expect(page.getByText('返回日常 · 已返回日常模式')).toBeVisible();
+  await page.screenshot({path:resolve(output,'daily-return-summary.png'),fullPage:true});
+  await page.getByText('查看设备回执与诊断编号').click();
   await expect(page.getByText('考试看板：已退出',{exact:true})).toBeVisible();
   await expect(page.getByText('ClassIsland：已就绪',{exact:true})).toBeVisible();
   if (dailyRequests.length !== 2) throw new Error('Daily request missing or duplicated');
   await page.screenshot({path:resolve(output,'daily-return.png'),fullPage:true});
+  await page.getByText('查看设备回执与诊断编号').click();
+  await page.setViewportSize({width:760,height:900});
+  await page.screenshot({path:resolve(output,'daily-return-760.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  if (!(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))) throw new Error('Runtime control overflows narrow viewport');
+  await page.screenshot({path:resolve(output,'daily-return-mobile.png'),fullPage:true});
+  await page.setViewportSize({width:760,height:900});
+  await page.evaluate(()=>window.fixtureSetTheme('dark'));
+  await expect(page.locator('.v-application')).toHaveClass(/v-theme--dark/);
+  await expect.poll(() => page.locator('.npep-runtime-card').evaluate(element => window.getComputedStyle(element).backgroundColor)).toBe('rgb(33, 33, 33)');
+  await page.screenshot({path:resolve(output,'daily-return-760-dark.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  if (!(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))) throw new Error('Runtime control overflows narrow viewport');
+  await page.screenshot({path:resolve(output,'daily-return-mobile-dark.png'),fullPage:true});
   if (errors.length) throw new Error(errors.join('\n'));
   console.log(`PASS isolated browser: plan presentation and remote Daily return; ambiguous retries preserve target and ID, truthful result labels. ${requests.length} API requests. Screenshots: ${output}`);
 } finally { await browser?.close(); await server.close(); }

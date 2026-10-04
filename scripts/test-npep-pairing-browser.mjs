@@ -77,7 +77,8 @@ const server = await createServer({configFile:false,envFile:false,root,cacheDir:
         ${admin?"clearClassroomScreenToken();saveAccountTokens({accessToken:'fixture-admin',refreshToken:'fixture-session'});":"saveClassroomScreenToken('fixture-screen');"}
         const termId=ref('term');window.fixtureTerm=termId;
         const bindings=${JSON.stringify(screens.map(s=>({id:s.id,name:s.name,isActive:true,administrativeClass:{name:s.className,termId:'term',gradeId:s.gradeId,grade:{name:s.gradeId==='grade'?'高一':'高二'},isActive:true,term:{id:'term',status:'ACTIVE'}}})))};
-        createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{class:'pa-6'},()=>h(Panel,{schoolId:'school',termId:termId.value,bindings})))}).use(createVuetify({components,directives})).mount('#app');
+        const vuetify=createVuetify({components,directives});window.fixtureSetTheme=name=>{vuetify.theme.global.name.value=name;};
+        createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{class:'pa-6'},()=>h(Panel,{schoolId:'school',termId:termId.value,bindings})))}).use(vuetify).mount('#app');
       </script></html>`));
     } catch(error){errors.push(error.message);res.statusCode=500;res.end('Fixture failed');}
   });}}],server:{host:'127.0.0.1',port,strictPort:true,hmr:false},
@@ -113,6 +114,25 @@ try {
   await screen.getByRole('button',{name:'生成配对码',exact:true}).click();
   await expect(screen.getByText('ABCD2345',{exact:true})).toBeVisible();
   await expect(screen.getByLabel('NPEduTools 服务提供商地址（后端）')).toHaveValue(origin);
+  await expect(screen.getByText(/剩余 \d+ 分 \d{2} 秒/)).toBeVisible();
+  await expect(screen.getByRole('button',{name:'重新生成配对码',exact:true})).toBeEnabled();
+  await screen.mouse.move(0,0);await screen.waitForTimeout(400);
+  await screen.setViewportSize({width:1920,height:1080});
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-1920.png'),fullPage:true});
+  await screen.setViewportSize({width:1366,height:768});
+  assert.equal(await screen.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,'pairing page must fit a 1366px classroom viewport');
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-1366.png'),fullPage:true});
+  await screen.setViewportSize({width:1280,height:1100});
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-desktop.png'),fullPage:true});
+  await screen.setViewportSize({width:390,height:844});
+  await expect(screen.getByText('ABCD2345',{exact:true})).toBeVisible();
+  assert.equal(await screen.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,'pairing page must fit a narrow viewport');
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-narrow.png'),fullPage:true});
+  await screen.evaluate(()=>window.fixtureSetTheme('dark'));
+  await expect(screen.locator('.v-application')).toHaveClass(/v-theme--dark/);
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-narrow-dark.png'),fullPage:true});
+  await screen.evaluate(()=>window.fixtureSetTheme('light'));
+  await screen.setViewportSize({width:1280,height:1100});
   await screen.getByRole('button',{name:'重新生成配对码',exact:true}).click();
   await expect(screen.getByText('WXYZ2345',{exact:true})).toBeVisible();
   await expect(screen.getByText('ABCD2345',{exact:true})).toHaveCount(0);
@@ -133,7 +153,7 @@ try {
   await expect(screen.getByRole('button',{name:'生成配对码',exact:true})).toBeDisabled();
   checks.push('conflict requires refresh; closing blocks screen');
   occupied=true;await screen.getByRole('button',{name:'刷新授权状态',exact:true}).click();
-  await expect(screen.getByText(/此大屏已有 NPEduTools 绑定/)).toBeVisible();checks.push('occupied binding cannot be replaced');
+  await expect(screen.getByRole('heading',{name:'这台大屏已连接设备'})).toBeVisible();checks.push('occupied binding cannot be replaced');
   await select('网页配对','开放');await previewButton.click();await confirm.check();
   await admin.evaluate(()=>{window.fixtureTerm.value='other-term';});
   await expect(confirm).toHaveCount(0);await expect(admin.getByRole('button',{name:'确认批量开放',exact:true})).toHaveCount(0);
