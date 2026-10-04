@@ -45,3 +45,19 @@ test('protected scheduled STOP preserves PIN rejection after the status refresh'
   assert.equal(await c.protectedStop('725316'), true);
   assert.equal(submitted, 2);
 });
+
+test('rejected manual STOP remains visible across successful observations until the next action', async () => {
+  let rejected = true;
+  const live = {...view, status: {...view.status, sessionId: 'capture', state: 'Active'}};
+  const c = createNativeNoiseController({screen: async body => {
+    if (body && rejected) throw {response: {status: 409, data: {error: {code: 'STATE_CHANGED'}}}};
+    return live;
+  }}, () => {});
+  c.context('screen'); await c.poll();
+  assert.equal(await c.command('STOP'), false);
+  assert.match(c.snapshot().error, /STATE_CHANGED/);
+  await c.poll(); assert.match(c.snapshot().error, /STATE_CHANGED/);
+  rejected = false; assert.equal(await c.command('STOP'), true);
+  assert.doesNotMatch(c.snapshot().error, /STATE_CHANGED/);
+  assert.equal(c.snapshot().status.state, 'Active', 'request acceptance alone must not claim capture stopped');
+});
