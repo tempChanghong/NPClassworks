@@ -2,7 +2,7 @@
   "name": "classworks",
   "private": true,
   "type": "module",
-  "version": "1.2.0",
+  "version": "1.2.5",
   "codename": "Hitori",
   "codenameZh": "后藤一里",
   "packageManager": "pnpm@10.33.0",
