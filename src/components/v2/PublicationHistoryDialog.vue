@@ -2,19 +2,24 @@
   <v-dialog
     :model-value="modelValue"
     :persistent="writeBusy"
-    max-width="820"
+    max-width="860"
+    scrollable
     @update:model-value="requestVisibility"
   >
-    <v-card class="rounded-xl">
-      <v-card-title class="d-flex align-center pa-5 pb-2">
-        <v-icon
-          class="mr-3"
-          icon="mdi-history"
-        />
-        不可删除的版本历史
-        <v-spacer />
+    <v-card class="history-dialog rounded-xl">
+      <v-card-title class="history-dialog__header pa-5 pb-3">
+        <div class="history-dialog__heading">
+          <v-icon icon="mdi-history" />
+          <div>
+            <div>不可删除的版本历史</div>
+            <div class="history-dialog__subtitle text-medium-emphasis">
+              当前版本 {{ workingPublication?.revision || "—" }}<span v-if="!loading"> · 已加载 {{ revisions.length }} 个版本</span>
+            </div>
+          </div>
+        </div>
         <v-btn
           v-if="canCertifyCurrent"
+          class="history-dialog__certify"
           color="success"
           :loading="certifying"
           :disabled="writeBusy"
@@ -25,59 +30,68 @@
           教师确认当前版本
         </v-btn>
       </v-card-title>
-      <v-card-text class="px-5">
-        <v-alert
-          class="mb-4"
-          type="info"
-          variant="tonal"
-        >
-          恢复后，所选内容将成为新的当前版本。
-        </v-alert>
+      <v-card-text class="history-dialog__body px-5">
+        <div class="history-dialog__hint mb-4">
+          <v-icon
+            icon="mdi-information-outline"
+            size="small"
+          />
+          恢复会生成新的当前版本，原有记录仍保留。
+        </div>
         <v-skeleton-loader
           v-if="loading"
           type="list-item-three-line@3"
         />
-        <v-timeline
-          v-else
-          align="start"
-          density="compact"
-          side="end"
+        <ol
+          v-else-if="revisions.length"
+          class="history-list"
+          aria-label="版本记录"
         >
-          <v-timeline-item
+          <li
             v-for="item in revisions"
             :key="item.id"
-            :dot-color="mode === 'screen' && revisionState(item).key === 'pending' ? 'grey' : revisionState(item).color"
-            size="small"
+            class="history-entry"
           >
             <v-card
+              class="history-entry__card"
               border
               variant="flat"
             >
-              <v-card-text>
-                <div class="d-flex align-center flex-wrap ga-2 mb-2">
-                  <strong>版本 {{ item.revision }}</strong>
-                  <v-chip
-                    v-if="mode !== 'screen' || revisionState(item).key !== 'pending'"
-                    :color="revisionState(item).color"
-                    size="small"
-                    variant="tonal"
-                  >
-                    {{ revisionState(item).label }}
-                  </v-chip>
-                  <v-chip
-                    v-if="item.action === 'RESTORED'"
-                    size="small"
-                    variant="outlined"
-                  >
-                    恢复自版本 {{ item.restoredFromRevision }}
-                  </v-chip>
-                  <span class="text-caption text-medium-emphasis">
+              <v-card-text class="pa-4">
+                <div class="history-entry__top">
+                  <div class="history-entry__identity">
+                    <strong>版本 {{ item.revision }}</strong>
+                    <v-chip
+                      v-if="item.revision === workingPublication?.revision"
+                      color="primary"
+                      size="small"
+                      variant="tonal"
+                    >
+                      当前版本
+                    </v-chip>
+                    <v-chip
+                      v-if="mode !== 'screen' || revisionState(item).key !== 'pending'"
+                      :color="revisionState(item).color"
+                      size="small"
+                      variant="tonal"
+                    >
+                      {{ revisionState(item).label }}
+                    </v-chip>
+                    <v-chip
+                      v-if="item.action === 'RESTORED'"
+                      size="small"
+                      variant="outlined"
+                    >
+                      恢复自版本 {{ item.restoredFromRevision }}
+                    </v-chip>
+                  </div>
+                  <span class="history-entry__meta text-medium-emphasis">
                     {{ formatDateTime(item.createdAt) }} · {{ actorLabel(item) }}
                   </span>
                 </div>
                 <div
                   v-if="item.snapshot.title"
-                  class="font-weight-bold mb-1"
+                  class="history-entry__title font-weight-bold"
                 >
                   {{ item.snapshot.title }}
                 </div>
@@ -98,7 +112,7 @@
                   v-if="!item.purgedAt"
                   :publication="item.snapshot"
                 />
-                <div class="d-flex justify-end mt-3">
+                <div class="history-entry__actions mt-3">
                   <v-btn
                     :disabled="writeBusy || item.revision === workingPublication?.revision || item.snapshot.status === 'WITHDRAWN' || Boolean(item.purgedAt)"
                     :loading="restoringRevision === item.revision"
@@ -112,8 +126,14 @@
                 </div>
               </v-card-text>
             </v-card>
-          </v-timeline-item>
-        </v-timeline>
+          </li>
+        </ol>
+        <v-empty-state
+          v-else-if="!error"
+          headline="暂无版本记录"
+          icon="mdi-history"
+          text="此发布还没有可查看的历史版本"
+        />
         <div class="d-flex justify-center mt-4">
           <v-btn
             v-if="nextBeforeRevision !== null && !loading"
@@ -132,16 +152,17 @@
             重新加载
           </v-btn>
         </div>
-        <v-alert
-          v-if="error"
-          class="mt-4"
-          type="error"
-          variant="tonal"
-        >
-          {{ error }}
-        </v-alert>
       </v-card-text>
-      <v-card-actions class="px-5 pb-5">
+      <v-alert
+        v-if="error"
+        class="history-dialog__error mx-5 mb-2"
+        role="alert"
+        type="error"
+        variant="tonal"
+      >
+        {{ error }}
+      </v-alert>
+      <v-card-actions class="history-dialog__footer px-5 pb-5">
         <v-spacer />
         <v-btn
           :disabled="writeBusy"
@@ -323,9 +344,48 @@ async function refreshConflict(action, isCurrent) {
 </script>
 
 <style scoped>
+.history-dialog { max-height: min(90dvh, 920px); }
+.history-dialog__header { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+.history-dialog__heading { align-items: center; display: flex; font-size: 1.15rem; font-weight: 700; gap: 12px; min-width: 0; white-space: normal; }
+.history-dialog__subtitle { font-size: .82rem; font-weight: 400; line-height: 1.4; margin-top: 2px; }
+.history-dialog__body { min-height: 0; }
+.history-dialog__hint { align-items: center; display: flex; font-size: .86rem; gap: 8px; line-height: 1.5; }
+.history-list { border-left: 2px solid rgba(var(--v-theme-on-surface), .18); list-style: none; margin: 0 0 0 9px; padding: 0 0 0 20px; }
+.history-entry { margin-bottom: 12px; position: relative; }
+.history-entry::before {
+  background: rgb(var(--v-theme-primary));
+  border: 3px solid rgb(var(--v-theme-surface));
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-primary));
+  content: '';
+  height: 12px;
+  left: -27px;
+  position: absolute;
+  top: 18px;
+  width: 12px;
+}
+.history-entry__card { min-width: 0; }
+.history-entry__top { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; }
+.history-entry__identity { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.history-entry__meta { font-size: .82rem; overflow-wrap: anywhere; }
+.history-entry__title { margin-top: 12px; overflow-wrap: anywhere; }
+.history-entry__actions { display: flex; justify-content: flex-end; }
+.history-dialog__error { flex-shrink: 0; }
+.history-dialog__footer { border-top: 1px solid rgba(var(--v-theme-on-surface), .12); flex-shrink: 0; }
 .revision-content {
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .history-dialog__header { padding: 16px !important; }
+  .history-dialog__certify { width: 100%; }
+  .history-dialog__body { padding: 0 16px !important; }
+  .history-list { border: 0; margin: 0; padding: 0; }
+  .history-entry::before { display: none; }
+  .history-entry__actions .v-btn { min-height: 44px; width: 100%; }
+  .history-dialog__footer { padding: 12px 16px 16px !important; }
+  .history-dialog__footer .v-btn { width: 100%; }
 }
 </style>

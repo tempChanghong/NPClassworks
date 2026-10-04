@@ -19,7 +19,7 @@ async function openHistory(browser, request, status = "PUBLISHED") {
   await page.getByRole("button").filter({has: page.locator(".mdi-dots-vertical")}).click();
   await page.getByText("版本历史与恢复", {exact: true}).click();
   const dialog = page.getByRole("dialog").filter({hasText: "不可删除的版本历史"});
-  await expect(dialog.locator(".v-timeline-item")).toHaveCount(20);
+  await expect(dialog.locator(".history-entry")).toHaveCount(20);
   return {context, page, dialog, errors};
 }
 
@@ -31,7 +31,7 @@ for (const status of ["DRAFT", "WITHDRAWN"]) {
       // History remains accessible, including restoring earlier published content.
       await expect(s.dialog.getByRole("button", {name: "恢复此版本", exact: true}).first()).toBeEnabled();
       await s.dialog.getByRole("button", {name: "加载更早版本", exact: true}).click();
-      await expect(s.dialog.locator(".v-timeline-item")).toHaveCount(40);
+      await expect(s.dialog.locator(".history-entry")).toHaveCount(40);
       expect(s.errors).toEqual([]);
     } finally { await s.context.close(); }
   });
