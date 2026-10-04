@@ -208,9 +208,10 @@ import {computed, onMounted, onUnmounted, ref, watch} from 'vue';
 import {nativeNoise, nativeNoiseState as native} from '@/utils/nativeNoise';
 import {noiseMonitoringState as browser} from '@/utils/noiseMonitoring';
 import {noiseService} from '@/utils/noiseService';
-import {npepNoiseDisplayApi} from '@/utils/classworksV2Client';
+import {npepNoiseDisplayApi, npepNoiseDisplayPresenceApi} from '@/utils/classworksV2Client';
 import {getServerUrl} from '@/utils/socketClient';
 import {level, qualityName} from '@/utils/nativeNoisePresentation';
+import {classifyScheduledNoisePresence} from '@/utils/scheduledNoisePresence';
 import {
   browserScheduledDisplayCandidate, nativeDisplayPhase, nativeScheduledDisplayCandidate,
   hydrateScheduledReturn, scheduledReturnRemainingMs, scheduledReturnStorageKey,
@@ -234,8 +235,10 @@ const returnMinutes = ref(10);
 const returnError = ref('');
 const returnChecked = ref(false);
 const pendingRecoveryWindow = ref('');
+const presenceUiTick = ref(0);
 const browserSnapshot = ref(noiseService.snapshot());
 let timer;
+let presenceTimer;
 let endTimer;
 let unsubscribeBrowser;
 let lastSample = '';
@@ -243,6 +246,13 @@ let lastSampleAt = 0;
 let dismissedInMemory = '';
 let returnSyncing = false;
 let returnGeneration = 0;
+let presenceSessionId = globalThis.crypto.randomUUID();
+let presenceSequence = 0;
+let presenceGeneration = 0;
+let presenceInFlight = false;
+let presenceDirty = false;
+let presenceSupported = true;
+let presenceActive = false;
 
 const freshNative = computed(() => {
   tick.value;
@@ -457,7 +467,47 @@ async function requestStop() {
   else stopPinError.value = native.value.error || '停止请求未确认';
 }
 
+function presenceSnapshot() {
+  presenceUiTick.value;
+  const value = candidate.value, status = native.value.status;
+  if (value?.provider !== 'native' || !status?.instanceId
+    || !Number.isSafeInteger(status.revision)) return null;
+  const state = classifyScheduledNoisePresence({
+    candidate: value, returning: Boolean(currentReturn.value?.confirmed),
+    visible: document.visibilityState === 'visible', focused: document.hasFocus(),
+    blocked: props.blocked || confirmStop.value,
+    overlayActive: !displayContext.value && Boolean(document.querySelector('.v-overlay--active')),
+    displayed: displayContext.value?.windowKey === value.windowKey && phase.value === 'active',
+  });
+  return {displaySessionId: presenceSessionId, state, instanceId: status.instanceId,
+    revision: status.revision, captureSessionId: value.sessionId, window: value.window};
+}
+const presenceSignature = computed(() => JSON.stringify(presenceSnapshot()));
+async function reportPresence() {
+  if (!presenceActive || !presenceSupported) return;
+  const snapshot = presenceSnapshot();
+  if (!snapshot) return;
+  if (presenceInFlight) { presenceDirty = true; return; }
+  presenceInFlight = true;
+  const generation = presenceGeneration;
+  try {
+    await npepNoiseDisplayPresenceApi.report({...snapshot,
+      requestId: globalThis.crypto.randomUUID(), sequence: ++presenceSequence});
+  } catch (error) {
+    if (generation === presenceGeneration && [404, 426].includes(error?.response?.status))
+      presenceSupported = false;
+  } finally {
+    presenceInFlight = false;
+    if (presenceActive && (presenceDirty || generation !== presenceGeneration)) {
+      presenceDirty = false;
+      globalThis.queueMicrotask(reportPresence);
+    }
+  }
+}
+function refreshPresenceUi() { presenceUiTick.value++; }
+
 watch([candidate, () => props.blocked, tick, returnState, returnChecked], maybeOpen, {immediate: true});
+watch(presenceSignature, reportPresence);
 watch(() => candidate.value?.windowKey, () => {
   returnGeneration++;
   returnChecked.value = false;
@@ -471,6 +521,11 @@ watch(candidate, value => {
 });
 watch(() => props.bindingId, () => {
   returnGeneration++;
+  presenceGeneration++;
+  presenceSessionId = globalThis.crypto.randomUUID();
+  presenceSequence = 0;
+  presenceSupported = true;
+  presenceUiTick.value++;
   returnChecked.value = false;
   displayContext.value = null;
   confirmStop.value = false;
@@ -520,9 +575,15 @@ watch(native, value => {
   trend.value = [...trend.value.slice(-19), value.status.currentDbfs];
 });
 onMounted(() => {
+  presenceActive = true;
   loadReturn();
   syncReturn();
   window.addEventListener('online', syncReturn);
+  window.addEventListener('online', reportPresence);
+  window.addEventListener('focus', refreshPresenceUi);
+  window.addEventListener('blur', refreshPresenceUi);
+  document.addEventListener('visibilitychange', refreshPresenceUi);
+  presenceTimer = window.setInterval(reportPresence, 5000);
   timer = window.setInterval(() => {
     tick.value++;
     if (returnState.value?.windowKey === candidate.value?.windowKey
@@ -534,7 +595,15 @@ onMounted(() => {
 });
 onUnmounted(() => {
   returnGeneration++;
+  presenceGeneration++;
+  presenceActive = false;
+  presenceDirty = false;
   window.removeEventListener('online', syncReturn);
+  window.removeEventListener('online', reportPresence);
+  window.removeEventListener('focus', refreshPresenceUi);
+  window.removeEventListener('blur', refreshPresenceUi);
+  document.removeEventListener('visibilitychange', refreshPresenceUi);
+  window.clearInterval(presenceTimer);
   window.clearInterval(timer);
   window.clearTimeout(endTimer);
   unsubscribeBrowser?.();

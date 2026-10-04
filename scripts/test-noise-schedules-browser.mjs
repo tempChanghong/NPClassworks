@@ -33,7 +33,7 @@ const server=await createServer({configFile:false,envFile:false,root,cacheDir:re
       res.end('OK');return;}
     if(req.url?.startsWith('/api/v2/npep/')){
       let raw='';for await(const chunk of req)raw+=chunk;const body=raw?JSON.parse(raw):null;
-      requests.push({path:req.url,version:req.headers['x-npep-version'],body});
+      requests.push({method:req.method,path:req.url,version:req.headers['x-npep-version'],body});
       res.setHeader('Content-Type','application/json');
       const requestId=body?.requestId||req.headers['x-request-id'];
       if(req.url.includes('/screen/')||/^\/api\/v2\/npep\/schools\/school\/devices\/device\/noise(?:-schedule)?$/.test(req.url)) {
@@ -47,6 +47,9 @@ const server=await createServer({configFile:false,envFile:false,root,cacheDir:re
         }
         res.end(JSON.stringify({protocolVersion:schedule?'0.7':'0.6',requestId,serverTime:new Date().toISOString(),data:schedule?runtimeView:
           {provider:'native',online:true,status:{configured:true,state:'Stopped',currentDbfs:null,quality:'Good',deviceName:'Synthetic microphone'},commands:[],reports}}));return;
+      }
+      if(req.method==='GET'&&req.url==='/api/v2/npep/schools/school/noise-display-settings?termId=term'){
+        res.end(JSON.stringify({protocolVersion:'0.8',requestId,serverTime:new Date().toISOString(),data:{...catalog(),settings:[]}}));return;
       }
       if(body&&conflict){res.statusCode=409;res.end(JSON.stringify({protocolVersion:'0.7',requestId,error:{code:'SCHEDULE_VERSION_CONFLICT'}}));return;}
       let data=catalog();
@@ -157,7 +160,16 @@ try{
   await expect(page.getByText(/其他管理员已更新此配置/)).toHaveCount(0);
   await expect(page.getByRole('button',{name:'预览影响',exact:true})).toBeEnabled();
   if(errors.length||await page.evaluate(()=>window.__microphones)!==0)throw new Error('UI regression: '+errors.join(';'));
-  if(saves.length!==1||requests.some(r=>r.version!=='0.7'))throw new Error('Unexpected writes or protocol version');
+  const schedulePath='/api/v2/npep/schools/school/noise-schedules';
+  const displaySettingsPath='/api/v2/npep/schools/school/noise-display-settings?termId=term';
+  const unexpectedRequests=requests.filter(r=>!([
+    ['GET',`${schedulePath}?termId=term`,'0.7'],
+    ['POST',`${schedulePath}/preview`,'0.7'],
+    ['POST',schedulePath,'0.7'],
+    ['GET',displaySettingsPath,'0.8'],
+  ].some(([method,path,version])=>r.method===method&&r.path===path&&r.version===version)
+    && (r.method==='GET'?r.body===null:r.body!==null)));
+  if(saves.length!==1||unexpectedRequests.length)throw new Error(`Unexpected writes or protocol version: ${JSON.stringify({saves:saves.length,unexpectedRequests})}`);
   await page.goto(origin+'/execution-fixture');
   await expect(page.getByText(/本次已手动停止/)).toBeVisible();
   await expect(page.getByText(/2026-10-01 19:30:00/)).toBeVisible();

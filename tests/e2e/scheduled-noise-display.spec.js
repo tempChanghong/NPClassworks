@@ -16,6 +16,7 @@ test('scheduled capture enters its own screen, returns without STOP, and waits f
   let commandSessionId = '';
   let returnExpiresAt = 0;
   let returnStarts = 0;
+  const presenceStates = [];
   let sessionId = 'synthetic-session-1';
   let lastScheduleSession = '';
   let releaseHeldNoise;
@@ -47,6 +48,12 @@ test('scheduled capture enters its own screen, returns without STOP, and waits f
         activeReturn: seconds ? {window, startedAt: new Date(returnExpiresAt - 600000).toISOString(),
           expiresAt: new Date(returnExpiresAt).toISOString(), returnMinutes: 10, remainingSeconds: seconds} : null}}});
   });
+  await page.route('**/api/v2/npep/screen/noise-display/presence', async route => {
+    const body = route.request().postDataJSON();
+    presenceStates.push(body.state);
+    await route.fulfill({json: {protocolVersion: '0.9', requestId: body.requestId,
+      data: {accepted: true, serverNow: new Date().toISOString()}}});
+  });
   await page.route('**/api/v2/npep/screen/noise', async route => {
     if (phase === 'stall') await new Promise(resolve => { releaseHeldNoise = resolve; });
     const state = phase === 'starting' ? 'Starting' : phase === 'ended' ? 'Stopped' : 'Active';
@@ -75,8 +82,10 @@ test('scheduled capture enters its own screen, returns without STOP, and waits f
   const display = page.getByRole('region', {name: '定时监测展示'});
   await page.waitForTimeout(3500);
   await expect(display).toHaveCount(0);
+  await expect.poll(() => presenceStates.includes('BLOCKED')).toBe(true);
   await page.getByTitle('关闭', {exact: true}).click();
   await expect(display).toBeVisible({timeout: 12000});
+  await expect.poll(() => presenceStates.includes('DISPLAY_VISIBLE')).toBe(true);
   await expect(display).toContainText('自习监测中');
   await expect(display).toContainText('-57.0');
   await expect(display).toContainText('年级排程');
@@ -96,6 +105,7 @@ test('scheduled capture enters its own screen, returns without STOP, and waits f
 
   await display.getByRole('button', {name: '返回作业板'}).click();
   await expect(display).toHaveCount(0);
+  await expect.poll(() => presenceStates.includes('RETURNING')).toBe(true);
   expect(commandCount).toBe(0);
   await page.waitForTimeout(3500);
   await expect(display).toHaveCount(0);

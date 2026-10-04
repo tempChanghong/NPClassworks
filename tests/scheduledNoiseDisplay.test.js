@@ -8,8 +8,22 @@ import {
   scheduledReturnStorageKey, activeScheduledReturn, hydrateScheduledReturn,
   scheduledReturnRemainingMs, serverReturnRemainingMs,
 } from '../src/utils/scheduledNoiseDisplay.js';
+import {classifyScheduledNoisePresence} from '../src/utils/scheduledNoisePresence.js';
 
 const window = {start: '2026-10-01T23:50:00.000', end: '2026-10-02T00:10:00.000'};
+
+test('presence reports actual display, focus and higher-priority overlays', () => {
+  const base = {candidate: {provider: 'native'}, returning: false, visible: true,
+    focused: true, blocked: false, overlayActive: false, displayed: true};
+  assert.equal(classifyScheduledNoisePresence(base), 'DISPLAY_VISIBLE');
+  assert.equal(classifyScheduledNoisePresence({...base, returning: true}), 'RETURNING');
+  assert.equal(classifyScheduledNoisePresence({...base, visible: false}), 'HIDDEN');
+  assert.equal(classifyScheduledNoisePresence({...base, focused: false}), 'HIDDEN');
+  assert.equal(classifyScheduledNoisePresence({...base, blocked: true}), 'BLOCKED');
+  assert.equal(classifyScheduledNoisePresence({...base, overlayActive: true, displayed: false}), 'BLOCKED');
+  assert.equal(classifyScheduledNoisePresence({...base, displayed: false}), 'HIDDEN');
+  assert.equal(classifyScheduledNoisePresence({...base, candidate: {provider: 'browser'}}), null);
+});
 function snapshots({state = 'Active', reason = 'WINDOW_ACTIVE', sessionId = 'session-1',
   scheduleSessionId = sessionId, applied = true} = {}) {
   return {
