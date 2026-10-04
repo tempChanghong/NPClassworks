@@ -67,3 +67,35 @@ export function nativeDisplayPhase(noiseStatus, scheduleStatus, context) {
 export function scheduledDisplayStorageKey(serverUrl, bindingId) {
   return `npep.noise.display.dismissed:${JSON.stringify([serverUrl, bindingId])}`;
 }
+
+export function scheduledReturnStorageKey(serverUrl, bindingId) {
+  return `npep.noise.display.return:${JSON.stringify([serverUrl, bindingId])}`;
+}
+
+export function activeScheduledReturn(value, windowKey, now = Date.now()) {
+  return value && value.windowKey === windowKey
+    && Number.isFinite(value.expiresAt) && value.expiresAt > now ? value : null;
+}
+
+export function scheduledReturnRemainingMs(value, monotonicNow) {
+  if (!value || !Number.isFinite(value.remainingMs) || !Number.isFinite(value.anchorAt))
+    return 0;
+  return Math.max(0, value.remainingMs - Math.max(0, monotonicNow - value.anchorAt));
+}
+
+export function hydrateScheduledReturn(value, wallNow, monotonicNow) {
+  if (!value || typeof value.windowKey !== 'string' || typeof value.requestId !== 'string'
+    || !Number.isFinite(value.startedAt) || !Number.isFinite(value.expiresAt)
+    || !Number.isFinite(value.savedAt) || !Number.isFinite(value.remainingMs)
+    || wallNow < value.savedAt - 1000) return null;
+  const remainingMs = Math.max(0, Math.min(value.remainingMs, value.expiresAt - wallNow));
+  return remainingMs > 0 ? {...value, remainingMs, anchorAt: monotonicNow} : null;
+}
+
+export function serverReturnRemainingMs(active, serverNow, elapsedMs) {
+  const expiry = Date.parse(active?.expiresAt);
+  const at = Date.parse(serverNow);
+  if (!Number.isFinite(expiry) || !Number.isFinite(at) || !Number.isFinite(elapsedMs)
+    || !Number.isFinite(active?.remainingSeconds)) return 0;
+  return Math.max(0, Math.min(active.remainingSeconds * 1000, expiry - at) - Math.max(0, elapsedMs));
+}

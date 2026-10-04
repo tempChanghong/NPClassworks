@@ -5,6 +5,8 @@ import {join} from 'node:path';
 import {
   browserScheduledDisplayCandidate, nativeDisplayPhase, nativeScheduledDisplayCandidate,
   schoolCalendarMilliseconds, schoolRemainingSeconds, scheduledDisplayStorageKey,
+  scheduledReturnStorageKey, activeScheduledReturn, hydrateScheduledReturn,
+  scheduledReturnRemainingMs, serverReturnRemainingMs,
 } from '../src/utils/scheduledNoiseDisplay.js';
 
 const window = {start: '2026-10-01T23:50:00.000', end: '2026-10-02T00:10:00.000'};
@@ -72,6 +74,31 @@ test('browser legacy provider needs a running scheduled session, and binding sco
   assert.equal(browserScheduledDisplayCandidate('browser', {...state, status: 'initializing'}, 'screen-1'), null);
   assert.equal(browserScheduledDisplayCandidate('browser', {...state, scheduledActive: false}, 'screen-1'), null);
   assert.notEqual(scheduledDisplayStorageKey('https://a', 'screen-1'), scheduledDisplayStorageKey('https://a', 'screen-2'));
+  assert.notEqual(scheduledReturnStorageKey('https://a', 'screen-1'), scheduledReturnStorageKey('https://a', 'screen-2'));
+});
+
+test('return lease remains scoped to one schedule window and expires without extension', () => {
+  const key = JSON.stringify([window.start, window.end]);
+  const lease = {windowKey: key, expiresAt: 10000};
+  assert.equal(activeScheduledReturn(lease, key, 5000), lease);
+  assert.equal(activeScheduledReturn(lease, key, 10000), null);
+  assert.equal(activeScheduledReturn(lease, 'other', 5000), null);
+});
+
+test('return countdown uses a monotonic clock and rejects backward wall-clock reloads', () => {
+  const lease = {windowKey: 'window-a', requestId: 'request-a', startedAt: 1000,
+    expiresAt: 601000, savedAt: 1000, remainingMs: 600000};
+  const active = hydrateScheduledReturn(lease, 2000, 100);
+  assert.equal(scheduledReturnRemainingMs(active, 6100), 593000);
+  assert.equal(scheduledReturnRemainingMs(active, 6100), 593000);
+  assert.equal(hydrateScheduledReturn(lease, -2000, 100), null);
+  assert.equal(hydrateScheduledReturn(lease, 700000, 100), null);
+});
+
+test('server countdown subtracts request travel and cannot grow from rounded seconds', () => {
+  const active = {expiresAt: '2026-10-04T19:10:00.000Z', remainingSeconds: 600};
+  assert.equal(serverReturnRemainingMs(active, '2026-10-04T19:00:00.000Z', 120), 599880);
+  assert.equal(serverReturnRemainingMs(active, '2026-10-04T19:00:00.500Z', 120), 599380);
 });
 
 test('optional synthetic desktop 0.6/0.7 snapshots satisfy the same entry contract', {skip: !process.env.NPEP_NOISE_CONTRACTS_DIR}, () => {

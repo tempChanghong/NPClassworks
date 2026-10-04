@@ -7,6 +7,30 @@
   >
     定时监测已开始；完成当前操作后会显示监测画面。
   </v-alert>
+  <v-alert
+    v-if="candidate && !displayContext && returnRemainingLabel"
+    class="mt-3"
+    type="info"
+    variant="tonal"
+  >
+    已临时返回作业板，监测仍在进行；约 {{ returnRemainingLabel }} 后恢复展示。
+  </v-alert>
+  <v-alert
+    v-if="candidate && !displayContext && currentReturn && returnError"
+    class="mt-2"
+    type="warning"
+    variant="tonal"
+  >
+    {{ returnError }}
+  </v-alert>
+  <v-alert
+    v-if="candidate && !displayContext && pendingRecoveryWindow === candidate.windowKey"
+    class="mt-3"
+    type="info"
+    variant="tonal"
+  >
+    返回期限已到；完成当前操作后会恢复监测展示。
+  </v-alert>
 
   <section
     v-if="displayContext && !blocked"
@@ -99,6 +123,14 @@
         >
           停止请求已提交，等待桌面执行回执；此时不能认定监测已停止。
         </v-alert>
+        <v-alert
+          v-if="native.error && displayContext.provider === 'native'"
+          type="warning"
+          variant="tonal"
+          density="compact"
+        >
+          {{ native.error }}
+        </v-alert>
       </main>
 
       <footer class="scheduled-noise-display__footer">
@@ -110,7 +142,7 @@
         >
           返回作业板
         </v-btn>
-        <span>返回作业板不会停止采集</span>
+        <span>返回作业板不会停止采集；{{ returnMinutes }} 分钟后自动恢复展示</span>
         <v-spacer />
         <v-btn
           size="large"
@@ -138,8 +170,18 @@
     max-width="460"
   >
     <v-card class="rounded-xl">
-      <v-card-title>结束本次监测？</v-card-title>
-      <v-card-text>这会向 NPEduTools 发送停止请求。本时段不会自动重启；如需恢复，请在监测详情中明确操作。实际停止状态以桌面回传为准。</v-card-text>
+      <v-card-title>验证并结束本次监测</v-card-title>
+      <v-card-text>
+        输入本大屏 PIN 申请停止。服务端和桌面会再次核对定时会话；获准后本时段不会自动重启。
+        <v-text-field
+          v-model="stopPin"
+          class="mt-4"
+          label="本大屏 PIN"
+          type="password"
+          autocomplete="off"
+          :error-messages="stopPinError"
+        />
+      </v-card-text>
       <v-card-actions>
         <v-spacer />
         <v-btn
@@ -151,6 +193,7 @@
         <v-btn
           color="error"
           :loading="native.busy"
+          :disabled="!stopPin"
           @click="requestStop"
         >
           发送停止请求
@@ -165,11 +208,13 @@ import {computed, onMounted, onUnmounted, ref, watch} from 'vue';
 import {nativeNoise, nativeNoiseState as native} from '@/utils/nativeNoise';
 import {noiseMonitoringState as browser} from '@/utils/noiseMonitoring';
 import {noiseService} from '@/utils/noiseService';
+import {npepNoiseDisplayApi} from '@/utils/classworksV2Client';
 import {getServerUrl} from '@/utils/socketClient';
 import {level, qualityName} from '@/utils/nativeNoisePresentation';
 import {
   browserScheduledDisplayCandidate, nativeDisplayPhase, nativeScheduledDisplayCandidate,
-  scheduledDisplayStorageKey, schoolCalendarMilliseconds, schoolRemainingSeconds,
+  hydrateScheduledReturn, scheduledReturnRemainingMs, scheduledReturnStorageKey,
+  schoolCalendarMilliseconds, schoolRemainingSeconds, serverReturnRemainingMs,
 } from '@/utils/scheduledNoiseDisplay';
 
 const props = defineProps({bindingId: {type: String, default: ''}, className: {type: String, default: '班级大屏'}, blocked: Boolean});
@@ -177,11 +222,18 @@ defineEmits(['details']);
 const displayContext = ref(null);
 const confirmStop = ref(false);
 const stopRequested = ref(false);
+const stopPin = ref('');
+const stopPinError = ref('');
 const trend = ref([]);
 const clockAnchor = ref(null);
 const noiseObservedAt = ref(0);
 const scheduleObservedAt = ref(0);
 const tick = ref(0);
+const returnState = ref(null);
+const returnMinutes = ref(10);
+const returnError = ref('');
+const returnChecked = ref(false);
+const pendingRecoveryWindow = ref('');
 const browserSnapshot = ref(noiseService.snapshot());
 let timer;
 let endTimer;
@@ -189,6 +241,8 @@ let unsubscribeBrowser;
 let lastSample = '';
 let lastSampleAt = 0;
 let dismissedInMemory = '';
+let returnSyncing = false;
+let returnGeneration = 0;
 
 const freshNative = computed(() => {
   tick.value;
@@ -261,23 +315,109 @@ const lastReport = computed(() => {
 const policyPending = computed(() => phase.value === 'active' && displayContext.value?.provider === 'native'
   && native.value.schedule?.applied === false);
 
-function suppressionKey() { return scheduledDisplayStorageKey(getServerUrl(), props.bindingId); }
+const currentReturn = computed(() => {
+  tick.value;
+  return returnState.value?.windowKey === candidate.value?.windowKey
+    && scheduledReturnRemainingMs(returnState.value, window.performance.now()) > 0
+    ? returnState.value : null;
+});
+const returnRemainingLabel = computed(() => {
+  if (!currentReturn.value) return '';
+  const seconds = Math.ceil(scheduledReturnRemainingMs(currentReturn.value, window.performance.now()) / 1000);
+  return seconds >= 60 ? `${Math.ceil(seconds / 60)} 分钟` : `${seconds} 秒`;
+});
+function returnKey() { return scheduledReturnStorageKey(getServerUrl(), props.bindingId); }
+function saveReturn(value) {
+  if (value) pendingRecoveryWindow.value = '';
+  returnState.value = value ? {...value, savedAt: Date.now(),
+    remainingMs: scheduledReturnRemainingMs(value, window.performance.now()),
+    anchorAt: window.performance.now()} : null;
+  try {
+    if (returnState.value) localStorage.setItem(returnKey(), JSON.stringify(returnState.value));
+    else localStorage.removeItem(returnKey());
+  } catch { /* In-memory countdown remains bounded. */ }
+}
+function loadReturn() {
+  try {
+    const value = JSON.parse(localStorage.getItem(returnKey()) || 'null');
+    returnState.value = hydrateScheduledReturn(value, Date.now(), window.performance.now());
+    if (value?.windowKey && !returnState.value) pendingRecoveryWindow.value = value.windowKey;
+  } catch { returnState.value = null; }
+}
 function isDismissed(value) {
   if (dismissedInMemory === `${props.bindingId}:${value.windowKey}`) return true;
-  if (value.provider !== 'native') return false;
-  try { return localStorage.getItem(suppressionKey()) === value.windowKey; } catch { return false; }
+  return value.provider === 'native' && Boolean(currentReturn.value);
+}
+function acceptReturn(reply, previous = null, requestStartedAt = window.performance.now()) {
+  if (Number.isInteger(reply?.returnMinutes)) returnMinutes.value = reply.returnMinutes;
+  const active = reply?.activeReturn;
+  const key = active?.window && JSON.stringify([active.window.start, active.window.end]);
+  const nowMono = window.performance.now();
+  let remainingMs = serverReturnRemainingMs(active, reply?.serverNow, nowMono - requestStartedAt);
+  if (previous?.windowKey === key)
+    remainingMs = Math.min(remainingMs, scheduledReturnRemainingMs(previous, nowMono));
+  if (!active || key !== candidate.value?.windowKey || remainingMs <= 0) {
+    if (previous?.windowKey === candidate.value?.windowKey) pendingRecoveryWindow.value = previous.windowKey;
+    saveReturn(null);
+    return;
+  }
+  const now = Date.now();
+  saveReturn({windowKey: key, requestId: previous?.requestId || globalThis.crypto.randomUUID(),
+    startedAt: previous?.startedAt || now,
+    expiresAt: now + remainingMs, returnMinutes: active.returnMinutes,
+    remainingMs, anchorAt: nowMono, confirmed: true});
+}
+async function syncReturn() {
+  const value = candidate.value;
+  if (returnSyncing || value?.provider !== 'native') return;
+  returnSyncing = true;
+  const generation = returnGeneration;
+  const requestStartedAt = window.performance.now();
+  try {
+    const reply = await npepNoiseDisplayApi.screen();
+    if (generation !== returnGeneration || candidate.value?.windowKey !== value.windowKey) return;
+    const previous = returnState.value;
+    if (reply.activeReturn?.remainingSeconds > 0) {
+      acceptReturn(reply, previous, requestStartedAt);
+    } else if (previous?.windowKey === value.windowKey
+      && scheduledReturnRemainingMs(previous, window.performance.now()) > 0 && !previous.confirmed) {
+      const postStartedAt = window.performance.now();
+      const posted = await npepNoiseDisplayApi.screen({requestId: previous.requestId,
+        window: value.window, offlineStartedAt: new Date(previous.startedAt).toISOString(),
+        returnMinutes: previous.returnMinutes});
+      if (generation === returnGeneration && candidate.value?.windowKey === value.windowKey)
+        acceptReturn(posted, previous, postStartedAt);
+    } else {
+      returnMinutes.value = reply.returnMinutes || 10;
+      if (previous?.windowKey === value.windowKey
+        && scheduledReturnRemainingMs(previous, window.performance.now()) <= 0)
+        pendingRecoveryWindow.value = value.windowKey;
+      saveReturn(null);
+    }
+    returnError.value = '';
+  } catch {
+    returnError.value = '返回期限暂未与学校服务同步；当前页面仍会按原期限恢复展示。';
+  } finally {
+    if (generation === returnGeneration) returnChecked.value = true;
+    returnSyncing = false;
+    if (generation !== returnGeneration && candidate.value?.provider === 'native')
+      globalThis.queueMicrotask(syncReturn);
+  }
 }
 function openManually() {
   if (!candidate.value || props.blocked) return;
   displayContext.value = {...candidate.value};
+  pendingRecoveryWindow.value = '';
   trend.value = [];
   lastSample = '';
   lastSampleAt = 0;
   stopRequested.value = false;
 }
 function maybeOpen() {
+  tick.value;
   const value = candidate.value;
   if (!value || props.blocked || document.visibilityState !== 'visible') return;
+  if (value.provider === 'native' && !returnChecked.value) return;
   // An existing Vuetify editor, copy view or confirmation keeps its input and focus.
   if (!displayContext.value && document.querySelector('.v-overlay--active')) return;
   if (displayContext.value?.windowKey === value.windowKey && displayContext.value.provider === value.provider) {
@@ -287,31 +427,61 @@ function maybeOpen() {
   if (isDismissed(value)) return;
   openManually();
 }
-function returnToBoard() {
+async function returnToBoard() {
   const value = displayContext.value;
   if (value) {
-    dismissedInMemory = `${props.bindingId}:${value.windowKey}`;
     if (value.provider === 'native') {
-      try { localStorage.setItem(suppressionKey(), value.windowKey); } catch { /* Current page still suppresses reentry. */ }
+      if (!(returnState.value?.windowKey === value.windowKey
+        && scheduledReturnRemainingMs(returnState.value, window.performance.now()) > 0)) {
+        const now = Date.now();
+        const remainingMs = returnMinutes.value * 60000;
+        saveReturn({windowKey: value.windowKey, requestId: globalThis.crypto.randomUUID(),
+          startedAt: now, expiresAt: now + remainingMs, remainingMs,
+          anchorAt: window.performance.now(), returnMinutes: returnMinutes.value, confirmed: false});
+      }
+    } else {
+      dismissedInMemory = `${props.bindingId}:${value.windowKey}`;
     }
   }
   displayContext.value = null;
   confirmStop.value = false;
+  stopPin.value = '';
+  if (value?.provider === 'native') await syncReturn();
 }
 async function requestStop() {
-  confirmStop.value = false;
   if (phase.value !== 'active' || displayContext.value?.provider !== 'native') return;
-  stopRequested.value = await nativeNoise.command('STOP');
+  if (!stopPin.value) { stopPinError.value = '请输入本大屏 PIN'; return; }
+  stopRequested.value = await nativeNoise.protectedStop(stopPin.value);
+  stopPin.value = '';
+  if (stopRequested.value) { confirmStop.value = false; stopPinError.value = ''; }
+  else stopPinError.value = native.value.error || '停止请求未确认';
 }
 
-watch([candidate, () => props.blocked], maybeOpen, {immediate: true});
+watch([candidate, () => props.blocked, tick, returnState, returnChecked], maybeOpen, {immediate: true});
+watch(() => candidate.value?.windowKey, () => {
+  returnGeneration++;
+  returnChecked.value = false;
+  if (pendingRecoveryWindow.value !== candidate.value?.windowKey) pendingRecoveryWindow.value = '';
+});
+watch(candidate, value => {
+  if (value?.provider === 'native') {
+    if (returnState.value && returnState.value.windowKey !== value.windowKey) saveReturn(null);
+    syncReturn();
+  }
+});
 watch(() => props.bindingId, () => {
+  returnGeneration++;
+  returnChecked.value = false;
   displayContext.value = null;
   confirmStop.value = false;
   trend.value = [];
   noiseObservedAt.value = 0;
   scheduleObservedAt.value = 0;
   dismissedInMemory = '';
+  returnState.value = null;
+  returnError.value = '';
+  pendingRecoveryWindow.value = '';
+  loadReturn();
 });
 watch(() => browser.value.scheduledActive, active => {
   if (!active && displayContext.value?.provider !== 'browser') dismissedInMemory = '';
@@ -324,11 +494,18 @@ watch(() => native.value.schedule, schedule => {
   const status = schedule?.status;
   clockAnchor.value = schedule?.online && status?.clockReady && !status.dateNeedsReview && status.schoolNow
     ? {schoolNow: status.schoolNow, seenAt: window.performance.now()} : null;
+  if (schedule?.online && ['EXAM_PAUSED', 'WINDOW_SKIPPED', 'OUTSIDE_WINDOW'].includes(status?.reason)) {
+    saveReturn(null);
+    if (status.reason === 'EXAM_PAUSED') displayContext.value = null;
+  }
 });
 watch(phase, value => {
   window.clearTimeout(endTimer);
-  if (value === 'exam') { displayContext.value = null; return; }
-  if (value === 'ended') endTimer = window.setTimeout(() => { if (phase.value === 'ended') displayContext.value = null; }, 5000);
+  if (value === 'exam') { saveReturn(null); displayContext.value = null; return; }
+  if (value === 'ended') {
+    saveReturn(null);
+    endTimer = window.setTimeout(() => { if (phase.value === 'ended') displayContext.value = null; }, 5000);
+  }
   if (value === 'active' && stopRequested.value && displayContext.value?.sessionId !== native.value.status?.sessionId)
     stopRequested.value = false;
 });
@@ -343,10 +520,21 @@ watch(native, value => {
   trend.value = [...trend.value.slice(-19), value.status.currentDbfs];
 });
 onMounted(() => {
-  timer = window.setInterval(() => { tick.value++; }, 1000);
+  loadReturn();
+  syncReturn();
+  window.addEventListener('online', syncReturn);
+  timer = window.setInterval(() => {
+    tick.value++;
+    if (returnState.value?.windowKey === candidate.value?.windowKey
+      && scheduledReturnRemainingMs(returnState.value, window.performance.now()) <= 0)
+      pendingRecoveryWindow.value = returnState.value.windowKey;
+    if (tick.value % 15 === 0) syncReturn();
+  }, 1000);
   unsubscribeBrowser = noiseService.subscribe(value => { browserSnapshot.value = value; });
 });
 onUnmounted(() => {
+  returnGeneration++;
+  window.removeEventListener('online', syncReturn);
   window.clearInterval(timer);
   window.clearTimeout(endTimer);
   unsubscribeBrowser?.();

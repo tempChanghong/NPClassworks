@@ -401,6 +401,42 @@ export const npepNoiseScheduleApi = {
   save: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/noise-schedules`,
     {...options, version: '0.7', body, requestId: body.requestId}),
 };
+export const npepNoiseDisplayApi = {
+  async screen(body, {signal} = {}) {
+    const token = getClassroomScreenToken(), server = baseUrl();
+    if (!token) throw new Error('大屏尚未绑定');
+    const requestId = body?.requestId || globalThis.crypto.randomUUID();
+    const response = await client.request({method: body ? 'post' : 'get',
+      url: `/api/v2/npep/screen/noise-display${body ? '/return' : ''}`, timeout: 8000, signal,
+      headers: screenHeaders({'X-NPEP-Version': '0.8', 'X-Request-Id': requestId}),
+      ...(body ? {data: {...body, requestId}} : {})});
+    if (token !== getClassroomScreenToken() || server !== baseUrl()) throw staleAccountRequest();
+    const value = response.data;
+    if (value?.protocolVersion !== '0.8' || value.requestId !== requestId || !value.data)
+      throw new Error('定时展示接口响应不兼容');
+    return value.data;
+  },
+  settings: (school, termId, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/noise-display-settings`,
+    {...options, version: '0.8', params: termId ? {termId} : undefined}),
+  saveSetting: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/noise-display-settings`,
+    {...options, version: '0.8', body}),
+};
+export const npepNoiseManagementApi = {
+  async stop(pin, status, {signal} = {}) {
+    const token = getClassroomScreenToken(), server = baseUrl();
+    if (!token) throw new Error('大屏尚未绑定');
+    const requestId = globalThis.crypto.randomUUID();
+    const response = await client.post('/api/v2/npep/screen/noise-management/commands', {
+      requestId, command: {action: 'STOP', instanceId: status.instanceId, revision: status.revision,
+        sessionId: status.sessionId, durationSeconds: 10800}, pin,
+    }, {timeout: 8000, signal, headers: screenHeaders({'X-NPEP-Version': '0.8', 'X-Request-Id': requestId})});
+    if (token !== getClassroomScreenToken() || server !== baseUrl()) throw staleAccountRequest();
+    const value = response.data;
+    if (value?.protocolVersion !== '0.8' || value.requestId !== requestId || !value.data)
+      throw new Error('定时监测管理接口响应不兼容');
+    return value.data;
+  },
+};
 export const npepNoiseApi = {
   async screen(body, {signal} = {}) {
     const token = getClassroomScreenToken(), server = baseUrl();

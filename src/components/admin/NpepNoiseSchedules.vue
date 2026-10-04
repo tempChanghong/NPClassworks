@@ -288,6 +288,12 @@
             保存后，支持自动排程的 NPEduTools 会接收规则，按 ClassIsland 学校时间执行。请在设备噪音报告中核对“已应用”和执行状态；保存本身不代表已开始监测。不保存原始音频。
           </p>
         </section>
+        <NpepNoiseDisplaySettings
+          :school-id="schoolId"
+          :term-id="editorTerm"
+          :target-type="targetType"
+          :target-id="targetId"
+        />
       </template>
       <v-btn
         v-else
@@ -302,6 +308,7 @@
 <script setup>
 import {computed, toRef} from 'vue';
 import {useNoiseScheduleEditor} from '@/composables/admin/useNoiseScheduleEditor.js';
+import NpepNoiseDisplaySettings from '@/components/admin/NpepNoiseDisplaySettings.vue';
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: '当前学校'}, termId: {type: String, default: ''}});
 const editor = useNoiseScheduleEditor(toRef(props, 'schoolId'), toRef(props, 'termId'));
 const {catalog, termId: editorTerm, targetType, targetId, targets, draft, revision, preview, busy, error, message, loaded, valid, validation, refresh, previewDraft, save} = editor;

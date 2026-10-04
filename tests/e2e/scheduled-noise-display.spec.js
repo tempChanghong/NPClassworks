@@ -14,6 +14,8 @@ test('scheduled capture enters its own screen, returns without STOP, and waits f
   let phase = 'starting';
   let commandCount = 0;
   let commandSessionId = '';
+  let returnExpiresAt = 0;
+  let returnStarts = 0;
   let sessionId = 'synthetic-session-1';
   let lastScheduleSession = '';
   let releaseHeldNoise;
@@ -22,10 +24,28 @@ test('scheduled capture enters its own screen, returns without STOP, and waits f
     window.microphoneRequests = 0;
     navigator.mediaDevices.getUserMedia = async () => { window.microphoneRequests++; throw Error('Unexpected browser microphone'); };
   });
-  await page.route('**/api/v2/npep/screen/noise/commands', async route => {
+  await page.route('**/api/v2/npep/screen/noise-management/commands', async route => {
+    const pin = route.request().postDataJSON().pin;
+    if (pin !== '725316') {
+      await route.fulfill({status: 401, json: {protocolVersion: '0.8',
+        requestId: route.request().headers()['x-request-id'], error: {code: 'SCREEN_PIN_INCORRECT'}}});
+      return;
+    }
     commandCount++;
-    commandSessionId = route.request().postDataJSON().sessionId;
-    await route.fulfill({json: {protocolVersion: '0.6', requestId: route.request().headers()['x-request-id'], data: {accepted: true}}});
+    commandSessionId = route.request().postDataJSON().command.sessionId;
+    await route.fulfill({json: {protocolVersion: '0.8', requestId: route.request().headers()['x-request-id'], data: {accepted: true}}});
+  });
+  await page.route('**/api/v2/npep/screen/noise-display**', async route => {
+    const remainingSeconds = Math.max(0, Math.ceil((returnExpiresAt - Date.now()) / 1000));
+    if (route.request().method() === 'POST' && !remainingSeconds) {
+      returnStarts++;
+      returnExpiresAt = Date.now() + 600000;
+    }
+    const seconds = Math.max(0, Math.ceil((returnExpiresAt - Date.now()) / 1000));
+    await route.fulfill({json: {protocolVersion: '0.8', requestId: route.request().headers()['x-request-id'],
+      data: {supported: true, serverNow: new Date().toISOString(), returnMinutes: 10, source: 'Default',
+        activeReturn: seconds ? {window, startedAt: new Date(returnExpiresAt - 600000).toISOString(),
+          expiresAt: new Date(returnExpiresAt).toISOString(), returnMinutes: 10, remainingSeconds: seconds} : null}}});
   });
   await page.route('**/api/v2/npep/screen/noise', async route => {
     if (phase === 'stall') await new Promise(resolve => { releaseHeldNoise = resolve; });
@@ -81,8 +101,20 @@ test('scheduled capture enters its own screen, returns without STOP, and waits f
   await expect(display).toHaveCount(0);
   await page.reload();
   await expect(display).toHaveCount(0);
+  expect(returnStarts).toBe(1);
   await page.getByRole('button', {name: '查看展示'}).click();
   await expect(display).toBeVisible();
+  await display.getByRole('button', {name: '返回作业板'}).click();
+  await expect(display).toHaveCount(0);
+  expect(returnStarts).toBe(1);
+  returnExpiresAt = Date.now() + 8000;
+  await page.reload();
+  await page.getByRole('button', {name: '课堂工具', exact: true}).first().click();
+  await expect(display).toHaveCount(0);
+  await expect(page.getByText('返回期限已到；完成当前操作后会恢复监测展示。'))
+    .toBeVisible({timeout: 12000});
+  await page.getByTitle('关闭', {exact: true}).click();
+  await expect(display).toBeVisible({timeout: 12000});
 
   phase = 'stall';
   await expect.poll(() => Boolean(releaseHeldNoise)).toBe(true);
@@ -104,6 +136,11 @@ test('scheduled capture enters its own screen, returns without STOP, and waits f
   await expect.poll(() => display.locator('.scheduled-noise-display__trend span').count()).toBeLessThan(2);
 
   await display.getByRole('button', {name: '结束本次监测'}).click();
+  await page.getByLabel('本大屏 PIN').fill('000000');
+  await page.getByRole('button', {name: '发送停止请求'}).click();
+  await expect(page.getByRole('dialog').getByText('SCREEN_PIN_INCORRECT')).toBeVisible();
+  expect(commandCount).toBe(0);
+  await page.getByLabel('本大屏 PIN').fill('725316');
   await page.getByRole('button', {name: '发送停止请求'}).click();
   await expect(display).toContainText('等待桌面执行回执');
   expect(commandCount).toBe(1);
