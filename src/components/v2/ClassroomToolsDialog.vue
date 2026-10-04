@@ -111,55 +111,64 @@
               重新读取考勤
             </v-btn>
           </v-alert>
-          <div class="d-flex align-center flex-wrap ga-3 mb-5">
-            <v-chip
+          <section
+            class="attendance-panel"
+            aria-labelledby="attendance-title"
+          >
+            <div class="attendance-heading">
+              <div>
+                <span class="attendance-eyebrow">课堂记录 · {{ attendanceDateLabel }}</span>
+                <h2 id="attendance-title">
+                  今日考勤
+                </h2>
+                <p>点选每位学生的当前状态，完成后保存到学校记录。</p>
+              </div>
+              <v-chip
+                v-if="attendanceReady"
+                :color="hasAttendanceDraft() ? 'warning' : 'success'"
+                variant="tonal"
+              >
+                {{ hasAttendanceDraft() ? '有未保存修改' : '当前记录已加载' }}
+              </v-chip>
+            </div>
+            <div
               v-if="attendanceReady"
-              color="success"
-              variant="tonal"
+              class="attendance-metrics"
             >
-              到校 {{ attendanceCounts.present }}
-            </v-chip>
-            <v-chip
-              v-if="attendanceReady"
-              color="error"
-              variant="tonal"
-            >
-              缺勤 {{ attendanceCounts.absent }}
-            </v-chip>
-            <v-chip
-              v-if="attendanceReady"
-              color="warning"
-              variant="tonal"
-            >
-              迟到 {{ attendanceCounts.late }}
-            </v-chip>
-            <v-chip
-              v-if="attendanceReady"
-              color="grey"
-              variant="tonal"
-            >
-              不参与 {{ attendanceCounts.excluded }}
-            </v-chip>
-            <v-spacer />
-            <v-btn
-              :disabled="!attendanceReady || savingAttendance"
-              prepend-icon="mdi-account-edit-outline"
-              variant="tonal"
-              @click="openRosterEditor"
-            >
-              编辑学生名单
-            </v-btn>
-            <v-btn
-              color="primary"
-              :disabled="!attendanceReady || savingRoster"
-              :loading="savingAttendance"
-              prepend-icon="mdi-content-save-check-outline"
-              variant="elevated"
-              @click="saveAttendance"
-            >
-              保存今日考勤
-            </v-btn>
-          </div>
+              <div class="attendance-metric attendance-metric--present">
+                <span>到校 </span><strong>{{ attendanceCounts.present }}</strong>
+              </div>
+              <div class="attendance-metric attendance-metric--absent">
+                <span>缺勤 </span><strong>{{ attendanceCounts.absent }}</strong>
+              </div>
+              <div class="attendance-metric attendance-metric--late">
+                <span>迟到 </span><strong>{{ attendanceCounts.late }}</strong>
+              </div>
+              <div class="attendance-metric attendance-metric--excluded">
+                <span>不参与 </span><strong>{{ attendanceCounts.excluded }}</strong>
+              </div>
+            </div>
+            <div class="attendance-actions">
+              <v-btn
+                :disabled="!attendanceReady || savingAttendance"
+                prepend-icon="mdi-account-edit-outline"
+                variant="tonal"
+                @click="openRosterEditor"
+              >
+                编辑学生名单
+              </v-btn>
+              <v-btn
+                color="primary"
+                :disabled="!attendanceReady || savingRoster"
+                :loading="savingAttendance"
+                prepend-icon="mdi-content-save-check-outline"
+                variant="elevated"
+                @click="saveAttendance"
+              >
+                保存今日考勤
+              </v-btn>
+            </div>
+          </section>
 
           <v-empty-state
             v-if="attendanceReady && !store.classroomStudents.length"
@@ -178,55 +187,53 @@
             </template>
           </v-empty-state>
 
-          <v-list
+          <div
             v-else-if="attendanceReady"
-            class="rounded-xl"
-            lines="two"
+            class="attendance-list"
+            role="list"
           >
-            <v-list-item
+            <div
               v-for="student in store.classroomStudents"
               :key="student.id"
               class="student-row"
+              role="listitem"
             >
-              <template #prepend>
+              <div class="student-identity">
                 <v-avatar
                   :color="statusColor(studentStatus(student.id))"
                   variant="tonal"
                 >
                   {{ student.sortOrder + 1 }}
                 </v-avatar>
-              </template>
-              <v-list-item-title class="font-weight-medium">
-                {{ student.name }}
-              </v-list-item-title>
-              <v-list-item-subtitle v-if="student.studentNumber">
-                学号 {{ student.studentNumber }}
-              </v-list-item-subtitle>
-              <template #append>
-                <v-btn-toggle
-                  :disabled="savingAttendance || savingRoster"
-                  :model-value="studentStatus(student.id)"
-                  color="primary"
-                  mandatory
-                  variant="outlined"
-                  @update:model-value="setStudentStatus(student.id, $event)"
-                >
-                  <v-btn value="present">
-                    到校
-                  </v-btn>
-                  <v-btn value="absent">
-                    缺勤
-                  </v-btn>
-                  <v-btn value="late">
-                    迟到
-                  </v-btn>
-                  <v-btn value="excluded">
-                    不参与
-                  </v-btn>
-                </v-btn-toggle>
-              </template>
-            </v-list-item>
-          </v-list>
+                <div>
+                  <strong>{{ student.name }}</strong>
+                  <span v-if="student.studentNumber">学号 {{ student.studentNumber }}</span>
+                </div>
+              </div>
+              <v-btn-toggle
+                class="student-status"
+                :disabled="savingAttendance || savingRoster"
+                :model-value="studentStatus(student.id)"
+                color="primary"
+                mandatory
+                variant="outlined"
+                @update:model-value="setStudentStatus(student.id, $event)"
+              >
+                <v-btn value="present">
+                  到校
+                </v-btn>
+                <v-btn value="absent">
+                  缺勤
+                </v-btn>
+                <v-btn value="late">
+                  迟到
+                </v-btn>
+                <v-btn value="excluded">
+                  不参与
+                </v-btn>
+              </v-btn-toggle>
+            </div>
+          </div>
         </template>
 
         <template v-else-if="activeTool === 'noise'">
@@ -268,13 +275,15 @@
       </v-alert>
       <v-dialog
         v-model="rosterDialog"
-        max-width="680"
+        max-width="760"
+        scrollable
       >
-        <v-card class="rounded-xl">
-          <v-card-title class="pa-5 pb-2">
-            编辑行政班学生名单
+        <v-card class="roster-editor rounded-xl">
+          <v-card-title class="roster-editor-header">
+            <h2>编辑行政班学生名单</h2>
+            <p>当前 {{ rosterRows.length }} 人 · 修改现有行可保留学生身份。</p>
           </v-card-title>
-          <v-card-text class="px-5">
+          <v-card-text class="roster-editor-content">
             <v-alert
               v-if="remoteRosterChanged"
               type="warning"
@@ -295,61 +304,83 @@
             >
               {{ store.classroomToolsError }}
             </v-alert>
-            <v-alert
-              class="mb-4"
-              type="info"
-              variant="tonal"
-            >
-              改名或修改学号请编辑下方学生行，以保留学生身份。批量导入可粘贴 Excel 的“学号、姓名”两列，或每行填写“学号 姓名”，默认保留其他学生。姓名不能为空；同名学生请填写不同学号，或逐项添加。
-            </v-alert>
-            <div
-              v-for="(student, index) in rosterRows"
-              :key="student.id || `new-${index}`"
-              class="d-flex ga-2 mb-2"
-            >
-              <v-text-field
-                v-model="student.studentNumber"
-                :label="`学号 ${index + 1}`"
-                :disabled="savingRoster"
-                hide-details
-              />
-              <v-text-field
-                v-model="student.name"
-                :label="`姓名 ${index + 1}`"
-                :disabled="savingRoster"
-                hide-details
-              />
+            <details class="roster-import">
+              <summary>
+                <span><strong>批量追加学生</strong><small>从 Excel 粘贴或逐行输入</small></span>
+                <v-icon icon="mdi-chevron-down" />
+              </summary>
+              <div class="roster-import-body">
+                <p>粘贴“学号、姓名”两列，或每行填写“学号 姓名”。导入默认保留其他学生；同名学生请填写不同学号。请在导入后核对，再保存名单。</p>
+                <v-textarea
+                  v-model="rosterText"
+                  :disabled="savingRoster"
+                  auto-grow
+                  label="批量追加名单"
+                  placeholder="01 张三&#10;02 李四&#10;03 王五"
+                  rows="3"
+                  variant="outlined"
+                />
+                <v-btn
+                  :disabled="savingRoster"
+                  variant="tonal"
+                  @click="appendScreenRoster"
+                >
+                  导入到名单
+                </v-btn>
+              </div>
+            </details>
+            <div class="roster-list-heading">
+              <div>
+                <h3>逐人编辑</h3>
+                <p>姓名不能为空；移出学生后，保存前仍可取消。</p>
+              </div>
               <v-btn
-                icon="mdi-close"
-                :aria-label="`移出第 ${index + 1} 人`"
                 :disabled="savingRoster"
-                @click="rosterRows.splice(index, 1)"
-              />
+                variant="tonal"
+                prepend-icon="mdi-account-plus-outline"
+                @click="addRosterStudent"
+              >
+                添加学生
+              </v-btn>
             </div>
-            <v-btn
-              class="mb-3"
-              :disabled="savingRoster"
-              @click="rosterRows.push({name: '', studentNumber: ''})"
+            <div
+              ref="rosterRowsElement"
+              class="roster-rows"
             >
-              添加学生
-            </v-btn>
-            <v-textarea
-              v-model="rosterText"
-              :disabled="savingRoster"
-              auto-grow
-              label="批量追加名单"
-              placeholder="01 张三&#10;02 李四&#10;03 王五"
-              rows="4"
-              variant="outlined"
-            />
-            <v-btn
-              :disabled="savingRoster"
-              @click="appendScreenRoster"
-            >
-              导入到名单
-            </v-btn>
+              <div
+                v-for="(student, index) in rosterRows"
+                :key="student.id || `new-${index}`"
+                class="roster-row"
+              >
+                <span class="roster-row-index">{{ index + 1 }}</span>
+                <v-text-field
+                  v-model="student.studentNumber"
+                  class="roster-row-number"
+                  :label="`学号 ${index + 1}`"
+                  :disabled="savingRoster"
+                  variant="outlined"
+                  hide-details
+                />
+                <v-text-field
+                  v-model="student.name"
+                  class="roster-row-name"
+                  :label="`姓名 ${index + 1}`"
+                  :disabled="savingRoster"
+                  variant="outlined"
+                  hide-details
+                />
+                <v-btn
+                  class="roster-row-remove"
+                  icon="mdi-close"
+                  variant="text"
+                  :aria-label="`移出第 ${index + 1} 人`"
+                  :disabled="savingRoster"
+                  @click="rosterRows.splice(index, 1)"
+                />
+              </div>
+            </div>
           </v-card-text>
-          <v-card-actions class="px-5 pb-5">
+          <v-card-actions class="roster-editor-actions">
             <v-spacer />
             <v-btn @click="rosterDialog = false">
               取消
@@ -370,7 +401,7 @@
 </template>
 
 <script setup>
-import {computed, onUnmounted, ref, watch} from "vue";
+import {computed, nextTick, onUnmounted, ref, watch} from "vue";
 import {useNow} from "@vueuse/core";
 import {getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {useClassworksV2Store} from "@/stores/classworksV2";
@@ -391,6 +422,7 @@ const activeTool = ref(props.initialTool);
 const rosterDialog = ref(false);
 const rosterText = ref("");
 const rosterRows = ref([]);
+const rosterRowsElement = ref(null);
 const savingRoster = ref(false);
 const savingAttendance = ref(false);
 const rosterBase = ref([]), rosterBaseRevision = ref(null), remoteRosterChanged = ref(false);
@@ -424,6 +456,7 @@ const attendanceReady = computed(() => {
     && !remoteRosterChanged.value
     && attendanceLoadedScope.value === attendanceScope());
 });
+const attendanceDateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', {month:'long',day:'numeric',weekday:'long'}).format(clock.value));
 const activeToolTitle = computed(() => tools.value.find((tool) => tool.id === activeTool.value)?.title || "");
 const attendanceCounts = computed(() => {
   const attendance = attendanceForCurrentRoster(attendanceDraft.value);
@@ -512,6 +545,14 @@ function openRosterEditor() {
   rosterRows.value = editableRoster(store.classroomStudents);
   rosterText.value = "";
   rosterDialog.value = true;
+}
+
+async function addRosterStudent() {
+  rosterRows.value.push({name: '', studentNumber: ''});
+  await nextTick();
+  const input = rosterRowsElement.value?.lastElementChild?.querySelector('.roster-row-name input');
+  input?.scrollIntoView({block: 'nearest'});
+  input?.focus({preventScroll: true});
 }
 
 function parseRoster() {
@@ -617,20 +658,69 @@ onUnmounted(() => {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-.student-row + .student-row {
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+.attendance-panel { margin-bottom: 20px; padding: 22px; border: 1px solid rgba(var(--v-border-color), .2); border-radius: 18px; }
+.attendance-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.attendance-heading h2 { font-size: 24px; font-weight: 750; }
+.attendance-heading p { color: rgba(var(--v-theme-on-surface), .68); font-size: 13px; }
+.attendance-eyebrow { color: rgb(var(--v-theme-primary)); font-size: 12px; font-weight: 800; letter-spacing: .06em; }
+.attendance-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.attendance-metric { display: grid; gap: 4px; padding: 14px 16px; border-radius: 14px; background: rgba(var(--v-theme-on-surface), .045); }
+.attendance-metric span { color: rgba(var(--v-theme-on-surface), .7); font-size: 13px; }
+.attendance-metric strong { font-size: 28px; line-height: 1; }
+.attendance-metric--absent strong { color: rgb(var(--v-theme-error)); }
+.attendance-metric--late strong { color: rgb(var(--v-theme-warning)); }
+.attendance-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.attendance-list { display: grid; gap: 10px; background: transparent; }
+.student-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid rgba(var(--v-border-color), .2); border-radius: 14px; }
+.student-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.student-identity > div { display: grid; min-width: 0; }
+.student-identity strong { overflow-wrap: anywhere; }
+.student-identity span { color: rgba(var(--v-theme-on-surface), .68); font-size: 13px; }
+.student-status :deep(.v-btn) { min-height: 44px; }
+.roster-editor { display: flex; flex-direction: column; max-height: min(90vh, 820px); max-height: min(90dvh, 820px); overflow: hidden; }
+.roster-editor-header { display: grid; flex-shrink: 0; gap: 4px; padding: 20px 24px 14px; white-space: normal; }
+.roster-editor-header h2 { font-size: 22px; font-weight: 750; }
+.roster-editor-header p, .roster-list-heading p, .roster-import-body p { color: rgba(var(--v-theme-on-surface), .68); font-size: 13px; }
+.roster-editor-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 24px 20px !important; }
+.roster-import { border: 1px solid rgba(var(--v-border-color), .22); border-radius: 12px; }
+.roster-import summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; cursor: pointer; }
+.roster-import summary::marker { content: ''; }
+.roster-import summary span { display: grid; gap: 3px; }
+.roster-import summary small { color: rgba(var(--v-theme-on-surface), .68); font-size: 13px; }
+.roster-import[open] summary .v-icon { transform: rotate(180deg); }
+.roster-import-body { padding: 0 16px 16px; }
+.roster-import-body p { margin-bottom: 14px; }
+.roster-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 20px 0 12px; }
+.roster-list-heading h3 { font-size: 17px; font-weight: 750; }
+.roster-rows { display: grid; gap: 8px; }
+.roster-row { display: grid; grid-template-columns: 28px minmax(0, .8fr) minmax(0, 1.2fr) 44px; align-items: center; gap: 8px; padding: 10px; border: 1px solid rgba(var(--v-border-color), .2); border-radius: 12px; }
+.roster-row-index { color: rgba(var(--v-theme-on-surface), .68); font-weight: 700; text-align: center; }
+.roster-editor-actions { flex-shrink: 0; padding: 12px 24px 20px; border-top: 1px solid rgba(var(--v-border-color), .16); }
+@media (min-width: 1200px) {
+  .attendance-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .attendance-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
-  .student-row :deep(.v-list-item__append) {
-    align-self: stretch;
-    margin-inline-start: 0;
-    padding-top: 10px;
-    width: 100%;
-  }
-
-  .student-row :deep(.v-list-item__content) {
-    min-width: 120px;
-  }
+  .attendance-panel { padding: 16px; }
+  .attendance-heading { display: grid; }
+  .attendance-heading :deep(.v-chip) { justify-self: start; }
+  .attendance-actions :deep(.v-btn) { width: 100%; }
+  .student-row { grid-template-columns: 1fr; }
+  .student-status { display: flex; width: 100%; }
+  .student-status :deep(.v-btn) { flex: 1 1 0; min-width: 0; padding-inline: 4px; }
+  .roster-editor-header { padding: 18px 18px 12px; }
+  .roster-editor-content { padding: 0 18px 18px !important; }
+  .roster-list-heading { align-items: flex-start; }
+  .roster-list-heading :deep(.v-btn) { min-width: 100px; }
+  .roster-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .roster-row-index { grid-column: 1; grid-row: 1; justify-self: start; padding-left: 4px; }
+  .roster-row-remove { grid-column: 2; grid-row: 1; justify-self: end; }
+  .roster-row-number { grid-column: 1 / -1; grid-row: 2; }
+  .roster-row-name { grid-column: 1 / -1; grid-row: 3; }
+  .roster-row-number, .roster-row-name { min-width: 0; }
+  .roster-editor-actions { padding: 12px 18px 18px; }
 }
 </style>

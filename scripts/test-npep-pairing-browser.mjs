@@ -42,7 +42,8 @@ const server = await createServer({configFile:false,envFile:false,root,cacheDir:
         calls.push({path:req.url,method:req.method,body});
         assert.equal(req.headers['x-npep-version'],'0.1');
         if(body&&contract){
-          const definition=req.url.includes('/screen/')?'issueScreenPairing':req.url.endsWith('/preview')?'previewPairingAccessBatch':'setPairingAccessBatch';
+          const definition=req.url.includes('/screen/')?'issueScreenPairing':req.url.includes('/screen-bindings/')?'setScreenPairingAccess'
+            :req.url.endsWith('/preview')?'previewPairingAccessBatch':'setPairingAccessBatch';
           assert.equal(contract.validate(definition,body),true,'Actual browser request must satisfy backend wire schema');
         }
         const requestId=body?.requestId||req.headers['x-request-id'];
@@ -58,6 +59,12 @@ const server = await createServer({configFile:false,envFile:false,root,cacheDir:
         }
         assert.equal(req.headers.authorization,'Bearer fixture-admin');assert.equal(req.headers['x-classworks-screen-token'],undefined);
         if(!body)return reply({items:screens.map(s=>({screenBindingId:s.id,enabled:s.enabled,revision:s.revision}))});
+        const single=/\/screen-bindings\/([^/]+)\/pairing-access$/.exec(req.url);
+        if(single){
+          const screen=screens.find(s=>s.id===decodeURIComponent(single[1]));assert.ok(screen);
+          assert.equal(body.expectedRevision,screen.revision);screen.enabled=body.enabled;screen.revision++;
+          return reply({screenBindingId:screen.id,enabled:screen.enabled,revision:screen.revision});
+        }
         const result=preview(body);
         if(req.url.endsWith('/preview'))return reply(result);
         assert.ok(req.url.endsWith('/batch'));assert.equal(body.previewDigest,'a'.repeat(64));
@@ -106,10 +113,22 @@ try {
   await previewButton.click();await expect(admin.getByText(/有效大屏 1 台/)).toBeVisible();
   const apply=admin.getByRole('button',{name:'确认批量开放',exact:true});await expect(apply).toBeDisabled();
   await confirm.check();await expect(apply).toBeEnabled();
+  await admin.mouse.move(0,0);await admin.waitForTimeout(350);
+  await admin.screenshot({path:resolve(output,'admin-preauthorization-preview-desktop.png'),fullPage:true,animations:'disabled'});
+  await admin.setViewportSize({width:390,height:844});
+  assert.equal(await admin.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,'preauthorization preview must fit a narrow viewport');
+  await admin.screenshot({path:resolve(output,'admin-preauthorization-preview-mobile.png'),fullPage:true,animations:'disabled'});
+  await admin.evaluate(()=>window.fixtureSetTheme('dark'));
+  await expect(admin.locator('.v-application')).toHaveClass(/v-theme--dark/);
+  await admin.screenshot({path:resolve(output,'admin-preauthorization-preview-mobile-dark.png'),fullPage:true,animations:'disabled'});
+  await admin.evaluate(()=>window.fixtureSetTheme('light'));
+  await admin.setViewportSize({width:1280,height:1100});
   await select('网页配对','关闭');await expect(confirm).toHaveCount(0);
   await select('网页配对','开放');await previewButton.click();await confirm.check();await apply.click();
   await expect(admin.getByText(/已开放 1 台大屏的网页配对/)).toBeVisible();
   assert.equal(screens[0].enabled,true);assert.equal(screens[1].enabled,false);checks.push('grade preview, consent reset and apply');
+  await admin.mouse.move(0,0);await admin.waitForTimeout(350);
+  await admin.screenshot({path:resolve(output,'admin-preauthorization-saved.png'),fullPage:true,animations:'disabled'});
   await screen.getByRole('button',{name:'刷新授权状态',exact:true}).click();
   await screen.getByRole('button',{name:'生成配对码',exact:true}).click();
   await expect(screen.getByText('ABCD2345',{exact:true})).toBeVisible();
@@ -154,6 +173,9 @@ try {
   checks.push('conflict requires refresh; closing blocks screen');
   occupied=true;await screen.getByRole('button',{name:'刷新授权状态',exact:true}).click();
   await expect(screen.getByRole('heading',{name:'这台大屏已连接设备'})).toBeVisible();checks.push('occupied binding cannot be replaced');
+  await admin.locator('.pairing-access-device').filter({hasText:'二班大屏'}).getByRole('button',{name:'开放网页配对'}).click();
+  await expect(admin.locator('.pairing-access-device').filter({hasText:'二班大屏'}).getByText('已开放',{exact:true})).toBeVisible();
+  assert.equal(screens[0].enabled,false);assert.equal(screens[1].enabled,true);checks.push('individual access changes only the selected screen');
   await select('网页配对','开放');await previewButton.click();await confirm.check();
   await admin.evaluate(()=>{window.fixtureTerm.value='other-term';});
   await expect(confirm).toHaveCount(0);await expect(admin.getByRole('button',{name:'确认批量开放',exact:true})).toHaveCount(0);

@@ -18,7 +18,7 @@ test("admin roster commits, refreshes a screen, rejects its stale draft and pres
   await screen.page.getByRole("button", {name: "课堂工具", exact: true}).first().click();
   await screen.page.locator(".tool-entry").filter({hasText: "考勤"}).click();
   await screen.page.getByRole("button", {name: "编辑学生名单", exact: true}).click();
-  const editor = screen.page.getByRole("dialog").filter({has: screen.page.getByRole("textbox", {name: "批量追加名单"})}).last();
+  const editor = screen.page.getByRole("dialog").filter({hasText: "编辑行政班学生名单"}).last();
   await expect(editor.getByLabel("姓名 1", {exact: true})).toHaveValue("张三");
   await editor.getByLabel("姓名 1", {exact: true}).fill("大屏未保存输入");
 

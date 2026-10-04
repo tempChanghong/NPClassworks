@@ -1,28 +1,29 @@
 <template>
-  <v-card
-    variant="outlined"
-    class="rounded-xl mb-4"
+  <section
+    class="pairing-access"
+    aria-labelledby="pairing-access-title"
   >
-    <v-card-title class="d-flex flex-wrap align-center ga-2">
-      班级大屏预授权
-      <v-spacer />
+    <header class="pairing-access-header">
+      <div>
+        <span class="pairing-access-eyebrow">学校设置 · NPEP</span>
+        <h2 id="pairing-access-title">
+          班级大屏预授权
+        </h2>
+        <p>决定哪些现有大屏可以在现场生成一次性网页配对码。</p>
+      </div>
       <v-btn
-        variant="text"
+        variant="tonal"
         :loading="busy"
         @click="refresh"
       >
         刷新预授权
       </v-btn>
-    </v-card-title>
-    <v-card-text>
-      <p class="mb-3">
-        开放后，该班级大屏可在“课堂工具 → 连接 NPEduTools”生成配对码，现场输入桌面端即可核对连接，无需管理员再次批准。关闭会使未完成的网页配对失效；已连接设备请通过“撤销互联设备授权”管理。
-      </p>
+    </header>
+    <div class="pairing-access-content">
       <v-alert
         v-if="error"
         type="error"
         variant="tonal"
-        class="mb-3"
       >
         {{ error }}
       </v-alert>
@@ -30,17 +31,29 @@
         v-if="message"
         type="success"
         variant="tonal"
-        class="mb-3"
       >
         {{ message }}
       </v-alert>
-      <div class="pa-4 mb-4 rounded-lg bg-surface-light">
-        <h3 class="text-subtitle-1 mb-2">
-          按年级／全校批量设置
-        </h3>
-        <p class="text-caption mb-3">
-          只修改当前学期已存在的有效班级大屏，不自动授权以后新建的大屏。已连接设备不受影响。
-        </p>
+
+      <div
+        v-if="loaded"
+        class="pairing-access-overview"
+      >
+        <div><span>当前范围大屏</span><strong>{{ eligible.length }}</strong></div>
+        <div><span>已开放网页配对</span><strong>{{ enabledCount }}</strong></div>
+        <div><span>状态待核对</span><strong>{{ unknownCount }}</strong></div>
+      </div>
+
+      <section
+        class="pairing-access-section"
+        aria-labelledby="pairing-access-batch-title"
+      >
+        <div class="pairing-access-section-heading">
+          <h3 id="pairing-access-batch-title">
+            按范围批量设置
+          </h3>
+          <p>先选择全校或年级和目标状态，再预览将改变的大屏。</p>
+        </div>
         <v-row dense>
           <v-col
             cols="12"
@@ -82,11 +95,12 @@
         </v-row>
         <p
           v-if="!termId"
-          class="text-caption mb-2"
+          class="pairing-access-note mb-2"
         >
           请先选择有效的当前学期。
         </p>
         <v-btn
+          class="pairing-access-preview-button"
           variant="tonal"
           :disabled="!canPreview"
           @click="previewBatch"
@@ -95,16 +109,21 @@
         </v-btn>
         <v-sheet
           v-if="preview"
-          class="pa-4 mt-3 rounded-lg"
+          class="pairing-access-preview mt-4"
           border
         >
           <h4>{{ preview.termName }} · {{ preview.targetName }} · {{ preview.enabled ? '开放' : '关闭' }}网页配对</h4>
-          <p class="my-2">
+          <div class="pairing-access-preview-metrics">
+            <div><span>有效大屏</span><strong>{{ preview.totalScreens }}</strong></div>
+            <div><span>将修改</span><strong>{{ preview.changedScreens }}</strong></div>
+            <div><span>保持原状态</span><strong>{{ preview.unchangedScreens }}</strong></div>
+          </div>
+          <p class="pairing-access-note mt-3">
             有效大屏 {{ preview.totalScreens }} 台：修改 {{ preview.changedScreens }} 台，保持 {{ preview.unchangedScreens }} 台；排除停用或无效项目 {{ preview.excludedScreens }} 台。
           </p>
           <p
             v-if="!preview.enabled && preview.changedScreens"
-            class="text-caption mb-2"
+            class="pairing-access-note mt-2"
           >
             被关闭大屏的未完成网页配对将失效。已连接设备不会解绑。
           </p>
@@ -122,7 +141,7 @@
           </v-list>
           <p
             v-if="preview.truncated"
-            class="text-caption"
+            class="pairing-access-note"
           >
             这里显示前 50 台；提交会处理上方统计的全部大屏。
           </p>
@@ -133,7 +152,7 @@
             label="已核对范围，同意批量修改网页配对预授权"
             hide-details
           />
-          <div class="d-flex flex-wrap ga-2 mt-3">
+          <div class="pairing-access-actions">
             <v-btn
               color="primary"
               :disabled="!canApply"
@@ -150,20 +169,41 @@
             </v-btn>
           </div>
         </v-sheet>
-      </div>
-      <v-list
-        v-if="loaded"
-        bg-color="transparent"
+        <p class="pairing-access-note mt-4">
+          批量设置只作用于当前学期已存在的有效大屏，不会自动授权日后新建的大屏。
+        </p>
+      </section>
+
+      <section
+        class="pairing-access-section"
+        aria-labelledby="pairing-access-individual-title"
       >
-        <v-list-item
-          v-for="binding in eligible"
-          :key="binding.id"
-          :title="`${binding.name} · ${binding.administrativeClass?.name || '班级'}`"
+        <div class="pairing-access-section-heading">
+          <h3 id="pairing-access-individual-title">
+            逐台核对与调整
+          </h3>
+          <p>开放后可在大屏“课堂工具 → 连接 NPEduTools”生成配对码；关闭会使未完成的网页配对失效。</p>
+        </div>
+        <div
+          v-if="loaded && eligible.length"
+          class="pairing-access-list"
         >
-          <template #subtitle>
-            {{ policies[binding.id]?.enabled ? '已开放网页配对' : '未开放网页配对' }}
-          </template>
-          <template #append>
+          <div
+            v-for="binding in eligible"
+            :key="binding.id"
+            class="pairing-access-device"
+          >
+            <div>
+              <strong>{{ binding.name }}</strong>
+              <span>{{ binding.administrativeClass?.name || '班级' }}</span>
+            </div>
+            <v-chip
+              size="small"
+              :color="!policies[binding.id] ? 'warning' : policies[binding.id].enabled ? 'success' : undefined"
+              variant="tonal"
+            >
+              {{ !policies[binding.id] ? '状态待核对' : policies[binding.id].enabled ? '已开放' : '未开放' }}
+            </v-chip>
             <v-btn
               :disabled="busy || !policies[binding.id]"
               :color="policies[binding.id]?.enabled ? undefined : 'primary'"
@@ -172,14 +212,20 @@
             >
               {{ policies[binding.id]?.enabled ? '关闭网页配对' : '开放网页配对' }}
             </v-btn>
-          </template>
-        </v-list-item>
-      </v-list>
-      <p v-if="loaded && !eligible.length">
-        请先创建有效班级的大屏账号。
-      </p>
-    </v-card-text>
-  </v-card>
+          </div>
+        </div>
+        <p
+          v-else-if="loaded"
+          class="pairing-access-note"
+        >
+          请先创建有效班级的大屏账号。
+        </p>
+        <p class="pairing-access-note mt-4">
+          已连接设备不会因关闭预授权而解绑；如需断开，请在互联设备列表中撤销授权。
+        </p>
+      </section>
+    </div>
+  </section>
 </template>
 
 <script setup>
@@ -191,6 +237,8 @@ const policies = ref({}), busy = ref(false), loaded = ref(false), error = ref(''
 const targetType = ref('SCHOOL'), gradeId = ref(null), batchEnabled = ref(true), preview = ref(null), batchConfirmed = ref(false);
 const eligible = computed(() => props.bindings.filter(b => b.isActive && b.administrativeClass?.isActive !== false && b.administrativeClass?.term?.status === 'ACTIVE'
   && (!props.termId || (b.administrativeClass.termId || b.administrativeClass.term.id) === props.termId)));
+const enabledCount = computed(() => eligible.value.filter(b => policies.value[b.id]?.enabled).length);
+const unknownCount = computed(() => eligible.value.filter(b => !policies.value[b.id]).length);
 const grades = computed(() => [...new Map(eligible.value.filter(b=>b.administrativeClass.gradeId).map(b=>[b.administrativeClass.gradeId,
   {value:b.administrativeClass.gradeId,title:b.administrativeClass.grade?.name || '年级资料待核对'}])).values()]);
 const canPreview = computed(() => loaded.value && !busy.value && !!props.termId && (targetType.value === 'SCHOOL' || grades.value.some(g=>g.value===gradeId.value)));
@@ -253,3 +301,40 @@ watch([targetType,gradeId,batchEnabled], clearPreview, {flush:'sync'});
 watch(() => [props.schoolId,props.termId], () => { generation++; controller?.abort(); clearPreview(); gradeId.value = null; policies.value = {}; loaded.value = false; busy.value = false; void refresh(); }, {immediate: true,flush:'sync'});
 onUnmounted(() => { generation++; controller?.abort(); });
 </script>
+
+<style scoped>
+.pairing-access { padding: 8px 0 4px; }
+.pairing-access-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.pairing-access-header h2 { font-size: 24px; font-weight: 750; }
+.pairing-access-header p, .pairing-access-section-heading p, .pairing-access-note { color: rgba(var(--v-theme-on-surface), .68); font-size: 13px; }
+.pairing-access-eyebrow { color: rgb(var(--v-theme-primary)); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.pairing-access-content { display: grid; gap: 16px; }
+.pairing-access-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pairing-access-overview > div, .pairing-access-preview-metrics > div { display: grid; gap: 5px; padding: 12px; border-radius: 12px; background: rgba(var(--v-theme-on-surface), .045); }
+.pairing-access-overview span, .pairing-access-preview-metrics span { color: rgba(var(--v-theme-on-surface), .68); font-size: 12px; }
+.pairing-access-overview strong, .pairing-access-preview-metrics strong { font-size: 18px; }
+.pairing-access-section { padding: 20px; border: 1px solid rgba(var(--v-border-color), .2); border-radius: 16px; }
+.pairing-access-section-heading { margin-bottom: 18px; }
+.pairing-access-section-heading h3 { font-size: 19px; font-weight: 750; }
+.pairing-access-preview { padding: 18px; border-radius: 14px; }
+.pairing-access-preview h4 { font-size: 17px; }
+.pairing-access-preview-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.pairing-access-preview :deep(.v-list) { margin-top: 12px; border-top: 1px solid rgba(var(--v-border-color), .16); }
+.pairing-access-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.pairing-access-list { border-top: 1px solid rgba(var(--v-border-color), .16); }
+.pairing-access-device { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 14px 0; border-bottom: 1px solid rgba(var(--v-border-color), .16); }
+.pairing-access-device > div { display: grid; gap: 2px; min-width: 0; }
+.pairing-access-device strong { overflow-wrap: anywhere; }
+.pairing-access-device span { color: rgba(var(--v-theme-on-surface), .68); font-size: 13px; }
+@media (max-width: 600px) {
+  .pairing-access-header { display: grid; }
+  .pairing-access-header :deep(.v-btn) { width: 100%; }
+  .pairing-access-overview { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pairing-access-section { padding: 16px; }
+  .pairing-access-preview { padding: 14px; }
+  .pairing-access-preview-metrics { grid-template-columns: 1fr; }
+  .pairing-access-preview-button, .pairing-access-actions :deep(.v-btn) { width: 100%; }
+  .pairing-access-device { grid-template-columns: minmax(0, 1fr) auto; }
+  .pairing-access-device :deep(.v-btn) { grid-column: 1 / -1; width: 100%; }
+}
+</style>
