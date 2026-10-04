@@ -1,20 +1,23 @@
 <template>
   <v-card class="npep-device-manager rounded-xl mt-4">
-    <v-card-title class="d-flex align-center flex-wrap ga-2">
-      NPEP 设备互联
-      <v-spacer />
+    <v-card-title class="npep-manager-header">
+      <div>
+        <div class="npep-eyebrow">
+          学校设备 · NPEP
+        </div>
+        <h2>NPEP 设备互联</h2>
+        <p>{{ schoolName }} · 先核对设备，再处理连接与配置。</p>
+      </div>
       <v-btn
         :loading="busy"
-        variant="text"
+        prepend-icon="mdi-refresh"
+        variant="tonal"
         @click="refresh"
       >
         刷新互联设备
       </v-btn>
     </v-card-title>
     <v-card-text>
-      <p class="mb-3">
-        {{ schoolName }} · 配对后可查看设备状态、下发通知、切换考试／日常模式并管理原生噪音监测；实际执行以设备回执为准。
-      </p>
       <v-alert
         v-if="error"
         type="error"
@@ -39,128 +42,67 @@
       >
         刷新未完成，以下为上次成功加载的记录，请勿视为实时状态。
       </v-alert>
-      <NpepPairingAccess
-        :school-id="schoolId"
-        :term-id="termId"
-        :bindings="bindings"
-      />
-      <NpepNoiseSchedules
-        :school-id="schoolId"
-        :school-name="schoolName"
-        :term-id="termId"
-      />
-      <v-row>
-        <v-col
-          cols="12"
-          lg="4"
-        >
-          <h3 class="text-subtitle-1 mb-3">
-            关联本地设备
-          </h3>
-          <p class="mb-3">
-            先在大屏的 NPEduTools 中发起配对，将显示的短码输入这里。
-          </p>
-          <v-text-field
-            v-model="code"
-            label="8 位配对短码"
-            maxlength="9"
-            :disabled="busy || !!approved"
-            autocomplete="off"
-            variant="outlined"
-          />
-          <v-btn
-            :disabled="busy || !!approved || !loaded"
-            @click="resolve"
-          >
-            核对配对申请
-          </v-btn>
-          <div
-            v-if="candidate"
-            class="npep-candidate mt-4"
-          >
-            <p>申请设备：{{ candidate.deviceName }}</p>
-            <p>软件版本：{{ candidate.appVersion }}</p>
-            <p>申请到期：{{ time(candidate.expiresAt) }}</p>
-            <v-alert
-              v-if="expired"
-              type="warning"
-              variant="tonal"
-              class="my-2"
-            >
-              申请已过期，请在设备上重新发起配对。
-            </v-alert>
-            <template v-if="!approved">
-              <v-select
-                v-model="bindingId"
-                :items="bindingOptions"
-                label="关联的大屏与班级"
-                :disabled="busy || !!expired"
-                variant="outlined"
-                class="mt-3"
-              />
-              <p v-if="!bindingOptions.length">
-                没有可用大屏，请先为当前学期的有效班级创建并启用大屏账号。
-              </p>
-              <v-checkbox
-                v-model="confirmed"
-                :disabled="busy || !!expired"
-                label="已核对设备、学校和班级，同意配对并授权学校互联功能"
-                hide-details
-              />
-              <v-btn
-                color="primary"
-                :disabled="busy || !confirmed || !bindingId || !!expired"
-                class="mt-2"
-                @click="approve"
-              >
-                批准并等待现场确认
-              </v-btn>
-            </template>
-            <template v-else>
-              <p class="mt-3">
-                {{ approved.schoolName }} · {{ approved.administrativeClassName }} · {{ approved.screenBindingName }}
-              </p>
-              <v-btn
-                :disabled="busy || !!expired"
-                variant="text"
-                class="mt-2"
-                @click="cancel"
-              >
-                取消此次配对
-              </v-btn>
-              <v-btn
-                :disabled="busy"
-                variant="text"
-                class="mt-2"
-                @click="newPairing"
-              >
-                核对另一台设备
-              </v-btn>
-            </template>
+      <section
+        class="npep-overview"
+        aria-labelledby="npep-devices-title"
+      >
+        <div class="npep-section-heading mb-4">
+          <div>
+            <h3 id="npep-devices-title">
+              已登记的互联设备
+            </h3>
+            <p>先核对设备归属与最近观测；远程操作是否执行，以设备回执为准。</p>
           </div>
-        </v-col>
-        <v-col
-          cols="12"
-          lg="8"
-        >
-          <h3 class="text-subtitle-1 mb-3">
-            已登记的互联设备
-          </h3>
-          <p class="text-caption mb-3">
-            点击“刷新互联设备”查询最新状态。“在线”表示查询时最近一分钟收到上报；观测过时后会提示刷新，不据此断言设备已离线。失联不代表软件已退出，自动录制已启用也不代表正在录制。
-          </p>
-          <p v-if="loaded && !devices.length && !stale">
-            当前没有已登记的互联设备。
-          </p>
-          <v-card
-            v-for="device in devices"
-            :key="device.deviceId"
-            variant="outlined"
-            class="npep-device mb-3"
+          <v-chip
+            v-if="loaded"
+            variant="tonal"
+            color="primary"
           >
-            <v-card-text>
-              <div class="d-flex align-center flex-wrap ga-2 mb-2">
-                <strong>{{ device.deviceName }}</strong>
+            已加载 {{ devices.length }} 台{{ nextCursor ? ' · 还有更多' : '' }}
+          </v-chip>
+        </div>
+        <p class="npep-observation-help mb-4">
+          “在线”只表示查询时最近一分钟收到上报；观测过时请刷新。失联不代表软件已退出，自动录制已启用也不代表正在录制。
+        </p>
+        <div
+          v-if="loaded && !devices.length && !stale"
+          class="npep-empty"
+        >
+          <v-icon
+            icon="mdi-monitor-off"
+            color="primary"
+            size="38"
+          />
+          <strong>当前没有已登记的互联设备。</strong>
+          <p>先开放对应班级大屏的网页配对，再由现场安装人员完成连接。</p>
+          <v-btn
+            color="primary"
+            variant="tonal"
+            @click="openScreenConfiguration"
+          >
+            前往班级大屏网页配对
+          </v-btn>
+        </div>
+        <v-card
+          v-for="device in devices"
+          :key="device.deviceId"
+          variant="outlined"
+          class="npep-device mb-3"
+        >
+          <v-card-text class="pa-5">
+            <div class="npep-device-header">
+              <div class="npep-device-heading">
+                <v-icon
+                  icon="mdi-desktop-tower-monitor"
+                  color="primary"
+                  size="28"
+                />
+                <div>
+                  <h4>{{ device.deviceName }}</h4>
+                  <p>{{ bindingName(device) }}</p>
+                </div>
+              </div>
+              <div class="npep-device-badges">
                 <v-chip size="small">
                   {{ npepStateName(effectiveState(device)) }}
                 </v-chip>
@@ -171,11 +113,20 @@
                   {{ connectivity(device) }}
                 </v-chip>
               </div>
-              <p>{{ bindingName(device) }}</p>
+            </div>
+            <div class="npep-device-observation">
+              <p>最近观测：{{ device.lastSeenAt ? time(device.lastSeenAt) : '尚未上报' }}</p>
+              <p v-if="device.status">
+                上次观测模式：{{ npepModeName(device.status.mode) }}；录制状态：{{ npepRecordingName(device.status.recording) }}；自动录制：{{ npepAutomaticName(device.status.automaticRecording) }}。
+              </p>
+              <p v-else>
+                尚未收到运行状态上报。
+              </p>
+            </div>
+            <div class="npep-device-actions">
               <v-btn
                 :disabled="busy || stale || effectiveState(device) !== 'ACTIVE'"
                 variant="tonal"
-                class="my-2"
                 @click="runtimeDevice = device"
               >
                 考试模式
@@ -183,7 +134,6 @@
               <v-btn
                 :disabled="busy || stale || effectiveState(device) !== 'ACTIVE'"
                 variant="tonal"
-                class="ma-2"
                 @click="planDevice = device"
               >
                 考试方案
@@ -191,23 +141,26 @@
               <v-btn
                 :disabled="busy || stale || effectiveState(device) !== 'ACTIVE'"
                 variant="tonal"
-                class="ma-2"
                 @click="noiseDevice = device"
               >
                 噪音报告
               </v-btn>
-              <p>最近观测：{{ device.lastSeenAt ? time(device.lastSeenAt) : '尚未上报' }}</p>
+              <v-btn
+                variant="text"
+                :aria-expanded="expandedDeviceId === device.deviceId"
+                :aria-controls="`npep-device-detail-${device.deviceId}`"
+                @click="expandedDeviceId = expandedDeviceId === device.deviceId ? null : device.deviceId"
+              >
+                {{ expandedDeviceId === device.deviceId ? '收起设备详情' : '查看设备详情' }}
+              </v-btn>
+            </div>
+            <div
+              v-if="expandedDeviceId === device.deviceId"
+              :id="`npep-device-detail-${device.deviceId}`"
+              class="npep-device-details"
+            >
               <p>授权到期：{{ time(device.credentialExpiresAt) }}</p>
-              <p
-                v-if="device.status"
-                class="mt-2"
-              >
-                上次观测模式：{{ npepModeName(device.status.mode) }}；录制状态：{{ npepRecordingName(device.status.recording) }}；自动录制：{{ npepAutomaticName(device.status.automaticRecording) }}。
-              </p>
-              <p
-                v-if="device.status"
-                class="text-caption"
-              >
+              <p v-if="device.status">
                 NPEduTools {{ device.status.appVersion }} · ClassIsland：{{ bridge(device.status.classIsland) }} · ExamAware：{{ bridge(device.status.examAware) }}
               </p>
               <v-btn
@@ -215,22 +168,168 @@
                 :disabled="busy || stale"
                 color="error"
                 variant="text"
-                class="mt-2"
                 @click="revoking = device"
               >
                 撤销互联授权
               </v-btn>
-            </v-card-text>
-          </v-card>
-          <v-btn
-            v-if="nextCursor"
-            :disabled="busy || stale"
-            @click="more"
-          >
-            加载更多互联设备
-          </v-btn>
-        </v-col>
-      </v-row>
+            </div>
+          </v-card-text>
+        </v-card>
+        <v-btn
+          v-if="nextCursor"
+          :disabled="busy || stale"
+          variant="tonal"
+          @click="more"
+        >
+          加载更多互联设备
+        </v-btn>
+      </section>
+      <section
+        ref="configurationSection"
+        class="npep-configuration mt-8"
+        aria-labelledby="npep-configuration-title"
+      >
+        <div class="npep-section-heading mb-4">
+          <div>
+            <h3 id="npep-configuration-title">
+              连接与配置
+            </h3>
+            <p>按实际任务展开设置。班级大屏网页配对和旧版桌面短码配对是两条不同流程。</p>
+          </div>
+        </div>
+        <v-expansion-panels
+          v-model="openConfiguration"
+          multiple
+          class="npep-configuration-panels"
+        >
+          <v-expansion-panel value="screen">
+            <v-expansion-panel-title>
+              <div><strong>班级大屏网页配对</strong><span>开放现有大屏，现场由网页生成一次性码</span></div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text eager>
+              <NpepPairingAccess
+                :school-id="schoolId"
+                :term-id="termId"
+                :bindings="bindings"
+              />
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+          <v-expansion-panel value="legacy">
+            <v-expansion-panel-title>
+              <div><strong>旧版桌面短码配对</strong><span>仅用于从 NPEduTools 桌面端发起的配对申请</span></div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text eager>
+              <div
+                class="npep-legacy"
+              >
+                <v-row>
+                  <v-col
+                    cols="12"
+                    lg="12"
+                  >
+                    <h3 class="text-subtitle-1 mb-3">
+                      关联本地设备
+                    </h3>
+                    <p class="mb-3">
+                      先在大屏的 NPEduTools 中发起配对，将显示的短码输入这里。
+                    </p>
+                    <v-text-field
+                      v-model="code"
+                      label="8 位配对短码"
+                      maxlength="9"
+                      :disabled="busy || !!approved"
+                      autocomplete="off"
+                      variant="outlined"
+                    />
+                    <v-btn
+                      :disabled="busy || !!approved || !loaded"
+                      @click="resolve"
+                    >
+                      核对配对申请
+                    </v-btn>
+                    <div
+                      v-if="candidate"
+                      class="npep-candidate mt-4"
+                    >
+                      <p>申请设备：{{ candidate.deviceName }}</p>
+                      <p>软件版本：{{ candidate.appVersion }}</p>
+                      <p>申请到期：{{ time(candidate.expiresAt) }}</p>
+                      <v-alert
+                        v-if="expired"
+                        type="warning"
+                        variant="tonal"
+                        class="my-2"
+                      >
+                        申请已过期，请在设备上重新发起配对。
+                      </v-alert>
+                      <template v-if="!approved">
+                        <v-select
+                          v-model="bindingId"
+                          :items="bindingOptions"
+                          label="关联的大屏与班级"
+                          :disabled="busy || !!expired"
+                          variant="outlined"
+                          class="mt-3"
+                        />
+                        <p v-if="!bindingOptions.length">
+                          没有可用大屏，请先为当前学期的有效班级创建并启用大屏账号。
+                        </p>
+                        <v-checkbox
+                          v-model="confirmed"
+                          :disabled="busy || !!expired"
+                          label="已核对设备、学校和班级，同意配对并授权学校互联功能"
+                          hide-details
+                        />
+                        <v-btn
+                          color="primary"
+                          :disabled="busy || !confirmed || !bindingId || !!expired"
+                          class="mt-2"
+                          @click="approve"
+                        >
+                          批准并等待现场确认
+                        </v-btn>
+                      </template>
+                      <template v-else>
+                        <p class="mt-3">
+                          {{ approved.schoolName }} · {{ approved.administrativeClassName }} · {{ approved.screenBindingName }}
+                        </p>
+                        <v-btn
+                          :disabled="busy || !!expired"
+                          variant="text"
+                          class="mt-2"
+                          @click="cancel"
+                        >
+                          取消此次配对
+                        </v-btn>
+                        <v-btn
+                          :disabled="busy"
+                          variant="text"
+                          class="mt-2"
+                          @click="newPairing"
+                        >
+                          核对另一台设备
+                        </v-btn>
+                      </template>
+                    </div>
+                  </v-col>
+                </v-row>
+              </div>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+          <v-expansion-panel value="noise">
+            <v-expansion-panel-title>
+              <div><strong>学校自习噪音排程</strong><span>按年级或班级设置，保存后到设备报告核对执行</span></div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text eager>
+              <NpepNoiseSchedules
+                :school-id="schoolId"
+                :school-name="schoolName"
+                :term-id="termId"
+              />
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
+      </section>
     </v-card-text>
     <v-dialog
       :model-value="!!noiseDevice"
@@ -316,7 +415,7 @@
 </template>
 
 <script setup>
-import {ref, toRef, watch} from "vue";
+import {nextTick, ref, toRef, watch} from "vue";
 import NpepRuntimeControl from './NpepRuntimeControl.vue';
 import NpepExamPlanControl from './NpepExamPlanControl.vue';
 import NpepNoiseReports from './NpepNoiseReports.vue';
@@ -330,10 +429,13 @@ const manager = useNpepManager(toRef(props, "schoolId"));
 const {devices, bindings, candidate, approved, code, bindingId, busy, error, message, loaded, stale, nextCursor, now,
   expired, bindingOptions, refresh, more, resolve, approve, cancel, revoke} = manager;
 const confirmed = ref(false), revoking = ref(null);
+const openConfiguration = ref([]);
+const expandedDeviceId = ref(null);
+const configurationSection = ref(null);
 const runtimeDevice = ref(null);
 const planDevice = ref(null);
 const noiseDevice = ref(null);
-watch(() => props.schoolId, () => { runtimeDevice.value = null; planDevice.value = null; noiseDevice.value = null; });
+watch(() => props.schoolId, () => { runtimeDevice.value = null; planDevice.value = null; noiseDevice.value = null; openConfiguration.value = []; expandedDeviceId.value = null; });
 watch([candidate, bindingId, () => props.schoolId], () => { confirmed.value = false; revoking.value = null; });
 const time = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString("zh-CN") : "未知";
 const effectiveState = device => device.state === "ACTIVE" && Date.parse(device.credentialExpiresAt) <= now.value ? "EXPIRED" : device.state;
@@ -344,6 +446,11 @@ const bindingName = device => {
   return screen ? `${screen.name} · ${screen.administrativeClass?.name || '班级资料暂缺'}` : "原大屏资料不可用";
 };
 const bridge = value => ({READY: "已连接", DISCONNECTED: "未连接", UNKNOWN: "未知"}[value?.connection] || "未知");
+async function openScreenConfiguration() {
+  openConfiguration.value = [...new Set([...openConfiguration.value, 'screen'])];
+  await nextTick();
+  configurationSection.value?.scrollIntoView({block: 'start'});
+}
 function newPairing() { candidate.value = null; approved.value = null; bindingId.value = ""; code.value = ""; message.value = ""; }
 async function confirmRevoke() {
   const device = revoking.value;
@@ -354,6 +461,49 @@ async function confirmRevoke() {
 </script>
 
 <style scoped>
-.npep-device-manager { overflow-wrap: anywhere; }
+.npep-device-manager { overflow-wrap: anywhere; scroll-margin-top: 88px; }
 .npep-device-manager p { line-height: 1.7; }
+.npep-manager-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 28px 28px 12px;
+  white-space: normal;
+}
+.npep-eyebrow { color: rgb(var(--v-theme-primary)); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.npep-manager-header h2 { margin-top: 4px; font-size: clamp(24px, 2vw, 30px); font-weight: 750; }
+.npep-manager-header p { margin-top: 6px; color: rgba(var(--v-theme-on-surface), .7); font-size: 14px; }
+.npep-device-manager > :deep(.v-card-text) { padding: 12px 28px 28px; }
+.npep-section-heading { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.npep-section-heading h3 { font-size: 21px; font-weight: 750; }
+.npep-section-heading p { margin-top: 4px; color: rgba(var(--v-theme-on-surface), .68); font-size: 14px; }
+.npep-observation-help { color: rgba(var(--v-theme-on-surface), .68); font-size: 13px; }
+.npep-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 26px; border: 1px dashed rgba(var(--v-border-color), .28); border-radius: 16px; }
+.npep-empty strong { font-size: 18px; }
+.npep-empty p { margin: 0; color: rgba(var(--v-theme-on-surface), .7); }
+.npep-device { border-color: rgba(var(--v-border-color), .2) !important; }
+.npep-device-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.npep-device-heading { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.npep-device-heading h4 { font-size: 19px; font-weight: 750; line-height: 1.3; }
+.npep-device-heading p { margin-top: 3px; color: rgba(var(--v-theme-on-surface), .68); font-size: 14px; }
+.npep-device-badges, .npep-device-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.npep-device-observation { margin: 16px 0; padding: 13px 16px; border-radius: 12px; background: rgba(var(--v-theme-on-surface), .045); font-size: 14px; }
+.npep-device-observation p + p { margin-top: 4px; }
+.npep-device-details { margin-top: 16px; padding: 16px; border-top: 1px solid rgba(var(--v-border-color), .2); }
+.npep-device-details p + p { margin-top: 5px; }
+.npep-device-details :deep(.v-btn) { margin-top: 8px; }
+.npep-configuration-panels :deep(.v-expansion-panel) { border: 1px solid rgba(var(--v-border-color), .16); border-radius: 14px !important; }
+.npep-configuration-panels :deep(.v-expansion-panel-title) { min-height: 70px; }
+.npep-configuration-panels :deep(.v-expansion-panel-title > div) { display: grid; gap: 3px; }
+.npep-configuration-panels :deep(.v-expansion-panel-title strong) { font-size: 16px; }
+.npep-configuration-panels :deep(.v-expansion-panel-title span) { color: rgba(var(--v-theme-on-surface), .65); font-size: 13px; }
+.npep-legacy { max-width: 740px; }
+@media (max-width: 600px) {
+  .npep-device-manager { scroll-margin-top: 150px; }
+  .npep-manager-header { padding: 20px 18px 10px; }
+  .npep-device-manager > :deep(.v-card-text) { padding: 10px 18px 20px; }
+  .npep-device-actions :deep(.v-btn) { margin: 0; }
+}
 </style>

@@ -22,6 +22,7 @@ test("NPEP school UI approves a real pairing and revokes the confirmed PostgreSQ
   await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
   const panel = page.locator(".npep-device-manager");
   await expect(panel).toContainText("当前没有已登记");
+  await panel.getByRole("button", {name: /旧版桌面短码配对/}).click();
   await panel.getByLabel("8 位配对短码").fill(created.data.userCode);
   await panel.getByRole("button", {name: "核对配对申请", exact: true}).click();
   await expect(panel.locator(".npep-candidate")).toContainText("真实互联测试设备");
@@ -47,6 +48,7 @@ test("NPEP school UI approves a real pairing and revokes the confirmed PostgreSQ
   await expect(panel.locator(".npep-device")).toContainText("在线");
   await expect(panel.locator(".npep-device")).toContainText("录制状态：未录制");
   await panel.screenshot({path: "test-results/npep-manager.png"});
+  await panel.getByRole("button", {name: "查看设备详情", exact: true}).click();
   await panel.getByRole("button", {name: "撤销互联授权", exact: true}).click();
   await page.getByRole("button", {name: "确认撤销互联授权", exact: true}).click();
   await expect(panel.locator(".npep-device")).toContainText("已撤销");

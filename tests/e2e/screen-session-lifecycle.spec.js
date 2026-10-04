@@ -30,6 +30,22 @@ test.beforeEach(async ({request}) => {
   await request.post(`${api}/__test/reset`);
 });
 
+test("idle board survives scheduled display timer ticks and reload without a return lease", async ({browser}) => {
+  const s = await screenBrowser(browser);
+  try {
+    await s.page.clock.install({time: new Date("2026-10-04T12:00:00+08:00")});
+    await s.page.goto(origin);
+    await expect(s.page.getByRole("button", {name: "课堂工具", exact: true}).first()).toBeVisible();
+    await s.page.clock.fastForward(16000);
+    await expect(s.page.locator(".scheduled-noise-display")).not.toBeVisible();
+    expect(s.errors).toEqual([]);
+    await s.page.reload();
+    await expect(s.page.getByRole("button", {name: "课堂工具", exact: true}).first()).toBeVisible();
+    await s.page.clock.fastForward(2000);
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
 test("temporary screen exit expires across settings and clears teacher credentials while preserving binding", async ({browser}) => {
   const s = await screenBrowser(browser);
   try {

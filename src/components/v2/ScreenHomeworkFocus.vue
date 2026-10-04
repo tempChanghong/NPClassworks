@@ -143,7 +143,7 @@ watch(() => publication.value ? JSON.stringify([publication.value.id, publicatio
   publication.value.dueAt, publication.value.subjectId, publication.value.isCertified, targetNames.value]) : null, (value, previous) => {
   if (opened.value && value && previous && JSON.parse(value)[0] === JSON.parse(previous)[0]) updated.value = true;
 });
-defineExpose({open});
+defineExpose({open, opened});
 </script>
 <style scoped>
 .focus-heading { flex: 0 0 auto; white-space: normal; overflow-wrap: anywhere; }

@@ -18,7 +18,7 @@ const reports=[scheduledSession,unknownSession].map(sessionId=>({sessionId,start
 let runtimeView={supported:true,online:true,applied:true,sessions:[],policy:{source:'Grade',version:'a'.repeat(64),rules:[{days:[4],start:'19:00',end:'20:00'}]},
   status:{source:'Grade',owner:'None',reason:'WINDOW_SKIPPED',schoolNow:'2026-10-01T19:30:00.000',clockReady:true,dateNeedsReview:false,
     window:schoolWindow,next:null,leaseRemainingSeconds:80000},commands:[]};
-let conflict=false;
+let conflict=false, reportFailure=false, scheduleFailure=false;
 const classes=[{id:'one',name:'高二一班',gradeId:'grade',pairedDevices:1},{id:'two',name:'高二二班',gradeId:'grade',pairedDevices:0}];
 const catalog=()=>({termId:'term',terms:[{id:'term',name:'测试学期'}],grades:[{id:'grade',name:'高二'}],classes,policies,executionEnabled:true});
 const port=await new Promise((done,reject)=>{const probe=portProbe();probe.once('error',reject);probe.listen(0,'127.0.0.1',()=>{const p=probe.address().port;probe.close(e=>e?reject(e):done(p));});});
@@ -26,14 +26,20 @@ const server=await createServer({configFile:false,envFile:false,root,cacheDir:re
   resolve:{alias:{'@':resolve(root,'src')}},optimizeDeps:{entries:['src/components/admin/NpepNoiseSchedules.vue'],include:['vue','vuetify','vuetify/components','vuetify/directives']},
   plugins:[vue(),{name:'noise-schedule-fixture',configureServer(s){s.middlewares.use(async(req,res,next)=>{
     if(req.url==='/runtime-control'){let raw='';for await(const chunk of req)raw+=chunk;Object.assign(runtimeView,JSON.parse(raw));res.end('OK');return;}
-    if(req.url==='/fixture-control'){let raw='';for await(const chunk of req)raw+=chunk;conflict=JSON.parse(raw).conflict;res.end('OK');return;}
+    if(req.url==='/fixture-control'){let raw='';for await(const chunk of req)raw+=chunk;const control=JSON.parse(raw);
+      if(Object.hasOwn(control,'conflict'))conflict=control.conflict;
+      if(Object.hasOwn(control,'reportFailure'))reportFailure=control.reportFailure;
+      if(Object.hasOwn(control,'scheduleFailure'))scheduleFailure=control.scheduleFailure;
+      res.end('OK');return;}
     if(req.url?.startsWith('/api/v2/npep/')){
       let raw='';for await(const chunk of req)raw+=chunk;const body=raw?JSON.parse(raw):null;
-      requests.push({path:req.url,version:req.headers['x-npep-version'],body});
+      requests.push({method:req.method,path:req.url,version:req.headers['x-npep-version'],body});
       res.setHeader('Content-Type','application/json');
       const requestId=body?.requestId||req.headers['x-request-id'];
       if(req.url.includes('/screen/')||/^\/api\/v2\/npep\/schools\/school\/devices\/device\/noise(?:-schedule)?$/.test(req.url)) {
         const schedule=req.url.includes('noise-schedule');
+        if(reportFailure&&!schedule){res.statusCode=503;res.end(JSON.stringify({protocolVersion:'0.6',requestId,error:{code:'TEMPORARILY_UNAVAILABLE'}}));return;}
+        if(scheduleFailure&&schedule){res.statusCode=503;res.end(JSON.stringify({protocolVersion:'0.7',requestId,error:{code:'TEMPORARILY_UNAVAILABLE'}}));return;}
         if(body&&schedule) {
           resumeCount++;if(body.version!==runtimeView.policy.version||JSON.stringify(body.window)!==JSON.stringify(schoolWindow))throw new Error('Stale resume');
           runtimeView.status.reason='WINDOW_ACTIVE';runtimeView.status.owner='Schedule';
@@ -41,6 +47,9 @@ const server=await createServer({configFile:false,envFile:false,root,cacheDir:re
         }
         res.end(JSON.stringify({protocolVersion:schedule?'0.7':'0.6',requestId,serverTime:new Date().toISOString(),data:schedule?runtimeView:
           {provider:'native',online:true,status:{configured:true,state:'Stopped',currentDbfs:null,quality:'Good',deviceName:'Synthetic microphone'},commands:[],reports}}));return;
+      }
+      if(req.method==='GET'&&req.url==='/api/v2/npep/schools/school/noise-display-settings?termId=term'){
+        res.end(JSON.stringify({protocolVersion:'0.8',requestId,serverTime:new Date().toISOString(),data:{...catalog(),settings:[]}}));return;
       }
       if(body&&conflict){res.statusCode=409;res.end(JSON.stringify({protocolVersion:'0.7',requestId,error:{code:'SCHEDULE_VERSION_CONFLICT'}}));return;}
       let data=catalog();
@@ -74,7 +83,8 @@ const server=await createServer({configFile:false,envFile:false,root,cacheDir:re
         import Panel from '/src/components/admin/NpepNoiseReports.vue';import {saveAccountTokens,clearClassroomScreenToken} from '/src/utils/classworksV2Client.js';
         clearClassroomScreenToken();
         saveAccountTokens({accessToken:'isolated-access',refreshToken:'isolated-session'});
-        createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{class:'pa-6'},()=>h(Panel,{schoolId:'school',deviceId:'device',deviceName:'隔离测试设备'})))}).use(createVuetify({components,directives})).mount('#app');
+        const vuetify=createVuetify({components,directives});window.fixtureSetReportTheme=name=>{vuetify.theme.global.name.value=name;};
+        createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{class:'pa-6'},()=>h(Panel,{schoolId:'school',deviceId:'device',deviceName:'隔离测试设备'})))}).use(vuetify).mount('#app');
       </script></html>`));return;
     }
     if(req.url!=='/schedule-fixture')return next();
@@ -82,7 +92,8 @@ const server=await createServer({configFile:false,envFile:false,root,cacheDir:re
       import {createApp,h} from 'vue';import {createVuetify} from 'vuetify';import * as components from 'vuetify/components';import * as directives from 'vuetify/directives';import 'vuetify/styles';import '@mdi/font/css/materialdesignicons.css';
       import Panel from '/src/components/admin/NpepNoiseSchedules.vue';import {saveAccountTokens} from '/src/utils/classworksV2Client.js';
       saveAccountTokens({accessToken:'isolated-access',refreshToken:'isolated-session'});
-      createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{class:'pa-6'},()=>h(Panel,{schoolId:'school',schoolName:'隔离测试学校',termId:'term'})))}).use(createVuetify({components,directives})).mount('#app');
+      const vuetify=createVuetify({components,directives});window.fixtureSetScheduleTheme=name=>{vuetify.theme.global.name.value=name;};
+      createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{class:'pa-6'},()=>h(Panel,{schoolId:'school',schoolName:'隔离测试学校',termId:'term'})))}).use(vuetify).mount('#app');
     </script></html>`));
   });}}],server:{host:'127.0.0.1',port,strictPort:true,hmr:false},define:{'import.meta.env.VITE_SERVER_URL':'""','import.meta.env.VITE_DEFAULT_KV_SERVER':'""'}});
 let browser, page;
@@ -120,7 +131,18 @@ try{
   await page.getByRole('button',{name:'保存排程',exact:true}).click();
   await expect(page.getByText(/规则已保存，等待支持排程的桌面确认/)).toBeVisible();
   await expect(page.getByRole('button',{name:'保存排程',exact:true})).toBeDisabled();
+  await page.waitForTimeout(350);
   await page.screenshot({path:resolve(output,'grade-saved.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  if(!(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)))throw new Error('Schedule editor overflows narrow viewport');
+  await expect(page.getByRole('button',{name:'删除时段 1'})).toBeVisible();
+  await page.screenshot({path:resolve(output,'grade-saved-mobile.png'),fullPage:true});
+  await page.evaluate(()=>window.fixtureSetScheduleTheme('dark'));
+  await expect.poll(()=>page.locator('.noise-schedule-editor').evaluate(element=>window.getComputedStyle(element).backgroundColor)).toBe('rgb(33, 33, 33)');
+  await page.screenshot({path:resolve(output,'grade-saved-mobile-dark.png'),fullPage:true});
+  await page.evaluate(()=>window.fixtureSetScheduleTheme('light'));
+  await expect.poll(()=>page.locator('.noise-schedule-editor').evaluate(element=>window.getComputedStyle(element).backgroundColor)).toBe('rgb(255, 255, 255)');
+  await page.setViewportSize({width:1280,height:1050});
   await selectOption('配置范围','行政班');
   await page.getByRole('button',{name:'预览影响',exact:true}).click();
   await expect(page.getByText(/范围内 1 个班级/)).toBeVisible();
@@ -131,13 +153,23 @@ try{
   await page.getByRole('button',{name:'保存排程',exact:true}).click();
   await expect(page.getByText(/草稿已保留/)).toBeVisible();
   await expect(page.getByRole('button',{name:'保存排程',exact:true})).toBeDisabled();
+  await page.waitForTimeout(350);
   await page.screenshot({path:resolve(output,'class-conflict.png'),fullPage:true});
   await page.request.post(origin+'/fixture-control',{data:{conflict:false}});
   await page.getByRole('button',{name:'重新加载服务器配置',exact:true}).click();
   await expect(page.getByText(/其他管理员已更新此配置/)).toHaveCount(0);
   await expect(page.getByRole('button',{name:'预览影响',exact:true})).toBeEnabled();
   if(errors.length||await page.evaluate(()=>window.__microphones)!==0)throw new Error('UI regression: '+errors.join(';'));
-  if(saves.length!==1||requests.some(r=>r.version!=='0.7'))throw new Error('Unexpected writes or protocol version');
+  const schedulePath='/api/v2/npep/schools/school/noise-schedules';
+  const displaySettingsPath='/api/v2/npep/schools/school/noise-display-settings?termId=term';
+  const unexpectedRequests=requests.filter(r=>!([
+    ['GET',`${schedulePath}?termId=term`,'0.7'],
+    ['POST',`${schedulePath}/preview`,'0.7'],
+    ['POST',schedulePath,'0.7'],
+    ['GET',displaySettingsPath,'0.8'],
+  ].some(([method,path,version])=>r.method===method&&r.path===path&&r.version===version)
+    && (r.method==='GET'?r.body===null:r.body!==null)));
+  if(saves.length!==1||unexpectedRequests.length)throw new Error(`Unexpected writes or protocol version: ${JSON.stringify({saves:saves.length,unexpectedRequests})}`);
   await page.goto(origin+'/execution-fixture');
   await expect(page.getByText(/本次已手动停止/)).toBeVisible();
   await expect(page.getByText(/2026-10-01 19:30:00/)).toBeVisible();
@@ -164,7 +196,29 @@ try{
   await expect(page.getByRole('article',{name:`统计报告 ${scheduledSession}`,exact:true}).getByText('学校自动排程',{exact:true})).toBeVisible();
   await expect(page.getByRole('article',{name:`统计报告 ${unknownSession}`,exact:true}).getByText('来源未确认',{exact:true})).toBeVisible();
   await expect(page.getByText(/按当时规则执行/)).toBeVisible();
+  await expect(page.getByRole('button',{name:'刷新报告',exact:true})).toBeEnabled();
   await page.screenshot({path:resolve(output,'report-sources.png'),fullPage:true});
+  await page.setViewportSize({width:900,height:950});
+  await page.screenshot({path:resolve(output,'report-sources-900.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  if(!(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)))throw new Error('Noise report overflows narrow viewport');
+  await page.screenshot({path:resolve(output,'report-sources-mobile.png'),fullPage:true});
+  await page.evaluate(()=>window.fixtureSetReportTheme('dark'));
+  await expect.poll(()=>page.locator('.noise-admin-card').evaluate(element=>window.getComputedStyle(element).backgroundColor)).toBe('rgb(33, 33, 33)');
+  await page.screenshot({path:resolve(output,'report-sources-mobile-dark.png'),fullPage:true});
+  await page.request.post(origin+'/fixture-control',{data:{reportFailure:true}});
+  await page.getByRole('button',{name:'刷新报告',exact:true}).click();
+  await expect(page.getByText(/以下为上次成功加载的报告/)).toBeVisible();
+  await expect(page.getByRole('article',{name:`统计报告 ${scheduledSession}`,exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByText(/报告加载失败/)).toBeVisible();
+  await expect(page.getByText('报告尚未完成加载，请刷新后再核对。',{exact:true})).toBeVisible();
+  await expect(page.getByText('尚无已上传的结束报告。监测结束并恢复连接后会补传。',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('年级排程',{exact:true})).toBeVisible();
+  await page.request.post(origin+'/fixture-control',{data:{scheduleFailure:true}});
+  await page.reload();
+  await expect(page.getByText(/排程状态未确认/)).toBeVisible();
+  await expect(page.getByText('正在核对排程接口…',{exact:true})).toHaveCount(0);
   if(errors.length||await page.evaluate(()=>window.__microphones)!==0)throw new Error('Runtime UI regression: '+errors.join(';'));
   console.log('PASS browser: actual management editing and native schedule status/resume client, report source joins in screen/admin, late metadata, historical policy and offline retention, school calendar carrier, zero browser microphone requests. Fixtures only.');
 }catch(error){

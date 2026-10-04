@@ -42,7 +42,8 @@ const server = await createServer({configFile:false,envFile:false,root,cacheDir:
         calls.push({path:req.url,method:req.method,body});
         assert.equal(req.headers['x-npep-version'],'0.1');
         if(body&&contract){
-          const definition=req.url.includes('/screen/')?'issueScreenPairing':req.url.endsWith('/preview')?'previewPairingAccessBatch':'setPairingAccessBatch';
+          const definition=req.url.includes('/screen/')?'issueScreenPairing':req.url.includes('/screen-bindings/')?'setScreenPairingAccess'
+            :req.url.endsWith('/preview')?'previewPairingAccessBatch':'setPairingAccessBatch';
           assert.equal(contract.validate(definition,body),true,'Actual browser request must satisfy backend wire schema');
         }
         const requestId=body?.requestId||req.headers['x-request-id'];
@@ -58,6 +59,12 @@ const server = await createServer({configFile:false,envFile:false,root,cacheDir:
         }
         assert.equal(req.headers.authorization,'Bearer fixture-admin');assert.equal(req.headers['x-classworks-screen-token'],undefined);
         if(!body)return reply({items:screens.map(s=>({screenBindingId:s.id,enabled:s.enabled,revision:s.revision}))});
+        const single=/\/screen-bindings\/([^/]+)\/pairing-access$/.exec(req.url);
+        if(single){
+          const screen=screens.find(s=>s.id===decodeURIComponent(single[1]));assert.ok(screen);
+          assert.equal(body.expectedRevision,screen.revision);screen.enabled=body.enabled;screen.revision++;
+          return reply({screenBindingId:screen.id,enabled:screen.enabled,revision:screen.revision});
+        }
         const result=preview(body);
         if(req.url.endsWith('/preview'))return reply(result);
         assert.ok(req.url.endsWith('/batch'));assert.equal(body.previewDigest,'a'.repeat(64));
@@ -77,7 +84,8 @@ const server = await createServer({configFile:false,envFile:false,root,cacheDir:
         ${admin?"clearClassroomScreenToken();saveAccountTokens({accessToken:'fixture-admin',refreshToken:'fixture-session'});":"saveClassroomScreenToken('fixture-screen');"}
         const termId=ref('term');window.fixtureTerm=termId;
         const bindings=${JSON.stringify(screens.map(s=>({id:s.id,name:s.name,isActive:true,administrativeClass:{name:s.className,termId:'term',gradeId:s.gradeId,grade:{name:s.gradeId==='grade'?'高一':'高二'},isActive:true,term:{id:'term',status:'ACTIVE'}}})))};
-        createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{class:'pa-6'},()=>h(Panel,{schoolId:'school',termId:termId.value,bindings})))}).use(createVuetify({components,directives})).mount('#app');
+        const vuetify=createVuetify({components,directives});window.fixtureSetTheme=name=>{vuetify.theme.global.name.value=name;};
+        createApp({render:()=>h(components.VApp,{},()=>h(components.VMain,{class:'pa-6'},()=>h(Panel,{schoolId:'school',termId:termId.value,bindings})))}).use(vuetify).mount('#app');
       </script></html>`));
     } catch(error){errors.push(error.message);res.statusCode=500;res.end('Fixture failed');}
   });}}],server:{host:'127.0.0.1',port,strictPort:true,hmr:false},
@@ -105,14 +113,45 @@ try {
   await previewButton.click();await expect(admin.getByText(/有效大屏 1 台/)).toBeVisible();
   const apply=admin.getByRole('button',{name:'确认批量开放',exact:true});await expect(apply).toBeDisabled();
   await confirm.check();await expect(apply).toBeEnabled();
+  await admin.mouse.move(0,0);await admin.waitForTimeout(350);
+  await admin.screenshot({path:resolve(output,'admin-preauthorization-preview-desktop.png'),fullPage:true,animations:'disabled'});
+  await admin.setViewportSize({width:390,height:844});
+  assert.equal(await admin.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,'preauthorization preview must fit a narrow viewport');
+  await admin.screenshot({path:resolve(output,'admin-preauthorization-preview-mobile.png'),fullPage:true,animations:'disabled'});
+  await admin.evaluate(()=>window.fixtureSetTheme('dark'));
+  await expect(admin.locator('.v-application')).toHaveClass(/v-theme--dark/);
+  await admin.screenshot({path:resolve(output,'admin-preauthorization-preview-mobile-dark.png'),fullPage:true,animations:'disabled'});
+  await admin.evaluate(()=>window.fixtureSetTheme('light'));
+  await admin.setViewportSize({width:1280,height:1100});
   await select('网页配对','关闭');await expect(confirm).toHaveCount(0);
   await select('网页配对','开放');await previewButton.click();await confirm.check();await apply.click();
   await expect(admin.getByText(/已开放 1 台大屏的网页配对/)).toBeVisible();
   assert.equal(screens[0].enabled,true);assert.equal(screens[1].enabled,false);checks.push('grade preview, consent reset and apply');
+  await admin.mouse.move(0,0);await admin.waitForTimeout(350);
+  await admin.screenshot({path:resolve(output,'admin-preauthorization-saved.png'),fullPage:true,animations:'disabled'});
   await screen.getByRole('button',{name:'刷新授权状态',exact:true}).click();
   await screen.getByRole('button',{name:'生成配对码',exact:true}).click();
   await expect(screen.getByText('ABCD2345',{exact:true})).toBeVisible();
   await expect(screen.getByLabel('NPEduTools 服务提供商地址（后端）')).toHaveValue(origin);
+  await expect(screen.getByText(/剩余 \d+ 分 \d{2} 秒/)).toBeVisible();
+  await expect(screen.getByRole('button',{name:'重新生成配对码',exact:true})).toBeEnabled();
+  await screen.mouse.move(0,0);await screen.waitForTimeout(400);
+  await screen.setViewportSize({width:1920,height:1080});
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-1920.png'),fullPage:true});
+  await screen.setViewportSize({width:1366,height:768});
+  assert.equal(await screen.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,'pairing page must fit a 1366px classroom viewport');
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-1366.png'),fullPage:true});
+  await screen.setViewportSize({width:1280,height:1100});
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-desktop.png'),fullPage:true});
+  await screen.setViewportSize({width:390,height:844});
+  await expect(screen.getByText('ABCD2345',{exact:true})).toBeVisible();
+  assert.equal(await screen.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth),true,'pairing page must fit a narrow viewport');
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-narrow.png'),fullPage:true});
+  await screen.evaluate(()=>window.fixtureSetTheme('dark'));
+  await expect(screen.locator('.v-application')).toHaveClass(/v-theme--dark/);
+  await screen.screenshot({path:resolve(output,'screen-pairing-code-narrow-dark.png'),fullPage:true});
+  await screen.evaluate(()=>window.fixtureSetTheme('light'));
+  await screen.setViewportSize({width:1280,height:1100});
   await screen.getByRole('button',{name:'重新生成配对码',exact:true}).click();
   await expect(screen.getByText('WXYZ2345',{exact:true})).toBeVisible();
   await expect(screen.getByText('ABCD2345',{exact:true})).toHaveCount(0);
@@ -133,7 +172,10 @@ try {
   await expect(screen.getByRole('button',{name:'生成配对码',exact:true})).toBeDisabled();
   checks.push('conflict requires refresh; closing blocks screen');
   occupied=true;await screen.getByRole('button',{name:'刷新授权状态',exact:true}).click();
-  await expect(screen.getByText(/此大屏已有 NPEduTools 绑定/)).toBeVisible();checks.push('occupied binding cannot be replaced');
+  await expect(screen.getByRole('heading',{name:'这台大屏已连接设备'})).toBeVisible();checks.push('occupied binding cannot be replaced');
+  await admin.locator('.pairing-access-device').filter({hasText:'二班大屏'}).getByRole('button',{name:'开放网页配对'}).click();
+  await expect(admin.locator('.pairing-access-device').filter({hasText:'二班大屏'}).getByText('已开放',{exact:true})).toBeVisible();
+  assert.equal(screens[0].enabled,false);assert.equal(screens[1].enabled,true);checks.push('individual access changes only the selected screen');
   await select('网页配对','开放');await previewButton.click();await confirm.check();
   await admin.evaluate(()=>{window.fixtureTerm.value='other-term';});
   await expect(confirm).toHaveCount(0);await expect(admin.getByRole('button',{name:'确认批量开放',exact:true})).toHaveCount(0);

@@ -1,5 +1,5 @@
 // The selected provider survives a network error; a failed poll never opens a second microphone.
-export function createNativeNoiseController(api, publish, remember = {get: () => null, set: () => {}}, schedules = null) {
+export function createNativeNoiseController(api, publish, remember = {get: () => null, set: () => {}}, schedules = null, management = null) {
   let scope = '', epoch = 0, polling = false, state;
   let resumeBody = null;
   const empty = () => ({provider: 'checking', online: false, status: null, reports: [], commands: [], error: '', busy: false,
@@ -53,6 +53,30 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
       return false;
     } finally { if (current === epoch) { emit({busy: false}); await poll(); } }
   }
+  async function protectedStop(pin) {
+    if (!management || state.busy || !state.online || state.provider !== 'native' || !state.status?.sessionId)
+      return false;
+    const current = epoch, status = state.status;
+    let failure = '';
+    emit({busy: true, error: ''});
+    try {
+      await management.stop(pin, status);
+      if (current === epoch) emit({error: '已提交管理验证与停止请求，等待桌面执行回执。'});
+      return true;
+    } catch (e) {
+      failure = [404, 426].includes(e?.response?.status)
+        ? '当前互联服务不支持定时监测管理保护，停止请求未提交。'
+        : `停止请求未确认：${e?.response?.data?.error?.code || e.message}。请核对当前采集状态。`;
+      if (current === epoch) emit({error: failure});
+      return false;
+    } finally {
+      if (current === epoch) {
+        emit({busy: false});
+        await poll();
+        if (failure && current === epoch) emit({error: failure});
+      }
+    }
+  }
   state = empty();
   async function resumeSchedule() {
     const schedule=state.schedule;
@@ -70,5 +94,5 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
       return false;
     } finally { if(current===epoch) {emit({busy:false}); await poll();} }
   }
-  return {context, poll, command, resumeSchedule, snapshot: () => state};
+  return {context, poll, command, protectedStop, resumeSchedule, snapshot: () => state};
 }

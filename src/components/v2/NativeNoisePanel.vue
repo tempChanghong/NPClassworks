@@ -54,7 +54,7 @@
       </v-btn>
       <v-btn
         :disabled="!state.online || !active || pending || state.busy"
-        @click="nativeNoise.command('STOP')"
+        @click="scheduledCapture ? stopDialog = true : nativeNoise.command('STOP')"
       >
         停止监测
       </v-btn>
@@ -85,15 +85,61 @@
       :sessions="state.schedule?.sessions || []"
       :current-version="state.schedule?.policy?.version || ''"
     />
+    <v-dialog
+      v-model="stopDialog"
+      max-width="460"
+    >
+      <v-card class="rounded-xl">
+        <v-card-title>验证并停止定时监测</v-card-title>
+        <v-card-text>
+          输入本大屏 PIN。服务端和桌面会核对当前定时会话，停止成功后本时段不会自动重启。
+          <v-text-field
+            v-model="stopPin"
+            class="mt-4"
+            label="本大屏 PIN"
+            type="password"
+            autocomplete="off"
+            :error-messages="stopPinError"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn @click="stopDialog = false">
+            取消
+          </v-btn>
+          <v-btn
+            color="error"
+            :loading="state.busy"
+            :disabled="!stopPin"
+            @click="requestProtectedStop"
+          >
+            提交停止请求
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-card>
 </template>
 <script setup>
-import {computed} from 'vue';
+import {computed, ref, watch} from 'vue';
 import {nativeNoise, nativeNoiseState as state} from '@/utils/nativeNoise';
 import {stateName, qualityName, receiptName, time, level, signalHint} from '@/utils/nativeNoisePresentation';
 import NoiseReportList from '@/components/v2/NoiseReportList.vue';
 import NoiseScheduleStatus from '@/components/v2/NoiseScheduleStatus.vue';
 const active = computed(() => ['Starting', 'Active', 'Stopping'].includes(state.value.status?.state));
+const scheduledCapture = computed(() => state.value.schedule?.status?.owner === 'Schedule'
+  && state.value.schedule?.status?.sessionId === state.value.status?.sessionId);
+const stopDialog = ref(false);
+const stopPin = ref('');
+const stopPinError = ref('');
+watch(stopDialog, open => { if (!open) { stopPin.value = ''; stopPinError.value = ''; } });
+async function requestProtectedStop() {
+  if (!stopPin.value) { stopPinError.value = '请输入本大屏 PIN'; return; }
+  const accepted = await nativeNoise.protectedStop(stopPin.value);
+  stopPin.value = '';
+  if (accepted) stopDialog.value = false;
+  else stopPinError.value = state.value.error || '停止请求未确认';
+}
 const pending = computed(() => state.value.commands?.some(c => !c.receipt));
 const lastCommand = computed(() => state.value.commands?.at(-1));
 const hint = computed(() => state.value.online && state.value.status?.state === 'Active' && state.value.status?.quality === 'Good'

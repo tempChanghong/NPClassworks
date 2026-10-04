@@ -116,7 +116,10 @@
       </v-card-text>
     </v-card>
 
-    <ScreenNoiseStatus @open="$emit('noise')" />
+    <ScreenNoiseStatus
+      @open="$emit('noise')"
+      @display="scheduledNoiseDisplay?.openManually()"
+    />
     <HomeworkTomorrowButton
       ref="tomorrowTool"
       :class-name="className"
@@ -361,6 +364,13 @@
         </v-btn>
       </div>
     </div>
+    <ScreenScheduledNoiseDisplay
+      ref="scheduledNoiseDisplay"
+      :binding-id="bindingId"
+      :class-name="className"
+      :blocked="scheduledDisplayBlocked || copyModeOpen || notificationCenterOpen || copyModeSuspended || Boolean(focusTool?.opened)"
+      @details="$emit('noise')"
+    />
   </section>
 </template>
 
@@ -380,6 +390,7 @@ import HomeworkCorrectionsButton from "@/components/v2/HomeworkCorrectionsButton
 import OrganizedHomeworkFeed from "@/components/v2/OrganizedHomeworkFeed.vue";
 import ScreenNoticePopup from "@/components/v2/ScreenNoticePopup.vue";
 import ScreenNoiseStatus from "@/components/v2/ScreenNoiseStatus.vue";
+import ScreenScheduledNoiseDisplay from "@/components/v2/ScreenScheduledNoiseDisplay.vue";
 import BoardDateNavigator from "@/components/v2/BoardDateNavigator.vue";
 import ScreenSyncStatus from "@/components/v2/ScreenSyncStatus.vue";
 import HomeworkPrintButton from "@/components/v2/HomeworkPrintButton.vue";
@@ -409,8 +420,10 @@ import {
 } from "@/utils/screenDisplaySettings";
 
 defineEmits(["create", "edit", "history", "tools", "noise", "attendance", "copy-board", "settings", "exit", "diagnostics"]);
+defineProps({scheduledDisplayBlocked: Boolean});
 const store = useClassworksV2Store();
 const focusTool = ref(null);
+const scheduledNoiseDisplay = ref(null);
 const actionDock = ref(null);
 const dockHeight = ref(74);
 useResizeObserver(actionDock, () => {

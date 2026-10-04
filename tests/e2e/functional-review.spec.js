@@ -39,7 +39,10 @@ test("screen roster imports retain invalid paste and keep separately numbered na
     await expect(page.getByText("欧阳 小明", {exact: true})).toBeVisible();
     await page.getByRole("button", {name: "编辑学生名单", exact: true}).click();
     const dialog = page.getByRole("dialog").filter({hasText: "编辑行政班学生名单"});
+    await expect(dialog.getByLabel("批量追加名单", {exact: true})).toBeHidden();
+    await dialog.locator('summary').filter({hasText: '批量追加学生'}).click();
     const paste = dialog.getByLabel("批量追加名单", {exact: true});
+    await expect(paste).toBeVisible();
     for (const [text, message] of [["03\t", "姓名不能为空"], ["\t张三\n\t张三", "同名且未填写学号"]]) {
       await paste.fill(text);
       await dialog.getByRole("button", {name: "导入到名单", exact: true}).click();

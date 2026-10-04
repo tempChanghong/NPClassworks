@@ -27,3 +27,21 @@ test('remembered native provider survives page reload and old endpoint errors', 
   const c = createNativeNoiseController({screen: async () => { throw {response: {status: 404}}; }}, () => {}, {get: () => 'native', set: () => {}});
   c.context('screen'); await c.poll(); assert.equal(c.snapshot().provider, 'native'); assert.equal(c.snapshot().online, false);
 });
+
+test('protected scheduled STOP preserves PIN rejection after the status refresh', async () => {
+  let submitted = 0;
+  const live = {...view, status: {...view.status, sessionId: 'capture', state: 'Active'}};
+  const management = {stop: async pin => {
+    submitted++;
+    if (pin !== '725316') throw {response: {status: 401, data: {error: {code: 'SCREEN_PIN_INCORRECT'}}}};
+  }};
+  const c = createNativeNoiseController({screen: async () => live}, () => {},
+    {get: () => null, set: () => {}}, null, management);
+  c.context('screen');
+  await c.poll();
+  assert.equal(await c.protectedStop('000000'), false);
+  assert.match(c.snapshot().error, /SCREEN_PIN_INCORRECT/);
+  assert.equal(c.snapshot().status.state, 'Active');
+  assert.equal(await c.protectedStop('725316'), true);
+  assert.equal(submitted, 2);
+});

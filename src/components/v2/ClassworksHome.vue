@@ -379,6 +379,7 @@
     <template v-else-if="mode === 'screen'">
       <ClassroomScreenView
         v-if="store.screenSession"
+        :scheduled-display-blocked="screenOobePending || screenTemporarilyUnlocked || screenComposerDialog || historyDialog || classroomToolsDialog || screenExitDialog || publicationResultDialog || notificationDeliveryDialog || changePinDialog || store.selectionDialog"
         @create="openScreenComposer()"
         @edit="openScreenComposer"
         @history="openHistory($event, 'screen')"
