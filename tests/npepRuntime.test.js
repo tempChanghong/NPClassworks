@@ -78,3 +78,57 @@ test('web Daily request keeps its target and ID across a lost response and block
   await state.create('DAILY'); assert.deepEqual(requests[0], requests[1]);
   assert.equal(requests[1].target,'DAILY'); assert.equal(state.pending.value,null);
 });
+
+test('rejected remote switch keeps its failure visible after the status refresh succeeds', async () => {
+  const device = randomUUID(), path = routes(device);
+  h.routes.set(`POST ${path}/runtime-operations`, (_req, reply) => reply({error: {code: 'OPERATION_BUSY'}}, 409));
+  const {state} = await h.openComponent('/src/components/admin/NpepRuntimeControl.vue', {schoolId: 'school', deviceId: device});
+  await eventually(() => assert.ok(state.snapshot.value));
+  state.confirmed.value = true;
+  await state.create('DAILY');
+  assert.equal(state.pending.value, null);
+  assert.match(state.error.value, /已有切换任务正在执行/, 'a successful GET must not erase the rejected control request');
+  await state.refresh();
+  assert.match(state.error.value, /已有切换任务正在执行/, 'polling must keep the rejected request distinct from current device health');
+  h.routes.set(`POST ${path}/runtime-operations`, (req, reply) => reply(envelope(req.body.requestId, {operationId: randomUUID(), target: 'DAILY', state: 'QUEUED'}), 201, true));
+  state.confirmed.value = true; await state.create('DAILY');
+  assert.equal(state.error.value, '');
+});
+
+test('rapid opposite requests and an older poll cannot overwrite the post-command observation', async () => {
+  const device = randomUUID(), path = routes(device), stale = deferred(), posted = deferred(), requests = [];
+  const {state} = await h.openComponent('/src/components/admin/NpepRuntimeControl.vue', {schoolId: 'school', deviceId: device});
+  await eventually(() => assert.ok(state.snapshot.value));
+  h.routes.set(`GET ${path}/runtime-status`, async (req, reply) => { await stale.promise; reply(envelope(req.headers['x-request-id'], {...ready(), status: {...ready().status, runtimeMode: 'EXAM'}}), 200, true); });
+  const reading = state.refresh();
+  await eventually(() => assert.equal(h.requests.filter(r => r.path === `${path}/runtime-status`).length, 2));
+  h.routes.set(`POST ${path}/runtime-operations`, async (req, reply) => {
+    requests.push(req.body); await posted.promise;
+    reply(envelope(req.body.requestId, {operationId: randomUUID(), target: 'DAILY', state: 'QUEUED'}), 201, true);
+  });
+  state.confirmed.value = true;
+  const switching = state.create('DAILY');
+  await eventually(() => assert.equal(requests.length, 1));
+  await state.create('EXAM'); await state.create('DAILY');
+  assert.equal(requests.length, 1, 'a still-pending control request must not enqueue a duplicate or opposite target');
+  routes(device, {...ready(), status: {...ready().status, runtimeMode: 'DAILY'}});
+  posted.resolve(); await switching;
+  stale.resolve(); await reading;
+  assert.equal(state.snapshot.value.status.runtimeMode, 'DAILY');
+});
+
+test('historical successful exam receipt does not replace current daily or offline observations', async () => {
+  const device = randomUUID(), path = routes(device, {...ready(), status: {...ready().status, runtimeMode: 'DAILY'}});
+  h.routes.set(`GET ${path}/runtime-operations`, (req, reply) => reply(envelope(req.headers['x-request-id'], {
+    items: [{operationId: randomUUID(), target: 'EXAM', state: 'SUCCEEDED', evidence: {examAware: 'READY'}}], nextCursor: null,
+  }), 200, true));
+  const {state} = await h.openComponent('/src/components/admin/NpepRuntimeControl.vue', {schoolId: 'school', deviceId: device});
+  await eventually(() => assert.ok(state.snapshot.value));
+  assert.equal(state.snapshot.value.status.runtimeMode, 'DAILY');
+  assert.equal(state.operations.value[0].state, 'SUCCEEDED');
+  h.routes.set(`GET ${path}/runtime-status`, (_req, reply) => reply({error: {code: 'AUTH_REVOKED'}}, 403));
+  await state.refresh();
+  assert.equal(state.snapshot.value, null);
+  assert.equal(state.operations.value[0].state, 'SUCCEEDED', 'historical evidence remains historical when live access is revoked');
+  assert.ok(state.blocked.value);
+});
