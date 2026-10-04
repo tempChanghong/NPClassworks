@@ -483,6 +483,7 @@ export const npepExamPlanApi = {
   cancel: (school, device, operation, options) => npepAdminRequest('post', `${examPlanPath(school, device)}/${encodeURIComponent(operation)}/cancel`, {...options, version: '0.5', body: {}}),
 };
 export const npepAdminApi = {
+  overview: (schoolId, options) => npepAdminRequest('get', `${npepSchoolPath(schoolId)}/device-overview`, options),
   previewPairingAccessBatch: (schoolId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/pairing-access/preview`, {...options, body, requestId: body.requestId}),
   setPairingAccessBatch: (schoolId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/pairing-access/batch`, {...options, body, requestId: body.requestId}),
   pairingAccess: (schoolId, options) => npepAdminRequest('get', `${npepSchoolPath(schoolId)}/pairing-access`, options),

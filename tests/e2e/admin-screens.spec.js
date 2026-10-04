@@ -260,6 +260,107 @@ test("NPEP approval retries retain identity; device pagination, stale observatio
   } finally { await context.close(); }
 });
 
+test('NPEP school overview counts all pages, filters on server and keeps stale observations explicit', async ({browser}) => {
+  let fail = false, forbidden = false;
+  const requests = [];
+  const all = Array.from({length: 42}, (_, index) => ({
+    deviceId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    deviceName: index === 3 ? '三号工具' : `教室工具 ${index}`, screenBindingId: 'screen-a', bindingRevision: 1,
+    administrativeClassId: 'class-a', screenBindingName: '一班大屏', administrativeClassName: '一班', bindingChanged: false,
+    state: index === 41 ? 'REVOKED' : 'ACTIVE', connectivity: index < 35 ? 'ONLINE' : index < 40 ? 'OFFLINE' : 'UNKNOWN',
+    lastSeenAt: index === 40 ? null : new Date(Date.now() - (index < 35 ? 1000 : 120000)).toISOString(),
+    credentialExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+    issues: index >= 35 && index < 41 ? [index === 40 ? 'UNREPORTED' : 'OFFLINE'] : [],
+    status: {appVersion: 'preview', mode: 'DAILY', recording: 'IDLE', automaticRecording: 'ENABLED',
+      classIsland: {connection: 'READY'}, examAware: {connection: 'DISCONNECTED'}},
+  }));
+  const {page, context, errors} = await openAdmin(browser, 1100, 'ADMIN', {}, 'screens', async context => {
+    await context.route(`${api}/api/v2/npep/**`, async route => {
+      const req = route.request(), url = new URL(req.url()); requests.push(url);
+      const reply = data => route.fulfill({json: {protocolVersion: '0.1', requestId: req.headers()['x-request-id'], serverTime: new Date().toISOString(), data}});
+      if (url.pathname.endsWith('/info')) return reply({});
+      if (!url.pathname.endsWith('/device-overview')) return route.fulfill({status: 404, json: {error: {code: 'NOT_FOUND'}}});
+      if (forbidden) return route.fulfill({status: 403, json: {error: {code: 'SCHOOL_ADMIN_REQUIRED'}}});
+      if (fail) return route.fulfill({status: 503, json: {error: {code: 'TEMPORARILY_UNAVAILABLE'}}});
+      const filter = url.searchParams.get('filter'), search = url.searchParams.get('search');
+      const selected = all.filter(item => (filter === 'ALL' || filter === 'ATTENTION' && item.issues.length || filter === 'ONLINE' && item.connectivity === 'ONLINE' || filter === 'INACTIVE' && item.state !== 'ACTIVE') &&
+        [item.deviceName, item.screenBindingName, item.administrativeClassName].some(text => text.includes(search || '')));
+      const remaining = selected.filter(item => !url.searchParams.has('cursor') || item.deviceId > url.searchParams.get('cursor'));
+      const items = remaining.slice(0, 20);
+      return reply({asOf: new Date().toISOString(), summary: {total: 42, active: 41, online: 35, offline: 5, unreported: 1, attention: 6, inactive: 1},
+        matchedTotal: selected.length, items, nextCursor: remaining.length > 20 ? items.at(-1).deviceId : null});
+    });
+  });
+  try {
+    await page.getByRole('button', {name: '打开 NPEP 设备互联'}).click();
+    const panel = page.locator('.npep-device-manager'), overview = panel.locator('.device-operations');
+    await expect(panel.locator('.npep-device')).toHaveCount(20);
+    await expect(overview).toContainText('共 42 台匹配，已加载 20 台');
+    const downloaded = page.waitForEvent('download');
+    await overview.getByRole('button', {name: '导出诊断摘要'}).click();
+    const download = await downloaded;
+    expect(download.suggestedFilename()).toMatch(/^NPClassworks-NPEP-diagnostics-.*\.json$/);
+    const diagnostic = JSON.parse(await readFile(await download.path(), 'utf8'));
+    expect(diagnostic.kind).toBe('npep-school-overview-diagnostics');
+    expect(diagnostic.summary.total).toBe(42);
+    expect(diagnostic.exportedCount).toBe(20);
+    expect(diagnostic.hasMore).toBe(true);
+    expect(diagnostic.stale).toBe(false);
+    expect(JSON.stringify(diagnostic)).not.toContain('教室工具');
+    expect(JSON.stringify(diagnostic)).not.toContain('credentialExpiresAt');
+    await expect(overview.getByRole('button', {name: /全部登记/})).toContainText('42');
+    await panel.getByRole('button', {name: '加载更多互联设备'}).click();
+    await expect(panel.locator('.npep-device')).toHaveCount(40);
+    await expect(overview.getByRole('button', {name: /全部登记/})).toContainText('42');
+    await overview.getByRole('button', {name: /待检查/}).click();
+    await expect(panel.locator('.npep-device')).toHaveCount(6);
+    await expect(overview).toContainText('共 6 台匹配');
+    expect(requests.at(-1).searchParams.get('filter')).toBe('ATTENTION');
+    expect(requests.at(-1).searchParams.has('cursor')).toBe(false);
+    await overview.getByRole('button', {name: /全部登记/}).click();
+    await overview.getByRole('textbox', {name: /搜索设备、班级或大屏名称/}).fill('三号');
+    await overview.getByRole('button', {name: '搜索', exact: true}).click();
+    await expect(panel.locator('.npep-device')).toHaveCount(1);
+    await expect(panel.locator('.npep-device')).toContainText('三号工具');
+    await expect(overview.getByRole('button', {name: /全部登记/})).toContainText('42');
+    await overview.getByRole('textbox', {name: /搜索设备、班级或大屏名称/}).fill('找不到');
+    await overview.getByRole('button', {name: '搜索', exact: true}).click();
+    await expect(panel).toContainText('没有匹配当前筛选');
+    await expect(panel.getByRole('button', {name: '前往班级大屏网页配对'})).toHaveCount(0);
+    await overview.getByRole('textbox', {name: /搜索设备、班级或大屏名称/}).fill('');
+    await overview.getByRole('button', {name: /待检查/}).click();
+    await expect(panel.locator('.npep-device')).toHaveCount(6);
+    await expect(panel.getByRole('button', {name: '刷新互联设备', exact: true})).toBeEnabled();
+    await page.mouse.move(0, 0);
+    await page.screenshot({path: 'test-results/device-overview-desktop.png', fullPage: true, animations: 'disabled'});
+    await page.setViewportSize({width: 390, height: 844});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await overview.screenshot({path: 'test-results/device-overview-mobile.png', animations: 'disabled'});
+    await page.evaluate(() => localStorage.setItem('Classworks_settings', JSON.stringify({'theme.mode': 'light'})));
+    await page.reload();
+    await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
+    await page.getByRole('button', {name: '打开 NPEP 设备互联'}).click();
+    await overview.getByRole('button', {name: /待检查/}).click();
+    await expect(panel.locator('.npep-device')).toHaveCount(6);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await overview.screenshot({path: 'test-results/device-overview-mobile-light.png', animations: 'disabled'});
+    fail = true; await panel.getByRole('button', {name: '刷新互联设备', exact: true}).click();
+    await expect(panel).toContainText('刷新未完成'); await expect(overview).toContainText('观测已过时');
+    const staleDownload = page.waitForEvent('download');
+    await overview.getByRole('button', {name: '导出诊断摘要'}).click();
+    const staleBundle = JSON.parse(await readFile(await (await staleDownload).path(), 'utf8'));
+    expect(staleBundle.stale).toBe(true);
+    expect(staleBundle.exportedCount).toBe(6);
+    await expect(panel.locator('.npep-device')).toHaveCount(6);
+    await expect(panel.getByRole('button', {name: '考试模式', exact: true}).first()).toBeDisabled();
+    forbidden = true; await panel.getByRole('button', {name: '刷新互联设备', exact: true}).click();
+    await expect(panel).toContainText('没有这所学校的管理权限');
+    await expect(overview).toHaveCount(0); await expect(panel.locator('.npep-device')).toHaveCount(0);
+    await expect(panel.getByRole('button', {name: '导出诊断摘要'})).toHaveCount(0);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
 test("NPEP ignores a late short-code response after the panel closes", async ({browser}) => {
   let release;
   const held = new Promise(resolve => { release = resolve; });
@@ -268,6 +369,7 @@ test("NPEP ignores a late short-code response after the panel closes", async ({b
     await context.route(`${api}/api/v2/npep/**`, async route => {
       const request = route.request(), body = request.method() === "POST" ? request.postDataJSON() : null;
       const path = new URL(request.url()).pathname;
+      if (path.endsWith('/device-overview')) return route.fulfill({status: 404, json: {error: {code: 'NOT_FOUND'}}});
       if (path.endsWith("/resolve")) { entered = true; await held; }
       await route.fulfill({json: {protocolVersion: "0.1", requestId: body?.requestId || request.headers()["x-request-id"], serverTime: new Date().toISOString(),
         data: path.endsWith("/devices") ? {items: [], nextCursor: null} : path.endsWith("/resolve") ? {pairingId: randomUUID(), deviceName: "迟到的旧设备", expiresAt: new Date(Date.now() + 600000).toISOString()} : {supportedCapabilities: ["device.status"]}}}).catch(() => {});

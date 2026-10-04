@@ -22,6 +22,8 @@ test("NPEP school UI approves a real pairing and revokes the confirmed PostgreSQ
   await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
   const panel = page.locator(".npep-device-manager");
   await expect(panel).toContainText("当前没有已登记");
+  await expect(panel.locator('.device-operations')).toContainText('学校运维概览');
+  await expect(panel.locator('.device-operations').getByRole('button', {name: /全部登记/})).toContainText('0');
   await panel.getByRole("button", {name: /旧版桌面短码配对/}).click();
   await panel.getByLabel("8 位配对短码").fill(created.data.userCode);
   await panel.getByRole("button", {name: "核对配对申请", exact: true}).click();
@@ -47,10 +49,23 @@ test("NPEP school UI approves a real pairing and revokes the confirmed PostgreSQ
   await panel.getByRole("button", {name: "刷新互联设备", exact: true}).click();
   await expect(panel.locator(".npep-device")).toContainText("在线");
   await expect(panel.locator(".npep-device")).toContainText("录制状态：未录制");
+  const overview = panel.locator('.device-operations');
+  await expect(overview.getByRole('button', {name: /全部登记/})).toContainText('1');
+  await expect(overview.getByRole('button', {name: /在线/})).toContainText('1');
+  await overview.getByRole('button', {name: /待检查/}).click();
+  await expect(panel.locator('.npep-device')).toHaveCount(1);
+  await expect(panel.locator('.npep-device')).toContainText('日常模式下课程桥接未连接');
+  await overview.getByRole('textbox', {name: /搜索设备、班级或大屏名称/}).fill('高一一班');
+  await overview.getByRole('button', {name: '搜索', exact: true}).click();
+  await expect(overview).toContainText('共 1 台匹配');
   await panel.screenshot({path: "test-results/npep-manager.png"});
   await panel.getByRole("button", {name: "查看设备详情", exact: true}).click();
   await panel.getByRole("button", {name: "撤销互联授权", exact: true}).click();
   await page.getByRole("button", {name: "确认撤销互联授权", exact: true}).click();
+  // The current ATTENTION filter correctly drops the revoked device. Select
+  // historical registrations explicitly instead of interpreting it as offline.
+  await expect(panel).toContainText('没有匹配当前筛选');
+  await overview.getByRole('button', {name: /非授权登记/}).click();
   await expect(panel.locator(".npep-device")).toContainText("已撤销");
   expect((await native("/device/me", null, deviceBearer)).status).toBe(401);
   expect((await classroom.prisma.npepDevice.findUnique({where: {id: confirmed.data.deviceId}})).state).toBe("REVOKED");

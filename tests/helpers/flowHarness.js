@@ -187,6 +187,14 @@ export async function createFlowHarness() {
       app.mount({}); mounted.push(app);
       return {state, unmount() { mounted.splice(mounted.indexOf(app), 1); app.unmount(); }};
     },
+    async openNpepManager() {
+      const {useNpepManager} = await vite.ssrLoadModule('/src/composables/admin/useNpepManager.js');
+      const school = ref('school');
+      let state;
+      const app = renderer.createApp({setup() { state = useNpepManager(school); return () => null; }});
+      app.mount({}); mounted.push(app);
+      return {state, school};
+    },
     async openNoiseScheduleEditor() {
       const {useNoiseScheduleEditor} = await vite.ssrLoadModule('/src/composables/admin/useNoiseScheduleEditor.js');
       const school = ref('school'), term = ref('term');

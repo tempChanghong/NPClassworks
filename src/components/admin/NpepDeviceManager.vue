@@ -46,6 +46,29 @@
         class="npep-overview"
         aria-labelledby="npep-devices-title"
       >
+        <NpepDeviceOverview
+          v-if="overview"
+          v-model:search="search"
+          :summary="overview.summary"
+          :as-of="overview.asOf"
+          :now="now"
+          :stale="stale"
+          :busy="busy"
+          :filter="filter"
+          :matched-total="overview.matchedTotal"
+          :loaded-count="devices.length"
+          @filter="applyOverview"
+          @search="applyOverview()"
+          @export="exportDiagnostics"
+        />
+        <v-alert
+          v-if="overviewUnavailable"
+          type="info"
+          variant="tonal"
+          class="mb-4"
+        >
+          当前服务尚未提供学校运维概览；以下仅显示已加载的设备，不代表全校汇总。
+        </v-alert>
         <div class="npep-section-heading mb-4">
           <div>
             <h3 id="npep-devices-title">
@@ -65,7 +88,7 @@
           “在线”只表示查询时最近一分钟收到上报；观测过时请刷新。失联不代表软件已退出，自动录制已启用也不代表正在录制。
         </p>
         <div
-          v-if="loaded && !devices.length && !stale"
+          v-if="loaded && !devices.length && !stale && (!overview || overview.summary.total === 0)"
           class="npep-empty"
         >
           <v-icon
@@ -83,6 +106,12 @@
             前往班级大屏网页配对
           </v-btn>
         </div>
+        <p
+          v-else-if="loaded && !devices.length && !stale"
+          class="npep-empty mb-4"
+        >
+          没有匹配当前筛选或搜索的设备。可选择“全部登记”并清空搜索后重试。
+        </p>
         <v-card
           v-for="device in devices"
           :key="device.deviceId"
@@ -115,6 +144,9 @@
               </div>
             </div>
             <div class="npep-device-observation">
+              <p v-if="device.issues?.length">
+                待检查：{{ device.issues.map(overviewIssueName).join('；') }}。
+              </p>
               <p>最近观测：{{ device.lastSeenAt ? time(device.lastSeenAt) : '尚未上报' }}</p>
               <p v-if="device.status">
                 上次观测模式：{{ npepModeName(device.status.mode) }}；录制状态：{{ npepRecordingName(device.status.recording) }}；自动录制：{{ npepAutomaticName(device.status.automaticRecording) }}。
@@ -421,12 +453,19 @@ import NpepExamPlanControl from './NpepExamPlanControl.vue';
 import NpepNoiseReports from './NpepNoiseReports.vue';
 import NpepNoiseSchedules from './NpepNoiseSchedules.vue';
 import NpepPairingAccess from './NpepPairingAccess.vue';
+import NpepDeviceOverview from './NpepDeviceOverview.vue';
+import {overviewIssueName} from '@/utils/npepDeviceOverview';
+import {createNpepOverviewDiagnostics} from '@/utils/npepDiagnostics';
+import {downloadDiagnosticBundle} from '@/utils/localDiagnostics';
+import {getServerUrl} from '@/utils/socketClient';
+import packageInfo from '../../../package.json';
 import {useNpepManager} from "@/composables/admin/useNpepManager";
 import {npepConnectivity, npepStateName, npepModeName, npepRecordingName, npepAutomaticName} from "@/utils/npepPresentation";
 
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: "当前学校"}, termId: {type: String, default: ''}});
 const manager = useNpepManager(toRef(props, "schoolId"));
 const {devices, bindings, candidate, approved, code, bindingId, busy, error, message, loaded, stale, nextCursor, now,
+  overview, overviewUnavailable, filter, search, applyOverview,
   expired, bindingOptions, refresh, more, resolve, approve, cancel, revoke} = manager;
 const confirmed = ref(false), revoking = ref(null);
 const openConfiguration = ref([]);
@@ -441,11 +480,24 @@ const time = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLoc
 const effectiveState = device => device.state === "ACTIVE" && Date.parse(device.credentialExpiresAt) <= now.value ? "EXPIRED" : device.state;
 const connectivity = device => stale.value ? "待刷新核对" : npepConnectivity({...device, state: effectiveState(device)}, now.value);
 const bindingName = device => {
+  if (device.screenBindingName) return `${device.screenBindingName} · ${device.bindingChanged ? '原班级绑定已变化或不可用' : device.administrativeClassName || '班级资料暂缺'}`;
   const screen = bindings.value.find(b => b.id === device.screenBindingId);
   if (screen && device.administrativeClassId && screen.administrativeClassId !== device.administrativeClassId) return `${screen.name} · 原班级绑定已变化`;
   return screen ? `${screen.name} · ${screen.administrativeClass?.name || '班级资料暂缺'}` : "原大屏资料不可用";
 };
 const bridge = value => ({READY: "已连接", DISCONNECTED: "未连接", UNKNOWN: "未知"}[value?.connection] || "未知");
+function exportDiagnostics() {
+  if (busy.value || !overview.value) return;
+  try {
+    const bundle = createNpepOverviewDiagnostics({overview: overview.value, devices: devices.value,
+      schoolId: props.schoolId, filter: filter.value, stale: stale.value, now: now.value,
+      backendUrl: getServerUrl(), appVersion: packageInfo.version, hasMore: Boolean(nextCursor.value)});
+    downloadDiagnosticBundle(bundle, `NPClassworks-NPEP-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+    message.value = '已生成本地诊断摘要；包含服务地址和归属编号，分享前请核对文件。';
+  } catch {
+    error.value = '无法导出当前诊断摘要，请刷新概览或检查浏览器下载权限后重试。';
+  }
+}
 async function openScreenConfiguration() {
   openConfiguration.value = [...new Set([...openConfiguration.value, 'screen'])];
   await nextTick();

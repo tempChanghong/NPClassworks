@@ -1,11 +1,14 @@
 import {computed, onUnmounted, ref, watch} from "vue";
 import {classworksV2Api, npepAdminApi} from "@/utils/classworksV2Client";
 import {npepErrorMessage} from "@/utils/npepPresentation";
+import {readDeviceOverview} from '@/utils/npepDeviceOverview';
 
 export function useNpepManager(schoolId) {
   const devices = ref([]), bindings = ref([]), candidate = ref(null), approved = ref(null);
   const code = ref(""), bindingId = ref(""), busy = ref(false), error = ref(""), message = ref("");
   const loaded = ref(false), stale = ref(false), nextCursor = ref(null), now = ref(Date.now());
+  const overview = ref(null), overviewUnavailable = ref(false), filter = ref('ALL'), search = ref('');
+  let appliedSearch = '';
   let generation = 0, controller, disposed = false, approvalRequest, serverAt = Date.now(), receivedAt = globalThis.performance.now(), wallAt = Date.now();
   const tick = () => { now.value = serverAt + Math.max(0, globalThis.performance.now() - receivedAt, Date.now() - wallAt); };
   const timer = setInterval(tick, 1000);
@@ -19,6 +22,7 @@ export function useNpepManager(schoolId) {
     devices.value = []; bindings.value = []; candidate.value = null; approved.value = null;
     code.value = ""; bindingId.value = ""; error.value = ""; message.value = "";
     loaded.value = false; stale.value = false; nextCursor.value = null; approvalRequest = null;
+    overview.value = null; overviewUnavailable.value = false; filter.value = 'ALL'; search.value = ''; appliedSearch = '';
   }
   async function run(operation) {
     if (disposed || busy.value || !schoolId.value) return;
@@ -32,21 +36,37 @@ export function useNpepManager(schoolId) {
       if (!current()) return;
       if (failure.code === "ERR_CANCELED") {
         devices.value = []; bindings.value = []; candidate.value = null; approved.value = null; loaded.value = false;
+        overview.value = null;
         error.value = "登录上下文已变化，请重新打开互联面板。";
         return;
       }
       error.value = npepErrorMessage(failure); stale.value = loaded.value;
       if ([401, 403].includes(failure.response?.status)) {
         devices.value = []; candidate.value = null; approved.value = null; bindings.value = []; loaded.value = false;
+        overview.value = null;
       }
     } finally { if (current()) busy.value = false; }
   }
   async function fetchList(school, options, current, more = false) {
-    const result = await npepAdminApi.devices(school, {...options, params: {limit: 20, ...(more ? {cursor: nextCursor.value} : {})}});
+    let result, snapshot;
+    if (!overviewUnavailable.value) {
+      try {
+        result = await npepAdminApi.overview(school, {...options, params: {limit: 20, filter: filter.value, search: appliedSearch,
+          ...(more ? {cursor: nextCursor.value} : {})}});
+        if (!current()) return;
+        snapshot = readDeviceOverview(result.data);
+      } catch (failure) {
+        if (!current()) return;
+        if (failure.response?.status !== 404) throw failure;
+        overviewUnavailable.value = true; overview.value = null;
+      }
+    }
+    if (overviewUnavailable.value) result = await npepAdminApi.devices(school, {...options, params: {limit: 20, ...(more ? {cursor: nextCursor.value} : {})}});
     if (!current()) return;
     if (!Array.isArray(result.data.items)) throw new Error("Invalid device list");
     const combined = more ? [...devices.value, ...result.data.items] : result.data.items;
     devices.value = [...new Map(combined.map(device => [device.deviceId, device])).values()];
+    overview.value = snapshot || null;
     nextCursor.value = result.data.nextCursor; loaded.value = true; stale.value = false; clock(result);
   }
   const refresh = () => run(async (school, options, current) => {
@@ -56,6 +76,18 @@ export function useNpepManager(schoolId) {
     await fetchList(school, options, current);
   });
   const more = () => nextCursor.value && run((school, options, current) => fetchList(school, options, current, true));
+  async function applyOverview(nextFilter = filter.value) {
+    if (busy.value || overviewUnavailable.value || !overview.value) return;
+    const previousFilter = filter.value, previousSearch = appliedSearch;
+    await run(async (school, options, current) => {
+      filter.value = nextFilter; appliedSearch = search.value.trim();
+      try { await fetchList(school, options, current); }
+      catch (failure) {
+        if (current()) { filter.value = previousFilter; appliedSearch = previousSearch; }
+        throw failure;
+      }
+    });
+  }
   const resolve = () => {
     const normalized = code.value.replaceAll("-", "").replaceAll(" ", "").toUpperCase();
     if (!/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/.test(normalized)) { error.value = "请输入设备上显示的 8 位配对短码。"; return; }
@@ -90,5 +122,6 @@ export function useNpepManager(schoolId) {
   watch(schoolId, () => { clear(); void refresh(); }, {immediate: true, flush: "sync"});
   onUnmounted(() => { disposed = true; clear(); clearInterval(timer); });
   return {devices, bindings, candidate, approved, code, bindingId, busy, error, message, loaded, stale, nextCursor, now,
+    overview, overviewUnavailable, filter, search, applyOverview,
     expired, bindingOptions, refresh, more, resolve, approve, cancel, revoke};
 }
