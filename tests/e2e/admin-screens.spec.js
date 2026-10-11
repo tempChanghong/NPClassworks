@@ -625,7 +625,7 @@ for (const width of [1440, 390]) {
       await expect(editor.locator('.study-preview')).toContainText('物理走班 A');await expect(editor.locator('.study-preview')).toContainText('物理走班 B');
       await expect(editor.locator('.study-preview')).toContainText('2026-10-12 19:00:00');
       await editor.getByRole('button',{name:'保存自习设置',exact:true}).click();
-      expect(saved[0].policy.settings.noise).toEqual({enabled:true,redLineDbfs:-35,mediumLineDbfs:-45,disciplineCooldownSeconds:720,highContinuousSeconds:3});
+      expect(saved[0].policy.settings.noise).toEqual({enabled:true,redLineDbfs:-35,mediumLineDbfs:-45,disciplineCooldownSeconds:720,highContinuousSeconds:4});
       expect(saved[0].policy.settings.photos.cooldownSeconds).toBe(30);expect(saved[0].policy.settings.photos.continuousSeconds).toBe(3);
       await expect(editor).toContainText('自习设置已保存');await expect(editor).toContainText('保存不代表设备已应用或正在采集');
       expect(saved).toHaveLength(1);expect(saved[0]).toMatchObject({termId:'term',targetType:'CLASS',targetId:'class-a',expectedRevision:0,
