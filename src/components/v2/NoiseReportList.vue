@@ -48,6 +48,12 @@
           </v-chip>
         </div>
         <p
+          v-if="r.timing?.clockDiscontinuity"
+          class="noise-report-note mt-3"
+        >
+          设备墙钟与监测计时存在差异。起止范围按开始时间和实际经过时长推算，不能视为已核准的北京时间。
+        </p>
+        <p
           v-if="source && currentVersion && source.version !== currentVersion"
           class="noise-report-note mt-3"
         >
@@ -98,6 +104,9 @@
           <p>削波 {{ r.summary.clippedPercent.toFixed(2) }}%</p>
           <p>麦克风：{{ r.deviceName || '未打开设备' }}</p>
           <p>算法：{{ r.algorithm }}</p>
+          <p v-if="r.timing">
+            结束时间来源：单调计时推算；设备墙钟观测：{{ time(r.timing.observedEndedAt) }}
+          </p>
           <p v-if="r.estimate">
             参考版本：{{ r.estimate.profileId }} · {{ time(r.estimate.confirmedAt) }} · {{ r.estimate.method }} · A/{{ r.estimate.timeWeighting }} · 偏移 {{ r.estimate.offsetDb.toFixed(2) }} dB
           </p>
