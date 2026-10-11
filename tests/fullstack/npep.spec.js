@@ -30,10 +30,8 @@ test("NPEP school UI approves a real pairing and revokes the confirmed PostgreSQ
   await panel.locator(".v-select").filter({hasText: "关联的大屏与班级"}).click();
   await page.getByRole("option", {name: "测试大屏 · 高一一班", exact: true}).click();
   await panel.getByLabel("已核对设备、学校和班级，同意配对并授权学校互联功能").check();
+  await panel.getByLabel('班级管理口令（未配置时必填，留空保留已有口令）').fill('isolated-school-credential');
   await panel.getByRole("button", {name: "批准并等待现场确认", exact: true}).click();
-  const credential = page.getByRole('dialog').filter({hasText:'学校管理口令'});
-  await credential.getByLabel('学校管理口令',{exact:true}).fill('isolated-school-credential');
-  await credential.getByRole('button',{name:'保存并启用',exact:true}).click();
   await expect(panel).toContainText("批准已保存");
   expect(await classroom.prisma.npepDevice.count({where: {schoolId: classroom.school.id}})).toBe(0);
   const approval = (await native(`/pairings/${pairingId}`, null, pairBearer)).data;
