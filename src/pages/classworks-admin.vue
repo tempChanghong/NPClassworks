@@ -806,7 +806,7 @@
                     {{ selectedSchool?.school.name || '未选择学校' }} · {{ selectedTermName }}
                   </div>
                   <div class="text-body-2 text-medium-emphasis mt-1">
-                    大屏账号按学校管理，班级与设备互联使用当前学期。首次登录需要独立账号和 PIN；重置绑定会使原设备失效。
+                    大屏账号按学校管理，班级使用当前学期。首次登录需要独立账号和 PIN；重置绑定会使原设备失效。原生设备配对与噪音监测请前往左侧 NPEP。
                   </div>
                 </div>
               </v-card-text>
@@ -818,29 +818,32 @@
             :administrative-class-options="administrativeClassOptions"
             :manager="screenManager"
           />
-          <template v-if="tab === 'screens' && selectedSchoolId && selectedSchool">
-            <v-btn
-              class="mt-5"
-              variant="tonal"
-              prepend-icon="mdi-link-variant"
-              @click="npepVisible = !npepVisible"
-            >
-              {{ npepVisible ? '收起 NPEP 设备互联' : '打开 NPEP 设备互联' }}
-            </v-btn>
-            <NpepDeviceManager
-              v-if="npepVisible"
-              :key="selectedSchoolId"
-              :school-id="selectedSchoolId"
-              :school-name="selectedSchool.school.name"
-              :term-id="selectedTermId"
-            />
-          </template>
           <template v-if="managerMemberships.length">
             <div class="text-overline text-medium-emphasis mt-7 mb-2">
               全校作业设置
             </div>
             <AdminHomeworkQuickDeadlines :manager="homeworkSettingsManager" />
           </template>
+        </v-window-item>
+
+        <v-window-item :value="tab.startsWith('npep-') ? tab : 'npep-devices'">
+          <NpepDeviceManager
+            v-if="tab.startsWith('npep-') && selectedSchoolId && selectedSchool"
+            :key="selectedSchoolId"
+            :section="tab.slice(5)"
+            :school-id="selectedSchoolId"
+            :school-name="selectedSchool.school.name"
+            :term-id="selectedTermId"
+            @navigate="value => navigateAdminTab(`npep-${value}`)"
+            @dirty="npepDirty = $event"
+          />
+          <v-alert
+            v-else
+            type="info"
+            variant="tonal"
+          >
+            {{ adminMembershipsStatus === 'loading' ? '正在核验学校管理权限…' : '请选择具有 OWNER/ADMIN 权限的学校后管理 NPEP。' }}
+          </v-alert>
         </v-window-item>
 
         <v-window-item value="migration">
@@ -1190,7 +1193,7 @@ import AdminUndoSnackbar from "@/components/admin/AdminUndoSnackbar.vue";
 import AdminNavigationPanel from "@/components/admin/AdminNavigationPanel.vue";
 import AdminScreenAccountPanel from "@/components/admin/AdminScreenAccountPanel.vue";
 const NpepDeviceManager = defineAsyncComponent(() => import("@/components/admin/NpepDeviceManager.vue"));
-const npepVisible = ref(false);
+const npepDirty = ref(false);
 import {useScreenAccountManager} from "@/composables/admin/useScreenAccountManager";
 import AdminHomeworkQuickInputs from "@/components/admin/AdminHomeworkQuickInputs.vue";
 import AdminHomeworkQuickDeadlines from "@/components/admin/AdminHomeworkQuickDeadlines.vue";
@@ -1218,7 +1221,7 @@ import {
   startOAuthLogin,
 } from "@/utils/classworksV2Client";
 const ADMIN_CONTEXT_KEY = "npclassworks-admin-context:v1";
-const ADMIN_TABS = new Set(["overview", "structure", "students", "organization", "teachers", "accounts", "screens", "migration", "audit", "terms"]);
+const ADMIN_TABS = new Set(["overview", "structure", "students", "organization", "teachers", "accounts", "screens", "npep-devices", "npep-study", "npep-noise", "npep-seating", "migration", "audit", "terms"]);
 const studentRosterDirty = ref(false);
 
 function loadAdminContext() {
@@ -1242,8 +1245,9 @@ const localAuthStatus = ref({bootstrapRequired: false, bootstrapAvailable: false
 const profile = ref(null);
 const schoolMemberships = ref([]);
 const adminMembershipsStatus = ref("idle");
-const tab = ref(ADMIN_TABS.has(String(route.query.section || savedAdminContext.tab))
-  ? String(route.query.section || savedAdminContext.tab)
+const normalizeAdminSection = value => value === "npep" ? "npep-devices" : String(value || "");
+const tab = ref(ADMIN_TABS.has(normalizeAdminSection(route.query.section || savedAdminContext.tab))
+  ? normalizeAdminSection(route.query.section || savedAdminContext.tab)
   : "overview");
 const errorMessage = ref("");
 const successMessage = ref("");
@@ -1300,6 +1304,15 @@ const adminNavigationGroups = [
       {title: "学生名单", value: "students", icon: "mdi-account-group-outline"},
       {title: "教师分配", value: "teachers", icon: "mdi-human-male-board"},
       {title: "大屏设备", value: "screens", icon: "mdi-monitor-dashboard"},
+    ],
+  },
+  {
+    label: "NPEP",
+    items: [
+      {title: "大屏互联", value: "npep-devices", icon: "mdi-link-variant"},
+      {title: "自习展示", value: "npep-study", icon: "mdi-clock-outline"},
+      {title: "噪音监测", value: "npep-noise", icon: "mdi-waveform"},
+      {title: "自习座位表", value: "npep-seating", icon: "mdi-seat-outline"},
     ],
   },
   {
@@ -1432,6 +1445,7 @@ const filteredRosterWorkspaces = computed(() => {
 });
 const currentSectionHasUnsavedChanges = computed(() => {
   if (tab.value === "students") return studentRosterDirty.value;
+  if (tab.value.startsWith("npep-") && npepDirty.value) return true;
   // Quick settings are shared by the screen and teacher panels, and stay editable during saving.
   if (homeworkSettingsSnapshot.value && homeworkSettingsValue() !== homeworkSettingsSnapshot.value) return true;
   if (tab.value === "organization") return organizationText.value !== organizationTextSnapshot.value;
@@ -1461,8 +1475,10 @@ const releaseReloadProtection = registerAppReloadBlocker(() => currentSectionHas
 onUnmounted(releaseReloadProtection);
 
 async function navigateAdminTab(value) {
+  value = normalizeAdminSection(value);
   if (!ADMIN_TABS.has(String(value)) || value === tab.value) return true;
-  if (!await confirmDiscardCurrentSection()) return false;
+  // NPEP sections share one mounted manager; switching between them retains drafts.
+  if (!(tab.value.startsWith("npep-") && value.startsWith("npep-")) && !await confirmDiscardCurrentSection()) return false;
   tab.value = value;
   return true;
 }
@@ -2089,7 +2105,7 @@ watch([tab, selectedSchoolId, selectedTermId], ([section, schoolId, termId]) => 
   if (!unchanged) void router.replace({query: nextQuery});
 });
 watch(() => route.query.section, (section) => {
-  const value = String(section || "");
+  const value = normalizeAdminSection(section);
   if (!ADMIN_TABS.has(value) || value === tab.value) return;
   void navigateAdminTab(value).then((changed) => {
     if (!changed) void router.replace({query: {...route.query, section: tab.value}});

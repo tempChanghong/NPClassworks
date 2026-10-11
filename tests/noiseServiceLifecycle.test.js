@@ -117,4 +117,41 @@ test("microphone lifecycle ignores cancelled asynchronous starts", async t => {
     assert.equal(late.track.stopped, true); assert.equal(service.status, "paused");
     assert.equal(requests.length, count);
   });
+  await t.test('stalled frames expire on monotonic time, including wall-clock rollback and suspension', async () => {
+    const clockDescriptor=Object.getOwnPropertyDescriptor(globalThis,'performance');
+    let tick=100, wall=Date.now(); const originalNow=Date.now;
+    Object.defineProperty(globalThis,'performance',{configurable:true,value:{now:()=>tick}}); Date.now=()=>wall;
+    try {
+      const starting=service.start(); requests.at(-1).resolve(stream()); await starting;
+      const feed=()=>service.processorNode.port.onmessage({data:{rms:.01,peak:.02}});
+      for(let i=0;i<601;i++){ tick+=100; wall+=100; feed(); }
+      assert.equal(service.snapshot().signalHealth.quality,'good');
+      wall-=3600000; tick+=1000;
+      const stale=service.snapshot(); assert.equal(stale.currentDbfs,null); assert.equal(stale.currentDisplayDb,null);
+      assert.equal(stale.currentScore,null); assert.equal(stale.signalHealth.quality,'no-data'); assert.equal(stale.signalHealth.coverage,0);
+      feed(); assert.ok(service.snapshot().signalHealth.coverage<1);
+      assert.equal(service.snapshot().signalHealth.quality,'low-coverage');
+      service.audioContext.state='suspended'; assert.equal(service.snapshot().currentDbfs,null);
+      service.audioContext.state='running'; tick+=100; feed();
+      assert.equal(service.windowFrames.length,1);
+      await service.stop(); assert.equal(service.signalTimer,null); assert.equal(intervals.size,0);
+    } finally { Date.now=originalNow; Object.defineProperty(globalThis,'performance',clockDescriptor); }
+  });
+  for(const seconds of [10,29.9,30]) await t.test(`ended after ${seconds}s saves captured tail once and rejects old-session events`,async()=>{
+    const descriptor=Object.getOwnPropertyDescriptor(globalThis,'performance');
+    const originalNow=Date.now; let tick=100, wall=originalNow(); let saved=[];
+    const originalStore=service.historyStore;
+    Object.defineProperty(globalThis,'performance',{configurable:true,value:{now:()=>tick}}); Date.now=()=>wall;
+    service.historyStore={append:async slice=>saved.push(slice)};
+    try {
+      const starting=service.start(), media=stream(); requests.at(-1).resolve(media); await starting;
+      for(let i=0;i<Math.round(seconds*10);i++){tick+=100;wall+=100;service.processorNode.port.onmessage({data:{rms:.01,peak:.02}});}
+      media.track.dispatchEvent(new globalThis.Event('ended')); media.track.dispatchEvent(new globalThis.Event('ended'));
+      assert.equal(service.status,'error'); await service.stop(); await service.historyWrite;
+      assert.equal(saved.length,1); assert.equal(saved[0].frames,Math.round(seconds*10));
+      const next=service.start(); requests.at(-1).resolve(stream()); await next;
+      media.track.dispatchEvent(new globalThis.Event('ended')); assert.equal(service.status,'active');
+      await service.stop(); await service.historyWrite; assert.equal(saved.length,1);
+    } finally {service.historyStore=originalStore;Date.now=originalNow;Object.defineProperty(globalThis,'performance',descriptor);}
+  });
 });

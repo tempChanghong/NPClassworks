@@ -200,11 +200,11 @@ export default {
     scheduledActive() { return noiseMonitoringState.value.scheduledActive },
     scheduledEndTime() { return noiseMonitoringState.value.scheduledEndTime },
     currentDb() {
-      if (!this.isMonitoring || this.status !== 'active') return '--'
+      if (!this.isMonitoring || this.status !== 'active' || !Number.isFinite(this.currentDisplayDb)) return '--'
       return Math.round(this.currentDisplayDb)
     },
     statusColor() {
-      if (this.status === 'active') return 'success'
+      if (this.status === 'active') return this.signalHealth.quality === 'no-data' ? 'warning' : 'success'
       if (this.status === 'paused') return 'warning'
       if (this.status === 'permission-denied' || this.status === 'error') return 'error'
       return 'grey'
@@ -218,6 +218,7 @@ export default {
         error: '错误',
       }
       if (['permission-denied', 'error'].includes(this.status)) return map[this.status]
+      if (this.status === 'active' && this.signalHealth.quality === 'no-data') return '等待新采样'
       return this.isMonitoring ? (map[this.status] || '未知') : '未启动'
     },
     dbColor() {
@@ -234,6 +235,7 @@ export default {
     noiseLevel() {
       const db = typeof this.currentDb === 'number' ? this.currentDb : 0
       if (!this.isMonitoring || this.status !== 'active') return '等待监测'
+      if (!Number.isFinite(this.currentDisplayDb)) return '等待新采样'
       if (db < 30) return '极其安静'
       if (db < 40) return '非常安静'
       if (db < 50) return '安静'
@@ -294,8 +296,10 @@ export default {
         silent: '信号过低',
         clipping: '麦克风输入过载',
         'no-signal': '等待麦克风信号',
+        'no-data': '暂无新采样',
       }
       const label = labels[this.signalHealth.quality] || '检查信号'
+      if (this.signalHealth.quality === 'no-data') return label
       const coverage = this.signalHealth.coverage || 0
       if (this.status === 'active' && coverage < 80) {
         return `${label} · 还需约 ${Math.ceil((80 - coverage) * 0.6)} 秒`
@@ -310,8 +314,8 @@ export default {
         this.historyError = snapshot.historyError || ''
         this.isMonitoring = ['initializing', 'active'].includes(snapshot.status)
         if (snapshot.status === 'permission-denied') this.micPermissionState = 'denied'
-        const now = Date.now()
-        if (!statusChanged && snapshot.status === 'active' && now - this.lastUiUpdateAt < 250) return
+        const now = globalThis.performance.now()
+        if (!statusChanged && snapshot.signalHealth?.quality === this.signalHealth.quality && snapshot.status === 'active' && now - this.lastUiUpdateAt < 250) return
         this.lastUiUpdateAt = now
         this.currentDbfs = snapshot.currentDbfs
         this.currentDisplayDb = snapshot.currentDisplayDb
@@ -325,7 +329,7 @@ export default {
         if (snapshot.signalHealth?.errorCode) this.micPermissionState = snapshot.signalHealth.errorCode
 
         const dbVal = Math.max(0, Math.min(100, this.currentDisplayDb))
-        this.recentDbValues.push(dbVal)
+        if (Number.isFinite(this.currentDisplayDb)) this.recentDbValues.push(dbVal)
         if (this.recentDbValues.length > MINI_BAR_COUNT) this.recentDbValues.shift()
         const sliceId = snapshot.lastSlice?.id || ''
         if (sliceId && sliceId !== this.lastHistorySliceId) {

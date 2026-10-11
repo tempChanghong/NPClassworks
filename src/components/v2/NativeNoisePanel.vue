@@ -28,6 +28,13 @@
       <span>dBFS 信号电平</span>
       <v-chip>{{ state.online ? stateName(state.status?.state) : '未知／离线' }}</v-chip>
     </div>
+    <p
+      v-if="state.status?.estimate"
+      class="my-2"
+    >
+      {{ estimatedStatistic(state.online && state.status?.state === 'Active' && state.status.estimate.state === 'Active' ? state.status.estimate.currentDbA : null) }} ·
+      {{ state.online ? estimateStatus(state.status.estimate) : '估算状态未知／离线' }} · A/{{ state.status.estimate.timeWeighting }}
+    </p>
     <p>采样质量：{{ !state.online ? '未知' : ['Stopped', 'Faulted'].includes(state.status?.state) ? '已结束' : qualityName(state.status?.quality, state.status?.currentDbfs) }} · {{ state.status?.deviceName || '请在 NPEduTools 保存麦克风' }}</p>
     <p
       v-if="hint"
@@ -36,7 +43,7 @@
       {{ hint }}
     </p>
     <p class="text-caption mb-4">
-      最近上报：{{ time(state.receivedAt) }}。此值有网络延迟，不是实际声压级，也不与旧网页评分混用。
+      最近上报：{{ time(state.receivedAt) }}。此值有网络延迟。dBFS 是数字电平；估算 dB(A) 需有效本机参考，不与旧网页评分混用。
     </p>
     <p
       v-if="state.status?.uploadError"
@@ -121,6 +128,7 @@
   </v-card>
 </template>
 <script setup>
+import {estimatedStatistic, estimateStatus} from '@/utils/nativeNoisePresentation';
 import {computed, ref, watch} from 'vue';
 import {nativeNoise, nativeNoiseState as state} from '@/utils/nativeNoise';
 import {stateName, qualityName, receiptName, time, level, signalHint} from '@/utils/nativeNoisePresentation';

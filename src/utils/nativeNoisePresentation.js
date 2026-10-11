@@ -1,6 +1,12 @@
 export const time = value => value ? new Date(value).toLocaleString('zh-CN') : '尚无';
 export const stateName = state => ({Idle: '未开始', Starting: '启动中', Active: '监测中', Stopping: '停止中', Stopped: '已停止', Faulted: '采集异常'}[state] || '未知');
 // Presentation thresholds match the desktop: -100 is the trend bound, not a calibrated noise threshold.
+export const estimatedStatistic = value => Number.isFinite(value) ? value.toFixed(1) + ' 估算 dB(A)' : '无有效估算值';
+export function estimateStatus(estimate) {
+  if (!estimate) return '尚无外部参考';
+  const reasons = {DEVICE_CHANGED:'麦克风变化，参考失效',INPUT_SETTINGS_CHANGED:'输入设置变化，参考失效',INPUT_SETTINGS_UNAVAILABLE:'无法核对输入设置，参考失效',A_WEIGHTING_UNAVAILABLE:'A 加权不可用',REFERENCE_STORE_UNAVAILABLE:'参考文件不可用'};
+  return reasons[estimate.reason] || ({Active:'估算有效',WarmingUp:'A 加权预热中',NoData:'等待有效估算',Stopped:'已结束',Invalidated:'参考失效'}[estimate.state] || '估算状态未知');
+}
 export const numericalFloorDbfs = -160;
 export const trendMinimumDbfs = -100;
 export const weakSignal = value => Number.isFinite(value) && value <= trendMinimumDbfs;

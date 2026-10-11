@@ -19,9 +19,13 @@ function memoryStorage() {
 test("noise schedule defaults to the evening study period", () => {
   assert.deepEqual(sanitizeNoiseScheduleSettings(), {
     enabled: true,
-    startTime: "19:15",
+    startTime: "19:00",
     endTime: "21:30",
   });
+  const defaults = loadNoiseScheduleSettings("new-screen", memoryStorage());
+  assert.equal(isWithinNoiseSchedule(defaults, new Date(2026, 7, 15, 18, 59)), false);
+  assert.equal(isWithinNoiseSchedule(defaults, new Date(2026, 7, 15, 19, 0)), true);
+  assert.equal(isWithinNoiseSchedule(defaults, new Date(2026, 7, 15, 21, 30)), false);
 });
 
 test("noise schedule accepts daytime and overnight windows", () => {
@@ -43,5 +47,19 @@ test("noise schedule is isolated per classroom screen", () => {
     startTime: "08:00",
     endTime: "09:00",
   });
-  assert.equal(loadNoiseScheduleSettings("screen-b", storage).startTime, "19:15");
+  assert.equal(loadNoiseScheduleSettings("screen-b", storage).startTime, "19:00");
+});
+
+test("saved old and custom schedules are preserved without writing during reads", () => {
+  const storage = memoryStorage();
+  const old = {enabled: true, startTime: "19:15", endTime: "21:30"};
+  const custom = {enabled: false, startTime: "18:20", endTime: "22:10"};
+  saveNoiseScheduleSettings("old-screen", old, storage);
+  saveNoiseScheduleSettings("custom-screen", custom, storage);
+  storage.setItem = () => { throw new Error("Loading must not rewrite saved schedules"); };
+  assert.deepEqual(loadNoiseScheduleSettings("old-screen", storage), old);
+  assert.equal(isWithinNoiseSchedule(loadNoiseScheduleSettings("old-screen", storage), new Date(2026, 7, 15, 19, 0)), false);
+  assert.deepEqual(loadNoiseScheduleSettings("custom-screen", storage), custom);
+  assert.deepEqual(sanitizeNoiseScheduleSettings({startTime: "invalid", endTime: "21:30"}),
+    {enabled: true, startTime: "19:00", endTime: "21:30"});
 });
