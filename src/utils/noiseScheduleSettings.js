@@ -1,6 +1,6 @@
 export const NOISE_SCHEDULE_DEFAULTS = Object.freeze({
   enabled: true,
-  startTime: "19:15",
+  startTime: "19:00",
   endTime: "21:30",
 });
 
