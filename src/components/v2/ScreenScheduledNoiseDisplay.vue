@@ -93,6 +93,13 @@
             <span v-if="lastReport">最近回传 {{ lastReport }}</span>
           </div>
         </div>
+        <p
+          v-if="displayContext.provider === 'native' && native.status?.estimate"
+          class="scheduled-noise-display__disclaimer"
+        >
+          {{ estimatedStatistic(validDbfs && native.status.estimate.state === 'Active' ? native.status.estimate.currentDbA : null) }} ·
+          {{ validDbfs ? estimateStatus(native.status.estimate) : '估算状态待确认' }} · A/{{ native.status.estimate.timeWeighting }}
+        </p>
         <div
           v-if="trend.length > 1 && validDbfs"
           class="scheduled-noise-display__trend"
@@ -210,7 +217,7 @@ import {noiseMonitoringState as browser} from '@/utils/noiseMonitoring';
 import {noiseService} from '@/utils/noiseService';
 import {npepNoiseDisplayApi, npepNoiseDisplayPresenceApi} from '@/utils/classworksV2Client';
 import {getServerUrl} from '@/utils/socketClient';
-import {level, qualityName} from '@/utils/nativeNoisePresentation';
+import {level, qualityName, estimatedStatistic, estimateStatus} from '@/utils/nativeNoisePresentation';
 import {classifyScheduledNoisePresence} from '@/utils/scheduledNoisePresence';
 import {
   browserScheduledDisplayCandidate, nativeDisplayPhase, nativeScheduledDisplayCandidate,

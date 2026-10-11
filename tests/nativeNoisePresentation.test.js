@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {level, qualityName, statistic, signalHint, weakSignal} from '../src/utils/nativeNoisePresentation.js';
+import {level, qualityName, statistic, signalHint, weakSignal, estimatedStatistic, estimateStatus} from '../src/utils/nativeNoisePresentation.js';
+
+test('estimated A levels use separate labels and unavailable values never become zero', () => {
+  assert.equal(statistic(-30),'-30.0 dBFS');assert.equal(estimatedStatistic(60),'60.0 估算 dB(A)');
+  for(const v of [null,undefined,NaN,Infinity])assert.equal(estimatedStatistic(v),'无有效估算值');
+  assert.match(estimateStatus({state:'Invalidated',reason:'INPUT_SETTINGS_CHANGED'}),/参考失效/);
+  assert.equal(estimateStatus({state:'WarmingUp',reason:null}),'A 加权预热中');
+  assert.equal(estimateStatus(null),'尚无外部参考');
+});
 
 test('floor is a bound; low nonzero capture is distinguished from responsive speech', () => {
   assert.equal(level(-160), '≤ -160.0');
