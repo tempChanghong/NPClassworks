@@ -67,6 +67,23 @@ test('image headers bound decoded pixels before browser decoding',()=>{
   assert.deepEqual(seatingImageDimensions(b),{width:2000,height:3000});view.setUint32(16,4097);assert.throws(()=>seatingImageDimensions(b));
   assert.throws(()=>seatingImageDimensions(new Uint8Array(20)));
 });
+
+test('administrator retains draft after device publication conflict and explicitly reloads device version',async()=>{
+  setup(); const base='/api/v2/npep/schools/school/seating';let writes=0,revision=0;
+  h.routes.set(`GET ${base}`,(req,reply)=>reply(envelope(req.headers['x-request-id'],{current:{revision,hash:null},versions:revision?[{revision,source:'Device',deviceId:'bound-device',restorable:true}]:[],receipts:[]}),200,true));
+  h.routes.set(`POST ${base}`,(req,reply)=>{
+    writes++;
+    if(writes===1){revision=1;return reply({error:{code:'SEATING_CHANGED'}},409);}
+    assert.equal(req.body.expectedRevision,1);revision=2;reply(envelope(req.body.requestId,{revision,hash:'new-image'}),200,true);
+  });
+  const {state:s}=await h.openComponent('/src/components/admin/NpepSeatingSettings.vue',{schoolId:'school',termId:'term'});
+  await eventually(()=>assert.equal(s.classes.value.length,2));await s.changeClass('one');
+  s.draft.value={image:'fixture',dataUrl:'data:image/png;base64,fixture',width:1,height:1,byteCount:8};
+  await s.publish('image');assert.ok(s.draft.value);assert.equal(writes,1);assert.equal(s.current.value.revision,0);
+  await s.refresh();assert.ok(s.draft.value);assert.equal(s.current.value.revision,1);
+  assert.equal(s.versions.value[0].source,'Device');assert.equal(s.versions.value[0].deviceId,'bound-device');
+  await s.publish('image');assert.equal(writes,2);assert.equal(s.draft.value,null);
+});
 for (const failure of ['list', 'image']) test(`failed ${failure} for another class clears observations and blocks all writes`,async()=>{
   setup(); const base='/api/v2/npep/schools/school/seating';
   h.routes.set(`GET ${base}`,(req,reply)=>{

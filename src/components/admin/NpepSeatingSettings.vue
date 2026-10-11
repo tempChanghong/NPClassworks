@@ -97,8 +97,8 @@
         <v-list-item
           v-for="v in versions"
           :key="v.revision"
-          :title="`版本 ${v.revision} · ${v.hash ? '图片' : '撤回'}`"
-          :subtitle="new Date(v.createdAt).toLocaleString('zh-CN')"
+          :title="`版本 ${v.revision} · ${v.hash ? '图片' : '撤回'}${v.source === 'Device' ? ' · 本班大屏上传' : ''}`"
+          :subtitle="`${new Date(v.createdAt).toLocaleString('zh-CN')}${v.deviceId ? ` · 设备 ${v.deviceId}` : ''}`"
         >
           <template #append>
             <v-btn
