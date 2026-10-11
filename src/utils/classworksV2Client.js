@@ -370,10 +370,12 @@ export function describeApiError(error, fallback = "请求失败") {
 // Web uses administrator or screen credentials, never native device secrets.
 // Short pairing codes are displayed transiently, never persisted here.
 async function npepAdminRequest(method, path, {body, signal, params, version = "0.1", requestId = globalThis.crypto.randomUUID()} = {}) {
+  const session = version === "0.14" || version === "0.15" ? accountSession() : null;
   const response = await client.request({method, url: `/api/v2/npep${path}`, signal, params, timeout: 10000,
-    headers: {"X-NPEP-Version": version, ...(method === "get" ? {"X-Request-Id": requestId} : {})},
+    headers: {"X-NPEP-Version": version, ...(method === "get" || version === "0.14" || version === "0.15" ? {"X-Request-Id": requestId} : {})},
     ...(body ? {data: {...body, requestId}} : {}),
   });
+  if (session && !isCurrentAccountSession(session)) throw staleAccountRequest();
   const value = response.data;
   if (value?.protocolVersion !== version || value.requestId !== requestId || !Number.isFinite(Date.parse(value.serverTime)) || !value.data) {
     throw new Error("互联服务响应不兼容，请刷新后重试");
@@ -400,6 +402,17 @@ export const npepNoiseScheduleApi = {
   preview: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/noise-schedules/preview`, {...options, version: '0.7', body}),
   save: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/noise-schedules`,
     {...options, version: '0.7', body, requestId: body.requestId}),
+};
+export const npepStudySettingsApi = {
+  resume: (school, device, body, options) => npepAdminRequest('post', `${runtimePath(school, device)}/study-settings/resume`,
+    {...options, version: '0.11', body, requestId: body.requestId}),
+  management: (school, device, options) => npepAdminRequest('get', `${runtimePath(school, device)}/study-settings`, {...options, version: '0.10'}),
+  list: (school, termId, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/study-settings`,
+    {...options, version: '0.10', params: termId ? {termId} : {}}),
+  preview: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/study-settings/preview`,
+    {...options, version: '0.10', body, requestId: body.requestId}),
+  save: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/study-settings`,
+    {...options, version: '0.10', body, requestId: body.requestId}),
 };
 export const npepNoiseDisplayApi = {
   async screen(body, {signal} = {}) {
@@ -483,6 +496,12 @@ export const npepExamPlanApi = {
   cancel: (school, device, operation, options) => npepAdminRequest('post', `${examPlanPath(school, device)}/${encodeURIComponent(operation)}/cancel`, {...options, version: '0.5', body: {}}),
 };
 export const npepAdminApi = {
+  studySessions: (school, options) => npepAdminRequest("get", `${npepSchoolPath(school)}/study-sessions`, {...options,version:"0.17"}),
+  classManagement: (school,binding,options) => npepAdminRequest('get',`${npepSchoolPath(school)}/class-management/${encodeURIComponent(binding)}`,{...options,version:'0.16'}),
+  setClassManagement: (school,binding,body,options) => npepAdminRequest('post',`${npepSchoolPath(school)}/class-management/${encodeURIComponent(binding)}`,{...options,version:'0.16',body,requestId:body.requestId}),
+  equipment: (school,device,options) => npepAdminRequest('get',`${npepSchoolPath(school)}/devices/${encodeURIComponent(device)}/equipment`,{...options,version:'0.16'}),
+  setEquipment: (school,device,body,options) => npepAdminRequest('post',`${npepSchoolPath(school)}/devices/${encodeURIComponent(device)}/equipment`,{...options,version:'0.16',body,requestId:body.requestId}),
+  overview: (schoolId, options) => npepAdminRequest('get', `${npepSchoolPath(schoolId)}/device-overview`, options),
   previewPairingAccessBatch: (schoolId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/pairing-access/preview`, {...options, body, requestId: body.requestId}),
   setPairingAccessBatch: (schoolId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/pairing-access/batch`, {...options, body, requestId: body.requestId}),
   pairingAccess: (schoolId, options) => npepAdminRequest('get', `${npepSchoolPath(schoolId)}/pairing-access`, options),
@@ -1067,3 +1086,26 @@ export const classworksV2Api = {
 };
 
 export default client;
+
+export const npepSeatingApi = {
+  catalog: (school, termId, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/seating/catalog`, {...options, version: '0.14', params: termId ? {termId} : {}}),
+  list: (school, params, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/seating`, {...options, version: '0.14', params}),
+  image: (school, params, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/seating/image`, {...options, version: '0.14', params}),
+  publish: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/seating`, {...options, version: '0.14', body, requestId: body.requestId}),
+};
+export const npepStudyPhotosApi = {
+  exitEvents: (school, params, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/study-exit-events`, {...options, version: '0.15', params}),
+  list: (school, params, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/study-photos`, {...options, version: '0.15', params}),
+  remove: (school, id, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/study-photos/${encodeURIComponent(id)}/delete`,
+    {...options, version: '0.15', body: {requestId: globalThis.crypto.randomUUID()}}),
+  async image(school, id, {signal, download = false} = {}) {
+    const session = accountSession();
+    const response = await client.request({method: 'get', url: `/api/v2/npep${npepSchoolPath(school)}/study-photos/${encodeURIComponent(id)}/image`,
+      signal, timeout: 10000, responseType: 'arraybuffer', params: download ? {download: '1'} : {},
+      headers: {'X-NPEP-Version': '0.15', 'X-Request-Id': globalThis.crypto.randomUUID()}});
+    if (!isCurrentAccountSession(session)) throw staleAccountRequest();
+    if (!response.headers['content-type']?.startsWith('image/jpeg') || !response.data) throw new Error('照片响应不兼容');
+    if (!Number.isInteger(response.data.byteLength) || response.data.byteLength <= 0 || response.data.byteLength > 262144) throw new Error('照片体积不符合限制');
+    return new Blob([response.data], {type: 'image/jpeg'});
+  },
+};

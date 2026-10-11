@@ -150,6 +150,7 @@
                     v-model="rule.days"
                     :items="days"
                     :label="'时段 ' + (index + 1) + ' · 星期'"
+                    :aria-label="'时段 ' + (index + 1) + ' · 星期'"
                     multiple
                     chips
                     :disabled="busy"
@@ -189,7 +190,7 @@
               class="mt-3"
               variant="tonal"
               :disabled="busy || draft.rules.length >= 32"
-              @click="draft.rules.push({days:[1,2,3,4,5],start:'19:00',end:'21:00'})"
+              @click="draft.rules.push({days:[],start:'19:00',end:'21:30'})"
             >
               添加时段
             </v-btn>
@@ -288,12 +289,9 @@
             保存后，支持自动排程的 NPEduTools 会接收规则，按 ClassIsland 学校时间执行。请在设备噪音报告中核对“已应用”和执行状态；保存本身不代表已开始监测。不保存原始音频。
           </p>
         </section>
-        <NpepNoiseDisplaySettings
-          :school-id="schoolId"
-          :term-id="editorTerm"
-          :target-type="targetType"
-          :target-id="targetId"
-        />
+        <p class="schedule-note mt-3">
+          旧网页定时展示已停用。全屏自习、日常／考试时段和临时收起时长请在 NPEP「自习展示」中配置。
+        </p>
       </template>
       <v-btn
         v-else
@@ -306,18 +304,19 @@
   </v-card>
 </template>
 <script setup>
-import {computed, toRef} from 'vue';
+import {computed, toRef, watch} from 'vue';
 import {useNoiseScheduleEditor} from '@/composables/admin/useNoiseScheduleEditor.js';
-import NpepNoiseDisplaySettings from '@/components/admin/NpepNoiseDisplaySettings.vue';
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: '当前学校'}, termId: {type: String, default: ''}});
+const emit = defineEmits(['dirty']);
 const editor = useNoiseScheduleEditor(toRef(props, 'schoolId'), toRef(props, 'termId'));
-const {catalog, termId: editorTerm, targetType, targetId, targets, draft, revision, preview, busy, error, message, loaded, valid, validation, refresh, previewDraft, save} = editor;
+const {catalog, termId: editorTerm, targetType, targetId, targets, draft, revision, preview, busy, error, message, loaded, valid, validation, hasUnsavedChanges, refresh, previewDraft, save} = editor;
+watch(hasUnsavedChanges, value => emit('dirty', value), {immediate: true, flush: 'sync'});
 const days = ['周一','周二','周三','周四','周五','周六','周日'].map((title, i) => ({title, value:i+1}));
 const modes = computed(() => [...(targetType.value === 'CLASS' ? [{title:'继承年级',value:'Inherit'}] : []), {title:'使用本范围时段',value:'Override'}, {title:'关闭自动监测',value:'Disabled'}]);
 const validationMessage = computed(() => ({EMPTY_RULES:'请至少添加一个时段。',INVALID_RULE:'请检查星期和开始／结束时间。',INVALID_DURATION:'时段不能等长或超过三小时。',MERGED_WINDOW_TOO_LONG:'相邻或重叠时段合并后超过三小时，请调整。'}[validation.value] || '排程配置无效，请检查填写内容。'));
 function selectFirst() { targetId.value = targets.value[0]?.id || ''; }
 function changeMode(mode) {
-  draft.value.rules = mode === 'Override' ? [{days:[1,2,3,4,5],start:'19:00',end:'21:00'}] : [];
+  draft.value.rules = mode === 'Override' ? [{days:[],start:'19:00',end:'21:30'}] : [];
 }
 const sourceName = source => ({Grade:'继承年级',Class:'班级时段',Disabled:'已关闭',None:'未配置'}[source]);
 const ruleText = rule => rule.days.map(d => days[d-1].title).join('、')+' '+rule.start+'–'+rule.end+(rule.end < rule.start ? '（次日结束）' : '');

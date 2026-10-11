@@ -3,12 +3,13 @@
     <v-card-title class="npep-manager-header">
       <div>
         <div class="npep-eyebrow">
-          学校设备 · NPEP
+          学校互联
         </div>
-        <h2>NPEP 设备互联</h2>
-        <p>{{ schoolName }} · 先核对设备，再处理连接与配置。</p>
+        <h2>{{ sectionTitles[section] }}</h2>
+        <p>{{ schoolName }} · NPEP 学校管理。</p>
       </div>
       <v-btn
+        v-if="section === 'devices'"
         :loading="busy"
         prepend-icon="mdi-refresh"
         variant="tonal"
@@ -17,6 +18,7 @@
         刷新互联设备
       </v-btn>
     </v-card-title>
+
     <v-card-text>
       <v-alert
         v-if="error"
@@ -43,9 +45,33 @@
         刷新未完成，以下为上次成功加载的记录，请勿视为实时状态。
       </v-alert>
       <section
+        v-show="section === 'devices'"
         class="npep-overview"
         aria-labelledby="npep-devices-title"
       >
+        <NpepDeviceOverview
+          v-if="overview"
+          v-model:search="search"
+          :summary="overview.summary"
+          :as-of="overview.asOf"
+          :now="now"
+          :stale="stale"
+          :busy="busy"
+          :filter="filter"
+          :matched-total="overview.matchedTotal"
+          :loaded-count="devices.length"
+          @filter="applyOverview"
+          @search="applyOverview()"
+          @export="exportDiagnostics"
+        />
+        <v-alert
+          v-if="overviewUnavailable"
+          type="info"
+          variant="tonal"
+          class="mb-4"
+        >
+          当前服务尚未提供学校运维概览；以下仅显示已加载的设备，不代表全校汇总。
+        </v-alert>
         <div class="npep-section-heading mb-4">
           <div>
             <h3 id="npep-devices-title">
@@ -65,7 +91,7 @@
           “在线”只表示查询时最近一分钟收到上报；观测过时请刷新。失联不代表软件已退出，自动录制已启用也不代表正在录制。
         </p>
         <div
-          v-if="loaded && !devices.length && !stale"
+          v-if="loaded && !devices.length && !stale && (!overview || overview.summary.total === 0)"
           class="npep-empty"
         >
           <v-icon
@@ -83,6 +109,12 @@
             前往班级大屏网页配对
           </v-btn>
         </div>
+        <p
+          v-else-if="loaded && !devices.length && !stale"
+          class="npep-empty mb-4"
+        >
+          没有匹配当前筛选或搜索的设备。可选择“全部登记”并清空搜索后重试。
+        </p>
         <v-card
           v-for="device in devices"
           :key="device.deviceId"
@@ -115,6 +147,9 @@
               </div>
             </div>
             <div class="npep-device-observation">
+              <p v-if="device.issues?.length">
+                待检查：{{ device.issues.map(overviewIssueName).join('；') }}。
+              </p>
               <p>最近观测：{{ device.lastSeenAt ? time(device.lastSeenAt) : '尚未上报' }}</p>
               <p v-if="device.status">
                 上次观测模式：{{ npepModeName(device.status.mode) }}；录制状态：{{ npepRecordingName(device.status.recording) }}；自动录制：{{ npepAutomaticName(device.status.automaticRecording) }}。
@@ -163,6 +198,18 @@
               <p v-if="device.status">
                 NPEduTools {{ device.status.appVersion }} · ClassIsland：{{ bridge(device.status.classIsland) }} · ExamAware：{{ bridge(device.status.examAware) }}
               </p>
+              <NpepStudyDeviceStatus
+                v-if="effectiveState(device) === 'ACTIVE'"
+                :key="`${schoolId}:${device.deviceId}`"
+                :school-id="schoolId"
+                :device-id="device.deviceId"
+              />
+              <NpepEquipmentSettings
+                v-if="effectiveState(device)==='ACTIVE'"
+                :key="`equipment:${schoolId}:${device.deviceId}`"
+                :school-id="schoolId"
+                :device-id="device.deviceId"
+              />
               <v-btn
                 v-if="device.state !== 'REVOKED'"
                 :disabled="busy || stale"
@@ -185,6 +232,7 @@
         </v-btn>
       </section>
       <section
+        v-show="section === 'devices'"
         ref="configurationSection"
         class="npep-configuration mt-8"
         aria-labelledby="npep-configuration-title"
@@ -274,6 +322,15 @@
                         <p v-if="!bindingOptions.length">
                           没有可用大屏，请先为当前学期的有效班级创建并启用大屏账号。
                         </p>
+                        <v-text-field
+                          v-model="managementSecret"
+                          type="password"
+                          label="班级管理口令（未配置时必填，留空保留已有口令）"
+                          maxlength="128"
+                          autocomplete="new-password"
+                          variant="outlined"
+                          :disabled="busy || !!expired"
+                        />
                         <v-checkbox
                           v-model="confirmed"
                           :disabled="busy || !!expired"
@@ -316,20 +373,87 @@
               </div>
             </v-expansion-panel-text>
           </v-expansion-panel>
-          <v-expansion-panel value="noise">
-            <v-expansion-panel-title>
-              <div><strong>学校自习噪音排程</strong><span>按年级或班级设置，保存后到设备报告核对执行</span></div>
-            </v-expansion-panel-title>
-            <v-expansion-panel-text eager>
-              <NpepNoiseSchedules
-                :school-id="schoolId"
-                :school-name="schoolName"
-                :term-id="termId"
-              />
-            </v-expansion-panel-text>
-          </v-expansion-panel>
         </v-expansion-panels>
       </section>
+      <section
+        v-if="noiseVisited"
+        v-show="section === 'noise'"
+        class="npep-noise"
+        aria-label="学校原生噪音监测"
+      >
+        <div class="npep-noise-reports mt-4">
+          <h3>设备执行状态与报告</h3>
+          <p class="npep-observation-help mt-2 mb-4">
+            排程保存、设备已应用与实际采集是不同状态，请打开设备报告核对。此处查看 NPEduTools 原生统计；浏览器本地历史仍在网页监测中查看。
+          </p>
+          <v-select
+            v-model="reportDeviceId"
+            :items="reportDevices"
+            label="报告设备（当前已加载列表）"
+            variant="outlined"
+            :disabled="busy || stale || !reportDevices.length"
+            hide-details
+          />
+          <div class="npep-device-actions mt-3">
+            <v-btn
+              color="primary"
+              variant="tonal"
+              :disabled="busy || stale || !selectedReportDevice"
+              @click="noiseDevice = selectedReportDevice"
+            >
+              查看噪音报告
+            </v-btn>
+            <v-btn
+              v-if="nextCursor"
+              :disabled="busy || stale"
+              variant="text"
+              @click="more"
+            >
+              加载更多互联设备
+            </v-btn>
+            <v-btn
+              variant="text"
+              @click="emit('navigate', 'devices')"
+            >
+              前往设备互联检索与配对
+            </v-btn>
+          </div>
+          <p class="npep-observation-help mt-3">
+            仅列出当前已加载且授权有效的设备；列表沿用设备互联的筛选条件，不代表全校设备。没有找到设备时，可前往设备互联检索或加载更多。
+          </p>
+        </div>
+        <NpepNoiseSchedules
+          :school-id="schoolId"
+          :school-name="schoolName"
+          :term-id="termId"
+          @dirty="noiseDirty = $event"
+        />
+      </section>
+      <NpepStudySettings
+        v-if="studyVisited"
+        v-show="section === 'study'"
+        :school-id="schoolId"
+        :school-name="schoolName"
+        :term-id="termId"
+        @dirty="studyDirty = $event"
+      />
+      <NpepSeatingSettings
+        v-if="seatingVisited"
+        v-show="section === 'seating'"
+        :school-id="schoolId"
+        :term-id="termId"
+        @dirty="seatingDirty = $event"
+      />
+      <NpepStudyReports
+        v-if="section === 'study' || section === 'noise'"
+        :school-id="schoolId"
+        :term-id="termId"
+      />
+      <NpepStudyPhotos
+        v-if="section === 'study'"
+        :school-id="schoolId"
+        :term-id="termId"
+      />
     </v-card-text>
     <v-dialog
       :model-value="!!noiseDevice"
@@ -415,18 +539,46 @@
 </template>
 
 <script setup>
-import {nextTick, ref, toRef, watch} from "vue";
+import {computed, defineAsyncComponent, nextTick, onUnmounted, ref, toRef, watch} from "vue";
 import NpepRuntimeControl from './NpepRuntimeControl.vue';
 import NpepExamPlanControl from './NpepExamPlanControl.vue';
 import NpepNoiseReports from './NpepNoiseReports.vue';
 import NpepNoiseSchedules from './NpepNoiseSchedules.vue';
 import NpepPairingAccess from './NpepPairingAccess.vue';
+import NpepDeviceOverview from './NpepDeviceOverview.vue';
+import NpepStudyDeviceStatus from './NpepStudyDeviceStatus.vue';
+import {overviewIssueName} from '@/utils/npepDeviceOverview';
+import {createNpepOverviewDiagnostics} from '@/utils/npepDiagnostics';
+import {downloadDiagnosticBundle} from '@/utils/localDiagnostics';
+import {getServerUrl} from '@/utils/socketClient';
+import packageInfo from '../../../package.json';
 import {useNpepManager} from "@/composables/admin/useNpepManager";
 import {npepConnectivity, npepStateName, npepModeName, npepRecordingName, npepAutomaticName} from "@/utils/npepPresentation";
 
-const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: "当前学校"}, termId: {type: String, default: ''}});
+const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: "当前学校"}, termId: {type: String, default: ''}, section: {type: String, default: 'devices'}});
+const emit = defineEmits(['dirty', 'navigate']);
+const NpepStudySettings = defineAsyncComponent(() => import('./NpepStudySettings.vue'));
+const NpepEquipmentSettings=defineAsyncComponent(()=>import('./NpepEquipmentSettings.vue'));
+const NpepStudyReports = defineAsyncComponent(() => import('./NpepStudyReports.vue'));
+const NpepStudyPhotos = defineAsyncComponent(() => import('./NpepStudyPhotos.vue'));
+const section = toRef(props, 'section');
+const sectionTitles = {devices: '大屏互联', study: '自习展示', noise: '噪音监测', seating: '自习座位表'};
+const NpepSeatingSettings = defineAsyncComponent(() => import('./NpepSeatingSettings.vue'));
+const noiseVisited = ref(false);
+const studyVisited = ref(false);
+const seatingVisited = ref(false);
+const noiseDirty = ref(false), studyDirty = ref(false), seatingDirty = ref(false);
+const reportDeviceId = ref(null);
+watch(section, value => {
+  if (value === 'noise') noiseVisited.value = true;
+  if (value === 'study') studyVisited.value = true;
+  if (value === 'seating') seatingVisited.value = true;
+}, {immediate: true});
+watch([noiseDirty, studyDirty, seatingDirty], ([noise, study, seating]) => emit('dirty', noise || study || seating), {immediate: true, flush: 'sync'});
+onUnmounted(() => emit('dirty', false));
 const manager = useNpepManager(toRef(props, "schoolId"));
-const {devices, bindings, candidate, approved, code, bindingId, busy, error, message, loaded, stale, nextCursor, now,
+const {devices, bindings, candidate, approved, code, bindingId, managementSecret,busy, error, message, loaded, stale, nextCursor, now,
+  overview, overviewUnavailable, filter, search, applyOverview,
   expired, bindingOptions, refresh, more, resolve, approve, cancel, revoke} = manager;
 const confirmed = ref(false), revoking = ref(null);
 const openConfiguration = ref([]);
@@ -440,12 +592,29 @@ watch([candidate, bindingId, () => props.schoolId], () => { confirmed.value = fa
 const time = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString("zh-CN") : "未知";
 const effectiveState = device => device.state === "ACTIVE" && Date.parse(device.credentialExpiresAt) <= now.value ? "EXPIRED" : device.state;
 const connectivity = device => stale.value ? "待刷新核对" : npepConnectivity({...device, state: effectiveState(device)}, now.value);
+const selectedReportDevice = computed(() => devices.value.find(device => device.deviceId === reportDeviceId.value && effectiveState(device) === 'ACTIVE'));
+const reportDevices = computed(() => devices.value.filter(device => effectiveState(device) === 'ACTIVE').map(device => ({
+  title: `${device.deviceName} · ${bindingName(device)} · ${connectivity(device)}`, value: device.deviceId,
+})));
 const bindingName = device => {
+  if (device.screenBindingName) return `${device.screenBindingName} · ${device.bindingChanged ? '原班级绑定已变化或不可用' : device.administrativeClassName || '班级资料暂缺'}`;
   const screen = bindings.value.find(b => b.id === device.screenBindingId);
   if (screen && device.administrativeClassId && screen.administrativeClassId !== device.administrativeClassId) return `${screen.name} · 原班级绑定已变化`;
   return screen ? `${screen.name} · ${screen.administrativeClass?.name || '班级资料暂缺'}` : "原大屏资料不可用";
 };
 const bridge = value => ({READY: "已连接", DISCONNECTED: "未连接", UNKNOWN: "未知"}[value?.connection] || "未知");
+function exportDiagnostics() {
+  if (busy.value || !overview.value) return;
+  try {
+    const bundle = createNpepOverviewDiagnostics({overview: overview.value, devices: devices.value,
+      schoolId: props.schoolId, filter: filter.value, stale: stale.value, now: now.value,
+      backendUrl: getServerUrl(), appVersion: packageInfo.version, hasMore: Boolean(nextCursor.value)});
+    downloadDiagnosticBundle(bundle, `NPClassworks-NPEP-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+    message.value = '已生成本地诊断摘要；包含服务地址和归属编号，分享前请核对文件。';
+  } catch {
+    error.value = '无法导出当前诊断摘要，请刷新概览或检查浏览器下载权限后重试。';
+  }
+}
 async function openScreenConfiguration() {
   openConfiguration.value = [...new Set([...openConfiguration.value, 'screen'])];
   await nextTick();
@@ -473,6 +642,9 @@ async function confirmRevoke() {
   white-space: normal;
 }
 .npep-eyebrow { color: rgb(var(--v-theme-primary)); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.npep-section-tabs { margin: 0 28px 8px; border-bottom: 1px solid rgba(var(--v-border-color), .16); }
+.npep-noise-reports { padding: 22px; border: 1px solid rgba(var(--v-border-color), .2); border-radius: 16px; }
+.npep-noise-reports h3 { font-size: 20px; font-weight: 750; }
 .npep-manager-header h2 { margin-top: 4px; font-size: clamp(24px, 2vw, 30px); font-weight: 750; }
 .npep-manager-header p { margin-top: 6px; color: rgba(var(--v-theme-on-surface), .7); font-size: 14px; }
 .npep-device-manager > :deep(.v-card-text) { padding: 12px 28px 28px; }
@@ -503,6 +675,8 @@ async function confirmRevoke() {
 @media (max-width: 600px) {
   .npep-device-manager { scroll-margin-top: 150px; }
   .npep-manager-header { padding: 20px 18px 10px; }
+  .npep-section-tabs { margin-inline: 18px; }
+  .npep-noise-reports { padding: 16px; }
   .npep-device-manager > :deep(.v-card-text) { padding: 10px 18px 20px; }
   .npep-device-actions :deep(.v-btn) { margin: 0; }
 }

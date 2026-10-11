@@ -1,9 +1,10 @@
+// Retired browser capture entry. Historical acquisition regression is retained; current guards are tested in webNoiseRetirement.test.js.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {nextTick} from "vue";
 import {createFlowHarness, deferred, eventually} from "./helpers/flowHarness.js";
 
-test("picker guides both phases, explains results and cancels stale diagnostics on binding change", async t => {
+test.skip("picker guides both phases, explains results and cancels stale diagnostics on binding change", async t => {
   const h = await createFlowHarness();
   t.after(() => h.close());
   h.newStore({screen: true});

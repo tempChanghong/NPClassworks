@@ -1,4 +1,4 @@
-export const CLASSROOM_TOOL_IDS = Object.freeze(["attendance", "noise"]);
+export const CLASSROOM_TOOL_IDS = Object.freeze(["attendance"]);
 export const CLASSROOM_TOOLS_SETTINGS_EVENT = "classworks-v2-classroom-tools-changed";
 
 export const CLASSROOM_TOOL_DEFAULTS = Object.freeze({

@@ -10,7 +10,8 @@ process.env.VITE_DEFAULT_KV_SERVER = api;
 process.env.VITE_ENABLE_ANALYTICS = "false";
 const releases = new Map();
 for (const release of ["previous", "next"]) {
-  const directory = resolve("dist-e2e", release);
+  // Parallel isolated runs use different API origins; never overwrite each other's assets.
+  const directory = resolve("dist-e2e", String(webPort), release);
   // Both releases use current application code. Only test-only HTML/entry markers
   // differ, producing real asset hashes and Workbox precache revisions for an update.
   await build({mode: "production", build: {outDir: directory}, logLevel: "error", plugins: [{

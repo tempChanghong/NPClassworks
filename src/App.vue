@@ -28,7 +28,6 @@
     <global-message />
     <rate-limit-modal />
     <PwaLifecyclePrompt />
-    <NoiseScheduleManager />
     <ActionDialogHost />
     <AppRecoveryDialog />
   </v-app>
@@ -40,7 +39,6 @@ import { useTheme } from "vuetify";
 import { getSetting, watchSettings } from "@/utils/settings";
 import RateLimitModal from "@/components/RateLimitModal.vue";
 import PwaLifecyclePrompt from "@/components/v2/PwaLifecyclePrompt.vue";
-import NoiseScheduleManager from "@/components/v2/NoiseScheduleManager.vue";
 import ActionDialogHost from "@/components/common/ActionDialogHost.vue";
 import AppRecoveryDialog from "@/components/common/AppRecoveryDialog.vue";
 import {useRoute, useRouter} from "vue-router";

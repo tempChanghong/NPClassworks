@@ -1,4 +1,9 @@
 const messages = {
+  SEATING_CHANGED: '自习座位表版本已变化，请刷新核对后重新发布；待发布图片仍保留。',
+  INVALID_IMAGE: '自习座位表图片格式或内容无效，请重新选择 PNG/JPEG 图片。',
+  IMAGE_DIMENSIONS: '自习座位表超出图片尺寸限制，请缩减尺寸并保持姓名可读。',
+  IMAGE_NO_LONGER_RETAINED: '此历史图片已超过保留版本范围，请重新上传原图。',
+
   SCREEN_TOKEN_INVALID: '大屏登录已失效，请重新登录对应班级大屏。',
   SCREEN_PAIRING_DISABLED: '学校尚未开放此大屏的网页配对，请联系管理员。',
   PREAUTHORIZATION_CHANGED: '学校预授权或大屏登录凭据已变化，请刷新并重新生成配对码。',
@@ -42,6 +47,10 @@ const messages = {
   INSTANCE_MISMATCH: "互联服务身份已变化，请重新打开面板并核对。", PROTOCOL_UNSUPPORTED: "当前互联协议不兼容，请升级后再试。",
   TEMPORARILY_UNAVAILABLE: "互联服务未启用或暂时不可用，请联系服务管理员。", CAPABILITY_DENIED: "当前仅支持查看设备状态。",
   INVALID_REQUEST: "提交内容无效，请核对后重试。",
+  STUDY_RESUME_UNAVAILABLE: '尚未收到设备的新鲜恢复能力回执，请刷新或核对桌面版本。',
+  STUDY_NOT_APPLIED: '当前自习配置尚未获得新鲜应用回执，请刷新后重试。',
+  COMMAND_PENDING: '已有恢复请求等待设备处理，请先刷新回执。',
+  SESSION_SUPERSEDED: '设备会话已变化，请刷新后重新核对。',
 };
 export function npepErrorMessage(error) {
   const detail = error?.response?.data?.error;

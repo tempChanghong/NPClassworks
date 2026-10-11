@@ -1,3 +1,4 @@
+import {requireWebNoise} from './webNoiseAvailability.js';
 export function classifyMicrophoneError(error, {secureContext = true} = {}) {
   if (!secureContext) return "insecure-context"
   const name = error?.name || ""
@@ -21,6 +22,7 @@ export async function queryMicrophonePermission() {
 }
 
 export async function requestMicrophonePermission() {
+  requireWebNoise();
   if (typeof window === "undefined" || !window.isSecureContext) {
     return {state: "insecure-context", devices: []}
   }

@@ -16,7 +16,10 @@ function routeCatalog() { h.routes.set(`GET ${path}`,(req,reply) => {
 async function editor() { routeCatalog(); const result = await h.openNoiseScheduleEditor(); await eventually(()=>assert.equal(result.state.loaded.value,true)); return result; }
 
 test('actual client loads scope, previews and saves with 0.7 and a stable retry ID',async()=>{
-  const {state} = await editor(); state.draft.value = {mode:'Override',rules:[{days:[1],start:'19:00',end:'21:00'}]};
+  const {state} = await editor();
+  assert.equal(state.hasUnsavedChanges.value, false);
+  state.draft.value = {mode:'Override',rules:[{days:[1],start:'19:00',end:'21:00'}]};
+  assert.equal(state.hasUnsavedChanges.value, true);
   h.routes.set(`POST ${path}/preview`,(req,reply)=>reply(envelope(req,{baseRevision:0,items:[],totalClasses:1,changedClasses:1,pairedDevices:1}),200,true));
   await state.previewDraft(); assert.equal(state.preview.value.totalClasses,1);
   const ids=[];
@@ -27,14 +30,18 @@ test('actual client loads scope, previews and saves with 0.7 and a stable retry 
     reply(envelope(req,{revision:1,updatedAt:new Date().toISOString(),items:[],baseRevision:0,executionEnabled:true}),200,true);
   });
   await state.save(); assert.match(state.error.value,/TEMPORARILY_UNAVAILABLE/);
+  assert.equal(state.hasUnsavedChanges.value, true);
   await state.save(); assert.equal(ids.length,2); assert.equal(ids[0],ids[1]);
   assert.equal(state.revision.value,1); assert.match(state.message.value,/等待支持排程的桌面确认/);
+  assert.equal(state.hasUnsavedChanges.value, false);
 });
 test('conflict keeps draft and blocks overwrite until explicit reload',async()=>{
   const {state} = await editor(); const draft={mode:'Override',rules:[{days:[2],start:'20:00',end:'21:00'}]}; state.draft.value=draft;
   h.routes.set(`POST ${path}`,(_req,reply)=>reply({error:{code:'SCHEDULE_VERSION_CONFLICT'}},409));
   await state.save(); assert.deepEqual(state.draft.value,draft); assert.equal(state.valid.value,false);
+  assert.equal(state.hasUnsavedChanges.value,true);
   assert.match(state.error.value,/草稿已保留/); await state.refresh(); assert.equal(state.valid.value,true); assert.equal(state.draft.value.mode,'Disabled');
+  assert.equal(state.hasUnsavedChanges.value,false);
 });
 test('late preview cannot become current after draft or school change',async()=>{
   const {state,school}=await editor(), held=deferred();

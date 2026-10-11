@@ -118,6 +118,8 @@ try{
     await input.scrollIntoViewIfNeeded();
     await input.press('ArrowDown');
     await page.getByRole('option',{name:title,exact:true}).click();
+    // Multiple weekday choices keep the menu open; close it before the next action.
+    await input.press('Escape');
     // Vuetify restores the originating input's focus after its leave animation.
     // Wait for the actual menu to hide before opening another selection.
     await expect(page.getByRole('option',{name:title,exact:true,includeHidden:true})).toBeHidden();
@@ -125,6 +127,8 @@ try{
   await page.goto(origin+'/schedule-fixture');
   await expect(page.getByText(/保存后，支持自动排程的/)).toBeVisible();
   await selectOption('自动监测规则','使用本范围时段');
+  // Weekdays intentionally start empty; a test must choose an actual school day.
+  await selectOption('时段 1 · 星期','周四');
   await expect(page.getByRole('button',{name:'保存排程',exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'预览影响',exact:true}).click();
   await expect(page.getByText('有效规则预览',{exact:true})).toBeVisible();
@@ -170,24 +174,17 @@ try{
   ].some(([method,path,version])=>r.method===method&&r.path===path&&r.version===version)
     && (r.method==='GET'?r.body===null:r.body!==null)));
   if(saves.length!==1||unexpectedRequests.length)throw new Error(`Unexpected writes or protocol version: ${JSON.stringify({saves:saves.length,unexpectedRequests})}`);
-  await page.goto(origin+'/execution-fixture');
-  await expect(page.getByText(/本次已手动停止/)).toBeVisible();
-  await expect(page.getByText(/2026-10-01 19:30:00/)).toBeVisible();
-  await expect(page.getByText('来源未确认',{exact:true})).toHaveCount(2);
   await page.request.post(origin+'/runtime-control',{data:{sessions:[{sessionId:scheduledSession,version:'a'.repeat(64),window:schoolWindow}]}});
-  await page.getByRole('button',{name:'刷新',exact:true}).click();
+  await page.goto(origin+'/reports-fixture');
   const scheduledReport=page.getByRole('article',{name:`统计报告 ${scheduledSession}`,exact:true});
   const unknownReport=page.getByRole('article',{name:`统计报告 ${unknownSession}`,exact:true});
   await expect(scheduledReport.getByText('学校自动排程',{exact:true})).toBeVisible();
   await expect(unknownReport.getByText('来源未确认',{exact:true})).toBeVisible();
   await expect(scheduledReport.getByText('学校时段：2026-10-01 19:00:00 → 2026-10-01 20:00:00',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'恢复本次自动监测',exact:true}).click();
-  await expect(page.getByText(/正在按排程监测/)).toBeVisible();
   await expect(page.getByRole('button',{name:'恢复本次自动监测',exact:true})).toHaveCount(0);
-  if(resumeCount!==1)throw new Error('Repeated resume');
+  if(resumeCount!==0)throw new Error('Administrator report attempted retired screen control');
   await page.request.post(origin+'/runtime-control',{data:{online:false,applied:false,policy:{...runtimeView.policy,version:'b'.repeat(64)}}});
-  await page.getByRole('button',{name:'刷新',exact:true}).click();
-  await expect(page.getByText(/下列内容为上次回传/)).toBeVisible();
+  await page.getByRole('button',{name:'刷新报告',exact:true}).click();
   await expect(page.getByText(/规则待桌面确认/)).toBeVisible();
   await expect(scheduledReport.getByText(/按当时规则执行/)).toBeVisible();
   await expect(scheduledReport.getByText('学校自动排程',{exact:true})).toBeVisible();
@@ -220,7 +217,7 @@ try{
   await expect(page.getByText(/排程状态未确认/)).toBeVisible();
   await expect(page.getByText('正在核对排程接口…',{exact:true})).toHaveCount(0);
   if(errors.length||await page.evaluate(()=>window.__microphones)!==0)throw new Error('Runtime UI regression: '+errors.join(';'));
-  console.log('PASS browser: actual management editing and native schedule status/resume client, report source joins in screen/admin, late metadata, historical policy and offline retention, school calendar carrier, zero browser microphone requests. Fixtures only.');
+  console.log('PASS browser: management editing with explicit weekdays, administrator report source joins, historical policy and offline retention, zero retired screen commands and browser microphone requests. Fixtures only.');
 }catch(error){
   if(page){await page.screenshot({path:resolve(output,'failure.png'),fullPage:true});
     const evidence={text:await page.locator('body').innerText(),aria:await page.locator('body').ariaSnapshot(),focusEvents:await page.evaluate(()=>window.__focusEvents),errors,requests};

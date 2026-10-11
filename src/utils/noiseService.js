@@ -1,3 +1,4 @@
+import {requireWebNoise} from '@/utils/webNoiseAvailability';
 import {
   getNoiseControlSettings,
   resetNoiseControlSettings,
@@ -15,6 +16,7 @@ const FRAME_MS = 100
 const ANALYSIS_INTERVAL_MS = 500
 const SCORE_WINDOW_MS = 60_000
 const SLICE_MS = 30_000
+const SIGNAL_TTL_MS = 1000
 
 const dbfsFromRms = rms => rms > 0 ? 20 * Math.log10(rms) : -100
 const createId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
@@ -37,6 +39,8 @@ class ClassworksNoiseService {
     this.fallbackAnalyser = null
     this.fallbackBuffer = null
     this.fallbackTimer = null
+    this.signalTimer = null
+    this.lastFeatureAt = null
     this.ringBuffer = []
     this.windowFrames = []
     this.sliceFrames = []
@@ -65,11 +69,12 @@ class ClassworksNoiseService {
   }
 
   snapshot() {
+    this.expireSignal()
     const latest = this.ringBuffer.at(-1)
     return {
       status: this.status,
-      currentDbfs: latest?.dbfs ?? -100,
-      currentDisplayDb: latest?.displayDb ?? 20,
+      currentDbfs: this.status === 'active' ? latest?.dbfs ?? null : null,
+      currentDisplayDb: this.status === 'active' ? latest?.displayDb ?? null : null,
       ringBuffer: [...this.ringBuffer],
       lastSlice: this.lastCompletedSlice,
       currentScore: this.currentScore,
@@ -81,6 +86,17 @@ class ClassworksNoiseService {
     }
   }
 
+  expireSignal() {
+    if (this.status !== 'active') return
+    const age = this.lastFeatureAt === null ? Infinity : globalThis.performance.now() - this.lastFeatureAt
+    if (age >= 0 && age < SIGNAL_TTL_MS && this.audioContext?.state === 'running') return
+    this.ringBuffer = []
+    this.windowFrames = []
+    this.currentScore = this.currentScoreDetail = null
+    this.signalHealth = {quality: 'no-data', confidence: 0, coverage: 0}
+    this.lastAnalysisAt = 0
+  }
+
   emit() {
     if (!this.listeners.size) return
     const snapshot = this.snapshot()
@@ -88,6 +104,7 @@ class ClassworksNoiseService {
   }
 
   async start({deviceId} = {}) {
+    requireWebNoise();
     if (["active", "initializing"].includes(this.status)) return
     const generation = ++this.generation
     this.microphoneTest?.abort()
@@ -158,7 +175,9 @@ class ClassworksNoiseService {
       this.signalHealth = {quality: "no-signal", confidence: 0, coverage: 0}
       this.sliceStart = Date.now()
       this.lastAnalysisAt = 0
+      this.lastFeatureAt = null
       this.status = "active"
+      this.signalTimer = window.setInterval(() => { if (isCurrent()) this.emit() }, ANALYSIS_INTERVAL_MS)
       this.emit()
     } catch (error) {
       if (!isCurrent()) return
@@ -224,10 +243,14 @@ class ClassworksNoiseService {
   consumeFeature(feature) {
     this.activityGuard?.()
     if (this.status !== "active") return
+    this.expireSignal()
     const timestamp = Date.now()
+    const receivedAt = globalThis.performance.now()
+    this.lastFeatureAt = receivedAt
     const dbfs = dbfsFromRms(feature.rms)
     const frame = {
       timestamp,
+      receivedAt,
       rms: feature.rms,
       dbfs,
       peakDbfs: dbfsFromRms(feature.peak),
@@ -238,13 +261,13 @@ class ClassworksNoiseService {
     this.ringBuffer.push({t: timestamp, dbfs: frame.dbfs, displayDb: frame.displayDb})
     if (this.ringBuffer.length > 100) this.ringBuffer.shift()
     this.windowFrames.push(frame)
-    this.windowFrames = this.windowFrames.filter(item => timestamp - item.timestamp <= SCORE_WINDOW_MS)
+    this.windowFrames = this.windowFrames.filter(item => receivedAt - item.receivedAt <= SCORE_WINDOW_MS)
     this.sliceFrames.push(frame)
     this.processCalibration(frame)
 
-    if (!this.lastAnalysisAt || timestamp - this.lastAnalysisAt >= ANALYSIS_INTERVAL_MS) {
+    if (!this.lastAnalysisAt || receivedAt - this.lastAnalysisAt >= ANALYSIS_INTERVAL_MS) {
       const analysis = analyzeNoiseWindow(this.windowFrames)
-      this.lastAnalysisAt = timestamp
+      this.lastAnalysisAt = receivedAt
       this.currentScore = analysis.score
       this.currentScoreDetail = analysis.scoreDetail
       this.signalHealth = {
@@ -305,6 +328,7 @@ class ClassworksNoiseService {
   }
 
   async testMicrophoneDevice(deviceId = "default", {diagnostic = false, onPhase, signal} = {}) {
+    requireWebNoise();
     const shouldResume = ["active", "initializing"].includes(this.status)
     const stopping = this.stop()
     const generation = this.generation
@@ -409,6 +433,9 @@ class ClassworksNoiseService {
     // Detach synchronously so a slow close never clears a newer session's resources.
     const context = this.audioContext
     window.clearInterval(this.fallbackTimer)
+    window.clearInterval(this.signalTimer)
+    this.signalTimer = null
+    this.lastFeatureAt = null
     this.fallbackTimer = null
     if (this.processorNode) this.processorNode.port.onmessage = null
     this.stream?.getTracks().forEach(track => track.stop())
@@ -429,7 +456,9 @@ class ClassworksNoiseService {
   handleTrackEnded() {
     if (!["active", "initializing"].includes(this.status)) return
     ++this.generation
+    if (this.status === 'active' && this.sliceFrames.length) this.finalizeSlice(Date.now())
     this.status = "error"
+    this.calibration = null
     void this.releaseAudioResources()
     this.emit()
   }

@@ -1,3 +1,4 @@
+// Retired browser capture entry. Historical acquisition regression is retained; current guards are tested in webNoiseRetirement.test.js.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {createFlowHarness, eventually} from "./helpers/flowHarness.js";
@@ -5,7 +6,7 @@ import {saveMicrophoneDeviceSettings, microphoneDeviceSettingsKey} from "../src/
 import {saveNoiseScheduleSettings} from "../src/utils/noiseScheduleSettings.js";
 
 for (const mode of ["scheduled", "manual", "idle"]) {
-  test(`${mode}: saving a replacement microphone recovers once only when monitoring is wanted`, async t => {
+  test.skip(`${mode}: saving a replacement microphone recovers once only when monitoring is wanted`, async t => {
     t.mock.timers.enable({apis: ["Date"], now: new Date("2026-09-10T12:00:00+08:00")});
     const h = await createFlowHarness();
     t.after(() => h.close());

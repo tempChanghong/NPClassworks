@@ -152,6 +152,9 @@ export async function createFlowHarness() {
   }
   reset();
   return {
+    async retiredNoiseRuntime() {
+      return {service:(await vite.ssrLoadModule("/src/utils/noiseService.js")).noiseService, native:(await vite.ssrLoadModule("/src/utils/nativeNoise.js")).nativeNoise};
+    },
     api, screenExit, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore, configureScreenUploadRetry,
     async openNpepPairing({management = false, bindings = [], termId = ''} = {}) {
       const {default: component} = await vite.ssrLoadModule(management ? '/src/components/admin/NpepPairingAccess.vue' : '/src/components/v2/NpepScreenPairingCard.vue');
@@ -187,6 +190,14 @@ export async function createFlowHarness() {
       app.mount({}); mounted.push(app);
       return {state, unmount() { mounted.splice(mounted.indexOf(app), 1); app.unmount(); }};
     },
+    async openNpepManager() {
+      const {useNpepManager} = await vite.ssrLoadModule('/src/composables/admin/useNpepManager.js');
+      const school = ref('school');
+      let state;
+      const app = renderer.createApp({setup() { state = useNpepManager(school); return () => null; }});
+      app.mount({}); mounted.push(app);
+      return {state, school};
+    },
     async openNoiseScheduleEditor() {
       const {useNoiseScheduleEditor} = await vite.ssrLoadModule('/src/composables/admin/useNoiseScheduleEditor.js');
       const school = ref('school'), term = ref('term');
@@ -194,6 +205,14 @@ export async function createFlowHarness() {
       const app = renderer.createApp({setup() { state = useNoiseScheduleEditor(school, term); return () => null; }});
       app.mount({}); mounted.push(app);
       return {state, school, term};
+    },
+    async openStudySettingsEditor() {
+      const {useStudySettingsEditor} = await vite.ssrLoadModule('/src/composables/admin/useStudySettingsEditor.js');
+      const school = ref('school'), term = ref('term');
+      let state;
+      const app = renderer.createApp({setup() { state = useStudySettingsEditor(school, term); return () => null; }});
+      app.mount({}); mounted.push(app);
+      return {state, school, term, unmount() { mounted.splice(mounted.indexOf(app), 1); app.unmount(); }};
     },
     async openSchoolHomeworkSettings() {
       const {useSchoolHomeworkSettings} = await vite.ssrLoadModule("/src/composables/admin/useSchoolHomeworkSettings.js");

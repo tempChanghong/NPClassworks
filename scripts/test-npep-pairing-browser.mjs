@@ -13,6 +13,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const args=process.argv.slice(2);
 if(args.length && (args.length!==2||args[0]!=='--backend-root'))throw new Error('Use --backend-root <checkout> or no options.');
 const contract=args.length ? await import(pathToFileURL(resolve(args[1],'domain/npep/wire.js'))) : null;
+const managementContract=args.length ? await import(pathToFileURL(resolve(args[1],'domain/npep/schoolManagement.js'))) : null;
 const output = resolve(root, '.artifacts/pairing-browser', randomUUID());
 await mkdir(output, {recursive:true});
 const screens = [{id:'one',name:'一班大屏',gradeId:'grade',className:'高一一班',enabled:false,revision:1},
@@ -40,7 +41,20 @@ const server = await createServer({configFile:false,envFile:false,root,cacheDir:
       if (req.url?.startsWith('/api/v2/npep/')) {
         let raw='';for await(const chunk of req)raw+=chunk;const body=raw?JSON.parse(raw):null;
         calls.push({path:req.url,method:req.method,body});
-        assert.equal(req.headers['x-npep-version'],'0.1');
+        const management=/\/class-management\/([^/]+)$/.exec(req.url);
+        assert.equal(req.headers['x-npep-version'],management?'0.16':'0.1');
+        if(management){
+          const selected=screens.find(s=>s.id===decodeURIComponent(management[1]));assert.ok(selected);
+          assert.equal(req.headers.authorization,'Bearer fixture-admin');
+          if(body){
+            if(managementContract)assert.equal(managementContract.managementWriteValid(body),true);
+            assert.equal(body.expectedRevision,0);assert.equal(body.secret,'isolated-admin-credential');
+            selected.enabled=body.enabled;selected.revision++;
+          }
+          res.setHeader('Content-Type','application/json');
+          res.end(JSON.stringify({protocolVersion:'0.16',requestId:body?.requestId||req.headers['x-request-id'],serverTime:new Date().toISOString(),
+            data:{revision:body?1:0,configured:!!body,enabled:selected.enabled}}));return;
+        }
         if(body&&contract){
           const definition=req.url.includes('/screen/')?'issueScreenPairing':req.url.includes('/screen-bindings/')?'setScreenPairingAccess'
             :req.url.endsWith('/preview')?'previewPairingAccessBatch':'setPairingAccessBatch';
@@ -174,6 +188,11 @@ try {
   occupied=true;await screen.getByRole('button',{name:'刷新授权状态',exact:true}).click();
   await expect(screen.getByRole('heading',{name:'这台大屏已连接设备'})).toBeVisible();checks.push('occupied binding cannot be replaced');
   await admin.locator('.pairing-access-device').filter({hasText:'二班大屏'}).getByRole('button',{name:'开放网页配对'}).click();
+  const credentialDialog=admin.getByRole('dialog');
+  await expect(credentialDialog).toContainText('班级管理口令与预授权');
+  await credentialDialog.getByLabel('新管理口令（8至128位）').fill('isolated-admin-credential');
+  await credentialDialog.getByRole('button',{name:'保存口令与预授权',exact:true}).click();
+  await expect(credentialDialog).toBeHidden();
   await expect(admin.locator('.pairing-access-device').filter({hasText:'二班大屏'}).getByText('已开放',{exact:true})).toBeVisible();
   assert.equal(screens[0].enabled,false);assert.equal(screens[1].enabled,true);checks.push('individual access changes only the selected screen');
   await select('网页配对','开放');await previewButton.click();await confirm.check();

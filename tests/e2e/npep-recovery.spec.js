@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {openAdmin} from './admin-fixture.js';
-import {api, origin} from './environment.js';
+import {api} from './environment.js';
 
 // Real production pages and controls; only loopback API responses and time are isolated.
 const window = {start: '2026-10-04T19:00:00.000', end: '2026-10-04T20:00:00.000'};
@@ -38,13 +38,20 @@ const examHistory = {operationId: 'historical-exam', target: 'EXAM', state: 'SUC
 };
 
 async function openDevices(browser, handle) {
-  const setup = await openAdmin(browser, 1440, 'ADMIN', {}, 'screens', async context => {
+  const setup = await openAdmin(browser, 1440, 'ADMIN', {}, 'npep', async context => {
     await context.route(`${api}/api/v2/npep/**`, async route => {
       const path = new URL(route.request().url()).pathname;
       if (path.endsWith('/info')) return reply(route, {supportedCapabilities: ['device.status']});
       if (path.endsWith('/noise-schedules')) return reply(route, {termId: 'term',
         terms: [{id: 'term', name: '当前学期'}], grades: [], classes: [], policies: [], executionEnabled: true});
       if (path.endsWith('/pairing-access')) return reply(route, {items: []});
+      if (path.endsWith('/equipment')) return reply(route, {policy:{revision:0,locked:false,microphoneId:null,cameraId:null},inventory:null});
+      if (path.endsWith('/device-overview')) return reply(route, {
+        asOf:new Date().toISOString(),summary:{total:2,active:2,online:2,offline:0,unreported:0,attention:0,inactive:0},matchedTotal:2,
+        items:['a','b'].map(id=>({deviceId:`device-${id}`,deviceName:`设备 ${id.toUpperCase()}`,screenBindingId:'screen-a',
+          state:'ACTIVE',bindingRevision:1,connectivity:'ONLINE',lastSeenAt:new Date().toISOString(),
+          credentialExpiresAt:new Date(Date.now()+86400000).toISOString(),issues:[],
+          status:{mode:'DAILY',recording:'IDLE',automaticRecording:'ENABLED'}})),nextCursor:null});
       if (path.endsWith('/devices')) return reply(route, {items: ['a', 'b'].map(id => ({
         deviceId: `device-${id}`, deviceName: `设备 ${id.toUpperCase()}`, screenBindingId: 'screen-a',
         state: 'ACTIVE', bindingRevision: 1, connectivity: 'ONLINE', lastSeenAt: new Date().toISOString(),
@@ -56,7 +63,6 @@ async function openDevices(browser, handle) {
     });
   });
   await setup.page.clock.install();
-  await setup.page.getByRole('button', {name: '打开 NPEP 设备互联', exact: true}).click();
   await expect(setup.page.locator('.npep-device')).toHaveCount(2);
   return setup;
 }
@@ -203,55 +209,6 @@ for (const online of [true, false]) {
   });
 }
 
-test.describe('native screen control failures', () => {
-  test.use({serviceWorkers: 'block', storageState: {cookies: [], origins: [{origin, localStorage: [
-    {name: 'classworks-v2-oobe', value: JSON.stringify({version: 1, completed: true, roleHint: 'screen'})},
-    {name: 'classworks-v2-screen-oobe:screen-a', value: JSON.stringify({version: 1, completed: true})},
-    {name: 'classworks-v2-screen-token', value: 'screen-token'},
-  ]}]}});
-
-  for (const action of ['stop', 'resume']) {
-    test(`${action} failure remains rendered after successful noise and schedule polls`, async ({page, request}, testInfo) => {
-      const errors = [];
-      page.on('pageerror', error => errors.push(error.message));
-      await request.post(`${origin}/__test/release`, {data: {release: 'previous'}});
-      await request.post(`${api}/__test/reset`);
-      await page.addInitScript(() => {
-        window.microphoneRequests = 0;
-        navigator.mediaDevices.getUserMedia = async () => { window.microphoneRequests++; throw Error('Unexpected browser microphone'); };
-      });
-      let observedState = action === 'stop' ? 'Active' : 'Stopped';
-      let observedReason = action === 'stop' ? 'MANUAL_ACTIVE' : 'WINDOW_FAILED';
-      await page.route('**/api/v2/npep/screen/noise**', async route => {
-        const path = new URL(route.request().url()).pathname;
-        if (path.endsWith('/noise/commands')) return reject(route, 'STATE_CHANGED');
-        if (path.endsWith('/noise-schedule/resume')) return reject(route, 'SCHEDULE_VERSION_CONFLICT');
-        if (path.endsWith('/noise-schedule')) return reply(route, schedule(observedReason, action === 'stop' ? 'Manual' : 'None'));
-        if (path.endsWith('/noise')) return reply(route, {provider: 'native', online: true,
-          receivedAt: new Date().toISOString(), reports: [], commands: [],
-          status: {state: observedState, sessionId: 'current-session', instanceId: 'isolated-instance', revision: 2,
-            quality: 'Good', currentDbfs: -57, deviceName: '隔离统计夹具', configured: true}});
-        // Display/presence are unused for Manual/None ownership; keep native server fallback explicit.
-        return route.fallback();
-      });
-      await page.goto(origin);
-      await page.getByRole('button', {name: '课堂工具', exact: true}).first().click();
-      await page.locator('.tool-entry').filter({hasText: '噪声监测'}).click();
-      const panel = page.locator('.v-card').filter({has: page.getByRole('heading', {name: 'NPEduTools 原生噪音监测', exact: true})}).last();
-      const command = panel.getByRole('button', {name: action === 'stop' ? '停止监测' : '恢复本次自动监测', exact: true});
-      await expect(command).toBeEnabled();
-      await command.click();
-      const failure = panel.getByRole('alert').filter({hasText: action === 'stop' ? '请求未确认：STATE_CHANGED' : '恢复未确认：SCHEDULE_VERSION_CONFLICT'});
-      await expect(failure).toBeVisible();
-      observedState = 'Stopped'; observedReason = 'WINDOW_SKIPPED';
-      await panel.getByRole('button', {name: '刷新', exact: true}).click();
-      await expect(panel.getByRole('region', {name: '学校自动监测', exact: true})).toContainText('本次已手动停止');
-      await expect(panel.getByRole('button', {name: '停止监测', exact: true})).toBeDisabled();
-      await expect(panel.getByRole('button', {name: '开始监测', exact: true})).toBeEnabled();
-      await expect(failure).toBeVisible();
-      await capture(page, testInfo, `${action}-failure-after-successful-poll`);
-      expect(await page.evaluate(() => window.microphoneRequests)).toBe(0);
-      expect(errors).toEqual([]);
-    });
-  }
-});
+// Retired PWA start/stop/resume and offline browser fallback are covered by
+// manual-noise.spec.js, scheduled-noise-display.spec.js and the real administrator
+// report fixture in scripts/test-native-reports-browser.mjs.

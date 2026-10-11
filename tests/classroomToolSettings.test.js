@@ -26,7 +26,7 @@ test("classroom tool settings persist independently for each screen", () => {
   const storage = memoryStorage();
   saveClassroomToolSettings("a", {enabledToolIds: ["attendance", "noise"]}, storage);
   saveClassroomToolSettings("b", {enabledToolIds: ["random"]}, storage);
-  assert.deepEqual(loadClassroomToolSettings("a", storage).enabledToolIds, ["attendance", "noise"]);
+  assert.deepEqual(loadClassroomToolSettings("a", storage).enabledToolIds, ["attendance"]);
   assert.deepEqual(loadClassroomToolSettings("b", storage).enabledToolIds, []);
   assert.notEqual(classroomToolSettingsKey("a"), classroomToolSettingsKey("b"));
   assert.deepEqual(loadClassroomToolSettings("missing", storage).enabledToolIds, CLASSROOM_TOOL_IDS);

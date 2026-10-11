@@ -44,9 +44,21 @@
             :color="source ? 'primary' : undefined"
             variant="tonal"
           >
-            {{ source ? '学校自动排程' : '来源未确认' }}
+            {{ r.sessionKind === 'Manual' ? '手动自习' : source ? '学校自动排程' : '来源未确认' }}
           </v-chip>
         </div>
+        <p
+          v-if="r.sessionKind === 'Manual' && r.endReason"
+          class="noise-report-note mt-3"
+        >
+          {{ r.endReason === 'ScheduledTakeover' ? '被学校定时自习接管，原手动会话已结束，不自动续开。' : r.endReason === 'ThreeHourLimit' ? '达到三小时上限。' : r.endReason === 'PlannedEnd' ? '到达指定结束时间。' : r.endReason === 'UserEnded' ? '主动结束。' : '手动会话中断或结束；请核对本机报告。' }}
+        </p>
+        <p
+          v-if="r.timing?.clockDiscontinuity"
+          class="noise-report-note mt-3"
+        >
+          设备墙钟与监测计时存在差异。起止范围按开始时间和实际经过时长推算，不能视为已核准的北京时间。
+        </p>
         <p
           v-if="source && currentVersion && source.version !== currentVersion"
           class="noise-report-note mt-3"
@@ -70,19 +82,40 @@
             <strong>{{ (r.summary.coverage * 100).toFixed(0) }}%</strong>
           </div>
           <div>
-            <span>能量平均</span>
+            <span>原始能量平均 · dBFS</span>
             <strong>{{ db(r.summary.energyMeanDbfs) }}</strong>
           </div>
           <div>
-            <span>峰值</span>
+            <span>原始采样峰值 · dBFS</span>
             <strong>{{ db(r.summary.peakDbfs) }}</strong>
           </div>
         </div>
+        <div
+          v-if="r.estimate"
+          class="noise-report-metrics"
+        >
+          <div><span>A/{{ r.estimate.timeWeighting }} 平滑电平能量均值</span><strong>{{ estimatedStatistic(r.estimate.summary.energyMeanDbA) }}</strong></div>
+          <div><span>最高平滑电平</span><strong>{{ estimatedStatistic(r.estimate.summary.maximumDbA) }}</strong></div>
+          <div><span>估算有效覆盖</span><strong>{{ (r.estimate.summary.coverage * 100).toFixed(0) }}%</strong><small>{{ r.estimate.summary.sampledSeconds.toFixed(1) }} 秒</small></div>
+          <div><span>估算结果状态</span><strong>{{ estimateStatus(r.estimate) }}</strong></div>
+        </div>
+        <p
+          v-if="r.estimate"
+          class="noise-report-note"
+        >
+          估算统计仅包含匹配参考、预热结束且削波不超过 0.1% 的有效区间，范围 30–130 dB(A)。最高平滑电平并非声压真峰值；均值不标作经仪器验证的 LAeq，也不用于班级排名。
+        </p>
         <details class="noise-report-details">
           <summary>查看采集与诊断信息</summary>
           <p>削波 {{ r.summary.clippedPercent.toFixed(2) }}%</p>
           <p>麦克风：{{ r.deviceName || '未打开设备' }}</p>
           <p>算法：{{ r.algorithm }}</p>
+          <p v-if="r.timing">
+            结束时间来源：单调计时推算；设备墙钟观测：{{ time(r.timing.observedEndedAt) }}
+          </p>
+          <p v-if="r.estimate">
+            参考版本：{{ r.estimate.profileId }} · {{ time(r.estimate.confirmedAt) }} · {{ r.estimate.method }} · A/{{ r.estimate.timeWeighting }} · 偏移 {{ r.estimate.offsetDb.toFixed(2) }} dB
+          </p>
           <p>会话编号：{{ r.sessionId }}</p>
         </details>
       </v-card-text>
@@ -91,10 +124,10 @@
 </template>
 <script setup>
 import {computed} from 'vue';
-import {time, statistic as db} from '@/utils/nativeNoisePresentation';
+import {time, statistic as db, estimatedStatistic, estimateStatus} from '@/utils/nativeNoisePresentation';
 import {scheduledReportSource, schoolCalendarText} from '@/utils/noiseReportSources';
 const props = defineProps({reports: {type: Array, default: () => []}, sessions: {type: Array, default: () => []}, currentVersion: {type: String, default: ''}, loaded: {type: Boolean, default: true}});
-const rows = computed(() => props.reports.map(report => ({report, source: scheduledReportSource(report.sessionId, props.sessions)})));
+const rows = computed(() => props.reports.map(report => ({report, source: report.sessionKind === 'Manual' ? null : scheduledReportSource(report.sessionId, props.sessions)})));
 </script>
 <style scoped>
 .noise-report-heading h4 { font-size: 19px; font-weight: 750; }

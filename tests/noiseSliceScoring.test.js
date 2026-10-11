@@ -13,6 +13,7 @@ test("noise history scores belong to each recorded interval regardless of live-a
   service.historyStore = {append: async slice => rows.push(slice), read: async () => rows, clear: async () => { rows.length = 0; }};
   let now = new Date("2026-09-09T10:00:00+08:00").getTime();
   t.mock.method(Date, "now", () => now);
+  t.mock.method(globalThis.performance, "now", () => now);
   t.after(async () => {
     await service.stop();
     service.historyStore = originalStore;
@@ -25,6 +26,7 @@ test("noise history scores belong to each recorded interval regardless of live-a
       await service.stop(); rows.length = 0;
       const start = now + 1000;
       Object.assign(service, {status: "active", sliceStart: start, lastAnalysisAt: start + analysisOffset,
+        lastFeatureAt: start, audioContext: {state: "running", close: async () => {}},
         windowFrames: [], sliceFrames: [], ringBuffer: []});
       const frames = [];
       for (let i = 1; i <= 750; i++) {
@@ -64,6 +66,7 @@ test("noise history scores belong to each recorded interval regardless of live-a
     await service.stop(); rows.length = 0;
     const start = now + 1000;
     Object.assign(service, {status: "active", sliceStart: start, lastAnalysisAt: start,
+      lastFeatureAt: start, audioContext: {state: "running", close: async () => {}},
       windowFrames: [], sliceFrames: [], ringBuffer: []});
     for (let i = 1; i <= 150; i++) {
       now = start + i * 200;
