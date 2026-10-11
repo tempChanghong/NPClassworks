@@ -626,8 +626,8 @@ for (const width of [1440, 390]) {
       await expect(editor.locator('.study-preview')).toContainText('2026-10-12 19:00:00');
       await editor.getByRole('button',{name:'保存自习设置',exact:true}).click();
       expect(saved[0].policy.settings.noise).toEqual({enabled:true,redLineDbfs:-35,mediumLineDbfs:-45,disciplineCooldownSeconds:720,highContinuousSeconds:4});
-      expect(saved[0].policy.settings.photos.cooldownSeconds).toBe(30);expect(saved[0].policy.settings.photos.continuousSeconds).toBe(3);
-      await expect(editor).toContainText('自习设置已保存');await expect(editor).toContainText('保存不代表设备已应用或正在采集');
+      expect(saved[0].policy.settings.photos.cooldownSeconds).toBe(30);expect(saved[0].policy.settings.photos.continuousSeconds).toBe(4);
+      await expect(editor).toContainText('自习设置已保存');await expect(editor).toContainText('保存不代表设备已应用、展示页已显示或正在采集');
       expect(saved).toHaveLength(1);expect(saved[0]).toMatchObject({termId:'term',targetType:'CLASS',targetId:'class-a',expectedRevision:0,
         expectedPreviewFingerprint:'b'.repeat(64),policy:{settings:{homework:{sourceClassIds:['class-b'],rotationSeconds:60},photos:{retentionDays:180,extendedRetentionAcknowledged:true}}}});
       await editor.getByLabel('作业每页轮换间隔').fill('90');

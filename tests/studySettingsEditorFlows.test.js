@@ -61,7 +61,8 @@ test('actual 0.10 client requires preview and preserves request ID across an amb
   await state.save(); assert.equal(state.hasUnsavedChanges.value,true);
   await state.save(); assert.equal(ids.length,2); assert.equal(ids[0],ids[1]);
   assert.equal(state.revision.value,1); assert.equal(state.hasUnsavedChanges.value,false);
-  assert.match(state.message.value,/尚待接入/);
+  assert.match(state.message.value,/核对捕获及上传状态/);
+  assert.doesNotMatch(state.message.value,/尚待接入/);
 });
 
 test('changed scope requires new preview, while revision conflict retains and blocks the draft',async()=>{
