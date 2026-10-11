@@ -429,6 +429,11 @@
         :term-id="termId"
         @dirty="seatingDirty = $event"
       />
+      <NpepStudyPhotos
+        v-if="section === 'study'"
+        :school-id="schoolId"
+        :term-id="termId"
+      />
     </v-card-text>
     <v-dialog
       :model-value="!!noiseDevice"
@@ -533,6 +538,7 @@ import {npepConnectivity, npepStateName, npepModeName, npepRecordingName, npepAu
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: "当前学校"}, termId: {type: String, default: ''}, section: {type: String, default: 'devices'}});
 const emit = defineEmits(['dirty', 'navigate']);
 const NpepStudySettings = defineAsyncComponent(() => import('./NpepStudySettings.vue'));
+const NpepStudyPhotos = defineAsyncComponent(() => import('./NpepStudyPhotos.vue'));
 const section = toRef(props, 'section');
 const sectionTitles = {devices: '大屏互联', study: '自习展示', noise: '噪音监测', seating: '自习座位表'};
 const NpepSeatingSettings = defineAsyncComponent(() => import('./NpepSeatingSettings.vue'));

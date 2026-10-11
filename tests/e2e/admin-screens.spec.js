@@ -5,6 +5,48 @@ import {origin, api} from "./environment.js";
 import {randomUUID} from "node:crypto";
 import {defaultStudySettings} from '../../src/utils/npepStudySettings.js';
 
+for (const width of [1440,390]) {
+  test(`NPEP study photos explicit preview download and delete at ${width}px`,async({browser})=>{
+    let jpeg, deleted=false, reads=0;const id=randomUUID();
+    const photo={eventId:id,classId:'class-a',capturedAt:'2026-10-11T12:00:00.000Z',expiresAt:'2026-11-10T12:00:00.000Z',reason:'Noise',unit:'Dbfs',level:-20,high:-30};
+    const {page,context,errors}=await openAdmin(browser,width,'OWNER',{},'npep',async context=>{
+      await context.route(`${api}/api/v2/npep/**`,async route=>{
+        const req=route.request(),path=new URL(req.url()).pathname;
+        const body=req.method()==='POST'?req.postDataJSON():null;
+        const reply=data=>route.fulfill({json:{protocolVersion:req.headers()['x-npep-version'],requestId:body?.requestId||req.headers()['x-request-id'],serverTime:new Date().toISOString(),data}});
+        if(path.endsWith('/info'))return reply({supportedCapabilities:['device.status']});
+        if(path.endsWith('/devices'))return reply({items:[],nextCursor:null});
+        if(path.endsWith('/study-settings'))return reply({termId:'term',terms:[{id:'term',name:'当前学期'}],grades:[],classes:[],settings:[]});
+        if(path.endsWith('/seating/catalog'))return reply({termId:'term',classes:[{id:'class-a',name:'一班'}]});
+        if(path.endsWith('/study-photos'))return reply({items:deleted?[]:[photo],cursor:null});
+        if(path.endsWith('/image')) {reads++;return route.fulfill({contentType:'image/jpeg',body:jpeg,headers:{'Cache-Control':'private, no-store'}});}
+        if(path.endsWith('/delete')) {deleted=true;return reply({eventId:id,state:'Deleted'});}
+        return route.fulfill({status:404,json:{error:{code:'NOT_FOUND'}}});
+      });
+    });
+    try {
+      jpeg=Buffer.from(await page.evaluate(()=>{
+        const c=document.createElement('canvas');c.width=640;c.height=360;
+        const g=c.getContext('2d');g.fillStyle='#e4e7eb';g.fillRect(0,0,640,360);g.fillStyle='#263449';g.font='28px sans-serif';g.fillText('合成自习照片 / TEST ONLY',50,100);
+        return c.toDataURL('image/jpeg',.6).split(',')[1];
+      }),'base64');
+      await navigateAdmin(page,'自习展示');const panel=page.locator('.study-photos');
+      await panel.locator('.v-select').click();await page.getByRole('option',{name:'一班',exact:true}).click();
+      expect(reads).toBe(0);await panel.getByRole('button',{name:'查询照片',exact:true}).click();await expect(panel).toContainText('连续超限');
+      expect(reads).toBe(0);await panel.getByRole('button',{name:'查看',exact:true}).click();
+      const preview=page.getByRole('dialog').filter({hasText:'自习照片 ·'});await expect(preview.locator('img')).toBeVisible();
+      await expect.poll(()=>preview.locator('img').evaluate(img=>img.naturalWidth)).toBe(640);
+      const download=page.waitForEvent('download');await preview.getByRole('button',{name:'下载',exact:true}).click();
+      expect((await download).suggestedFilename()).toBe('study-'+id+'.jpg');
+      await page.screenshot({path:`test-results/study-photos-${width}.png`,fullPage:true,animations:'disabled'});
+      await preview.getByRole('button',{name:'关闭',exact:true}).click();await panel.getByRole('button',{name:'删除',exact:true}).click();
+      const confirmation=page.getByRole('dialog').filter({hasText:'删除这张自习照片？'});
+      await confirmation.getByRole('button',{name:'删除',exact:true}).click();await expect(panel).toContainText('当前班级没有可查看的照片');
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+}
+
 // Production Vue page and real buttons, with explicit admin API fixtures.
 // Backend authorization remains covered by the separate backend integration tests.
 async function navigateAdmin(page, title) {
