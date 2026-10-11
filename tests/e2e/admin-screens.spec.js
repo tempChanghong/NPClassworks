@@ -1,10 +1,22 @@
+import {Buffer} from 'node:buffer';
 import {test, expect} from "@playwright/test";
-import {readFile} from "node:fs/promises";
+import {readFile, writeFile} from "node:fs/promises";
 import {origin, api} from "./environment.js";
 import {randomUUID} from "node:crypto";
+import {defaultStudySettings} from '../../src/utils/npepStudySettings.js';
 
 // Production Vue page and real buttons, with explicit admin API fixtures.
 // Backend authorization remains covered by the separate backend integration tests.
+async function navigateAdmin(page, title) {
+  if (title === "NPEP") title = "大屏互联";
+  if (page.viewportSize().width >= 960) {
+    await page.locator('.admin-navigation').getByText(title, {exact: true}).click();
+  } else {
+    await page.locator('.admin-mobile-page-switcher .v-select').click();
+    await page.getByRole('option', {name: `${["大屏互联", "自习展示", "噪音监测", "自习座位表"].includes(title) ? "NPEP" : "日常管理"} · ${title}`, exact: true}).click();
+  }
+}
+
 async function openAdmin(browser, width, role = "ADMIN", settings = {}, section = "screens", prepare = async () => {}) {
   const context = await browser.newContext({viewport: {width, height: 1000}, serviceWorkers: "block",
     storageState: {cookies: [], origins: [{origin, localStorage: [
@@ -194,9 +206,9 @@ test("NPEP approval retries retain identity; device pagination, stale observatio
   });
   const {page, context, errors} = setup;
   try {
-    await expect(page.getByRole("button", {name: "打开 NPEP 设备互联"})).toBeVisible();
+    await expect(page.locator(".admin-navigation").getByText("NPEP", {exact: true})).toBeVisible();
     expect(requests).toEqual([]);
-    await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
+    await navigateAdmin(page, "NPEP");
     const panel = page.locator(".npep-device-manager");
     await expect(panel).toContainText("当前没有已登记");
     const overviewY = (await panel.locator(".npep-overview").boundingBox()).y;
@@ -292,7 +304,7 @@ test('NPEP school overview counts all pages, filters on server and keeps stale o
     });
   });
   try {
-    await page.getByRole('button', {name: '打开 NPEP 设备互联'}).click();
+    await navigateAdmin(page, "NPEP");
     const panel = page.locator('.npep-device-manager'), overview = panel.locator('.device-operations');
     await expect(panel.locator('.npep-device')).toHaveCount(20);
     await expect(overview).toContainText('共 42 台匹配，已加载 20 台');
@@ -339,7 +351,7 @@ test('NPEP school overview counts all pages, filters on server and keeps stale o
     await page.evaluate(() => localStorage.setItem('Classworks_settings', JSON.stringify({'theme.mode': 'light'})));
     await page.reload();
     await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
-    await page.getByRole('button', {name: '打开 NPEP 设备互联'}).click();
+    await navigateAdmin(page, "NPEP");
     await overview.getByRole('button', {name: /待检查/}).click();
     await expect(panel.locator('.npep-device')).toHaveCount(6);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -376,19 +388,312 @@ test("NPEP ignores a late short-code response after the panel closes", async ({b
     });
   });
   try {
-    await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
+    await navigateAdmin(page, "NPEP");
     await expect(page.locator(".npep-device-manager")).toContainText("当前没有已登记");
     await page.locator(".npep-device-manager").getByRole("button", {name: /旧版桌面短码配对/}).click();
     await page.getByLabel("8 位配对短码").fill("ABCD2345");
     await page.getByRole("button", {name: "核对配对申请", exact: true}).click();
     await expect.poll(() => entered).toBe(true);
-    await page.getByRole("button", {name: "收起 NPEP 设备互联"}).click();
+    await navigateAdmin(page, "大屏设备");
     release();
-    await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
+    await navigateAdmin(page, "NPEP");
     await expect(page.locator(".npep-device-manager")).toContainText("当前没有已登记");
     await expect(page.locator(".npep-candidate")).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally { release(); await context.close(); }
+});
+
+for (const width of [1440, 390]) {
+  test(`NPEP navigation exposes noise schedules and reports without discarding drafts at ${width}px`, async ({browser}) => {
+    const requests = [], saved = [];
+    const policy = {mode: 'Override', rules: [{days: [1, 2, 3, 4, 5], start: '19:00', end: '21:30'}]};
+    let currentPolicy = JSON.parse(JSON.stringify(policy)), revision = 1;
+    const {page, context, errors} = await openAdmin(browser, width, 'OWNER', {}, 'screens', async context => {
+      await context.route(`${api}/api/v2/npep/**`, async route => {
+        const request = route.request(), path = new URL(request.url()).pathname;
+        const body = request.method() === 'POST' ? request.postDataJSON() : null;
+        requests.push({path, method: request.method()});
+        const reply = data => route.fulfill({json: {protocolVersion: request.headers()['x-npep-version'],
+          requestId: body?.requestId || request.headers()['x-request-id'], serverTime: new Date().toISOString(), data}});
+        if (path.endsWith('/info')) return reply({supportedCapabilities: ['device.status']});
+        if (path.endsWith('/device-overview')) return route.fulfill({status: 404, json: {error: {code: 'NOT_FOUND'}}});
+        if (path.endsWith('/devices')) return reply({items: [{deviceId: 'native-a', deviceName: '一班原生设备', state: 'ACTIVE',
+          screenBindingId: 'screen-a', connectivity: 'ONLINE', credentialExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+          lastSeenAt: new Date().toISOString()}], nextCursor: null});
+        if (path.endsWith('/noise-display-settings')) return reply({settings: [], classes: [{id: 'class-a', gradeId: 'grade'}]});
+        if (path.endsWith('/noise-schedules/preview')) return reply({baseRevision: revision, totalClasses: 1,
+          changedClasses: 1, pairedDevices: 1, items: []});
+        if (path.endsWith('/noise-schedules')) {
+          expect(request.headers()['x-npep-version']).toBe('0.7');
+          if (body) {
+            saved.push(body); currentPolicy = body.policy; revision++;
+            return reply({revision, baseRevision: revision - 1, executionEnabled: true, items: [],
+              totalClasses: 1, changedClasses: 1, pairedDevices: 1});
+          }
+          return reply({termId: 'term', terms: [{id: 'term', name: '当前学期'}],
+            grades: [{id: 'grade', name: '高二'}], classes: [{id: 'class-a', name: '一班', gradeId: 'grade'}],
+            policies: [{targetType: 'GRADE', targetId: 'grade', policy: currentPolicy, revision}], executionEnabled: true});
+        }
+        if (path.endsWith('/noise-schedule')) return reply({supported: true, online: false, applied: true,
+          policy: {source: 'Grade', version: 'v1'}, status: {reason: 'Scheduled', owner: 'Scheduled'}, sessions: []});
+        if (path.endsWith('/noise')) return reply({reports: []});
+        return route.fulfill({status: 404, json: {error: {code: 'NOT_FOUND'}}});
+      });
+    });
+    try {
+      await expect(page.getByRole('button', {name: '刷新大屏列表', exact: true})).toBeVisible();
+      expect(requests).toEqual([]);
+      await expect(page.getByRole('button', {name: '打开 NPEP 设备互联'})).toHaveCount(0);
+      await navigateAdmin(page, 'NPEP');
+      const panel = page.locator('.npep-device-manager');
+      await expect(panel.locator('.npep-device')).toHaveCount(1);
+      await expect(page).toHaveURL(/section=npep/);
+      expect(requests.some(item => item.path.endsWith('/noise-schedules'))).toBe(false);
+      await page.screenshot({path: `test-results/npep-navigation-${width}.png`, fullPage: true, animations: 'disabled'});
+      await navigateAdmin(page, '噪音监测');
+      const editor = panel.locator('.noise-schedule-editor');
+      await expect(editor.getByLabel('结束', {exact: true})).toHaveValue('21:30');
+      await expect(panel.locator('.npep-configuration')).toBeHidden();
+      await expect(editor.getByLabel('配置对象')).toHaveValue('高二');
+      const starts = editor.getByLabel('开始', {exact: true});
+      await starts.fill('19:05');
+      await navigateAdmin(page, '大屏互联');
+      await navigateAdmin(page, '噪音监测');
+      await expect(starts).toHaveValue('19:05');
+      expect(requests.filter(item => item.path.endsWith('/noise-schedules'))).toHaveLength(1);
+      await navigateAdmin(page, '大屏设备');
+      const discard = page.getByRole('dialog').filter({hasText: '放弃未保存的修改？'});
+      await expect(discard).toBeVisible();
+      await discard.getByRole('button', {name: '取消', exact: true}).click();
+      await expect(page).toHaveURL(/section=npep/);
+      await expect(starts).toHaveValue('19:05');
+      await editor.getByRole('button', {name: '预览影响', exact: true}).click();
+      await editor.getByRole('button', {name: '保存排程', exact: true}).click();
+      await expect(editor).toContainText('规则已保存，等待支持排程的桌面确认');
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({termId: 'term', targetType: 'GRADE', targetId: 'grade', expectedRevision: 1,
+        policy: {mode: 'Override', rules: [{days: [1, 2, 3, 4, 5], start: '19:05', end: '21:30'}]}});
+      await panel.locator('.npep-noise-reports .v-select').click();
+      await page.getByRole('option', {name: /一班原生设备/}).click();
+      await panel.getByRole('button', {name: '查看噪音报告', exact: true}).click();
+      const report = page.getByRole('dialog');
+      await expect(report).toContainText('原生噪音报告');
+      await expect(report).toContainText('离线／状态陈旧');
+      await expect(report).toContainText('不代表当前执行状态');
+      await expect(report).toContainText('尚无已上传的结束报告');
+      await report.getByRole('button', {name: '关闭', exact: true}).click();
+      await page.screenshot({path: `test-results/npep-noise-${width}.png`, fullPage: true, animations: 'disabled'});
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      const minutes = editor.getByLabel('自定义分钟数');
+      await minutes.fill('12');
+      await navigateAdmin(page, '大屏设备');
+      await expect(discard).toBeVisible();
+      await discard.getByRole('button', {name: '放弃并离开', exact: true}).click();
+      await expect(panel).toHaveCount(0);
+      await navigateAdmin(page, 'NPEP');
+      await expect(panel.locator('.npep-device')).toHaveCount(1);
+      await page.reload();
+      await expect(panel.getByRole('heading', {name: '大屏互联', exact: true})).toBeVisible();
+      await expect(page).toHaveURL(/section=npep/);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`NPEP study settings preserve customs, preview homework sources and enforce photo limits at ${width}px`, async ({browser}) => {
+    const saved=[], requests=[];
+    const custom=defaultStudySettings();custom.schedule.effectiveFrom='2026-10-12';custom.schedule.rules[0]={days:[1],start:'19:10',end:'21:20'};custom.homework.rotationSeconds=75;
+    let policies=[{targetType:'GRADE',targetId:'grade',revision:1,policy:{mode:'Override',settings:custom}}];
+    const catalog=()=>({termId:'term',terms:[{id:'term',name:'当前学期'}],grades:[{id:'grade',name:'高二'}],
+      classes:[{id:'class-a',name:'一班',gradeId:'grade',pairedDevices:1},{id:'class-b',name:'二班',gradeId:'grade',pairedDevices:0}],settings:policies});
+    const preview=body=>({previewFingerprint:'b'.repeat(64),baseRevision:body.expectedRevision,totalClasses:1,changedClasses:1,pairedDevices:1,previewDate:body.previewDate || null,
+      items:[{classId:'class-a',name:'一班',effective:{source:'Class',settings:body.policy.settings},
+        homeworkSources:[{id:'class-b',name:'二班'},{id:'walk-a',name:'物理走班 A',subjectName:'物理'},{id:'walk-b',name:'物理走班 B',subjectName:'物理'}],
+        windows:[{start:'2026-10-12T19:00:00',end:'2026-10-12T21:30:00'}]}]});
+    const {page,context,errors}=await openAdmin(browser,width,'OWNER',{},'npep',async context=>{
+      await context.route(`${api}/api/v2/npep/**`,async route=>{
+        const req=route.request(),path=new URL(req.url()).pathname,body=req.method()==='POST'?req.postDataJSON():null;
+        requests.push(path);
+        const reply=data=>route.fulfill({json:{protocolVersion:req.headers()['x-npep-version'],requestId:body?.requestId || req.headers()['x-request-id'],serverTime:new Date().toISOString(),data}});
+        if(path.endsWith('/info')) return reply({supportedCapabilities:['device.status']});
+        if(path.endsWith('/devices')) return reply({items:[],nextCursor:null});
+        if(path.endsWith('/study-settings/preview')) return reply(preview(body));
+        if(path.endsWith('/study-settings')) {
+          expect(req.headers()['x-npep-version']).toBe('0.10');
+          if(!body) return reply(catalog());
+          saved.push(body);policies.push({targetType:body.targetType,targetId:body.targetId,revision:1,policy:body.policy});
+          return reply({...preview(body),revision:1});
+        }
+        return route.fulfill({status:404,json:{error:{code:'NOT_FOUND'}}});
+      });
+    });
+    try {
+      const panel=page.locator('.npep-device-manager'); await expect(panel).toContainText('当前没有已登记');
+      expect(requests.some(path=>path.endsWith('/study-settings'))).toBe(false);
+      await navigateAdmin(page, '自习展示');
+      const editor=panel.locator('.study-settings');
+      await expect(editor.getByLabel('自习开始 1',{exact:true})).toHaveValue('19:10');
+      await expect(editor.getByLabel('作业每页轮换间隔',{exact:true})).toHaveValue('75');
+      const select=async(label,name)=>{await editor.locator('.v-select').filter({hasText:label}).click();await page.getByRole('option',{name,exact:true}).click();};
+      await select('自习配置范围','行政班');await expect(editor.getByLabel('自习启用规则')).toHaveValue('继承年级设置');
+      await select('自习启用规则','单独设置本班自习');
+      await expect(editor.getByLabel('自习开始 1')).toHaveValue('19:00');
+      await expect(editor.getByLabel('自习结束 1')).toHaveValue('21:30');
+      await expect(editor.getByLabel('自习生效日期')).toHaveValue('');
+      await expect(editor.getByLabel('作业每页轮换间隔')).toHaveValue('60');
+      await expect(editor.getByLabel('启用阈值拍照')).not.toBeChecked();
+      await expect(editor.getByLabel('高线连续超限时间')).toHaveValue('5');
+      await editor.getByLabel('高线连续超限时间').fill('3');
+      await expect(editor.getByRole('button',{name:'保存自习设置',exact:true})).toBeDisabled();
+      await editor.getByLabel('自习生效日期').fill('2026-10-12');
+      await select('自习时段 1 · 星期','周一');await page.keyboard.press('Escape');
+      await select('作业来源方式','指定来源行政班（自动包含其相关走班）');
+      await select('展示作业的来源行政班','二班');await page.keyboard.press('Escape');
+      await expect(editor.getByLabel('学生页噪音展示')).toHaveValue('状态＋小型实时趋势');
+      await editor.getByLabel('启用阈值拍照').check();
+      await expect(editor).toContainText('明确填写红线阈值');
+      await editor.getByLabel('第一阈值线 · 高电平').fill('-35');
+      await expect(editor.getByLabel('第二阈值线 · 中电平')).toHaveValue('');
+      await expect(editor.getByLabel('注意纪律最短间隔')).toHaveValue('600');
+      await editor.getByLabel('第二阈值线 · 中电平').fill('-30');
+      await expect(editor.getByRole('button',{name:'预览自习影响',exact:true})).toBeDisabled();
+      await editor.getByLabel('第二阈值线 · 中电平').fill('-45');
+      await editor.getByLabel('注意纪律最短间隔').fill('720');
+      await expect(editor.getByLabel('高线连续超限时间')).toHaveValue('3');
+      await expect(editor.getByLabel('拍照最短间隔')).toHaveValue('30');
+      await expect(editor.getByLabel('照片保留时间',{exact:true})).toHaveValue('30');
+      await editor.getByLabel('照片保留时间',{exact:true}).fill('181');
+      await expect(editor.getByRole('button',{name:'预览自习影响',exact:true})).toBeDisabled();
+      await editor.getByLabel('照片保留时间',{exact:true}).fill('180');await expect(editor).toContainText('需要确认延长保留的风险');
+      await editor.getByLabel('已了解延长照片保留时间的隐私与备份风险').check();
+      await editor.getByLabel('自习预览日期（可留空）').fill('2026-10-12');
+      await navigateAdmin(page, '大屏互联');await navigateAdmin(page, '自习展示');
+      await expect(editor.getByLabel('照片保留时间',{exact:true})).toHaveValue('180');
+      await editor.getByRole('button',{name:'预览自习影响',exact:true}).click();
+      await expect(editor.locator('.study-preview')).toContainText('物理走班 A');await expect(editor.locator('.study-preview')).toContainText('物理走班 B');
+      await expect(editor.locator('.study-preview')).toContainText('2026-10-12 19:00:00');
+      await editor.getByRole('button',{name:'保存自习设置',exact:true}).click();
+      expect(saved[0].policy.settings.noise).toEqual({enabled:true,redLineDbfs:-35,mediumLineDbfs:-45,disciplineCooldownSeconds:720,highContinuousSeconds:3});
+      expect(saved[0].policy.settings.photos.cooldownSeconds).toBe(30);expect(saved[0].policy.settings.photos.continuousSeconds).toBe(3);
+      await expect(editor).toContainText('自习设置已保存');await expect(editor).toContainText('保存不代表设备已应用或正在采集');
+      expect(saved).toHaveLength(1);expect(saved[0]).toMatchObject({termId:'term',targetType:'CLASS',targetId:'class-a',expectedRevision:0,
+        expectedPreviewFingerprint:'b'.repeat(64),policy:{settings:{homework:{sourceClassIds:['class-b'],rotationSeconds:60},photos:{retentionDays:180,extendedRetentionAcknowledged:true}}}});
+      await editor.getByLabel('作业每页轮换间隔').fill('90');
+      await select('自习配置对象','二班');
+      const discard=page.getByRole('dialog').filter({hasText:'放弃未保存的自习设置？'});await expect(discard).toBeVisible();
+      await discard.getByRole('button',{name:'取消',exact:true}).click();await expect(editor.getByLabel('作业每页轮换间隔')).toHaveValue('90');
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+      await page.screenshot({path:`test-results/study-settings-${width}.png`,fullPage:true,animations:'disabled'});
+      await editor.getByRole('region',{name:'自习展示与当天作业',exact:true}).screenshot({path:`test-results/study-presentation-${width}.png`,animations:'disabled'});
+      await editor.getByRole('region',{name:'噪音与阈值拍照',exact:true}).screenshot({path:`test-results/study-photos-${width}.png`,animations:'disabled'});
+      await page.evaluate(()=>window.scrollTo(0,0));
+      await page.screenshot({path:`test-results/study-overview-${width}.png`,animations:'disabled'});
+      expect(errors).toEqual([]);
+    } finally {await context.close();}
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`NPEP study receipts distinguish applied configuration from capture and expire at ${width}px`, async ({browser}) => {
+    const deviceId=randomUUID();let statusMode='fresh',requests=0,resumeRecord=null;const resumes=[];
+    const window={start:'2026-10-12T19:00:00.000',end:'2026-10-12T21:30:00.000'};
+    const {page,context,errors}=await openAdmin(browser,width,'OWNER',{},'npep',async context=>{
+      await context.route(`${api}/api/v2/npep/**`,async route=>{
+        const req=route.request(),path=new URL(req.url()).pathname;
+        const reply=data=>route.fulfill({json:{protocolVersion:req.headers()['x-npep-version'],requestId:req.method()==='POST'?req.postDataJSON().requestId:req.headers()['x-request-id'],serverTime:new Date().toISOString(),data}});
+        if(path.endsWith('/info'))return reply({supportedCapabilities:['device.status']});
+        if(path.endsWith('/devices'))return reply({items:[{deviceId,deviceName:'自习联调大屏',screenBindingId:'screen-a',administrativeClassName:'一班',bindingRevision:1,
+          state:'ACTIVE',lastSeenAt:new Date().toISOString(),credentialExpiresAt:new Date(Date.now()+86400000).toISOString(),status:null}],nextCursor:null});
+        if(path.endsWith(`/devices/${deviceId}/study-settings/resume`)){
+          expect(req.headers()['x-npep-version']).toBe('0.11');expect(req.method()).toBe('POST');
+          const body=req.postDataJSON();resumes.push(body);expect(body.version).toBe('a'.repeat(64));expect(body.window).toEqual(window);
+          resumeRecord={requestId:body.requestId,command:{commandId:randomUUID(),version:body.version,window},receipt:null,remainingMs:30000,expiresAt:new Date(Date.now()+30000).toISOString()};
+          statusMode='resume-pending';return reply(resumeRecord);
+        }
+        if(path.endsWith(`/devices/${deviceId}/study-settings`)){
+          requests++;expect(req.headers()['x-npep-version']).toBe('0.10');expect(req.method()).toBe('GET');
+          if(statusMode==='unsupported')return route.fulfill({status:426,json:{error:{code:'PROTOCOL_UNSUPPORTED'}}});
+          if(statusMode==='presentation-delayed')await new Promise(resolve=>setTimeout(resolve,800));
+          return reply({current:{version:(statusMode==='old-version'?'b':'a').repeat(64),effective:{source:'Grade'}},observation:{version:'a'.repeat(64),phase:'Active',clockReady:true,
+            presentationState:'NOT_INTEGRATED',captureState:'NOT_INTEGRATED'},receivedAt:new Date().toISOString(),observationAgeMs:statusMode==='aging'?14500:0,
+            fresh:true,configurationApplied:statusMode!=='old-version',presentationVerified:statusMode.startsWith('presentation') && statusMode!=='presentation-hidden',
+            presentation:statusMode.startsWith('presentation')?{state:statusMode==='presentation-hidden'?'Hidden':'Visible',reason:statusMode==='presentation-hidden'?'TEMPORARY_HIDE':'FRAME_CURRENT'}:null,
+            presentationVersion:(statusMode==='presentation-old-version'?'b':'a').repeat(64),presentationFresh:true,presentationAgeMs:0,
+            presentationRemainingMs:['presentation-aging','presentation-delayed'].includes(statusMode)?500:statusMode==='presentation-expired'?0:5000,
+            captureVerified:['capture','capture-aging','capture-old-version'].includes(statusMode),
+            execution:statusMode.startsWith('resume')?{owner:'None',state:'Stopped',signalFresh:false,reason:'WINDOW_SKIPPED',clockReady:true,window}
+              :statusMode.startsWith('capture')?{owner:'Schedule',state:statusMode==='capture-starting'?'Starting':'Active',signalFresh:statusMode!=='capture-starting',
+                reason:statusMode==='capture-starting'?'CAPTURE_STARTING':'WINDOW_ACTIVE'}:null,
+            executionVersion:(statusMode==='capture-old-version'?'b':'a').repeat(64),executionFresh:statusMode.startsWith('capture') || statusMode.startsWith('resume'),
+            executionAgeMs:statusMode==='capture-aging'?14500:0,resumeSupported:statusMode.startsWith('resume') && statusMode!=='resume-old-device',resumeAgeMs:0,
+            resumeCommands:resumeRecord?[{...resumeRecord,receipt:statusMode==='resume-accepted'?{commandId:resumeRecord.command.commandId,outcome:'ACCEPTED'}:null}]:[]});
+        }
+        return route.fulfill({status:404,json:{error:{code:'NOT_FOUND'}}});
+      });
+    });
+    try{
+      const panel=page.locator('.npep-device-manager');await expect(panel).toContainText('自习联调大屏');expect(requests).toBe(0);
+      await panel.getByRole('button',{name:'查看设备详情',exact:true}).click();
+      const status=panel.locator('.study-device-status');await expect(status).toContainText('尚未读取');expect(requests).toBe(0);
+      await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status).toContainText('自习配置已应用');await expect(status).toContainText('自习时段内');
+      await expect(status).toContainText('尚无展示执行回执');await expect(status).toContainText('尚无采集执行回执');await expect(status.getByText('正在监测',{exact:true})).toHaveCount(0);
+      await page.screenshot({path:`test-results/study-receipt-${width}.png`,fullPage:true,animations:'disabled'});
+      statusMode='capture';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status.locator('.study-capture-status')).toHaveText('设备回报正在采集');
+      await page.screenshot({path:`test-results/study-execution-${width}.png`,fullPage:true,animations:'disabled'});
+      statusMode='presentation-visible';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      const display=status.locator('.study-presentation-status');await expect(display).toHaveText('设备回报展示页可见');
+      await page.evaluate(()=>{globalThis.__studyWallNow=Date.now;Date.now=()=>globalThis.__studyWallNow()+3600000;});
+      await expect(display).toHaveText('设备回报展示页可见');
+      await page.screenshot({path:`test-results/study-display-presence-${width}.png`,fullPage:true,animations:'disabled'});
+      await page.evaluate(()=>{Date.now=globalThis.__studyWallNow;delete globalThis.__studyWallNow;});
+      statusMode='presentation-hidden';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('设备回报展示页已收起');
+      await expect(status).toContainText('临时使用电脑，按期限返回');
+      statusMode='presentation-old-version';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('展示执行回执待确认');
+      statusMode='presentation-expired';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('展示执行回执待确认');
+      statusMode='presentation-aging';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('展示执行回执待确认');
+      statusMode='presentation-delayed';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('展示执行回执待确认');
+      statusMode='capture-starting';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status.locator('.study-capture-status')).toHaveText('采集正在启动');
+      statusMode='resume-old-device';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      const restore=status.getByRole('button',{name:'恢复本时段监测',exact:true});await expect(restore).toBeDisabled();
+      statusMode='resume-skipped';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(restore).toBeEnabled();
+      await page.evaluate(() => {globalThis.__studyOriginalNow=Date.now;Date.now=()=>globalThis.__studyOriginalNow()+3600000;});
+      await restore.click();await expect(status).toContainText('恢复请求已受理，等待设备回执');expect(resumes).toHaveLength(1);
+      await expect(status.locator('.study-capture-status')).toHaveText('采集执行回执待确认');
+      await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(restore).toBeDisabled();
+      await page.evaluate(() => {Date.now=globalThis.__studyOriginalNow;delete globalThis.__studyOriginalNow;});
+      statusMode='resume-accepted';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status).toContainText('设备已处理恢复指令');await expect(status.locator('.study-capture-status')).toHaveText('设备回报未在定时采集');
+      await page.screenshot({path:`test-results/study-resume-${width}.png`,fullPage:true,animations:'disabled'});
+      statusMode='capture-old-version';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status.locator('.study-capture-status')).toHaveText('采集执行回执待确认');
+      statusMode='capture-aging';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status.locator('.study-capture-status')).toHaveText('采集执行回执待确认');
+      statusMode='old-version';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status).toContainText('该回执对应旧配置');await expect(status).toContainText('上次计算阶段');await expect(status).not.toContainText('自习配置已应用');
+      statusMode='aging';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status).toContainText('回执待重新确认');await expect(status).toContainText('历史回执');
+      statusMode='unsupported';await status.getByRole('button',{name:'刷新自习应用回执'}).click();
+      await expect(status).toContainText('当前服务尚未支持自习应用回执');await expect(status).not.toContainText('自习配置已应用');
+      expect(errors).toEqual([]);
+    }finally{await context.close();}
+  });
+}
+
+test('NPEP direct navigation requires an OWNER or ADMIN school membership', async ({browser}) => {
+  const requests = [];
+  const {page, context, errors} = await openAdmin(browser, 1440, 'TEACHER', {}, 'npep', async context => {
+    await context.route(`${api}/api/v2/npep/**`, route => { requests.push(route.request().url()); return route.fulfill({status: 403, json: {}}); });
+  });
+  try {
+    await expect(page.getByText('请选择具有 OWNER/ADMIN 权限的学校后管理 NPEP。')).toBeVisible();
+    await expect(page.locator('.npep-device-manager')).toHaveCount(0);
+    expect(requests).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
 });
 
 test("screen list preserves its snapshot after HTTP failure and shows fresh status on retry", async ({browser}) => {
@@ -601,7 +906,7 @@ for (const width of [1440, 540]) {
       if (width > 959) await page.locator(".admin-navigation").getByText(title, {exact: true}).click();
       else {
         await page.locator(".admin-mobile-page-switcher .v-select").getByRole("combobox").first().click();
-        await page.getByRole("option", {name: `日常管理 · ${title}`}).click();
+        await page.getByRole("option", {name: `${["大屏互联", "自习展示", "噪音监测", "自习座位表"].includes(title) ? "NPEP" : "日常管理"} · ${title}`}).click();
       }
     };
     try {
@@ -684,3 +989,56 @@ for (const failB of [false, true]) {
     } finally { release(); await context.close(); }
   });
 }
+
+test('NPEP group seat publication uses real file controls, retains drafts and separates download from viewing', async ({browser}) => {
+  for (const width of [1440, 720]) {
+    let current = {revision: 0, hash: null}, image = null, failFirst = true;
+    const versions = [], ids = [];
+    const {page, context, errors} = await openAdmin(browser, width, 'OWNER', {}, 'npep-seating', async context => {
+      await context.route(`${api}/api/v2/npep/**`, async route => {
+        const req = route.request(), url = new URL(req.url()), path = url.pathname;
+        const body = req.method() === 'POST' ? req.postDataJSON() : null;
+        const reply = data => route.fulfill({json: {protocolVersion: req.headers()['x-npep-version'], requestId: body?.requestId || req.headers()['x-request-id'], serverTime: new Date().toISOString(), data}});
+        if (path.endsWith('/info')) return reply({supportedCapabilities: ['device.status']});
+        if (path.endsWith('/devices')) return reply({items: [], nextCursor: null});
+        if (path.endsWith('/seating/catalog')) return reply({termId: 'term', classes: [{id: 'class-a', name: '一班'}, {id: 'class-b', name: '二班'}]});
+        if (path.endsWith('/seating/image')) { expect(url.searchParams.get('classId')).toBe('class-a'); return reply({image, ...current}); }
+        if (path.endsWith('/seating')) {
+          expect(req.headers()['x-npep-version']).toBe('0.14');
+          if (!body) return reply({current, versions: [...versions].reverse(), receipts: []});
+          expect(req.headers()['x-request-id']).toBe(body.requestId); expect(body.classId).toBe('class-a'); expect(body.termId).toBe('term');
+          ids.push(body.requestId);
+          if (failFirst) { failFirst = false; return route.fulfill({status: 503, json: {error: {code: 'TEMPORARILY_UNAVAILABLE'}}}); }
+          expect(body.expectedRevision).toBe(current.revision);
+          if (body.action === 'image') { image = body.image; const bytes = Buffer.from(image, 'base64'); expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a'); expect(bytes.length).toBeLessThanOrEqual(2097152); await writeFile(`test-results/seating-upload-${width}.png`, bytes); }
+          current = {revision: current.revision + 1, hash: body.action === 'withdraw' ? null : 'a'.repeat(64), width: 1000, height: 600, createdAt: new Date().toISOString(), restorable: body.action !== 'withdraw'};
+          versions.push(current); return reply(current);
+        }
+        return route.fulfill({status: 404, json: {error: {code: 'NOT_FOUND'}}});
+      });
+    });
+    try {
+      const panel = page.locator('.seating-settings'); await expect(panel).toBeVisible();
+      if (width >= 960) {
+        const heading = page.locator('.admin-navigation').getByText('NPEP', {exact: true}); await expect(heading).toBeVisible();
+        await expect(page.locator('.admin-navigation').getByText('权限管理', {exact: true})).toHaveCount(0);
+      }
+      await panel.locator('.v-select').filter({hasText: '自习所在班级'}).click(); await page.getByRole('option', {name: '一班', exact: true}).click();
+      const source = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 1000; canvas.height = 600;
+        const c = canvas.getContext('2d'); c.fillStyle = 'white'; c.fillRect(0, 0, 1000, 600); c.fillStyle = 'black'; c.font = '40px sans-serif'; c.fillText('自习座位表测试样张 A01–A40', 50, 80); return canvas.toDataURL('image/png').split(',')[1]; });
+      await panel.locator('input[type=file]').setInputFiles({name: '自习座位表.png', mimeType: 'image/png', buffer: Buffer.from(source, 'base64')});
+      await expect(panel).toContainText('待发布');
+      await navigateAdmin(page, '大屏互联'); await navigateAdmin(page, '自习座位表'); await expect(panel).toContainText('待发布');
+      await panel.getByRole('button', {name: '发布给此班级', exact: true}).click(); await expect(panel.locator('.v-alert')).toContainText(/未确认|请求失败|暂不可用|重试/);
+      await panel.getByRole('button', {name: '发布给此班级', exact: true}).click(); await expect(panel).toContainText('发布已保存');
+      expect(ids[0]).toBe(ids[1]); await expect(panel).toContainText('当前版本 1'); await expect(panel).toContainText('尚无设备回执');
+      await page.evaluate(() => window.scrollTo(0, 0)); await page.mouse.move(10, 10);
+      if (width >= 960) await expect(page.locator('.admin-navigation .v-list-item--active')).toHaveCount(1);
+      await page.screenshot({path: `test-results/seating-admin-${width}.png`, fullPage: true, animations: 'disabled'});
+      await panel.getByRole('button', {name: '撤回当前自习座位表', exact: true}).click();
+      const dialog = page.getByRole('dialog').filter({hasText: '撤回此自习座位表？'});
+      await dialog.getByRole('button', {name: '撤回', exact: true}).click(); await expect(panel).toContainText('尚未发布自习座位表 / 已撤回');
+      expect(current.revision).toBe(2); expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  }
+});

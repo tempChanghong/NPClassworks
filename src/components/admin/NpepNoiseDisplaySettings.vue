@@ -85,11 +85,13 @@
 </template>
 
 <script setup>
-import {computed, ref, watch} from 'vue';
+import {computed, onUnmounted, ref, watch} from 'vue';
 import {npepNoiseDisplayApi} from '@/utils/classworksV2Client';
 
 const props = defineProps({schoolId: {type: String, required: true}, termId: {type: String, default: ''},
   targetType: {type: String, default: 'GRADE'}, targetId: {type: String, default: ''}});
+const emit = defineEmits(['dirty']);
+const draftSnapshot = ref('');
 const catalog = ref(null);
 const loading = ref(false);
 const busy = ref(false);
@@ -110,10 +112,14 @@ const valid = computed(() => inherit.value || (Number.isInteger(draftMinutes.val
   && draftMinutes.value >= 1 && draftMinutes.value <= 60));
 const changed = computed(() => inherit.value ? Boolean(current.value)
   : current.value?.returnMinutes !== draftMinutes.value);
+const draftValue = () => JSON.stringify([inherit.value, draftMinutes.value]);
+watch([inherit, draftMinutes, draftSnapshot], () => emit('dirty', Boolean(draftSnapshot.value) && draftValue() !== draftSnapshot.value));
+onUnmounted(() => { generation++; emit('dirty', false); });
 
 function resetDraft() {
   inherit.value = props.targetType === 'CLASS' && !current.value;
   draftMinutes.value = current.value?.returnMinutes ?? grade.value?.returnMinutes ?? 10;
+  draftSnapshot.value = draftValue();
   message.value = '';
 }
 async function load() {

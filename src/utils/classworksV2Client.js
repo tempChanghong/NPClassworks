@@ -370,10 +370,12 @@ export function describeApiError(error, fallback = "请求失败") {
 // Web uses administrator or screen credentials, never native device secrets.
 // Short pairing codes are displayed transiently, never persisted here.
 async function npepAdminRequest(method, path, {body, signal, params, version = "0.1", requestId = globalThis.crypto.randomUUID()} = {}) {
+  const session = version === "0.14" ? accountSession() : null;
   const response = await client.request({method, url: `/api/v2/npep${path}`, signal, params, timeout: 10000,
-    headers: {"X-NPEP-Version": version, ...(method === "get" ? {"X-Request-Id": requestId} : {})},
+    headers: {"X-NPEP-Version": version, ...(method === "get" || version === "0.14" ? {"X-Request-Id": requestId} : {})},
     ...(body ? {data: {...body, requestId}} : {}),
   });
+  if (session && !isCurrentAccountSession(session)) throw staleAccountRequest();
   const value = response.data;
   if (value?.protocolVersion !== version || value.requestId !== requestId || !Number.isFinite(Date.parse(value.serverTime)) || !value.data) {
     throw new Error("互联服务响应不兼容，请刷新后重试");
@@ -400,6 +402,17 @@ export const npepNoiseScheduleApi = {
   preview: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/noise-schedules/preview`, {...options, version: '0.7', body}),
   save: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/noise-schedules`,
     {...options, version: '0.7', body, requestId: body.requestId}),
+};
+export const npepStudySettingsApi = {
+  resume: (school, device, body, options) => npepAdminRequest('post', `${runtimePath(school, device)}/study-settings/resume`,
+    {...options, version: '0.11', body, requestId: body.requestId}),
+  management: (school, device, options) => npepAdminRequest('get', `${runtimePath(school, device)}/study-settings`, {...options, version: '0.10'}),
+  list: (school, termId, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/study-settings`,
+    {...options, version: '0.10', params: termId ? {termId} : {}}),
+  preview: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/study-settings/preview`,
+    {...options, version: '0.10', body, requestId: body.requestId}),
+  save: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/study-settings`,
+    {...options, version: '0.10', body, requestId: body.requestId}),
 };
 export const npepNoiseDisplayApi = {
   async screen(body, {signal} = {}) {
@@ -1068,3 +1081,10 @@ export const classworksV2Api = {
 };
 
 export default client;
+
+export const npepSeatingApi = {
+  catalog: (school, termId, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/seating/catalog`, {...options, version: '0.14', params: termId ? {termId} : {}}),
+  list: (school, params, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/seating`, {...options, version: '0.14', params}),
+  image: (school, params, options) => npepAdminRequest('get', `${npepSchoolPath(school)}/seating/image`, {...options, version: '0.14', params}),
+  publish: (school, body, options) => npepAdminRequest('post', `${npepSchoolPath(school)}/seating`, {...options, version: '0.14', body, requestId: body.requestId}),
+};

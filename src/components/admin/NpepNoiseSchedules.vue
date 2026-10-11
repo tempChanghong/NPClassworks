@@ -189,7 +189,7 @@
               class="mt-3"
               variant="tonal"
               :disabled="busy || draft.rules.length >= 32"
-              @click="draft.rules.push({days:[1,2,3,4,5],start:'19:00',end:'21:00'})"
+              @click="draft.rules.push({days:[],start:'19:00',end:'21:30'})"
             >
               添加时段
             </v-btn>
@@ -293,6 +293,7 @@
           :term-id="editorTerm"
           :target-type="targetType"
           :target-id="targetId"
+          @dirty="displayDirty = $event"
         />
       </template>
       <v-btn
@@ -306,18 +307,21 @@
   </v-card>
 </template>
 <script setup>
-import {computed, toRef} from 'vue';
+import {computed, ref, toRef, watch} from 'vue';
 import {useNoiseScheduleEditor} from '@/composables/admin/useNoiseScheduleEditor.js';
 import NpepNoiseDisplaySettings from '@/components/admin/NpepNoiseDisplaySettings.vue';
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: '当前学校'}, termId: {type: String, default: ''}});
+const emit = defineEmits(['dirty']);
+const displayDirty = ref(false);
 const editor = useNoiseScheduleEditor(toRef(props, 'schoolId'), toRef(props, 'termId'));
-const {catalog, termId: editorTerm, targetType, targetId, targets, draft, revision, preview, busy, error, message, loaded, valid, validation, refresh, previewDraft, save} = editor;
+const {catalog, termId: editorTerm, targetType, targetId, targets, draft, revision, preview, busy, error, message, loaded, valid, validation, hasUnsavedChanges, refresh, previewDraft, save} = editor;
+watch([hasUnsavedChanges, displayDirty], ([schedule, display]) => emit('dirty', schedule || display), {immediate: true, flush: 'sync'});
 const days = ['周一','周二','周三','周四','周五','周六','周日'].map((title, i) => ({title, value:i+1}));
 const modes = computed(() => [...(targetType.value === 'CLASS' ? [{title:'继承年级',value:'Inherit'}] : []), {title:'使用本范围时段',value:'Override'}, {title:'关闭自动监测',value:'Disabled'}]);
 const validationMessage = computed(() => ({EMPTY_RULES:'请至少添加一个时段。',INVALID_RULE:'请检查星期和开始／结束时间。',INVALID_DURATION:'时段不能等长或超过三小时。',MERGED_WINDOW_TOO_LONG:'相邻或重叠时段合并后超过三小时，请调整。'}[validation.value] || '排程配置无效，请检查填写内容。'));
 function selectFirst() { targetId.value = targets.value[0]?.id || ''; }
 function changeMode(mode) {
-  draft.value.rules = mode === 'Override' ? [{days:[1,2,3,4,5],start:'19:00',end:'21:00'}] : [];
+  draft.value.rules = mode === 'Override' ? [{days:[],start:'19:00',end:'21:30'}] : [];
 }
 const sourceName = source => ({Grade:'继承年级',Class:'班级时段',Disabled:'已关闭',None:'未配置'}[source]);
 const ruleText = rule => rule.days.map(d => days[d-1].title).join('、')+' '+rule.start+'–'+rule.end+(rule.end < rule.start ? '（次日结束）' : '');

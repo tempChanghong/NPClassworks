@@ -203,6 +203,14 @@ export async function createFlowHarness() {
       app.mount({}); mounted.push(app);
       return {state, school, term};
     },
+    async openStudySettingsEditor() {
+      const {useStudySettingsEditor} = await vite.ssrLoadModule('/src/composables/admin/useStudySettingsEditor.js');
+      const school = ref('school'), term = ref('term');
+      let state;
+      const app = renderer.createApp({setup() { state = useStudySettingsEditor(school, term); return () => null; }});
+      app.mount({}); mounted.push(app);
+      return {state, school, term, unmount() { mounted.splice(mounted.indexOf(app), 1); app.unmount(); }};
+    },
     async openSchoolHomeworkSettings() {
       const {useSchoolHomeworkSettings} = await vite.ssrLoadModule("/src/composables/admin/useSchoolHomeworkSettings.js");
       const {default: inputs} = await vite.ssrLoadModule("/src/components/admin/AdminHomeworkQuickInputs.vue");

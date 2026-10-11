@@ -15,6 +15,12 @@ export function useNoiseScheduleEditor(school, initialTerm, api = npepNoiseSched
   const draft = ref({mode: 'Disabled', rules: []}), revision = ref(0), preview = ref(null);
   const busy = ref(false), error = ref(''), message = ref(''), loaded = ref(false), blocked = ref(false);
   const targets = computed(() => (targetType.value === 'GRADE' ? catalog.value?.grades : catalog.value?.classes) || []);
+  const hasUnsavedChanges = computed(() => {
+    if (!loaded.value || !targetId.value) return false;
+    const saved = catalog.value?.policies.find(p => p.targetType === targetType.value && p.targetId === targetId.value);
+    const baseline = saved?.policy || {mode: targetType.value === 'CLASS' ? 'Inherit' : 'Disabled', rules: []};
+    return JSON.stringify(draft.value) !== JSON.stringify(baseline);
+  });
   const validation = computed(() => validatePolicy(draft.value, targetType.value === 'GRADE'));
   const valid = computed(() => loaded.value && !!targetId.value && !validation.value && !blocked.value);
   let generation = 0, pending = null, disposed = false;
@@ -68,6 +74,6 @@ export function useNoiseScheduleEditor(school, initialTerm, api = npepNoiseSched
     catalog.value = null; targetId.value = ''; termId.value = initialTerm.value || ''; void refresh();
   }, {immediate: true});
   onScopeDispose(() => { disposed = true; generation++; });
-  return {catalog, termId, targetType, targetId, targets, draft, revision, preview, busy, error, message, loaded, valid, validation,
+  return {catalog, termId, targetType, targetId, targets, draft, revision, preview, busy, error, message, loaded, valid, validation, hasUnsavedChanges,
     refresh, previewDraft: () => operation(false), save: () => operation(true)};
 }
