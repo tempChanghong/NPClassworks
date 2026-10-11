@@ -68,7 +68,7 @@ export function useStudySettingsEditor(schoolId, initialTerm, api = npepStudySet
         const index = catalog.value.settings.findIndex(item => item.targetType === row.targetType && item.targetId === row.targetId);
         if (index < 0) catalog.value.settings.push(row); else catalog.value.settings[index] = row;
         revision.value = row.revision; baseline.value = JSON.stringify(selected.policy); pending = null;
-        message.value = '自习设置已保存。桌面展示与阈值拍照尚待接入，保存不代表设备已应用或正在采集。';
+        message.value = '自习设置已保存。保存不代表设备已应用、展示页已显示或正在采集；请查看设备回执与执行状态。摄像头阈值拍照尚待接入。';
       }
     } catch (cause) {
       if (disposed || gen !== generation || snapshot !== fingerprint()) return;
