@@ -67,3 +67,14 @@ test('photo deletion carries one stable request ID in headers and JSON',async()=
   });
   assert.equal((await h.api.npepStudyPhotosApi.remove('school',id)).data.state,'Deleted');
 });
+
+test('recovery records and manual photos have distinct wording, and manual reports cannot inherit scheduled provenance',async()=>{
+  catalog();const {state:s}=await h.openComponent('/src/components/admin/NpepStudyPhotos.vue',{schoolId:'school',termId:'term'});
+  assert.match(s.description({...photo(randomUUID()),sessionKind:'Manual'}),/手动自习/);
+  assert.match(s.description({...photo(randomUUID()),reason:'ProcessRecovery'}),/异常恢复后捕获/);
+  assert.match(s.description({isExitRecord:true,reason:'ProcessRecovery'}),/定时自习异常恢复/);
+  assert.doesNotMatch(s.description({isExitRecord:true,reason:'ProcessRecovery'}),/验证未通过/);
+  const version='a'.repeat(64),sessionId=randomUUID(),window={start:'2026-10-12T19:00:00.000',end:'2026-10-12T21:30:00.000'};
+  const {state:reports}=await h.openComponent('/src/components/v2/NoiseReportList.vue',{reports:[{sessionId,sessionKind:'Manual'}],sessions:[{sessionId,version,window}]});
+  assert.equal(reports.rows.value[0].source,null);
+});

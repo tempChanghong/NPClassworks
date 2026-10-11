@@ -44,9 +44,15 @@
             :color="source ? 'primary' : undefined"
             variant="tonal"
           >
-            {{ source ? '学校自动排程' : '来源未确认' }}
+            {{ r.sessionKind === 'Manual' ? '手动自习' : source ? '学校自动排程' : '来源未确认' }}
           </v-chip>
         </div>
+        <p
+          v-if="r.sessionKind === 'Manual' && r.endReason"
+          class="noise-report-note mt-3"
+        >
+          {{ r.endReason === 'ScheduledTakeover' ? '被学校定时自习接管，原手动会话已结束，不自动续开。' : r.endReason === 'ThreeHourLimit' ? '达到三小时上限。' : r.endReason === 'PlannedEnd' ? '到达指定结束时间。' : r.endReason === 'UserEnded' ? '主动结束。' : '手动会话中断或结束；请核对本机报告。' }}
+        </p>
         <p
           v-if="r.timing?.clockDiscontinuity"
           class="noise-report-note mt-3"
@@ -121,7 +127,7 @@ import {computed} from 'vue';
 import {time, statistic as db, estimatedStatistic, estimateStatus} from '@/utils/nativeNoisePresentation';
 import {scheduledReportSource, schoolCalendarText} from '@/utils/noiseReportSources';
 const props = defineProps({reports: {type: Array, default: () => []}, sessions: {type: Array, default: () => []}, currentVersion: {type: String, default: ''}, loaded: {type: Boolean, default: true}});
-const rows = computed(() => props.reports.map(report => ({report, source: scheduledReportSource(report.sessionId, props.sessions)})));
+const rows = computed(() => props.reports.map(report => ({report, source: report.sessionKind === 'Manual' ? null : scheduledReportSource(report.sessionId, props.sessions)})));
 </script>
 <style scoped>
 .noise-report-heading h4 { font-size: 19px; font-weight: 750; }

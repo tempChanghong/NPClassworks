@@ -83,7 +83,7 @@
       @update:model-value="value => { if (!value) closePreview(); }"
     >
       <v-card v-if="preview">
-        <v-card-title>{{ preview.photo.isExitRecord ? '退出验证记录关联画面' : '自习照片' }} · {{ time(preview.photo.isExitRecord ? preview.photo.createdAt : preview.photo.capturedAt) }}</v-card-title>
+        <v-card-title>{{ preview.photo.isExitRecord ? preview.photo.reason === 'ProcessRecovery' ? '异常恢复记录关联画面' : '退出验证记录关联画面' : '自习照片' }} · {{ time(preview.photo.isExitRecord ? preview.photo.createdAt : preview.photo.capturedAt) }}</v-card-title>
         <v-card-text>
           <img
             :src="preview.url"
@@ -123,7 +123,7 @@
       <v-list-item
         v-for="event in exitItems"
         :key="event.eventId"
-        :title="`${event.reason === 'Timeout' ? '管理验证超时' : '管理密码未通过'} · ${time(event.createdAt)}`"
+        :title="`${event.reason === 'ProcessRecovery' ? '定时自习异常恢复' : event.reason === 'Timeout' ? '管理验证超时' : '管理密码未通过'} · ${time(event.createdAt)}`"
         :subtitle="event.photoState === 'Stored' ? '关联画面已存储，可查看' : '没有当前可查看的关联画面'"
       >
         <template #append>
@@ -163,7 +163,7 @@ function reset() {
   exitItems.value = []; exitCursor.value = null; exitLoaded.value = false;
 }
 const time = value => new Date(value).toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'});
-const description = p => p.isExitRecord ? '本次退出验证未通过记录关联的画面；此处时间为服务器收到记录的时间。' : `${p.reason === 'Noise' ? '连续超限' : '点击退出后台'} · ${p.level == null ? '无电平读数' : p.level.toFixed(1) + (p.unit === 'EstimatedDbA' ? ' 估算 dB(A)' : ' dBFS')} · 到期 ${time(p.expiresAt)}`;
+const description = p => p.isExitRecord ? `${p.reason === 'ProcessRecovery' ? '定时自习异常恢复' : '退出验证未通过'}记录关联的画面；此处时间为服务器收到记录的时间。` : `${p.sessionKind === 'Manual' ? '手动自习 · ' : ''}${p.reason === 'Noise' ? '连续超限' : p.reason === 'ProcessRecovery' ? '异常恢复后捕获' : '点击退出后台'} · ${p.level == null ? '无电平读数' : p.level.toFixed(1) + (p.unit === 'EstimatedDbA' ? ' 估算 dB(A)' : ' dBFS')} · 到期 ${time(p.expiresAt)}`;
 function problem(e) { if (e.code !== 'ERR_CANCELED') error.value = '照片请求未完成；请核对权限、服务器照片功能及当前班级后重试。'; }
 watch(() => [props.schoolId, props.termId], async () => {
   reset(); classes.value = []; classId.value = null; term.value = null;
