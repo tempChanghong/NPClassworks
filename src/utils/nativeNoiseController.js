@@ -2,12 +2,13 @@
 export function createNativeNoiseController(api, publish, remember = {get: () => null, set: () => {}}, schedules = null, management = null) {
   let scope = '', epoch = 0, polling = false, state;
   let resumeBody = null;
+  let commandError = '', resumeError = '';
   const empty = () => ({provider: 'checking', online: false, status: null, reports: [], commands: [], error: '', busy: false,
     schedule:null, scheduleError:''});
   function emit(patch) { state = {...state, ...patch}; publish(state); }
   function context(key) {
     if (key === scope) return;
-    scope = key; epoch++; polling = false; resumeBody = null;
+    scope = key; epoch++; polling = false; resumeBody = null; commandError = ''; resumeError = '';
     state = empty();
     if (remember.get(key) === 'native') state.provider = 'native';
     publish(state);
@@ -20,11 +21,12 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
       if (current !== epoch) return;
       if (!['native', 'browser'].includes(value.provider)) throw new Error('噪音接口响应不兼容');
       remember.set(scope, value.provider);
-      emit({...value, error: ''});
+      // Polling the device successfully cannot confirm a rejected control request.
+      emit({...value, error: commandError});
       if (schedules && value.provider === 'native') {
         try {
           const schedule = await schedules.screen();
-          if (current === epoch) emit({schedule, scheduleError:''});
+          if (current === epoch) emit({schedule, scheduleError:resumeError});
         } catch (e) {
           if (current === epoch) emit({schedule:state.schedule?{...state.schedule,online:false,applied:false}:null,
             scheduleError:[404,426].includes(e?.response?.status)?'服务端尚未支持自动监测排程':'排程状态暂不可确认；请在桌面查看。'});
@@ -42,6 +44,7 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
   async function command(action, durationSeconds = 10800) {
     if (state.busy || !state.online || state.provider !== 'native' || !state.status) return false;
     const current = epoch, s = state.status;
+    commandError = '';
     emit({busy: true, error: ''});
     try {
       await api.screen({requestId: globalThis.crypto.randomUUID(), action, instanceId: s.instanceId,
@@ -49,7 +52,10 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
       if (current === epoch) emit({error: '请求已送达服务器，等待桌面执行回执。'});
       return true;
     } catch (e) {
-      if (current === epoch) emit({error: `请求未确认：${e?.response?.data?.error?.code || e.message}。请刷新查看实际状态。`});
+      if (current === epoch) {
+        commandError = `请求未确认：${e?.response?.data?.error?.code || e.message}。请刷新查看实际状态。`;
+        emit({error: commandError});
+      }
       return false;
     } finally { if (current === epoch) { emit({busy: false}); await poll(); } }
   }
@@ -58,6 +64,7 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
       return false;
     const current = epoch, status = state.status;
     let failure = '';
+    commandError = '';
     emit({busy: true, error: ''});
     try {
       await management.stop(pin, status);
@@ -67,7 +74,7 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
       failure = [404, 426].includes(e?.response?.status)
         ? '当前互联服务不支持定时监测管理保护，停止请求未提交。'
         : `停止请求未确认：${e?.response?.data?.error?.code || e.message}。请核对当前采集状态。`;
-      if (current === epoch) emit({error: failure});
+      if (current === epoch) { commandError = failure; emit({error: failure}); }
       return false;
     } finally {
       if (current === epoch) {
@@ -82,6 +89,7 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
     const schedule=state.schedule;
     if(!schedules || state.busy || !state.online || !schedule?.online || !schedule.applied || !schedule.status?.window) return false;
     const current=epoch, body={version:schedule.policy.version,window:schedule.status.window};
+    resumeError = '';
     if(!resumeBody || JSON.stringify(body)!==JSON.stringify({version:resumeBody.version,window:resumeBody.window}))
       resumeBody={...body,requestId:globalThis.crypto.randomUUID()};
     emit({busy:true,scheduleError:''});
@@ -90,7 +98,10 @@ export function createNativeNoiseController(api, publish, remember = {get: () =>
       if(current===epoch) { resumeBody=null; emit({scheduleError:'恢复请求已提交，等待桌面回执；请以运行状态为准。'}); }
       return true;
     } catch(e) {
-      if(current===epoch) emit({scheduleError:`恢复未确认：${e?.response?.data?.error?.code||e.message}`});
+      if(current===epoch) {
+        resumeError = `恢复未确认：${e?.response?.data?.error?.code||e.message}`;
+        emit({scheduleError:resumeError});
+      }
       return false;
     } finally { if(current===epoch) {emit({busy:false}); await poll();} }
   }

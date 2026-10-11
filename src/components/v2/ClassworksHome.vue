@@ -337,10 +337,12 @@
         </div>
         <v-empty-state
           v-if="store.feedLoadError && !store.feed.length"
-          class="rounded-xl"
-          headline="作业加载失败"
+          class="student-empty-state rounded-xl"
+          :headline="isCompactStudent ? undefined : '作业加载失败'"
           icon="mdi-cloud-alert-outline"
+          :size="isCompactStudent ? 48 : undefined"
           :text="store.feedLoadError"
+          :title="isCompactStudent ? '作业加载失败' : undefined"
         >
           <template #actions>
             <v-btn
@@ -363,15 +365,21 @@
 
         <v-empty-state
           v-else-if="!store.feedLoading && !store.studentError"
-          :headline="`${boardDateLabel}尚未录入作业`"
+          class="student-empty-state rounded-xl"
+          :headline="isCompactStudent ? undefined : `${boardDateLabel}尚未录入作业`"
           icon="mdi-check-circle-outline"
+          :size="isCompactStudent ? 48 : undefined"
           text="可以切换到前一天、后一天或选择其他日期查看"
+          :title="isCompactStudent ? `${boardDateLabel}尚未录入作业` : undefined"
         />
         <div
           v-if="isCompactStudent"
           class="student-mobile-support"
         >
-          <HomeworkSubjectStatus compact />
+          <HomeworkSubjectStatus
+            compact
+            hide-when-attention
+          />
         </div>
       </template>
     </template>
@@ -1663,6 +1671,8 @@ async function copyScreenBoardToToday() {
   }
 
   .classworks-v2-page--student-mobile .selection-summary {
+    background: rgba(var(--v-theme-surface), 0.94);
+    border: 1px solid rgba(var(--v-theme-primary), 0.24);
     min-height: 0;
   }
 
@@ -1701,7 +1711,27 @@ async function copyScreenBoardToToday() {
   }
 
   .classworks-v2-page--student-mobile :deep(.board-date-navigator) {
+    background: rgba(var(--v-theme-surface), 0.94);
     margin-bottom: 10px !important;
+  }
+
+  .classworks-v2-page--student-mobile :deep(.subject-status--compact) {
+    background: rgba(var(--v-theme-surface), 0.94);
+  }
+
+  .classworks-v2-page--student-mobile .student-empty-state {
+    background: rgba(var(--v-theme-surface), 0.92);
+    border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+    min-height: 0;
+    padding: 20px 16px;
+  }
+
+  .classworks-v2-page--student-mobile .student-empty-state :deep(.v-empty-state__title) {
+    line-height: 1.4;
+  }
+
+  .classworks-v2-page--student-mobile .student-empty-state :deep(.v-empty-state__text) {
+    padding: 0;
   }
 
   .teacher-session-summary {

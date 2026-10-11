@@ -103,7 +103,11 @@ try {
   await expect(page.getByText(/采样质量：采样有效/)).toBeVisible();
   await expect(page.getByText(/已达到数值下限/)).toHaveCount(0);
   await page.getByRole('button', {name: '停止监测', exact: true}).click();
-  await expect(page.getByText(/有效采样 55.0 秒/)).toBeVisible();
+  const report = page.getByRole('article', {name: `统计报告 ${reports[0].sessionId}`});
+  await expect(report).toHaveCount(1);
+  await expect(report).toContainText(/有效采样\s*55\.0 秒/);
+  await expect(report).toContainText(/总时长\s*60\.0 秒/);
+  await expect(report).toContainText(/覆盖率\s*92%/);
   await expect(page.getByText(/采样质量：已结束/)).toBeVisible();
   await page.screenshot({path: resolve(output, 'report.png'), fullPage: true});
   if (await page.evaluate(() => window.__micRequests) !== 0 || errors.length) throw new Error('Browser regression: ' + errors.join(';'));

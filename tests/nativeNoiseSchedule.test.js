@@ -28,3 +28,15 @@ test('offline and unapplied policy cannot resume automatic monitoring',async()=>
   const c=setup({screen:async body=>{if(body)sends++;return value;}});await c.poll();assert.equal(await c.resumeSchedule(),false);
   value={...schedule,online:false};await c.poll();assert.equal(await c.resumeSchedule(),false);assert.equal(sends,0);
 });
+
+test('rejected schedule resume remains visible after status refresh and clears on scope change', async () => {
+  const c = setup({screen: async body => {
+    if (body) throw {response: {status: 409, data: {error: {code: 'SCHEDULE_VERSION_CONFLICT'}}}};
+    return schedule;
+  }});
+  await c.poll();
+  assert.equal(await c.resumeSchedule(), false);
+  assert.match(c.snapshot().scheduleError, /SCHEDULE_VERSION_CONFLICT/);
+  await c.poll(); assert.match(c.snapshot().scheduleError, /SCHEDULE_VERSION_CONFLICT/);
+  c.context('another-screen'); assert.equal(c.snapshot().scheduleError, '');
+});

@@ -52,9 +52,14 @@ const props = defineProps({schoolId: {type: String, required: true}, deviceId: {
 defineEmits(['close']);
 const reports = ref([]), error = ref(''), busy = ref(false), reportsLoaded = ref(false);
 const schedule=ref(null), scheduleError=ref('');
-let generation = 0;
+let generation = 0, scheduleExpiresAt = 0;
+function expireSchedule() {
+  if (schedule.value?.online && globalThis.performance.now() >= scheduleExpiresAt)
+    schedule.value = {...schedule.value, online: false, applied: false};
+}
 async function refresh() {
   const current = ++generation;
+  const requestedAt = globalThis.performance.now();
   busy.value = true; error.value = '';
   try {
     const [reportResult, scheduleResult] = await Promise.allSettled([
@@ -70,7 +75,13 @@ async function refresh() {
       error.value = `报告加载失败：${failure?.response?.data?.error?.code || failure.message}${reportsLoaded.value ? '。以下为上次成功加载的报告，请勿视为实时状态' : ''}`;
     }
     if (scheduleResult.status === 'fulfilled') {
-      schedule.value = scheduleResult.value.data;
+      const reply = scheduleResult.value;
+      schedule.value = reply.data;
+      // Match the server's 15-second observation window without trusting the
+      // browser wall clock or extending it by HTTP/report-loading delay.
+      const age = Date.parse(reply.serverTime) - Date.parse(reply.data.receivedAt);
+      scheduleExpiresAt = Number.isFinite(age) && age >= 0 ? requestedAt + Math.max(0, 15000 - age) : 0;
+      expireSchedule();
       scheduleError.value = '';
     } else {
       const failure = scheduleResult.reason;
@@ -79,8 +90,9 @@ async function refresh() {
     }
   } finally { if (current === generation) busy.value = false; }
 }
-watch(() => [props.schoolId, props.deviceId], () => { reports.value = []; reportsLoaded.value = false; schedule.value=null; scheduleError.value=''; void refresh(); }, {immediate: true});
-onUnmounted(() => { generation++; });
+watch(() => [props.schoolId, props.deviceId], () => { reports.value = []; reportsLoaded.value = false; schedule.value=null; scheduleExpiresAt=0; scheduleError.value=''; void refresh(); }, {immediate: true});
+const freshnessTimer = setInterval(expireSchedule, 1000);
+onUnmounted(() => { generation++; clearInterval(freshnessTimer); });
 </script>
 <style scoped>
 .noise-admin-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 26px 28px 18px; white-space: normal; }

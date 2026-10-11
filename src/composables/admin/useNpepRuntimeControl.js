@@ -7,6 +7,7 @@ export function useNpepRuntimeControl(schoolId, deviceId) {
   const snapshot = ref(null), operations = ref([]), busy = ref(false), error = ref(''), message = ref('');
   const confirmed = ref(false), pending = ref(null), serverNow = ref(0);
   let controller = new AbortController(), generation = 0, reading = false, received = 0, serverTime = 0;
+  let mutationError = '';
   const blocked = computed(() => runtimeBlockedReason(snapshot.value, serverNow.value));
   const dailyBlocked = computed(() => runtimeBlockedReason(snapshot.value, serverNow.value, 'DAILY'));
   async function refresh() {
@@ -19,18 +20,19 @@ export function useNpepRuntimeControl(schoolId, deviceId) {
       if (own !== generation || busy.value) return;
       snapshot.value = status.data; operations.value = history.data.items;
       serverTime = Date.parse(status.serverTime); received = globalThis.performance.now(); serverNow.value = serverTime;
-      error.value = '';
+      // Observing the device successfully does not make the last control request succeed.
+      error.value = mutationError;
     } catch (e) {
       if (own === generation && !busy.value) { snapshot.value = null; error.value = npepErrorMessage(e); }
     } finally { if (own === generation) reading = false; }
   }
   async function mutate(action) {
     if (busy.value) return;
-    busy.value = true; error.value = '';
+    busy.value = true; error.value = ''; message.value = ''; mutationError = '';
     const own = ++generation;
     controller.abort(); controller = new AbortController(); reading = false;
     try { await action(controller.signal, () => own === generation); }
-    catch (e) { if (own === generation) error.value = npepErrorMessage(e); }
+    catch (e) { if (own === generation) error.value = mutationError = npepErrorMessage(e); }
     finally { if (own === generation) { busy.value = false; await refresh(); } }
   }
   const create = (target = 'EXAM') => {
@@ -57,7 +59,7 @@ export function useNpepRuntimeControl(schoolId, deviceId) {
   function clear() {
     generation++; controller.abort(); controller = new AbortController(); reading = false;
     busy.value = false; snapshot.value = null; operations.value = []; pending.value = null;
-    confirmed.value = false; error.value = ''; message.value = '';
+    confirmed.value = false; error.value = ''; message.value = ''; mutationError = '';
   }
   watch([schoolId, deviceId], () => { clear(); void refresh(); }, {immediate: true, flush: 'sync'});
   const clock = setInterval(() => { serverNow.value = serverTime + (globalThis.performance.now() - received); }, 1000);
