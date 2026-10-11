@@ -444,6 +444,11 @@
         :term-id="termId"
         @dirty="seatingDirty = $event"
       />
+      <NpepStudyReports
+        v-if="section === 'study' || section === 'noise'"
+        :school-id="schoolId"
+        :term-id="termId"
+      />
       <NpepStudyPhotos
         v-if="section === 'study'"
         :school-id="schoolId"
@@ -554,6 +559,7 @@ const props = defineProps({schoolId: {type: String, required: true}, schoolName:
 const emit = defineEmits(['dirty', 'navigate']);
 const NpepStudySettings = defineAsyncComponent(() => import('./NpepStudySettings.vue'));
 const NpepEquipmentSettings=defineAsyncComponent(()=>import('./NpepEquipmentSettings.vue'));
+const NpepStudyReports = defineAsyncComponent(() => import('./NpepStudyReports.vue'));
 const NpepStudyPhotos = defineAsyncComponent(() => import('./NpepStudyPhotos.vue'));
 const section = toRef(props, 'section');
 const sectionTitles = {devices: '大屏互联', study: '自习展示', noise: '噪音监测', seating: '自习座位表'};

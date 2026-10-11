@@ -496,6 +496,7 @@ export const npepExamPlanApi = {
   cancel: (school, device, operation, options) => npepAdminRequest('post', `${examPlanPath(school, device)}/${encodeURIComponent(operation)}/cancel`, {...options, version: '0.5', body: {}}),
 };
 export const npepAdminApi = {
+  studySessions: (school, options) => npepAdminRequest("get", `${npepSchoolPath(school)}/study-sessions`, {...options,version:"0.17"}),
   classManagement: (school,binding,options) => npepAdminRequest('get',`${npepSchoolPath(school)}/class-management/${encodeURIComponent(binding)}`,{...options,version:'0.16'}),
   setClassManagement: (school,binding,body,options) => npepAdminRequest('post',`${npepSchoolPath(school)}/class-management/${encodeURIComponent(binding)}`,{...options,version:'0.16',body,requestId:body.requestId}),
   equipment: (school,device,options) => npepAdminRequest('get',`${npepSchoolPath(school)}/devices/${encodeURIComponent(device)}/equipment`,{...options,version:'0.16'}),
