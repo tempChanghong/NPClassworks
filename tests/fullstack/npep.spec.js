@@ -18,8 +18,7 @@ test("NPEP school UI approves a real pairing and revokes the confirmed PostgreSQ
   expect(created.status).toBe(201);
   const pairingId = created.data.pairingId, pairBearer = `npepp1.${pairingId}.${pairingSecret}`;
   const teacher = await classroom.open("teacher"), page = teacher.page;
-  await page.goto(`${origin}/classworks-admin?section=screens&school=${classroom.school.id}&term=${classroom.workspace.termId}`);
-  await page.getByRole("button", {name: "打开 NPEP 设备互联"}).click();
+  await page.goto(`${origin}/classworks-admin?section=npep-devices&school=${classroom.school.id}&term=${classroom.workspace.termId}`);
   const panel = page.locator(".npep-device-manager");
   await expect(panel).toContainText("当前没有已登记");
   await expect(panel.locator('.device-operations')).toContainText('学校运维概览');
@@ -32,6 +31,9 @@ test("NPEP school UI approves a real pairing and revokes the confirmed PostgreSQ
   await page.getByRole("option", {name: "测试大屏 · 高一一班", exact: true}).click();
   await panel.getByLabel("已核对设备、学校和班级，同意配对并授权学校互联功能").check();
   await panel.getByRole("button", {name: "批准并等待现场确认", exact: true}).click();
+  const credential = page.getByRole('dialog').filter({hasText:'学校管理口令'});
+  await credential.getByLabel('学校管理口令',{exact:true}).fill('isolated-school-credential');
+  await credential.getByRole('button',{name:'保存并启用',exact:true}).click();
   await expect(panel).toContainText("批准已保存");
   expect(await classroom.prisma.npepDevice.count({where: {schoolId: classroom.school.id}})).toBe(0);
   const approval = (await native(`/pairings/${pairingId}`, null, pairBearer)).data;

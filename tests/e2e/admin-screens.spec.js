@@ -222,6 +222,16 @@ test("NPEP approval retries retain identity; device pagination, stale observatio
         return route.fulfill({json: {protocolVersion: "0.7", requestId: request.headers()["x-request-id"], serverTime: new Date().toISOString(),
           data: {termId: "term", terms: [{id: "term", name: "当前学期"}], grades: [], classes: [], policies: [], executionEnabled: true}}});
       }
+      if(path.includes('/class-management/')) {
+        expect(request.headers()['x-npep-version']).toBe('0.16');
+        return route.fulfill({json:{protocolVersion:'0.16',requestId:request.headers()['x-request-id'],serverTime:new Date().toISOString(),
+          data:{revision:1,configured:true,enabled:true}}});
+      }
+      if(path.endsWith('/equipment')) {
+        expect(request.headers()['x-npep-version']).toBe('0.16');
+        return route.fulfill({json:{protocolVersion:'0.16',requestId:request.headers()['x-request-id'],data:{
+          policy:{revision:0,locked:false,microphoneId:null,cameraId:null},inventory:null}}});
+      }
       expect(request.headers()["x-npep-version"]).toBe("0.1");
       const reply = data => route.fulfill({json: {protocolVersion: "0.1", requestId: body?.requestId || request.headers()["x-request-id"], serverTime: new Date().toISOString(), data}});
       if (path.endsWith("/info")) return reply({supportedCapabilities: ["device.status"]});
@@ -526,8 +536,7 @@ for (const width of [1440, 390]) {
       await report.getByRole('button', {name: '关闭', exact: true}).click();
       await page.screenshot({path: `test-results/npep-noise-${width}.png`, fullPage: true, animations: 'disabled'});
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      const minutes = editor.getByLabel('自定义分钟数');
-      await minutes.fill('12');
+      await starts.fill('19:06');
       await navigateAdmin(page, '大屏设备');
       await expect(discard).toBeVisible();
       await discard.getByRole('button', {name: '放弃并离开', exact: true}).click();
@@ -585,8 +594,8 @@ for (const width of [1440, 390]) {
       await expect(editor.getByLabel('自习生效日期')).toHaveValue('');
       await expect(editor.getByLabel('作业每页轮换间隔')).toHaveValue('60');
       await expect(editor.getByLabel('启用阈值拍照')).not.toBeChecked();
-      await expect(editor.getByLabel('高线连续超限时间')).toHaveValue('5');
-      await editor.getByLabel('高线连续超限时间').fill('3');
+      await expect(editor.getByLabel('高线连续超限时间')).toHaveValue('3');
+      await editor.getByLabel('高线连续超限时间').fill('4');
       await expect(editor.getByRole('button',{name:'保存自习设置',exact:true})).toBeDisabled();
       await editor.getByLabel('自习生效日期').fill('2026-10-12');
       await select('自习时段 1 · 星期','周一');await page.keyboard.press('Escape');
@@ -602,7 +611,7 @@ for (const width of [1440, 390]) {
       await expect(editor.getByRole('button',{name:'预览自习影响',exact:true})).toBeDisabled();
       await editor.getByLabel('第二阈值线 · 中电平').fill('-45');
       await editor.getByLabel('注意纪律最短间隔').fill('720');
-      await expect(editor.getByLabel('高线连续超限时间')).toHaveValue('3');
+      await expect(editor.getByLabel('高线连续超限时间')).toHaveValue('4');
       await expect(editor.getByLabel('拍照最短间隔')).toHaveValue('30');
       await expect(editor.getByLabel('照片保留时间',{exact:true})).toHaveValue('30');
       await editor.getByLabel('照片保留时间',{exact:true}).fill('181');

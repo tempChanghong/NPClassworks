@@ -38,7 +38,7 @@ const examHistory = {operationId: 'historical-exam', target: 'EXAM', state: 'SUC
 };
 
 async function openDevices(browser, handle) {
-  const setup = await openAdmin(browser, 1440, 'ADMIN', {}, 'screens', async context => {
+  const setup = await openAdmin(browser, 1440, 'ADMIN', {}, 'npep', async context => {
     await context.route(`${api}/api/v2/npep/**`, async route => {
       const path = new URL(route.request().url()).pathname;
       if (path.endsWith('/info')) return reply(route, {supportedCapabilities: ['device.status']});
@@ -56,7 +56,6 @@ async function openDevices(browser, handle) {
     });
   });
   await setup.page.clock.install();
-  await setup.page.getByRole('button', {name: '打开 NPEP 设备互联', exact: true}).click();
   await expect(setup.page.locator('.npep-device')).toHaveCount(2);
   return setup;
 }

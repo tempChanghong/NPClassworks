@@ -150,6 +150,7 @@
                     v-model="rule.days"
                     :items="days"
                     :label="'时段 ' + (index + 1) + ' · 星期'"
+                    :aria-label="'时段 ' + (index + 1) + ' · 星期'"
                     multiple
                     chips
                     :disabled="busy"
