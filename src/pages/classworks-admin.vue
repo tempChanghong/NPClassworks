@@ -1310,7 +1310,7 @@ const adminNavigationGroups = [
     label: "NPEP",
     items: [
       {title: "大屏互联", value: "npep-devices", icon: "mdi-link-variant"},
-      {title: "自习展示", value: "npep-study", icon: "mdi-clock-outline"},
+      {title: "自习设置", value: "npep-study", icon: "mdi-clock-outline"},
       {title: "噪音监测", value: "npep-noise", icon: "mdi-waveform"},
       {title: "自习座位表", value: "npep-seating", icon: "mdi-seat-outline"},
     ],

@@ -8,7 +8,7 @@
       type="info"
       variant="tonal"
     >
-      此处保存学校配置，由支持学校自习协议的桌面读取。保存不代表设备已应用、展示页已显示或正在采集；单张阈值拍照需要新版 Host 与服务器照片功能。现有噪音排程在“噪音监测”中独立管理。
+      此处统一配置自习时段、展示、作业、噪音与拍照策略，由支持学校自习协议的桌面读取。保存不代表设备已应用、展示页已显示或正在采集；执行状态、报告与照片在“噪音监测”中查看。旧排程仅保留在下方兼容区。
     </v-alert>
     <v-alert
       v-if="error"
@@ -99,7 +99,7 @@
         <v-btn-toggle
           v-model="scheduleMode"
           mandatory
-          class="my-3"
+          class="study-mode-switch my-3"
           :disabled="busy"
         >
           <v-btn value="Daily">
@@ -179,7 +179,8 @@
               />
             </v-col>
             <v-col
-              cols="6"
+              cols="12"
+              sm="6"
               md="3"
             >
               <v-text-field
@@ -192,7 +193,8 @@
               />
             </v-col>
             <v-col
-              cols="6"
+              cols="12"
+              sm="6"
               md="3"
             >
               <v-text-field
@@ -664,10 +666,12 @@ async function reload() { if (await discard()) await refresh(); }
 </script>
 
 <style scoped>
-.study-settings { display: grid; gap: 18px; margin-top: 18px; }
+.study-settings { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 18px; margin-top: 18px; }
 .study-heading h2 { font-size: 24px; font-weight: 750; }
 .study-heading p, .study-section p { color: rgba(var(--v-theme-on-surface), .68); font-size: 13px; line-height: 1.8; }
-.study-section { padding: 22px; border: 1px solid rgba(var(--v-border-color), .2); border-radius: 16px; }
+.study-section { min-width: 0; padding: 22px; border: 1px solid rgba(var(--v-border-color), .2); border-radius: 16px; }
+.study-mode-switch { max-width: 100%; }
+.study-settings :deep(input) { min-width: 0; }
 .study-section h3 { font-size: 20px; font-weight: 750; margin-bottom: 6px; }
 .study-section-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .study-rule { padding: 16px; border: 1px solid rgba(var(--v-border-color), .16); border-radius: 12px; }
@@ -676,5 +680,11 @@ async function reload() { if (await discard()) await refresh(); }
 .study-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .study-device-note { padding: 16px; background: rgba(var(--v-theme-on-surface), .04); border-radius: 12px; }
 .study-preview-class { padding: 16px 0; border-top: 1px solid rgba(var(--v-border-color), .16); margin-top: 12px; }
-@media (max-width: 600px) { .study-section { padding: 16px; } .study-actions :deep(.v-btn) { width: 100%; } }
+@media (max-width: 600px) {
+  .study-section { padding: 16px; }
+  .study-mode-switch { display: flex; flex-direction: column; width: 100%; height: auto; }
+  .study-mode-switch :deep(.v-btn) { min-height: 48px; width: 100%; }
+  .study-mode-switch :deep(.v-btn__content) { white-space: normal; }
+  .study-actions :deep(.v-btn) { width: 100%; }
+}
 </style>

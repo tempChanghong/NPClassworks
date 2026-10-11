@@ -384,7 +384,7 @@
         <div class="npep-noise-reports mt-4">
           <h3>设备执行状态与报告</h3>
           <p class="npep-observation-help mt-2 mb-4">
-            排程保存、设备已应用与实际采集是不同状态，请打开设备报告核对。此处查看 NPEduTools 原生统计；浏览器本地历史仍在网页监测中查看。
+            排程与阈值在“自习设置”中统一配置；此处核对设备执行状态、已上传的统计与照片。保存、设备已应用与实际采集是不同状态，请以新鲜的执行状态为准。
           </p>
           <v-select
             v-model="reportDeviceId"
@@ -422,21 +422,38 @@
             仅列出当前已加载且授权有效的设备；列表沿用设备互联的筛选条件，不代表全校设备。没有找到设备时，可前往设备互联检索或加载更多。
           </p>
         </div>
-        <NpepNoiseSchedules
+      </section>
+      <section
+        v-if="studyVisited"
+        v-show="section === 'study'"
+      >
+        <NpepStudySettings
           :school-id="schoolId"
           :school-name="schoolName"
           :term-id="termId"
-          @dirty="noiseDirty = $event"
+          @dirty="studyDirty = $event"
         />
+        <v-expansion-panels
+          v-model="legacySchedulePanels"
+          class="mt-4"
+        >
+          <v-expansion-panel value="legacy">
+            <v-expansion-panel-title>旧版噪音排程兼容</v-expansion-panel-title>
+            <v-expansion-panel-text eager>
+              <p class="npep-observation-help">
+                仅用于尚未配置学校自习策略的班级。已配置自习策略（包括关闭策略）的班级，旧排程不再执行；编辑旧排程不会覆盖自习设置。
+              </p>
+              <NpepNoiseSchedules
+                v-if="legacyScheduleVisited"
+                :school-id="schoolId"
+                :school-name="schoolName"
+                :term-id="termId"
+                @dirty="noiseDirty = $event"
+              />
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
       </section>
-      <NpepStudySettings
-        v-if="studyVisited"
-        v-show="section === 'study'"
-        :school-id="schoolId"
-        :school-name="schoolName"
-        :term-id="termId"
-        @dirty="studyDirty = $event"
-      />
       <NpepSeatingSettings
         v-if="seatingVisited"
         v-show="section === 'seating'"
@@ -445,12 +462,12 @@
         @dirty="seatingDirty = $event"
       />
       <NpepStudyReports
-        v-if="section === 'study' || section === 'noise'"
+        v-if="section === 'noise'"
         :school-id="schoolId"
         :term-id="termId"
       />
       <NpepStudyPhotos
-        v-if="section === 'study'"
+        v-if="section === 'noise'"
         :school-id="schoolId"
         :term-id="termId"
       />
@@ -562,10 +579,13 @@ const NpepEquipmentSettings=defineAsyncComponent(()=>import('./NpepEquipmentSett
 const NpepStudyReports = defineAsyncComponent(() => import('./NpepStudyReports.vue'));
 const NpepStudyPhotos = defineAsyncComponent(() => import('./NpepStudyPhotos.vue'));
 const section = toRef(props, 'section');
-const sectionTitles = {devices: '大屏互联', study: '自习展示', noise: '噪音监测', seating: '自习座位表'};
+const sectionTitles = {devices: '大屏互联', study: '自习设置', noise: '噪音监测', seating: '自习座位表'};
 const NpepSeatingSettings = defineAsyncComponent(() => import('./NpepSeatingSettings.vue'));
 const noiseVisited = ref(false);
 const studyVisited = ref(false);
+const legacySchedulePanels = ref(null);
+const legacyScheduleVisited = ref(false);
+watch(legacySchedulePanels, value => { if (value === 'legacy') legacyScheduleVisited.value = true; });
 const seatingVisited = ref(false);
 const noiseDirty = ref(false), studyDirty = ref(false), seatingDirty = ref(false);
 const reportDeviceId = ref(null);
