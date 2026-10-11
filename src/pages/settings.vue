@@ -583,80 +583,6 @@
                     @update:model-value="setToolEnabled(tool.id, $event)"
                   />
                 </SettingRow>
-                <template v-if="toolSettings.enabledToolIds.includes('noise')">
-                  <SettingRow
-                    description="到达设定时间后由班级大屏自动启动；结束时间到达后自动停止。"
-                    title="定时噪声监测"
-                  >
-                    <template #scope>
-                      <ScopeChip type="screen" />
-                    </template>
-                    <v-switch
-                      :model-value="noiseSchedule.enabled"
-                      color="primary"
-                      hide-details
-                      @update:model-value="saveNoiseScheduleSetting('enabled', $event)"
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    description="支持跨午夜时段。开始与结束时间相同时，自动监测关闭。"
-                    title="每日监测时段"
-                  >
-                    <template #scope>
-                      <ScopeChip type="screen" />
-                    </template>
-                    <div class="noise-schedule-time-fields">
-                      <v-text-field
-                        density="compact"
-                        hide-details
-                        label="开始"
-                        :model-value="noiseSchedule.startTime"
-                        type="time"
-                        variant="outlined"
-                        @update:model-value="saveNoiseScheduleSetting('startTime', $event)"
-                      />
-                      <span>至</span>
-                      <v-text-field
-                        density="compact"
-                        hide-details
-                        label="结束"
-                        :model-value="noiseSchedule.endTime"
-                        type="time"
-                        variant="outlined"
-                        @update:model-value="saveNoiseScheduleSetting('endTime', $event)"
-                      />
-                    </div>
-                  </SettingRow>
-                  <SettingRow
-                    description="提前授予麦克风权限，确保自动监测按时启动。"
-                    title="麦克风权限"
-                  >
-                    <template #scope>
-                      <ScopeChip type="device" />
-                    </template>
-                    <v-btn
-                      :color="noisePermissionReady ? 'success' : 'primary'"
-                      :prepend-icon="noisePermissionReady ? 'mdi-microphone-check' : 'mdi-microphone'"
-                      variant="tonal"
-                      @click="prepareNoiseMonitoring"
-                    >
-                      {{ noisePermissionReady ? '麦克风已授权' : '授权麦克风' }}
-                    </v-btn>
-                  </SettingRow>
-                  <SettingRow
-                    description="选择麦克风并测试输入信号。设置保存在当前大屏。"
-                    title="采集麦克风"
-                  >
-                    <template #scope>
-                      <ScopeChip type="screen" />
-                    </template>
-                    <MicrophoneDevicePicker
-                      :binding-id="bindingId"
-                      @permission="noisePermissionState = $event"
-                      @saved="notify('当前大屏的麦克风设置已保存')"
-                    />
-                  </SettingRow>
-                </template>
               </SettingsPanel>
             </template>
 
@@ -766,7 +692,6 @@ import {requestAppReload} from "@/utils/appReloadProtection";
 import {useRoute, useRouter} from "vue-router";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import ClassSelectionDialog from "@/components/v2/ClassSelectionDialog.vue";
-import MicrophoneDevicePicker from "@/components/v2/MicrophoneDevicePicker.vue";
 import BackgroundPresetPicker from "@/components/v2/BackgroundPresetPicker.vue";
 import SettingsPanel from "@/components/v2/settings/SettingsPanel.vue";
 import SettingRow from "@/components/v2/settings/SettingRow.vue";
@@ -785,12 +710,6 @@ import {
   loadClassroomToolSettings,
   saveClassroomToolSettings,
 } from "@/utils/classroomToolSettings";
-import {
-  loadNoiseScheduleSettings,
-  NOISE_SCHEDULE_DEFAULTS,
-  saveNoiseScheduleSettings,
-} from "@/utils/noiseScheduleSettings";
-import {microphonePermissionLabel, queryMicrophonePermission, requestMicrophonePermission} from "@/utils/microphonePermission";
 import {resetScreenOobe} from "@/utils/classworksOobe";
 import {confirmAction} from "@/utils/actionDialog";
 import {clearApplicationResourceCaches} from "@/utils/appRecovery";
@@ -831,14 +750,10 @@ const appearance = reactive({
 });
 const screenSettings = ref({...SCREEN_DISPLAY_DEFAULTS});
 const toolSettings = ref({...CLASSROOM_TOOL_DEFAULTS, enabledToolIds: [...CLASSROOM_TOOL_DEFAULTS.enabledToolIds]});
-const noiseSchedule = ref({...NOISE_SCHEDULE_DEFAULTS});
-const noisePermissionState = ref("prompt");
-const noisePermissionReady = computed(() => noisePermissionState.value === "granted");
 const bindingId = computed(() => store.screenSession?.binding?.id || "");
 
 const classroomTools = [
   {id: "attendance", title: "考勤", description: "记录缺勤、迟到和不参与学生。"},
-  {id: "noise", title: "噪声监测", description: "在本机分析教室环境噪声。"},
 ];
 
 const commonItems = [
@@ -895,7 +810,6 @@ watch(bindingId, (id) => {
   if (!id) return;
   screenSettings.value = loadScreenDisplaySettings(id);
   toolSettings.value = loadClassroomToolSettings(id);
-  noiseSchedule.value = loadNoiseScheduleSettings(id);
 }, {immediate: true});
 
 watch(() => [context.value, screenSettings.value.performanceMode], () => {
@@ -917,7 +831,6 @@ onMounted(async () => {
     loadError.value = "无法连接 NPClassworks 服务器";
   }
   if (navigator.storage?.estimate) storageEstimate.value = await navigator.storage.estimate();
-  noisePermissionState.value = await queryMicrophonePermission();
   loading.value = false;
 });
 
@@ -982,25 +895,6 @@ function setToolEnabled(id, enabled) {
   else ids.delete(id);
   toolSettings.value = saveClassroomToolSettings(bindingId.value, {enabledToolIds: [...ids]});
   notify("课堂工具设置已保存");
-}
-
-function saveNoiseScheduleSetting(field, value) {
-  noiseSchedule.value = saveNoiseScheduleSettings(bindingId.value, {
-    ...noiseSchedule.value,
-    [field]: value,
-  });
-  notify("噪声监测计划已保存到当前大屏");
-}
-
-async function prepareNoiseMonitoring() {
-  const result = await requestMicrophonePermission();
-  noisePermissionState.value = result.state;
-  if (result.state === "granted") {
-    noiseSchedule.value = saveNoiseScheduleSettings(bindingId.value, noiseSchedule.value);
-    notify(`麦克风权限已授予，检测到 ${result.devices.length || 1} 个输入设备`);
-  } else {
-    notify(microphonePermissionLabel(result.state));
-  }
 }
 
 function goBack() {

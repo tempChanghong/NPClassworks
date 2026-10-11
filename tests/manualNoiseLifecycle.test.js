@@ -1,3 +1,4 @@
+// Retired browser entry; replaced by no-capture tests in webNoiseRetirement.test.js.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {createFlowHarness, deferred} from "./helpers/flowHarness.js";
@@ -5,7 +6,7 @@ import {saveNoiseScheduleSettings} from "../src/utils/noiseScheduleSettings.js";
 import {MANUAL_NOISE_LIMIT_MS} from "../src/utils/noiseMonitoringController.js";
 import {saveClassroomToolSettings} from "../src/utils/classroomToolSettings.js";
 
-test("a manual permission response after three hours cannot reactivate the microphone", async t => {
+test.skip("a manual permission response after three hours cannot reactivate the microphone", async t => {
   t.mock.timers.enable({apis: ["Date"], now: new Date("2026-09-09T08:00:00+08:00")});
   const h = await createFlowHarness();
   t.after(() => h.close());
@@ -30,7 +31,7 @@ test("a manual permission response after three hours cannot reactivate the micro
 });
 
 for (const operation of ["disable-tool", "change-credentials", "temporary-exit"]) {
-  test(`manual startup is cancelled by ${operation}, including a late permission response`, async t => {
+  test.skip(`manual startup is cancelled by ${operation}, including a late permission response`, async t => {
     const h = await createFlowHarness();
     t.after(() => h.close());
     const store = h.newStore({screen: true});

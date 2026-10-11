@@ -1,3 +1,4 @@
+import {requireWebNoise} from '@/utils/webNoiseAvailability';
 import {
   getNoiseControlSettings,
   resetNoiseControlSettings,
@@ -103,6 +104,7 @@ class ClassworksNoiseService {
   }
 
   async start({deviceId} = {}) {
+    requireWebNoise();
     if (["active", "initializing"].includes(this.status)) return
     const generation = ++this.generation
     this.microphoneTest?.abort()
@@ -326,6 +328,7 @@ class ClassworksNoiseService {
   }
 
   async testMicrophoneDevice(deviceId = "default", {diagnostic = false, onPhase, signal} = {}) {
+    requireWebNoise();
     const shouldResume = ["active", "initializing"].includes(this.status)
     const stopping = this.stop()
     const generation = this.generation

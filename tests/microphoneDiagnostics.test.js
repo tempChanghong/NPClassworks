@@ -20,7 +20,8 @@ test("audio processing settings distinguish reported false from unknown", () => 
   assert.equal(microphoneProcessingSettings().autoGainControl, null);
 });
 
-test("two-phase acquisition requests raw audio, reports actual settings and releases resources", async t => {
+// Retired browser capture entry. Historical acquisition regression is retained; current guards are tested in webNoiseRetirement.test.js.
+test.skip("two-phase acquisition requests raw audio, reports actual settings and releases resources", async t => {
   const originals = new Map();
   let phase, stopped = 0, closed = 0, disconnected = 0, requestedAudio;
   const waits = [];

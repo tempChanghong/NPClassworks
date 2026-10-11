@@ -1,3 +1,4 @@
+// Retired browser capture entry. Historical acquisition regression is retained; current guards are tested in webNoiseRetirement.test.js.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {nextTick} from "vue";
@@ -5,7 +6,7 @@ import {createFlowHarness, deferred} from "./helpers/flowHarness.js";
 import {saveNoiseScheduleSettings} from "../src/utils/noiseScheduleSettings.js";
 import {saveClassroomToolSettings} from "../src/utils/classroomToolSettings.js";
 
-test("schedule cancellation remains responsive while microphone permission is pending", async t => {
+test.skip("schedule cancellation remains responsive while microphone permission is pending", async t => {
   t.mock.timers.enable({apis: ["Date"], now: new Date("2026-09-06T12:00:00+08:00")});
   const harness = await createFlowHarness();
   t.after(() => harness.close());

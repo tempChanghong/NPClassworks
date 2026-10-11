@@ -1,3 +1,4 @@
+import {requireWebNoise} from '@/utils/webNoiseAvailability';
 import {shallowRef} from 'vue';
 import {npepNoiseApi, npepNoiseScheduleApi, npepNoiseManagementApi} from '@/utils/classworksV2Client';
 import {createNativeNoiseController} from '@/utils/nativeNoiseController';
@@ -7,3 +8,6 @@ export const nativeNoise = createNativeNoiseController(npepNoiseApi, s => { nati
   get(scope) { try { return localStorage.getItem(key(scope)); } catch { return null; } },
   set(scope, provider) { try { localStorage.setItem(key(scope), provider); } catch { /* State remains in memory. */ } },
 }, npepNoiseScheduleApi, npepNoiseManagementApi);
+
+// Public PWA control entry is retired; administrator APIs remain separate.
+for (const action of ["command", "protectedStop", "resumeSchedule"]) nativeNoise[action] = async () => { requireWebNoise(); };

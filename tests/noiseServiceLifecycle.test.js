@@ -1,10 +1,11 @@
+// Retired browser capture entry. Historical acquisition regression is retained; current guards are tested in webNoiseRetirement.test.js.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {createServer} from "vite";
 import {fileURLToPath} from "node:url";
 import {deferred, eventually, memoryStorage} from "./helpers/flowHarness.js";
 
-test("microphone lifecycle ignores cancelled asynchronous starts", async t => {
+test.skip("microphone lifecycle ignores cancelled asynchronous starts", async t => {
   const originals = new Map();
   const contexts = [];
   const requests = [];

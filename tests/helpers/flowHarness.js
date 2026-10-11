@@ -152,6 +152,9 @@ export async function createFlowHarness() {
   }
   reset();
   return {
+    async retiredNoiseRuntime() {
+      return {service:(await vite.ssrLoadModule("/src/utils/noiseService.js")).noiseService, native:(await vite.ssrLoadModule("/src/utils/nativeNoise.js")).nativeNoise};
+    },
     api, screenExit, queue, drafts, dialogs, storage, routes, requests, publications, realtime, workspace, reset, newStore, configureScreenUploadRetry,
     async openNpepPairing({management = false, bindings = [], termId = ''} = {}) {
       const {default: component} = await vite.ssrLoadModule(management ? '/src/components/admin/NpepPairingAccess.vue' : '/src/components/v2/NpepScreenPairingCard.vue');

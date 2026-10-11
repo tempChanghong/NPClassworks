@@ -235,29 +235,6 @@
             </div>
           </div>
         </template>
-
-        <template v-else-if="activeTool === 'noise'">
-          <v-row justify="center">
-            <v-col
-              cols="12"
-            >
-              <noise-monitor-card
-                v-if="nativeNoiseState.provider === 'browser'"
-                :binding-id="store.screenSession?.binding?.id || ''"
-                expanded
-              />
-              <NativeNoisePanel v-else />
-              <v-alert
-                v-if="nativeNoiseState.provider === 'browser'"
-                class="mt-5"
-                type="info"
-                variant="tonal"
-              >
-                噪声分析只在当前浏览器本地处理，不上传录音。首次启用时需要允许麦克风权限。
-              </v-alert>
-            </v-col>
-          </v-row>
-        </template>
       </v-container>
 
       <v-alert
@@ -405,10 +382,7 @@ import {computed, nextTick, onUnmounted, ref, watch} from "vue";
 import {useNow} from "@vueuse/core";
 import {getClassroomScreenToken} from "@/utils/classworksV2Client";
 import {useClassworksV2Store} from "@/stores/classworksV2";
-import NoiseMonitorCard from "@/components/NoiseMonitorCard.vue";
-import NativeNoisePanel from '@/components/v2/NativeNoisePanel.vue';
 import NpepScreenPairingCard from '@/components/v2/NpepScreenPairingCard.vue';
-import {nativeNoiseState} from '@/utils/nativeNoise';
 import {loadClassroomToolSettings} from "@/utils/classroomToolSettings";
 import {editableRoster, importRoster, rosterChanges, validateRoster} from "@/utils/classRoster";
 import {confirmAction} from "@/utils/actionDialog";
@@ -418,7 +392,7 @@ import {on as socketOn, onConnect} from "@/utils/socketClient";
 const props = defineProps({modelValue: Boolean, initialTool: {type: String, default: ""}});
 defineEmits(["update:modelValue"]);
 const store = useClassworksV2Store();
-const activeTool = ref(props.initialTool);
+const activeTool = ref(props.initialTool === "noise" ? "" : props.initialTool);
 const rosterDialog = ref(false);
 const rosterText = ref("");
 const rosterRows = ref([]);
@@ -438,7 +412,6 @@ const toolSettings = ref(loadClassroomToolSettings(store.screenSession?.binding?
 
 const allTools = [
   {id: "attendance", title: "考勤", description: "记录今日缺勤、迟到和不参与学生", icon: "mdi-account-check-outline", color: "success"},
-  {id: "noise", title: "噪声监测", description: "查看教室环境噪声和本地统计", icon: "mdi-waveform", color: "info"},
 ];
 const tools = computed(() => [...allTools.filter((tool) => toolSettings.value.enabledToolIds.includes(tool.id)),
   {id: 'npep', title: '连接 NPEduTools', description: '学校预授权与大屏配对', icon: 'mdi-link-variant', color: 'primary'}]);

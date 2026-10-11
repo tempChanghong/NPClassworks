@@ -1,8 +1,9 @@
+// Retired browser capture entry. Historical acquisition regression is retained; current guards are tested in webNoiseRetirement.test.js.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createFlowHarness} from './helpers/flowHarness.js';
 
-test('the actual browser noise card withdraws stale readings and confidence without stopping ownership',async t=>{
+test.skip('the actual browser noise card withdraws stale readings and confidence without stopping ownership',async t=>{
   const h=await createFlowHarness(); h.newStore({screen:true});
   window.AudioContext=class {
     constructor(){this.state='running';this.audioWorklet={addModule:async()=>{}};}

@@ -1,3 +1,4 @@
+import {requireWebNoise} from './webNoiseAvailability.js';
 export const MICROPHONE_DEVICE_DEFAULTS = Object.freeze({deviceId: "default"});
 export const MICROPHONE_DEVICE_SETTINGS_EVENT = "classworks-microphone-device-settings-changed";
 
@@ -32,6 +33,7 @@ export function saveMicrophoneDeviceSettings(bindingId, settings, storage = loca
 }
 
 export async function listMicrophoneDevices({requestPermission = false} = {}) {
+  if (requestPermission) requireWebNoise();
   if (!navigator.mediaDevices?.enumerateDevices) return {state: "unsupported", devices: []};
   let stream;
   try {
@@ -66,6 +68,7 @@ export function microphoneProcessingSettings(settings = {}) {
 }
 
 export async function testMicrophoneInput(deviceId = "default", {durationMs = 1400, intervalMs = 70, signal, diagnostic = false, onPhase} = {}) {
+  requireWebNoise();
   const AudioContextApi = window.AudioContext || window.webkitAudioContext;
   if (!navigator.mediaDevices?.getUserMedia || !AudioContextApi) {
     throw new window.DOMException("Microphone API unavailable", "NotSupportedError");

@@ -16,7 +16,8 @@ test('noise API uses screen identity even when an administrator session is also 
   assert.equal((await h.api.npepNoiseApi.screen()).provider, 'browser');
 });
 
-test('native provider cancels browser scheduling and late microphone permission cannot restart it', async t => {
+// Retired browser capture entry. Historical acquisition regression is retained; current guards are tested in webNoiseRetirement.test.js.
+test.skip('native provider cancels browser scheduling and late microphone permission cannot restart it', async t => {
   const h = await createFlowHarness(); t.after(() => h.close()); h.newStore({screen: true});
   saveNoiseScheduleSettings('screen-a', {enabled: true, startTime: '00:00', endTime: '23:59'});
   t.mock.timers.enable({apis: ['Date'], now: new Date('2026-09-30T12:00:00+08:00')});
