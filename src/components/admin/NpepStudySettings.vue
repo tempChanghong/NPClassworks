@@ -96,6 +96,28 @@
         aria-label="自习时间与学校日历"
       >
         <h3>2. 时间与学校日历</h3>
+        <v-btn-toggle
+          v-model="scheduleMode"
+          mandatory
+          class="my-3"
+          :disabled="busy"
+        >
+          <v-btn value="Daily">
+            日常模式 · ClassIsland 时间
+          </v-btn>
+          <v-btn value="Exam">
+            考试模式 · Windows 时间
+          </v-btn>
+        </v-btn-toggle>
+        <p>两种模式分别配置。此模式没有时段就不会定时监测；旧配置只用于日常模式。考试放映优先，自习继续后台采集、按策略拍照，暂停提示音且不补播。</p>
+        <v-alert
+          v-if="!activeSchedule.rules.length"
+          type="info"
+          variant="tonal"
+          class="my-3"
+        >
+          当前模式不安排定时自习。
+        </v-alert>
         <p>北京时间 19:00–21:30 为新建默认时段，星期和日期需明确填写。准备提示在开始前两分钟显示，准备阶段不采集。</p>
         <v-row class="mt-2">
           <v-col
@@ -103,7 +125,7 @@
             md="6"
           >
             <v-text-field
-              v-model="settings.schedule.effectiveFrom"
+              v-model="activeSchedule.effectiveFrom"
               type="date"
               label="自习生效日期"
               variant="outlined"
@@ -124,7 +146,7 @@
           </v-col>
         </v-row>
         <div
-          v-for="(rule, index) in settings.schedule.rules"
+          v-for="(rule, index) in activeSchedule.rules"
           :key="index"
           class="study-rule"
         >
@@ -135,7 +157,7 @@
               variant="text"
               :aria-label="`删除自习时段 ${index + 1}`"
               :disabled="busy"
-              @click="settings.schedule.rules.splice(index, 1)"
+              @click="activeSchedule.rules.splice(index, 1)"
             />
           </div>
           <v-row>
@@ -187,7 +209,7 @@
         <v-btn
           class="mt-3"
           variant="tonal"
-          :disabled="busy || settings.schedule.rules.length >= 32"
+          :disabled="busy || activeSchedule.rules.length >= 32"
           @click="addRule"
         >
           添加自习时段
@@ -200,7 +222,7 @@
         </h4>
         <p>未接入自动节假日日历。例外由管理员填写；补课日需指定采用星期几的时段。</p>
         <v-row
-          v-for="(entry, index) in settings.schedule.exceptions"
+          v-for="(entry, index) in activeSchedule.exceptions"
           :key="index"
           class="mt-2"
         >
@@ -257,15 +279,15 @@
               variant="text"
               :aria-label="`删除日历例外 ${index + 1}`"
               :disabled="busy"
-              @click="settings.schedule.exceptions.splice(index, 1)"
+              @click="activeSchedule.exceptions.splice(index, 1)"
             />
           </v-col>
         </v-row>
         <v-btn
           class="mt-3"
           variant="text"
-          :disabled="busy || settings.schedule.exceptions.length >= 366"
-          @click="settings.schedule.exceptions.push({date:'',kind:'Skip',weekday:null})"
+          :disabled="busy || activeSchedule.exceptions.length >= 366"
+          @click="activeSchedule.exceptions.push({date:'',kind:'Skip',weekday:null})"
         >
           添加日历例外
         </v-btn>
@@ -581,7 +603,7 @@
 </template>
 
 <script setup>
-import {computed, toRef, watch} from 'vue';
+import {computed, ref, toRef, watch} from 'vue';
 import {useStudySettingsEditor} from '@/composables/admin/useStudySettingsEditor.js';
 import {confirmAction} from '@/utils/actionDialog.js';
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: '当前学校'}, termId: {type: String, default: ''}});
@@ -600,7 +622,14 @@ const calendarKinds = [{title:'停用（节假日等）',value:'Skip'}, {title:'
 const noiseDisplays = [{title:'只显示状态',value:'Status'}, {title:'状态＋小型实时趋势',value:'StatusTrend'}, {title:'状态＋当前单位数值',value:'StatusDbfs'}];
 const hideDurations = [1,2,3].map(minutes => ({title:`${minutes} 分钟`,value:minutes*60}));
 const homeworkModes = [{title:'各班显示本班及相关走班作业',value:'OwnClass'}, {title:'指定来源行政班（自动包含其相关走班）',value:'SelectedClasses'}];
-const endDate = computed({get: () => settings.value?.schedule.effectiveTo || '', set: value => { settings.value.schedule.effectiveTo = value || null; }});
+const scheduleMode = ref('Daily');
+const activeSchedule = computed(() => {
+  const s = settings.value;
+  if (!s) return null;
+  if (scheduleMode.value === 'Exam') s.examSchedule ??= {timeZone:'Asia/Shanghai', effectiveFrom:'', effectiveTo:null, rules:[], exceptions:[]};
+  return scheduleMode.value === 'Exam' ? s.examSchedule : s.schedule;
+});
+const endDate = computed({get: () => activeSchedule.value?.effectiveTo || '', set: value => { activeSchedule.value.effectiveTo = value || null; }});
 const highDuration = computed({get: () => settings.value?.noise.highContinuousSeconds, set: value => { const seconds = value === '' || value == null ? NaN : Number(value); settings.value.noise.highContinuousSeconds = seconds; settings.value.photos.continuousSeconds = seconds; }});
 const noiseUnits = [{title:'dBFS 数字输入电平',value:'Dbfs'}, {title:'估算 dB(A) · 需要本机外部参考',value:'Estimated'}];
 const noiseUnit = computed({get: () => settings.value?.noise.estimated ? 'Estimated' : 'Dbfs', set: value => {
@@ -630,7 +659,7 @@ const guardedTarget = computed({get: () => targetId.value, set: async value => {
   if (value === targetId.value || busy.value || !await discard()) return;
   targetId.value = value;
 }});
-function addRule() { settings.value.schedule.rules.push({days:[],start:'19:00',end:'21:30'}); }
+function addRule() { activeSchedule.value.rules.push({days:[],start:'19:00',end:'21:30'}); }
 async function reload() { if (await discard()) await refresh(); }
 </script>
 

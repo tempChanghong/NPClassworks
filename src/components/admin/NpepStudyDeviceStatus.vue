@@ -38,7 +38,7 @@
         {{ !currentVersion ? '该回执对应旧配置，当前配置尚待设备应用。' : '以下为历史回执，请刷新；不能据此判断当前执行状态。' }}
       </p>
       <p v-if="data.observation">
-        {{ fresh && currentVersion ? '最近计算阶段' : '上次计算阶段' }}：{{ phase }}；当次学校时间{{ data.observation.clockReady ? '已确认' : '待同步' }}。
+        {{ fresh && currentVersion ? '最近计算阶段' : '上次计算阶段' }}：{{ phase }}；{{ data.observation.mode === 'Exam' ? '考试模式 · Windows 时间' : '日常模式 · ClassIsland 时间' }}{{ data.observation.clockReady ? '已确认' : '待同步' }}。
       </p>
       <p v-if="!data.execution">
         本自习策略：尚无采集执行回执。
