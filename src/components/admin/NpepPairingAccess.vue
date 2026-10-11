@@ -9,7 +9,7 @@
         <h2 id="pairing-access-title">
           班级大屏预授权
         </h2>
-        <p>决定哪些现有大屏可以在现场生成一次性网页配对码。</p>
+        <p>学校设置班级管理口令后，可接受现场申请或允许使用口令直接连接。</p>
       </div>
       <v-btn
         variant="tonal"
@@ -212,6 +212,13 @@
             >
               {{ policies[binding.id]?.enabled ? '关闭网页配对' : '开放网页配对' }}
             </v-btn>
+            <v-btn
+              :disabled="busy"
+              variant="text"
+              @click="editCredential(binding.id)"
+            >
+              班级管理口令
+            </v-btn>
           </div>
         </div>
         <p
@@ -225,6 +232,54 @@
         </p>
       </section>
     </div>
+    <v-dialog
+      v-model="credentialDialog"
+      max-width="520"
+      :persistent="busy"
+    >
+      <v-card title="班级管理口令与预授权">
+        <v-card-text>
+          <p class="mb-4">
+            连接 NPEP 后，本机旧管理口令作废。此口令也用于预授权连接及采集设备解锁；不会作为设备长期联网凭据。
+          </p>
+          <v-text-field
+            v-model="credentialSecret"
+            type="password"
+            label="新管理口令（8至128位）"
+            maxlength="128"
+            autocomplete="new-password"
+            variant="outlined"
+            :disabled="busy"
+          />
+          <v-checkbox
+            v-model="credentialEnabled"
+            label="允许本班大屏使用管理口令直接连接"
+            :disabled="busy"
+          />
+          <v-alert
+            v-if="error"
+            type="error"
+            variant="tonal"
+          >
+            {{ error }}
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-btn
+            :disabled="busy"
+            @click="credentialDialog=false"
+          >
+            取消
+          </v-btn><v-spacer /><v-btn
+            color="primary"
+            :loading="busy"
+            @click="saveCredential"
+          >
+            保存口令与预授权
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </section>
 </template>
 
@@ -234,6 +289,7 @@ import {npepAdminApi} from '@/utils/classworksV2Client';
 import {npepErrorMessage} from '@/utils/npepPresentation';
 const props = defineProps({schoolId: {type: String, required: true}, termId: {type: String, default: ''}, bindings: {type: Array, default: () => []}});
 const policies = ref({}), busy = ref(false), loaded = ref(false), error = ref(''), message = ref('');
+const credentialDialog=ref(false),credentialSecret=ref(''),credentialEnabled=ref(false),credentialBinding=ref('');
 const targetType = ref('SCHOOL'), gradeId = ref(null), batchEnabled = ref(true), preview = ref(null), batchConfirmed = ref(false);
 const eligible = computed(() => props.bindings.filter(b => b.isActive && b.administrativeClass?.isActive !== false && b.administrativeClass?.term?.status === 'ACTIVE'
   && (!props.termId || (b.administrativeClass.termId || b.administrativeClass.term.id) === props.termId)));
@@ -260,6 +316,7 @@ async function refresh() {
 }
 async function toggle(id) {
   if (busy.value || !loaded.value || !policies.value[id]) return;
+  if(!policies.value[id].enabled){editCredential(id,true);return;}
   const school = props.schoolId, current = generation, policy = policies.value[id];
   clearPreview(); message.value = '';
   busy.value = true; error.value = ''; controller = new AbortController();
@@ -269,6 +326,25 @@ async function toggle(id) {
   } catch (failure) { if (current === generation) { error.value = npepErrorMessage(failure); loaded.value = false; } }
   finally { if (current === generation) busy.value = false; }
 }
+function editCredential(id,enable=false){credentialBinding.value=id;credentialSecret.value='';credentialEnabled.value=enable||!!policies.value[id]?.enabled;error.value='';credentialDialog.value=true;}
+async function saveCredential(){
+  if(busy.value)return;
+  const secret=credentialSecret.value;
+  if(secret.length<8||secret.length>128||/[\p{Cc}\p{Cf}]/u.test(secret)){error.value='请输入8至128位管理口令。';return;}
+  const school=props.schoolId,selected=credentialBinding.value,current=generation;
+  busy.value=true;error.value='';controller=new AbortController();
+  try{
+    const existing=await npepAdminApi.classManagement(school,selected,{signal:controller.signal});
+    if(current!==generation||school!==props.schoolId)return;
+    await npepAdminApi.setClassManagement(school,selected,{requestId:globalThis.crypto.randomUUID(),expectedRevision:existing.data.revision,secret,enabled:credentialEnabled.value},{signal:controller.signal});
+    if(current!==generation||school!==props.schoolId)return;
+    credentialDialog.value=false;credentialSecret.value='';message.value='学校口令和预授权已保存。设备收到新版本后生效；离线设备尚未应用。';
+    const latest=await npepAdminApi.pairingAccess(school,{signal:controller.signal});
+    if(current===generation&&school===props.schoolId)policies.value=Object.fromEntries(latest.data.items.map(p=>[p.screenBindingId,p]));
+  }catch(failure){if(current===generation)error.value=npepErrorMessage(failure);}
+  finally{credentialSecret.value='';if(current===generation)busy.value=false;}
+}
+watch(credentialDialog,value=>{if(!value)credentialSecret.value='';});
 async function runBatch(save) {
   if (save ? !canApply.value : !canPreview.value) return;
   const school = props.schoolId, current = generation, selected = selection();
@@ -298,7 +374,7 @@ async function runBatch(save) {
 const previewBatch = () => runBatch(false);
 const applyBatch = () => runBatch(true);
 watch([targetType,gradeId,batchEnabled], clearPreview, {flush:'sync'});
-watch(() => [props.schoolId,props.termId], () => { generation++; controller?.abort(); clearPreview(); gradeId.value = null; policies.value = {}; loaded.value = false; busy.value = false; void refresh(); }, {immediate: true,flush:'sync'});
+watch(() => [props.schoolId,props.termId], () => { generation++; controller?.abort(); credentialDialog.value=false;credentialSecret.value='';clearPreview(); gradeId.value = null; policies.value = {}; loaded.value = false; busy.value = false; void refresh(); }, {immediate: true,flush:'sync'});
 onUnmounted(() => { generation++; controller?.abort(); });
 </script>
 

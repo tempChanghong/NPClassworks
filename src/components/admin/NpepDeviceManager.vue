@@ -204,6 +204,12 @@
                 :school-id="schoolId"
                 :device-id="device.deviceId"
               />
+              <NpepEquipmentSettings
+                v-if="effectiveState(device)==='ACTIVE'"
+                :key="`equipment:${schoolId}:${device.deviceId}`"
+                :school-id="schoolId"
+                :device-id="device.deviceId"
+              />
               <v-btn
                 v-if="device.state !== 'REVOKED'"
                 :disabled="busy || stale"
@@ -316,6 +322,15 @@
                         <p v-if="!bindingOptions.length">
                           没有可用大屏，请先为当前学期的有效班级创建并启用大屏账号。
                         </p>
+                        <v-text-field
+                          v-model="managementSecret"
+                          type="password"
+                          label="班级管理口令（未配置时必填，留空保留已有口令）"
+                          maxlength="128"
+                          autocomplete="new-password"
+                          variant="outlined"
+                          :disabled="busy || !!expired"
+                        />
                         <v-checkbox
                           v-model="confirmed"
                           :disabled="busy || !!expired"
@@ -538,6 +553,7 @@ import {npepConnectivity, npepStateName, npepModeName, npepRecordingName, npepAu
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: "当前学校"}, termId: {type: String, default: ''}, section: {type: String, default: 'devices'}});
 const emit = defineEmits(['dirty', 'navigate']);
 const NpepStudySettings = defineAsyncComponent(() => import('./NpepStudySettings.vue'));
+const NpepEquipmentSettings=defineAsyncComponent(()=>import('./NpepEquipmentSettings.vue'));
 const NpepStudyPhotos = defineAsyncComponent(() => import('./NpepStudyPhotos.vue'));
 const section = toRef(props, 'section');
 const sectionTitles = {devices: '大屏互联', study: '自习展示', noise: '噪音监测', seating: '自习座位表'};
@@ -555,7 +571,7 @@ watch(section, value => {
 watch([noiseDirty, studyDirty, seatingDirty], ([noise, study, seating]) => emit('dirty', noise || study || seating), {immediate: true, flush: 'sync'});
 onUnmounted(() => emit('dirty', false));
 const manager = useNpepManager(toRef(props, "schoolId"));
-const {devices, bindings, candidate, approved, code, bindingId, busy, error, message, loaded, stale, nextCursor, now,
+const {devices, bindings, candidate, approved, code, bindingId, managementSecret,busy, error, message, loaded, stale, nextCursor, now,
   overview, overviewUnavailable, filter, search, applyOverview,
   expired, bindingOptions, refresh, more, resolve, approve, cancel, revoke} = manager;
 const confirmed = ref(false), revoking = ref(null);

@@ -6,6 +6,7 @@ import {readDeviceOverview} from '@/utils/npepDeviceOverview';
 export function useNpepManager(schoolId) {
   const devices = ref([]), bindings = ref([]), candidate = ref(null), approved = ref(null);
   const code = ref(""), bindingId = ref(""), busy = ref(false), error = ref(""), message = ref("");
+  const managementSecret=ref('');
   const loaded = ref(false), stale = ref(false), nextCursor = ref(null), now = ref(Date.now());
   const overview = ref(null), overviewUnavailable = ref(false), filter = ref('ALL'), search = ref('');
   let appliedSearch = '';
@@ -21,6 +22,7 @@ export function useNpepManager(schoolId) {
     generation++; controller?.abort(); busy.value = false;
     devices.value = []; bindings.value = []; candidate.value = null; approved.value = null;
     code.value = ""; bindingId.value = ""; error.value = ""; message.value = "";
+    managementSecret.value='';
     loaded.value = false; stale.value = false; nextCursor.value = null; approvalRequest = null;
     overview.value = null; overviewUnavailable.value = false; filter.value = 'ALL'; search.value = ''; appliedSearch = '';
   }
@@ -104,6 +106,15 @@ export function useNpepManager(schoolId) {
       approvalRequest = {pairingId, selected, requestId: globalThis.crypto.randomUUID()};
     }
     return run(async (school, options, current) => {
+      const credential=await npepAdminApi.classManagement(school,selected,options);
+      if(!current())return;
+      const secret=managementSecret.value;managementSecret.value='';
+      if(!credential.data.configured||secret){
+        if(secret.length<8||secret.length>128||/[\p{Cc}\p{Cf}]/u.test(secret)){error.value='批准连接前，请设置8至128位班级管理口令。';return;}
+        await npepAdminApi.setClassManagement(school,selected,{requestId:globalThis.crypto.randomUUID(),expectedRevision:credential.data.revision,enabled:credential.data.enabled,secret},options);
+        if(!current())return;
+        message.value='班级管理口令已保存，正在批准连接。';
+      }
       const result = await npepAdminApi.approve(school, pairingId, selected, {...options, requestId: approvalRequest.requestId});
       if (current()) { approved.value = result.data; clock(result); code.value = ""; message.value = "批准已保存。请在 NPEduTools 现场核对学校、班级与大屏并确认；如已完成，请刷新右侧列表查看登记结果。批准本身不代表设备已连接。"; }
     });
@@ -121,7 +132,7 @@ export function useNpepManager(schoolId) {
   });
   watch(schoolId, () => { clear(); void refresh(); }, {immediate: true, flush: "sync"});
   onUnmounted(() => { disposed = true; clear(); clearInterval(timer); });
-  return {devices, bindings, candidate, approved, code, bindingId, busy, error, message, loaded, stale, nextCursor, now,
+  return {devices, bindings, candidate, approved, code, bindingId, managementSecret,busy, error, message, loaded, stale, nextCursor, now,
     overview, overviewUnavailable, filter, search, applyOverview,
     expired, bindingOptions, refresh, more, resolve, approve, cancel, revoke};
 }

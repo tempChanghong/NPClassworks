@@ -496,6 +496,10 @@ export const npepExamPlanApi = {
   cancel: (school, device, operation, options) => npepAdminRequest('post', `${examPlanPath(school, device)}/${encodeURIComponent(operation)}/cancel`, {...options, version: '0.5', body: {}}),
 };
 export const npepAdminApi = {
+  classManagement: (school,binding,options) => npepAdminRequest('get',`${npepSchoolPath(school)}/class-management/${encodeURIComponent(binding)}`,{...options,version:'0.16'}),
+  setClassManagement: (school,binding,body,options) => npepAdminRequest('post',`${npepSchoolPath(school)}/class-management/${encodeURIComponent(binding)}`,{...options,version:'0.16',body,requestId:body.requestId}),
+  equipment: (school,device,options) => npepAdminRequest('get',`${npepSchoolPath(school)}/devices/${encodeURIComponent(device)}/equipment`,{...options,version:'0.16'}),
+  setEquipment: (school,device,body,options) => npepAdminRequest('post',`${npepSchoolPath(school)}/devices/${encodeURIComponent(device)}/equipment`,{...options,version:'0.16',body,requestId:body.requestId}),
   overview: (schoolId, options) => npepAdminRequest('get', `${npepSchoolPath(schoolId)}/device-overview`, options),
   previewPairingAccessBatch: (schoolId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/pairing-access/preview`, {...options, body, requestId: body.requestId}),
   setPairingAccessBatch: (schoolId, body, options) => npepAdminRequest('post', `${npepSchoolPath(schoolId)}/pairing-access/batch`, {...options, body, requestId: body.requestId}),
