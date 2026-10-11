@@ -22,7 +22,7 @@ jobs:
   contracts:
     uses: ./.github/workflows/contracts.yml
     with:
-      backend_ref: ${{ inputs.backend_ref || (github.event_name == 'pull_request' && '2a05f24654e4923f81a03d4824e123a5d141313a') || 'main' }}
+      backend_ref: ${{ inputs.backend_ref || (github.event_name == 'pull_request' && 'c4afaaef66d64ee0d6f3c5f06ba158f80013c591') || 'main' }}
 
   test:
     runs-on: ubuntu-latest
