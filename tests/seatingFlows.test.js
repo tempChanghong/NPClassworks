@@ -38,6 +38,25 @@ test('a late class response cannot overwrite the newly selected class',async()=>
   await eventually(()=>assert.ok(h.requests.some(r=>r.query.get('classId')==='one')));await s.changeClass('two');held.resolve();await first;
   assert.equal(s.classId.value,'two');assert.equal(s.current.value.revision,2);
 });
+
+test('an old image cannot overwrite a freshly reloaded class after A to B to A',async()=>{
+  setup(); const held=deferred(), base='/api/v2/npep/schools/school/seating'; let reads=0;
+  h.routes.set(`GET ${base}`,(req,reply)=>{
+    const revision=req.query.get('classId')==='one' ? ++reads : 7;
+    reply(envelope(req.headers['x-request-id'],{current:{revision,hash:`image-${revision}`},versions:[],receipts:[]}),200,true);
+  });
+  h.routes.set(`GET ${base}/image`,async(req,reply)=>{
+    const revision=req.query.get('revision');
+    if(req.query.get('classId')==='one' && revision==='1')await held.promise;
+    reply(envelope(req.headers['x-request-id'],{image:`fixture-${revision}`}),200,true);
+  });
+  const {state:s}=await h.openComponent('/src/components/admin/NpepSeatingSettings.vue',{schoolId:'school',termId:'term'});
+  await eventually(()=>assert.equal(s.classes.value.length,2)); const old=s.changeClass('one');
+  await eventually(()=>assert.ok(h.requests.some(r=>r.path===`${base}/image` && r.query.get('revision')==='1')));
+  await s.changeClass('two'); await s.changeClass('one'); held.resolve(); await old;
+  assert.equal(s.classId.value,'one'); assert.equal(s.ready.value,true);
+  assert.equal(s.current.value.revision,2); assert.equal(s.preview.value,'data:image/png;base64,fixture-2');
+});
 test('seat results from a changed account session are cancelled',async()=>{
   const held=deferred();h.routes.set('GET /api/v2/npep/schools/school/seating',async(req,reply)=>{await held.promise;reply(envelope(req.headers['x-request-id'],{current:{revision:99}}),200,true);});
   const request=h.api.npepSeatingApi.list('school',{termId:'term',classId:'one'}).catch(e=>e);
@@ -47,4 +66,35 @@ test('image headers bound decoded pixels before browser decoding',()=>{
   const b=new Uint8Array(24);b.set([137,80,78,71,13,10,26,10]);const view=new DataView(b.buffer);view.setUint32(16,2000);view.setUint32(20,3000);
   assert.deepEqual(seatingImageDimensions(b),{width:2000,height:3000});view.setUint32(16,4097);assert.throws(()=>seatingImageDimensions(b));
   assert.throws(()=>seatingImageDimensions(new Uint8Array(20)));
+});
+for (const failure of ['list', 'image']) test(`failed ${failure} for another class clears observations and blocks all writes`,async()=>{
+  setup(); const base='/api/v2/npep/schools/school/seating';
+  h.routes.set(`GET ${base}`,(req,reply)=>{
+    if(req.query.get('classId')==='two' && failure==='list') return reply({error:{code:'TEMPORARILY_UNAVAILABLE'}},503);
+    reply(envelope(req.headers['x-request-id'],{current:{revision:7,hash:'image-'+req.query.get('classId')},versions:[{revision:6,restorable:true}],receipts:[{deviceId:'fixture'}]}),200,true);
+  });
+  h.routes.set(`GET ${base}/image`,(req,reply)=>{
+    if(req.query.get('classId')==='two' && failure==='image') return reply({error:{code:'TEMPORARILY_UNAVAILABLE'}},503);
+    reply(envelope(req.headers['x-request-id'],{image:'one-image'}),200,true);
+  });
+  const {state:s}=await h.openComponent('/src/components/admin/NpepSeatingSettings.vue',{schoolId:'school',termId:'term'});
+  await eventually(()=>assert.equal(s.classes.value.length,2)); await s.changeClass('one');
+  assert.equal(s.ready.value,true); assert.ok(s.preview.value);
+  await s.changeClass('two');
+  assert.equal(s.ready.value,false); assert.equal(s.current.value.hash,null); assert.equal(s.preview.value,null);
+  assert.deepEqual(s.versions.value,[]); assert.deepEqual(s.receipts.value,[]); assert.ok(s.error.value);
+  s.draft.value={image:'new'};
+  await s.publish('image'); await s.withdraw(); await s.restore(6);
+  assert.equal(h.requests.filter(r=>r.method==='POST' && r.path===base).length,0);
+});
+for (const action of ['withdraw','restore']) test(`changing class while confirming ${action} cannot write to the new class`,async()=>{
+  setup(); const base='/api/v2/npep/schools/school/seating';
+  h.routes.set(`GET ${base}`,(req,reply)=>reply(envelope(req.headers['x-request-id'],{current:{revision:7,hash:'fixture'},versions:[{revision:6,restorable:true}],receipts:[]}),200,true));
+  h.routes.set(`GET ${base}/image`,(req,reply)=>reply(envelope(req.headers['x-request-id'],{image:'fixture'}),200,true));
+  const {state:s}=await h.openComponent('/src/components/admin/NpepSeatingSettings.vue',{schoolId:'school',termId:'term'});
+  await eventually(()=>assert.equal(s.classes.value.length,2)); await s.changeClass('one');
+  const confirming=action==='withdraw' ? s.withdraw() : s.restore(6);
+  await s.changeClass('two'); h.dialogs.settleActionDialog(true); await confirming;
+  assert.equal(s.ready.value,true); assert.equal(s.classId.value,'two');
+  assert.equal(h.requests.filter(r=>r.method==='POST' && r.path===base).length,0);
 });
