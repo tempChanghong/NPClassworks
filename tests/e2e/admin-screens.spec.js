@@ -744,7 +744,7 @@ for (const width of [1440, 390]) {
       await page.screenshot({path:`test-results/study-display-presence-${width}.png`,fullPage:true,animations:'disabled'});
       await page.evaluate(()=>{Date.now=globalThis.__studyWallNow;delete globalThis.__studyWallNow;});
       statusMode='presentation-hidden';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('设备回报展示页已收起');
-      await expect(status).toContainText('临时使用电脑，按期限返回');
+      await expect(status).toContainText('临时使用电脑，等待无操作后返回');
       statusMode='presentation-old-version';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('展示执行回执待确认');
       statusMode='presentation-expired';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('展示执行回执待确认');
       statusMode='presentation-aging';await status.getByRole('button',{name:'刷新自习应用回执'}).click();await expect(display).toHaveText('展示执行回执待确认');
