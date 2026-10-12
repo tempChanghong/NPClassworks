@@ -148,8 +148,12 @@ for (const theme of ["dark", "light"]) {
       settings: {"theme.mode": theme, "background.enabled": true, "background.imageData": wallpaper,
         "background.blur": 0, "background.opacity": 0}});
     try {
+      // The empty placeholder can appear before student context and date controls
+      // finish mounting. Read geometry only after the required controls are ready.
+      await expect(page.locator(".selection-summary")).toBeVisible();
       await page.getByLabel("选择日期").fill("2026-10-01");
       await expect(page.getByLabel("选择日期")).toHaveValue("2026-10-01");
+      await expect(page.getByRole("button", {name: "回到今天", exact: true})).toBeVisible();
       await expect(page.locator(".subject-status-summary")).toHaveCount(1);
       await expect(page.locator(".student-empty-state")).toBeVisible();
 
@@ -162,6 +166,9 @@ for (const theme of ["dark", "light"]) {
         await expect(page.locator(".board-date-navigator")).toBeVisible();
         await expect(page.locator(".subject-status--compact")).toBeVisible();
         await expect(page.locator(".student-empty-state")).toBeVisible();
+        for (const selector of [".board-date-stepper", ".board-date-today", ".board-date-input", ".board-date-title", ".selection-summary"]) {
+          await expect(page.locator(selector)).toBeVisible();
+        }
         const layout = await page.evaluate(() => {
           const bounds = selector => document.querySelector(selector).getBoundingClientRect();
           const nav = bounds(".board-date-navigator");
