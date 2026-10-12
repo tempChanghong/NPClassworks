@@ -101,3 +101,45 @@ test('invalid saved thresholds open advanced settings without changing the polic
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });
+
+test('viewing legacy exam schedules stays clean and ordinary retention errors stay outside advanced settings', async ({browser}) => {
+  const settings = defaultStudySettings();
+  delete settings.examSchedule;
+  settings.schedule.effectiveFrom = '2026-10-12';
+  settings.schedule.rules[0] = {days: [1], start: '19:10', end: '21:20'};
+  settings.photos.enabled = true;
+  const writes = [];
+  const {context, page, errors} = await openAdmin(browser, 390, 'OWNER', {}, 'npep-study', async context => {
+    await context.route(`${api}/api/v2/npep/**`, async route => {
+      const req=route.request(), path=new URL(req.url()).pathname;
+      if(req.method()!=='GET') writes.push(path);
+      const reply=data=>route.fulfill({json:{protocolVersion:req.headers()['x-npep-version'],requestId:req.headers()['x-request-id'],serverTime:new Date().toISOString(),data}});
+      if(path.endsWith('/info')) return reply({supportedCapabilities:['device.status']});
+      if(path.endsWith('/devices')) return reply({items:[],nextCursor:null});
+      if(path.endsWith('/study-settings')) return reply({termId:'term',terms:[{id:'term',name:'当前学期'}],grades:[{id:'grade',name:'高二'}],classes:[{id:'class-a',gradeId:'grade',name:'一班'}],
+        settings:[{targetType:'GRADE',targetId:'grade',revision:7,policy:{mode:'Override',settings}}]});
+      return route.fulfill({status:404,json:{error:{code:'NOT_FOUND'}}});
+    });
+  });
+  try {
+    const editor=page.locator('.study-settings');
+    await expect(editor.getByLabel('自习开始 1')).toHaveValue('19:10');
+    await editor.getByRole('button',{name:'考试模式 · Windows 时间',exact:true}).click();
+    await expect(editor).toContainText('当前模式不安排定时自习');
+    await page.locator('.npep-study-navigation').getByRole('button',{name:'报告与照片',exact:true}).click();
+    await expect(page.locator('.study-reports')).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.locator('.npep-study-navigation').getByRole('button',{name:'自习设置',exact:true}).click();
+    await editor.getByLabel('照片保留时间',{exact:true}).fill('181');
+    await expect(editor).toContainText('保留为 1–180 天');
+    await expect(editor.getByRole('button',{name:'高级设置',exact:true})).toHaveAttribute('aria-expanded','false');
+    await editor.getByLabel('照片保留时间',{exact:true}).fill('30');
+    await editor.getByLabel('自习生效日期').fill('2026-10-13');
+    await editor.getByRole('button',{name:'添加自习时段',exact:true}).click();
+    await expect(editor.getByLabel('自习开始 1')).toHaveValue('19:15');
+    await expect(editor.getByLabel('自习生效日期')).toHaveValue('2026-10-13');
+    await editor.getByRole('button',{name:'日常模式 · ClassIsland 时间',exact:true}).click();
+    await expect(editor.getByLabel('自习开始 1')).toHaveValue('19:10');
+    expect(writes).toEqual([]);expect(errors).toEqual([]);
+  } finally {await context.close();}
+});

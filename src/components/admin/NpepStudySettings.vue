@@ -125,7 +125,7 @@
             md="6"
           >
             <v-text-field
-              v-model="activeSchedule.effectiveFrom"
+              v-model="startDate"
               type="date"
               label="自习生效日期"
               variant="outlined"
@@ -289,7 +289,7 @@
           class="mt-3"
           variant="text"
           :disabled="busy || activeSchedule.exceptions.length >= 366"
-          @click="activeSchedule.exceptions.push({date:'',kind:'Skip',weekday:null})"
+          @click="addException"
         >
           添加日历例外
         </v-btn>
@@ -639,7 +639,10 @@ const settings = computed(() => draft.value.settings);
 const advancedPanel = ref(null);
 watch([targetType, targetId, () => props.schoolId, () => props.termId, validation], (values, previous = []) => {
   if (values.slice(0, 4).some((value, index) => value !== previous[index])) advancedPanel.value = null;
-  if (['INVALID_NOISE', 'INVALID_PHOTOS', 'INCONSISTENT_THRESHOLD_DURATION', 'PHOTO_THRESHOLD_REQUIRED'].includes(values[4])) advancedPanel.value = 'monitoring';
+  const photos = settings.value?.photos;
+  const invalidPhotoInterval = !Number.isInteger(photos?.cooldownSeconds) || photos.cooldownSeconds < 30 || photos.cooldownSeconds > 300;
+  if (['INVALID_NOISE', 'INCONSISTENT_THRESHOLD_DURATION', 'PHOTO_THRESHOLD_REQUIRED'].includes(values[4])
+    || values[4] === 'INVALID_PHOTOS' && invalidPhotoInterval) advancedPanel.value = 'monitoring';
 }, {immediate: true});
 const currentTermName = computed(() => catalog.value?.terms.find(term => term.id === editor.termId.value)?.name || '未选择有效学期');
 const targetTypes = [{title: '年级', value: 'GRADE'}, {title: '行政班', value: 'CLASS'}];
@@ -650,13 +653,18 @@ const calendarKinds = [{title:'停用（节假日等）',value:'Skip'}, {title:'
 const noiseDisplays = [{title:'只显示状态',value:'Status'}, {title:'状态＋小型实时趋势',value:'StatusTrend'}, {title:'状态＋当前单位数值',value:'StatusDbfs'}];
 const homeworkModes = [{title:'各班显示本班及相关走班作业',value:'OwnClass'}, {title:'指定来源行政班（自动包含其相关走班）',value:'SelectedClasses'}];
 const scheduleMode = ref('Daily');
+const emptyExamSchedule = Object.freeze({timeZone:'Asia/Shanghai', effectiveFrom:'', effectiveTo:null, rules:Object.freeze([]), exceptions:Object.freeze([])});
 const activeSchedule = computed(() => {
   const s = settings.value;
   if (!s) return null;
-  if (scheduleMode.value === 'Exam') s.examSchedule ??= {timeZone:'Asia/Shanghai', effectiveFrom:'', effectiveTo:null, rules:[], exceptions:[]};
-  return scheduleMode.value === 'Exam' ? s.examSchedule : s.schedule;
+  return scheduleMode.value === 'Exam' ? s.examSchedule || emptyExamSchedule : s.schedule;
 });
-const endDate = computed({get: () => activeSchedule.value?.effectiveTo || '', set: value => { activeSchedule.value.effectiveTo = value || null; }});
+function editableSchedule() {
+  if (scheduleMode.value !== 'Exam') return settings.value.schedule;
+  return settings.value.examSchedule ??= {timeZone:'Asia/Shanghai', effectiveFrom:'', effectiveTo:null, rules:[], exceptions:[]};
+}
+const startDate = computed({get: () => activeSchedule.value?.effectiveFrom || '', set: value => { editableSchedule().effectiveFrom = value; }});
+const endDate = computed({get: () => activeSchedule.value?.effectiveTo || '', set: value => { editableSchedule().effectiveTo = value || null; }});
 const highDuration = computed({get: () => settings.value?.noise.highContinuousSeconds, set: value => { const seconds = value === '' || value == null ? NaN : Number(value); settings.value.noise.highContinuousSeconds = seconds; settings.value.photos.continuousSeconds = seconds; }});
 const noiseUnits = [{title:'dBFS 数字输入电平',value:'Dbfs'}, {title:'估算 dB(A) · 需要本机外部参考',value:'Estimated'}];
 const noiseUnit = computed({get: () => settings.value?.noise.estimated ? 'Estimated' : 'Dbfs', set: value => {
@@ -687,7 +695,8 @@ const guardedTarget = computed({get: () => targetId.value, set: async value => {
   if (value === targetId.value || busy.value || !await discard()) return;
   targetId.value = value;
 }});
-function addRule() { activeSchedule.value.rules.push(defaultStudyRule()); }
+function addRule() { editableSchedule().rules.push(defaultStudyRule()); }
+function addException() { editableSchedule().exceptions.push({date:'',kind:'Skip',weekday:null}); }
 async function reload() { if (await discard()) await refresh(); }
 </script>
 
