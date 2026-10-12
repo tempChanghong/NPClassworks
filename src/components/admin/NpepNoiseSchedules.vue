@@ -190,7 +190,7 @@
               class="mt-3"
               variant="tonal"
               :disabled="busy || draft.rules.length >= 32"
-              @click="draft.rules.push({days:[],start:'19:00',end:'21:30'})"
+              @click="draft.rules.push(defaultStudyRule())"
             >
               添加时段
             </v-btn>
@@ -305,6 +305,7 @@
 </template>
 <script setup>
 import {computed, toRef, watch} from 'vue';
+import {defaultStudyRule} from '@/utils/npepStudySettings.js';
 import {useNoiseScheduleEditor} from '@/composables/admin/useNoiseScheduleEditor.js';
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: '当前学校'}, termId: {type: String, default: ''}});
 const emit = defineEmits(['dirty']);
@@ -316,7 +317,7 @@ const modes = computed(() => [...(targetType.value === 'CLASS' ? [{title:'继承
 const validationMessage = computed(() => ({EMPTY_RULES:'请至少添加一个时段。',INVALID_RULE:'请检查星期和开始／结束时间。',INVALID_DURATION:'时段不能等长或超过三小时。',MERGED_WINDOW_TOO_LONG:'相邻或重叠时段合并后超过三小时，请调整。'}[validation.value] || '排程配置无效，请检查填写内容。'));
 function selectFirst() { targetId.value = targets.value[0]?.id || ''; }
 function changeMode(mode) {
-  draft.value.rules = mode === 'Override' ? [{days:[],start:'19:00',end:'21:30'}] : [];
+  draft.value.rules = mode === 'Override' ? [defaultStudyRule()] : [];
 }
 const sourceName = source => ({Grade:'继承年级',Class:'班级时段',Disabled:'已关闭',None:'未配置'}[source]);
 const ruleText = rule => rule.days.map(d => days[d-1].title).join('、')+' '+rule.start+'–'+rule.end+(rule.end < rule.start ? '（次日结束）' : '');

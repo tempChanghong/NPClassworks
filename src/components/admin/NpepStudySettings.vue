@@ -118,7 +118,7 @@
         >
           当前模式不安排定时自习。
         </v-alert>
-        <p>北京时间 19:00–21:30 为新建默认时段，星期和日期需明确填写。展示提前五分钟打开并显示已发布的自习座位表；开始前两分钟显示十秒准备提示，准备阶段不采集。</p>
+        <p>北京时间 19:15–21:30 为新建默认时段，星期和日期需明确填写。展示提前五分钟打开并显示已发布的自习座位表；开始前两分钟显示十秒准备提示，准备阶段不采集。</p>
         <v-row class="mt-2">
           <v-col
             cols="12"
@@ -605,7 +605,7 @@
 import {computed, ref, toRef, watch} from 'vue';
 import {useStudySettingsEditor} from '@/composables/admin/useStudySettingsEditor.js';
 import {confirmAction} from '@/utils/actionDialog.js';
-import {defaultStudyEstimatedThresholds} from '@/utils/npepStudySettings.js';
+import {defaultStudyEstimatedThresholds, defaultStudyRule} from '@/utils/npepStudySettings.js';
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: '当前学校'}, termId: {type: String, default: ''}});
 const emit = defineEmits(['dirty']);
 const editor = useStudySettingsEditor(toRef(props, 'schoolId'), toRef(props, 'termId'));
@@ -659,7 +659,7 @@ const guardedTarget = computed({get: () => targetId.value, set: async value => {
   if (value === targetId.value || busy.value || !await discard()) return;
   targetId.value = value;
 }});
-function addRule() { activeSchedule.value.rules.push({days:[],start:'19:00',end:'21:30'}); }
+function addRule() { activeSchedule.value.rules.push(defaultStudyRule()); }
 async function reload() { if (await discard()) await refresh(); }
 </script>
 

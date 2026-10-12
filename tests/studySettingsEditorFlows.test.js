@@ -43,9 +43,20 @@ test('defaults remain disabled, custom settings survive loading and toggling, cl
   assert.equal(state.hasUnsavedChanges.value,false);
   state.targetType.value='CLASS'; state.targetId.value='class';
   assert.deepEqual(state.draft.value,{mode:'Inherit',settings:null});
-  state.changeMode('Override'); assert.deepEqual(state.draft.value.settings.schedule.rules,[{days:[],start:'19:00',end:'21:30'}]);
+  state.changeMode('Override'); assert.deepEqual(state.draft.value.settings.schedule.rules,[{days:[],start:'19:15',end:'21:30'}]);
   assert.deepEqual(state.draft.value.settings.noise.estimated,{highDbA:65,mediumDbA:50});
   assert.equal(state.draft.value.settings.schedule.effectiveFrom,''); assert.equal(state.valid.value,false);
+});
+
+test('saved 19:00 and custom schedules survive loading and mode toggling',async()=>{
+  for(const start of ['19:00','18:40']) {
+    const saved=policy(); saved.settings.schedule.rules[0].start=start;
+    const original=globalThis.structuredClone(saved);
+    const {state,unmount}=await editor({...catalog(),settings:[{targetType:'GRADE',targetId:'grade',revision:7,policy:saved}]});
+    assert.deepEqual(state.draft.value,original);
+    state.changeMode('Disabled');state.changeMode('Override');assert.deepEqual(state.draft.value,original);
+    assert.equal(state.hasUnsavedChanges.value,false);unmount();
+  }
 });
 
 test('loading and toggling existing acoustic/digital policies preserve school custom thresholds',async()=>{
