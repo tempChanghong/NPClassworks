@@ -20,6 +20,21 @@
     </v-card-title>
 
     <v-card-text>
+      <v-btn-toggle
+        v-if="section === 'study'"
+        v-model="studyView"
+        mandatory
+        variant="tonal"
+        class="npep-study-navigation mb-4"
+        aria-label="自习监测页面"
+      >
+        <v-btn value="settings">
+          自习设置
+        </v-btn>
+        <v-btn value="reports">
+          报告与照片
+        </v-btn>
+      </v-btn-toggle>
       <v-alert
         v-if="error"
         type="error"
@@ -377,14 +392,14 @@
       </section>
       <section
         v-if="noiseVisited"
-        v-show="section === 'noise'"
+        v-show="section === 'study' && studyView === 'reports'"
         class="npep-noise"
         aria-label="学校原生噪音监测"
       >
         <div class="npep-noise-reports mt-4">
           <h3>设备执行状态与报告</h3>
           <p class="npep-observation-help mt-2 mb-4">
-            排程与阈值在“自习设置”中统一配置；此处核对设备执行状态、已上传的统计与照片。保存、设备已应用与实际采集是不同状态，请以新鲜的执行状态为准。
+            排程与阈值在本页“自习设置”中统一配置；此处核对设备执行状态、已上传的统计与照片。保存、设备已应用与实际采集是不同状态，请以新鲜的执行状态为准。
           </p>
           <v-select
             v-model="reportDeviceId"
@@ -425,7 +440,7 @@
       </section>
       <section
         v-if="studyVisited"
-        v-show="section === 'study'"
+        v-show="section === 'study' && studyView === 'settings'"
       >
         <NpepStudySettings
           :school-id="schoolId"
@@ -433,26 +448,6 @@
           :term-id="termId"
           @dirty="studyDirty = $event"
         />
-        <v-expansion-panels
-          v-model="legacySchedulePanels"
-          class="mt-4"
-        >
-          <v-expansion-panel value="legacy">
-            <v-expansion-panel-title>旧版噪音排程兼容</v-expansion-panel-title>
-            <v-expansion-panel-text eager>
-              <p class="npep-observation-help">
-                仅用于尚未配置学校自习策略的班级。已配置自习策略（包括关闭策略）的班级，旧排程不再执行；编辑旧排程不会覆盖自习设置。
-              </p>
-              <NpepNoiseSchedules
-                v-if="legacyScheduleVisited"
-                :school-id="schoolId"
-                :school-name="schoolName"
-                :term-id="termId"
-                @dirty="noiseDirty = $event"
-              />
-            </v-expansion-panel-text>
-          </v-expansion-panel>
-        </v-expansion-panels>
       </section>
       <NpepSeatingSettings
         v-if="seatingVisited"
@@ -462,12 +457,12 @@
         @dirty="seatingDirty = $event"
       />
       <NpepStudyReports
-        v-if="section === 'noise'"
+        v-if="section === 'study' && studyView === 'reports'"
         :school-id="schoolId"
         :term-id="termId"
       />
       <NpepStudyPhotos
-        v-if="section === 'noise'"
+        v-if="section === 'study' && studyView === 'reports'"
         :school-id="schoolId"
         :term-id="termId"
       />
@@ -560,7 +555,6 @@ import {computed, defineAsyncComponent, nextTick, onUnmounted, ref, toRef, watch
 import NpepRuntimeControl from './NpepRuntimeControl.vue';
 import NpepExamPlanControl from './NpepExamPlanControl.vue';
 import NpepNoiseReports from './NpepNoiseReports.vue';
-import NpepNoiseSchedules from './NpepNoiseSchedules.vue';
 import NpepPairingAccess from './NpepPairingAccess.vue';
 import NpepDeviceOverview from './NpepDeviceOverview.vue';
 import NpepStudyDeviceStatus from './NpepStudyDeviceStatus.vue';
@@ -579,22 +573,20 @@ const NpepEquipmentSettings=defineAsyncComponent(()=>import('./NpepEquipmentSett
 const NpepStudyReports = defineAsyncComponent(() => import('./NpepStudyReports.vue'));
 const NpepStudyPhotos = defineAsyncComponent(() => import('./NpepStudyPhotos.vue'));
 const section = toRef(props, 'section');
-const sectionTitles = {devices: '大屏互联', study: '自习设置', noise: '噪音监测', seating: '自习座位表'};
+const sectionTitles = {devices: '大屏互联', study: '自习监测', seating: '自习座位表'};
 const NpepSeatingSettings = defineAsyncComponent(() => import('./NpepSeatingSettings.vue'));
 const noiseVisited = ref(false);
 const studyVisited = ref(false);
-const legacySchedulePanels = ref(null);
-const legacyScheduleVisited = ref(false);
-watch(legacySchedulePanels, value => { if (value === 'legacy') legacyScheduleVisited.value = true; });
+const studyView = ref('settings');
 const seatingVisited = ref(false);
-const noiseDirty = ref(false), studyDirty = ref(false), seatingDirty = ref(false);
+const studyDirty = ref(false), seatingDirty = ref(false);
 const reportDeviceId = ref(null);
-watch(section, value => {
-  if (value === 'noise') noiseVisited.value = true;
+watch([section, studyView], ([value, view]) => {
+  if (value === 'study' && view === 'reports') noiseVisited.value = true;
   if (value === 'study') studyVisited.value = true;
   if (value === 'seating') seatingVisited.value = true;
 }, {immediate: true});
-watch([noiseDirty, studyDirty, seatingDirty], ([noise, study, seating]) => emit('dirty', noise || study || seating), {immediate: true, flush: 'sync'});
+watch([studyDirty, seatingDirty], ([study, seating]) => emit('dirty', study || seating), {immediate: true, flush: 'sync'});
 onUnmounted(() => emit('dirty', false));
 const manager = useNpepManager(toRef(props, "schoolId"));
 const {devices, bindings, candidate, approved, code, bindingId, managementSecret,busy, error, message, loaded, stale, nextCursor, now,

@@ -54,12 +54,7 @@ for (const width of [320, 390, 768, 1440]) {
       await expect(editor.getByLabel('自习结束 1', {exact: true})).toHaveValue('21:20');
       await editor.getByRole('button', {name: '日常模式 · ClassIsland 时间', exact: true}).scrollIntoViewIfNeeded();
       await page.screenshot({path: testInfo.outputPath('mode-switch.png'), animations: 'disabled'});
-      if (width >= 960) {
-        await page.locator('.admin-navigation').getByText('噪音监测', {exact: true}).click();
-      } else {
-        await page.locator('.admin-mobile-page-switcher .v-select').click();
-        await page.getByRole('option', {name: 'NPEP · 噪音监测', exact: true}).click();
-      }
+      await page.locator('.npep-study-navigation').getByRole('button', {name: '报告与照片', exact: true}).click();
       await expect(page.locator('.study-reports')).toBeVisible();
       await expect(page.locator('.study-photos')).toBeVisible();
       await expect(editor).toBeHidden();

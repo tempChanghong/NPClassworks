@@ -12,8 +12,9 @@ function setup() {
 test('NPEP is a peer group and permissions are deferred; legacy section remains mapped',async()=>{
   const {state}=await h.openAdminAccounts();
   const groups=state.adminNavigationGroups;assert.deepEqual(groups.map(g=>g.label),['日常管理','NPEP','学校配置','运维与安全']);
-  assert.deepEqual(groups.find(g=>g.label==='NPEP').items.map(i=>i.title),['大屏互联','自习设置','噪音监测','自习座位表']);
+  assert.deepEqual(groups.find(g=>g.label==='NPEP').items.map(i=>i.title),['大屏互联','自习监测','自习座位表']);
   assert.equal(state.normalizeAdminSection('npep'),'npep-devices');
+  assert.equal(state.normalizeAdminSection('npep-noise'),'npep-study');
   assert.ok(!groups.flatMap(g=>g.items).some(i=>i.title==='权限管理'));
 });
 test('seating requests retain current class and same request identity across uncertain retries',async()=>{

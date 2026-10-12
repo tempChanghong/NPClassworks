@@ -51,12 +51,15 @@ for (const width of [1440,390]) {
 // Backend authorization remains covered by the separate backend integration tests.
 async function navigateAdmin(page, title) {
   if (title === "NPEP") title = "大屏互联";
+  const report = title === "噪音监测";
+  if (report || title === "自习设置") title = "自习监测";
   if (page.viewportSize().width >= 960) {
     await page.locator('.admin-navigation').getByText(title, {exact: true}).click();
   } else {
     await page.locator('.admin-mobile-page-switcher .v-select').click();
-    await page.getByRole('option', {name: `${["大屏互联", "自习设置", "噪音监测", "自习座位表"].includes(title) ? "NPEP" : "日常管理"} · ${title}`, exact: true}).click();
+    await page.getByRole('option', {name: `${["大屏互联", "自习监测", "自习座位表"].includes(title) ? "NPEP" : "日常管理"} · ${title}`, exact: true}).click();
   }
+  if (title === '自习监测') await page.locator('.npep-study-navigation').getByRole('button', {name: report ? '报告与照片' : '自习设置', exact: true}).click();
 }
 
 async function openAdmin(browser, width, role = "ADMIN", settings = {}, section = "screens", prepare = async () => {}) {
@@ -456,9 +459,11 @@ test("NPEP ignores a late short-code response after the panel closes", async ({b
 });
 
 for (const width of [1440, 390]) {
-  test(`NPEP separates study settings from monitoring and preserves legacy drafts at ${width}px`, async ({browser}) => {
+  test(`NPEP has one study entry, preserves unified drafts and never edits legacy schedules at ${width}px`, async ({browser}) => {
     const requests = [], saved = [];
-    const policy = {mode: 'Override', rules: [{days: [1, 2, 3, 4, 5], start: '19:00', end: '21:30'}]};
+    const settings = defaultStudySettings(); settings.schedule.effectiveFrom = '2026-10-12';
+    settings.schedule.rules[0].days = [1, 2, 3, 4, 5];
+    const policy = {mode: 'Override', settings};
     let currentPolicy = JSON.parse(JSON.stringify(policy)), revision = 1;
     const {page, context, errors} = await openAdmin(browser, width, 'OWNER', {}, 'screens', async context => {
       await context.route(`${api}/api/v2/npep/**`, async route => {
@@ -473,8 +478,15 @@ for (const width of [1440, 390]) {
           screenBindingId: 'screen-a', connectivity: 'ONLINE', credentialExpiresAt: new Date(Date.now() + 86400000).toISOString(),
           lastSeenAt: new Date().toISOString()}], nextCursor: null});
         if (path.endsWith('/noise-display-settings')) return reply({settings: [], classes: [{id: 'class-a', gradeId: 'grade'}]});
-        if (path.endsWith('/study-settings')) return reply({termId: 'term', terms: [{id: 'term', name: '当前学期'}],
-          grades: [{id: 'grade', name: '高二'}], classes: [{id: 'class-a', name: '一班', gradeId: 'grade'}], settings: []});
+        if (path.endsWith('/study-settings/preview')) return reply({baseRevision: revision, previewFingerprint: 'fixture-preview',
+          totalClasses: 1, changedClasses: 1, pairedDevices: 1, items: []});
+        if (path.endsWith('/study-settings')) {
+          if (body) { saved.push(body); currentPolicy = body.policy; revision++; return reply({revision, previewFingerprint: 'fixture-preview',
+            totalClasses: 1, changedClasses: 1, pairedDevices: 1, items: []}); }
+          return reply({termId: 'term', terms: [{id: 'term', name: '当前学期'}],
+            grades: [{id: 'grade', name: '高二'}], classes: [{id: 'class-a', name: '一班', gradeId: 'grade'}],
+            settings: [{targetType: 'GRADE', targetId: 'grade', policy: currentPolicy, revision}]});
+        }
         if (path.endsWith('/seating/catalog')) return reply({termId: 'term', classes: [{id: 'class-a', name: '一班'}]});
         if (path.endsWith('/noise-schedules/preview')) return reply({baseRevision: revision, totalClasses: 1,
           changedClasses: 1, pairedDevices: 1, items: []});
@@ -514,36 +526,28 @@ for (const width of [1440, 390]) {
       await expect(panel.locator('.study-reports')).toHaveCount(0);
       await expect(panel.locator('.study-photos')).toHaveCount(0);
       await expect(panel.locator('.noise-schedule-editor')).toHaveCount(0);
-      const compatibility = panel.getByRole('button', {name: '旧版噪音排程兼容', exact: true});
-      await compatibility.click();
-      await expect(panel).toContainText('旧排程不再执行');
-      const editor = panel.locator('.noise-schedule-editor');
-      await expect(editor.getByLabel('结束', {exact: true})).toHaveValue('21:30');
-      await expect(panel.locator('.npep-configuration')).toBeHidden();
-      await expect(editor.getByLabel('配置对象')).toHaveValue('高二');
-      const starts = editor.getByLabel('开始', {exact: true});
+      await expect(panel.getByRole('button', {name: '旧版噪音排程兼容', exact: true})).toHaveCount(0);
+      const editor = panel.locator('.study-settings');
+      await expect(editor.getByLabel('自习结束 1', {exact: true})).toHaveValue('21:30');
+      const starts = editor.getByLabel('自习开始 1', {exact: true});
       await starts.fill('19:05');
-      await compatibility.click();
+      await navigateAdmin(page, '噪音监测');
       await expect(editor).toBeHidden();
-      await expect(panel.locator('.v-expansion-panel-text').filter({has: page.locator('.noise-schedule-editor')})).toHaveCSS('display', 'none');
-      await compatibility.click();
-      await expect(starts).toHaveValue('19:05');
-      await navigateAdmin(page, '大屏互联');
       await navigateAdmin(page, '自习设置');
       await expect(starts).toHaveValue('19:05');
-      expect(requests.filter(item => item.path.endsWith('/noise-schedules'))).toHaveLength(1);
+      expect(requests.filter(item => item.path.endsWith('/noise-schedules'))).toHaveLength(0);
       await navigateAdmin(page, '大屏设备');
       const discard = page.getByRole('dialog').filter({hasText: '放弃未保存的修改？'});
       await expect(discard).toBeVisible();
       await discard.getByRole('button', {name: '取消', exact: true}).click();
       await expect(page).toHaveURL(/section=npep/);
       await expect(starts).toHaveValue('19:05');
-      await editor.getByRole('button', {name: '预览影响', exact: true}).click();
-      await editor.getByRole('button', {name: '保存排程', exact: true}).click();
-      await expect(editor).toContainText('规则已保存，等待支持排程的桌面确认');
+      await editor.getByRole('button', {name: '预览自习影响', exact: true}).click();
+      await editor.getByRole('button', {name: '保存自习设置', exact: true}).click();
+      await expect(editor).toContainText('自习设置已保存');
       expect(saved).toHaveLength(1);
       expect(saved[0]).toMatchObject({termId: 'term', targetType: 'GRADE', targetId: 'grade', expectedRevision: 1,
-        policy: {mode: 'Override', rules: [{days: [1, 2, 3, 4, 5], start: '19:05', end: '21:30'}]}});
+        policy: {mode: 'Override', settings: {schedule: {rules: [{days: [1, 2, 3, 4, 5], start: '19:05', end: '21:30'}]}}}});
       await navigateAdmin(page, '噪音监测');
       await panel.locator('.npep-noise-reports .v-select').click();
       await page.getByRole('option', {name: /一班原生设备/}).click();
@@ -978,7 +982,7 @@ for (const width of [1440, 540]) {
       if (width > 959) await page.locator(".admin-navigation").getByText(title, {exact: true}).click();
       else {
         await page.locator(".admin-mobile-page-switcher .v-select").getByRole("combobox").first().click();
-        await page.getByRole("option", {name: `${["大屏互联", "自习设置", "噪音监测", "自习座位表"].includes(title) ? "NPEP" : "日常管理"} · ${title}`}).click();
+        await page.getByRole("option", {name: `${["大屏互联", "自习监测", "自习座位表"].includes(title) ? "NPEP" : "日常管理"} · ${title}`}).click();
       }
     };
     try {

@@ -1221,7 +1221,7 @@ import {
   startOAuthLogin,
 } from "@/utils/classworksV2Client";
 const ADMIN_CONTEXT_KEY = "npclassworks-admin-context:v1";
-const ADMIN_TABS = new Set(["overview", "structure", "students", "organization", "teachers", "accounts", "screens", "npep-devices", "npep-study", "npep-noise", "npep-seating", "migration", "audit", "terms"]);
+const ADMIN_TABS = new Set(["overview", "structure", "students", "organization", "teachers", "accounts", "screens", "npep-devices", "npep-study", "npep-seating", "migration", "audit", "terms"]);
 const studentRosterDirty = ref(false);
 
 function loadAdminContext() {
@@ -1245,7 +1245,7 @@ const localAuthStatus = ref({bootstrapRequired: false, bootstrapAvailable: false
 const profile = ref(null);
 const schoolMemberships = ref([]);
 const adminMembershipsStatus = ref("idle");
-const normalizeAdminSection = value => value === "npep" ? "npep-devices" : String(value || "");
+const normalizeAdminSection = value => value === "npep" ? "npep-devices" : value === "npep-noise" ? "npep-study" : String(value || "");
 const tab = ref(ADMIN_TABS.has(normalizeAdminSection(route.query.section || savedAdminContext.tab))
   ? normalizeAdminSection(route.query.section || savedAdminContext.tab)
   : "overview");
@@ -1310,8 +1310,7 @@ const adminNavigationGroups = [
     label: "NPEP",
     items: [
       {title: "大屏互联", value: "npep-devices", icon: "mdi-link-variant"},
-      {title: "自习设置", value: "npep-study", icon: "mdi-clock-outline"},
-      {title: "噪音监测", value: "npep-noise", icon: "mdi-waveform"},
+      {title: "自习监测", value: "npep-study", icon: "mdi-clock-outline"},
       {title: "自习座位表", value: "npep-seating", icon: "mdi-seat-outline"},
     ],
   },
