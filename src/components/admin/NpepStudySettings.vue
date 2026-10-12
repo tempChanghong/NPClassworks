@@ -390,61 +390,7 @@
           hide-details
           class="my-3"
         />
-        <v-select
-          v-model="noiseUnit"
-          :items="noiseUnits"
-          label="双阈值使用的单位"
-          variant="outlined"
-          :disabled="busy || !settings.noise.enabled"
-        />
-        <p>切换单位不换算原有数值。估算 dB(A) 需要每台大屏先确认本机外部参考；缺少参考、输入设置变化、预热或无效采样时，该单位的效果和纪律提醒暂停，原始 dBFS 采集继续。</p>
-        <v-text-field
-          v-model="redLine"
-          type="number"
-          :min="noiseUnit === 'Estimated' ? 30 : -90"
-          :max="noiseUnit === 'Estimated' ? 130 : 0"
-          step="1"
-          label="第一阈值线 · 高电平"
-          :suffix="noiseUnit === 'Estimated' ? '估算 dB(A)' : 'dBFS'"
-          variant="outlined"
-          :disabled="busy || !settings.noise.enabled"
-        />
-        <v-text-field
-          v-model="mediumLine"
-          type="number"
-          :min="noiseUnit === 'Estimated' ? 30 : -90"
-          :max="noiseUnit === 'Estimated' ? 130 : 0"
-          step="1"
-          label="第二阈值线 · 中电平"
-          :suffix="noiseUnit === 'Estimated' ? '估算 dB(A)' : 'dBFS'"
-          variant="outlined"
-          :disabled="busy || !settings.noise.enabled"
-        />
-        <v-text-field
-          v-model.number="settings.noise.disciplineCooldownSeconds"
-          type="number"
-          min="1"
-          max="86400"
-          step="1"
-          label="注意纪律最短间隔"
-          suffix="秒"
-          variant="outlined"
-          :disabled="busy || !settings.noise.enabled"
-        />
-        <v-text-field
-          v-model="highDuration"
-          type="number"
-          min="1"
-          max="10"
-          step="1"
-          label="高线连续超限时间"
-          suffix="秒"
-          variant="outlined"
-          :disabled="busy || !settings.noise.enabled"
-        />
-        <p>新建默认高线持续 3 秒，纪律提醒与照片使用同一持续条件；两者限频分别计算。已有保存值保留，不自动覆盖。</p>
-        <p>默认 600 秒（10 分钟）至多提醒一次。连续达到第一线后，桌面显示五秒深红“注意纪律”并播放提示音；第二线仅显示较轻的红色边缘效果，无声音，达到第一线时边缘效果更强。提醒与拍照间隔分别计时，不播报拍照状态。高线必须大于中线。dBFS 越接近 0 电平越高；估算 dB(A) 随数值增大。留空表示尚未配置，不触发阈值效果。</p>
-        <p>dBFS 是数字信号电平，不是教室声压级。新建估算配置默认中线 50、高线 65 dB(A)，管理员可以调整；已保存配置保持原值。估算 dB(A) 使用本机外部参考及 A 加权 F/S 平滑统计，未校准时只显示 dBFS。阈值需结合现场麦克风与增益确认，不用它直接排名班级。</p>
+        <p>阈值、持续超限时长与提醒间隔可在下方高级设置调整。使用估算单位前，需在各大屏完成本机参考校准。</p>
         <v-switch
           v-model="settings.photos.enabled"
           label="启用阈值拍照"
@@ -457,23 +403,7 @@
           <v-row class="mt-2">
             <v-col
               cols="12"
-              md="4"
-            >
-              <v-text-field
-                v-model.number="settings.photos.cooldownSeconds"
-                type="number"
-                min="30"
-                max="300"
-                step="1"
-                label="拍照最短间隔"
-                suffix="秒"
-                variant="outlined"
-                :disabled="busy"
-              />
-            </v-col>
-            <v-col
-              cols="12"
-              md="4"
+              md="6"
             >
               <v-text-field
                 v-model.number="settings.photos.retentionDays"
@@ -488,7 +418,7 @@
               />
             </v-col>
           </v-row>
-          <p>连续超限时长使用上方“高线连续超限时间”，新建默认 3 秒；噪音触发与退出后台请求共用默认 30 秒限频。只在有效定时监测阶段工作，准备阶段和手动监测不触发；临时收起展示不会停止它。</p>
+          <p>连续超限时长使用高级设置中的“高线连续超限时间”，新建默认 3 秒；噪音触发与退出后台请求共用默认 30 秒限频。只在有效定时监测阶段工作，准备阶段和手动监测不触发；临时收起展示不会停止它。</p>
           <div class="study-device-note mt-3">
             <strong>摄像头：需现场明确选择</strong>
             <p>摄像头在 NPEduTools 初始设置或自习监测页选择并保存；未选择或不可用时不改用其他设备。每次单张取图后释放摄像头，不连续录制。照片上传失败时进入有上限的加密本机队列。</p>
@@ -508,6 +438,99 @@
             hide-details
           />
         </template>
+        <v-expansion-panels
+          v-model="advancedPanel"
+          class="study-advanced mt-4"
+          variant="accordion"
+          :disabled="busy"
+        >
+          <v-expansion-panel value="monitoring">
+            <v-expansion-panel-title aria-label="高级设置">
+              <div>
+                <strong>高级设置</strong>
+                <p class="mb-0">
+                  阈值、持续超限时长、提醒与拍照间隔
+                </p>
+              </div>
+            </v-expansion-panel-title>
+            <v-expansion-panel-text eager>
+              <h4 class="mb-3">
+                噪音阈值与纪律提醒
+              </h4>
+              <v-select
+                v-model="noiseUnit"
+                :items="noiseUnits"
+                label="双阈值使用的单位"
+                variant="outlined"
+                :disabled="busy || !settings.noise.enabled"
+              />
+              <p>切换单位不换算原有数值。估算 dB(A) 需要每台大屏先确认本机外部参考；缺少参考、输入设置变化、预热或无效采样时，该单位的效果和纪律提醒暂停，原始 dBFS 采集继续。</p>
+              <v-text-field
+                v-model="redLine"
+                type="number"
+                :min="noiseUnit === 'Estimated' ? 30 : -90"
+                :max="noiseUnit === 'Estimated' ? 130 : 0"
+                step="1"
+                label="第一阈值线 · 高电平"
+                :suffix="noiseUnit === 'Estimated' ? '估算 dB(A)' : 'dBFS'"
+                variant="outlined"
+                :disabled="busy || !settings.noise.enabled"
+              />
+              <v-text-field
+                v-model="mediumLine"
+                type="number"
+                :min="noiseUnit === 'Estimated' ? 30 : -90"
+                :max="noiseUnit === 'Estimated' ? 130 : 0"
+                step="1"
+                label="第二阈值线 · 中电平"
+                :suffix="noiseUnit === 'Estimated' ? '估算 dB(A)' : 'dBFS'"
+                variant="outlined"
+                :disabled="busy || !settings.noise.enabled"
+              />
+              <v-text-field
+                v-model.number="settings.noise.disciplineCooldownSeconds"
+                type="number"
+                min="1"
+                max="86400"
+                step="1"
+                label="注意纪律最短间隔"
+                suffix="秒"
+                variant="outlined"
+                :disabled="busy || !settings.noise.enabled"
+              />
+              <v-text-field
+                v-model="highDuration"
+                type="number"
+                min="1"
+                max="10"
+                step="1"
+                label="高线连续超限时间"
+                suffix="秒"
+                variant="outlined"
+                :disabled="busy || !settings.noise.enabled"
+              />
+              <p>新建默认高线持续 3 秒，纪律提醒与照片使用同一持续条件；两者限频分别计算。已有保存值保留，不自动覆盖。</p>
+              <p>默认 600 秒（10 分钟）至多提醒一次。连续达到第一线后，桌面显示五秒深红“注意纪律”并播放提示音；第二线仅显示较轻的红色边缘效果，无声音，达到第一线时边缘效果更强。提醒与拍照间隔分别计时，不播报拍照状态。高线必须大于中线。dBFS 越接近 0 电平越高；估算 dB(A) 随数值增大。留空表示尚未配置，不触发阈值效果。</p>
+              <p>dBFS 是数字信号电平，不是教室声压级。新建估算配置默认中线 50、高线 65 dB(A)，管理员可以调整；已保存配置保持原值。估算 dB(A) 使用本机外部参考及 A 加权 F/S 平滑统计，未校准时只显示 dBFS。阈值需结合现场麦克风与增益确认，不用它直接排名班级。</p>
+              <template v-if="settings.photos.enabled">
+                <h4 class="mt-4 mb-3">
+                  拍照间隔
+                </h4>
+                <v-text-field
+                  v-model.number="settings.photos.cooldownSeconds"
+                  type="number"
+                  min="30"
+                  max="300"
+                  step="1"
+                  label="拍照最短间隔"
+                  suffix="秒"
+                  variant="outlined"
+                  :disabled="busy"
+                />
+              </template>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
       </section>
     </template>
 
@@ -613,6 +636,11 @@ const {catalog, targetType, targetId, targets, draft, revision, preview, preview
   hasUnsavedChanges, validation, valid, changeMode, refresh, previewDraft, save} = editor;
 watch(hasUnsavedChanges, value => emit('dirty', value), {immediate: true, flush: 'sync'});
 const settings = computed(() => draft.value.settings);
+const advancedPanel = ref(null);
+watch([targetType, targetId, () => props.schoolId, () => props.termId, validation], (values, previous = []) => {
+  if (values.slice(0, 4).some((value, index) => value !== previous[index])) advancedPanel.value = null;
+  if (['INVALID_NOISE', 'INVALID_PHOTOS', 'INCONSISTENT_THRESHOLD_DURATION', 'PHOTO_THRESHOLD_REQUIRED'].includes(values[4])) advancedPanel.value = 'monitoring';
+}, {immediate: true});
 const currentTermName = computed(() => catalog.value?.terms.find(term => term.id === editor.termId.value)?.name || '未选择有效学期');
 const targetTypes = [{title: '年级', value: 'GRADE'}, {title: '行政班', value: 'CLASS'}];
 const modes = computed(() => [...(targetType.value === 'CLASS' ? [{title:'继承年级设置',value:'Inherit'}] : []),
@@ -670,6 +698,9 @@ async function reload() { if (await discard()) await refresh(); }
 .study-section { min-width: 0; padding: 22px; border: 1px solid rgba(var(--v-border-color), .2); border-radius: 16px; }
 .study-mode-switch { max-width: 100%; }
 .study-settings :deep(input) { min-width: 0; }
+.study-advanced { min-width: 0; }
+.study-advanced :deep(.v-expansion-panel-title) { min-width: 0; padding: 16px; }
+.study-advanced :deep(.v-expansion-panel-text__wrapper) { padding: 8px 16px 16px; }
 .study-section h3 { font-size: 20px; font-weight: 750; margin-bottom: 6px; }
 .study-section-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .study-rule { padding: 16px; border: 1px solid rgba(var(--v-border-color), .16); border-radius: 12px; }

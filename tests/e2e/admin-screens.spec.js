@@ -612,12 +612,16 @@ for (const width of [1440, 390]) {
       const editor=panel.locator('.study-settings');
       await expect(editor.getByLabel('自习开始 1',{exact:true})).toHaveValue('19:10');
       await expect(editor.getByLabel('作业每页轮换间隔',{exact:true})).toHaveValue('75');
+      const advanced = editor.getByRole('button',{name:'高级设置',exact:true});
+      await expect(advanced).toHaveAttribute('aria-expanded','false');
+      await expect(editor.getByLabel('第一阈值线 · 高电平')).not.toBeVisible();
+      await advanced.click();
       await expect(editor.getByLabel('第一阈值线 · 高电平')).toHaveValue('72');
       await expect(editor.getByLabel('第二阈值线 · 中电平')).toHaveValue('54');
       const select=async(label,name)=>{await editor.locator('.v-select').filter({hasText:label}).click();await page.getByRole('option',{name,exact:true}).click();};
       await select('自习配置范围','行政班');await expect(editor.getByLabel('自习启用规则')).toHaveValue('继承年级设置');
       await select('自习启用规则','单独设置本班自习');
-      await expect(editor.getByLabel('自习开始 1')).toHaveValue('19:00');
+      await expect(editor.getByLabel('自习开始 1')).toHaveValue('19:15');
       await expect(editor.getByLabel('自习结束 1')).toHaveValue('21:30');
       await expect(editor.getByLabel('自习生效日期')).toHaveValue('');
       await expect(editor.getByLabel('作业每页轮换间隔')).toHaveValue('60');
@@ -625,6 +629,7 @@ for (const width of [1440, 390]) {
       await expect(editor.getByLabel('高线连续超限时间')).toHaveValue('3');
       await expect(editor.getByLabel('第一阈值线 · 高电平')).toHaveValue('65');
       await expect(editor.getByLabel('第二阈值线 · 中电平')).toHaveValue('50');
+      await advanced.click();
       await select('双阈值使用的单位','dBFS 数字输入电平');
       await expect(editor.getByLabel('第一阈值线 · 高电平')).toHaveValue('');
       await select('双阈值使用的单位','估算 dB(A) · 需要本机外部参考');
@@ -655,6 +660,8 @@ for (const width of [1440, 390]) {
       await editor.getByLabel('照片保留时间',{exact:true}).fill('180');await expect(editor).toContainText('需要确认延长保留的风险');
       await editor.getByLabel('已了解延长照片保留时间的隐私与备份风险').check();
       await editor.getByLabel('自习预览日期（可留空）').fill('2026-10-12');
+      await advanced.click();
+      await expect(editor.getByLabel('第一阈值线 · 高电平')).not.toBeVisible();
       await navigateAdmin(page, '大屏互联');await navigateAdmin(page, '自习设置');
       await expect(editor.getByLabel('照片保留时间',{exact:true})).toHaveValue('180');
       await editor.getByRole('button',{name:'预览自习影响',exact:true}).click();

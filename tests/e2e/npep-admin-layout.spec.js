@@ -29,6 +29,11 @@ for (const width of [320, 390, 768, 1440]) {
     try {
       const editor = page.locator('.study-settings');
       await expect(editor.getByLabel('自习开始 1', {exact: true})).toHaveValue('19:10');
+      const advanced = editor.getByRole('button', {name: '高级设置', exact: true});
+      await expect(advanced).toHaveAttribute('aria-expanded', 'false');
+      await expect(editor.getByLabel('第一阈值线 · 高电平')).not.toBeVisible();
+      await advanced.click();
+      await expect(editor.getByLabel('第一阈值线 · 高电平')).toBeVisible();
       const visibleWithinPage = async locator => {
         await locator.scrollIntoViewIfNeeded();
         const box = await locator.boundingBox();
@@ -63,3 +68,36 @@ for (const width of [320, 390, 768, 1440]) {
     } finally { await context.close(); }
   });
 }
+
+test('invalid saved thresholds open advanced settings without changing the policy', async ({browser}) => {
+  const settings = defaultStudySettings();
+  settings.schedule.effectiveFrom = '2026-10-12';
+  settings.schedule.rules[0] = {days: [1], start: '19:10', end: '21:20'};
+  settings.noise.estimated = {highDbA: 50, mediumDbA: 65};
+  const writes = [];
+  const {context, page, errors} = await openAdmin(browser, 390, 'OWNER', {}, 'npep-study', async context => {
+    await context.route(`${api}/api/v2/npep/**`, async route => {
+      const req = route.request(), path = new URL(req.url()).pathname;
+      if (req.method() !== 'GET') writes.push(path);
+      const reply = data => route.fulfill({json: {
+        protocolVersion: req.headers()['x-npep-version'], requestId: req.headers()['x-request-id'], serverTime: new Date().toISOString(), data,
+      }});
+      if (path.endsWith('/info')) return reply({supportedCapabilities: ['device.status']});
+      if (path.endsWith('/devices')) return reply({items: [], nextCursor: null});
+      if (path.endsWith('/study-settings')) return reply({termId: 'term', terms: [{id: 'term', name: '当前学期'}],
+        grades: [{id: 'grade', name: '高二'}], classes: [{id: 'class-a', gradeId: 'grade', name: '一班'}],
+        settings: [{targetType: 'GRADE', targetId: 'grade', revision: 7, policy: {mode: 'Override', settings}}]});
+      return route.fulfill({status: 404, json: {error: {code: 'NOT_FOUND'}}});
+    });
+  });
+  try {
+    const editor = page.locator('.study-settings');
+    await expect(editor.getByRole('button', {name: '高级设置', exact: true})).toHaveAttribute('aria-expanded', 'true');
+    await expect(editor.getByLabel('第一阈值线 · 高电平')).toBeVisible();
+    await expect(editor.getByLabel('第一阈值线 · 高电平')).toHaveValue('50');
+    await expect(editor.getByLabel('第二阈值线 · 中电平')).toHaveValue('65');
+    await expect(editor.getByRole('button', {name: '预览自习影响', exact: true})).toBeDisabled();
+    expect(writes).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
