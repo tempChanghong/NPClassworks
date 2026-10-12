@@ -580,6 +580,7 @@ for (const width of [1440, 390]) {
   test(`NPEP study settings preserve customs, preview homework sources and enforce photo limits at ${width}px`, async ({browser}) => {
     const saved=[], requests=[];
     const custom=defaultStudySettings();custom.schedule.effectiveFrom='2026-10-12';custom.schedule.rules[0]={days:[1],start:'19:10',end:'21:20'};custom.homework.rotationSeconds=75;
+    custom.noise.estimated={highDbA:72,mediumDbA:54};
     let policies=[{targetType:'GRADE',targetId:'grade',revision:1,policy:{mode:'Override',settings:custom}}];
     const catalog=()=>({termId:'term',terms:[{id:'term',name:'当前学期'}],grades:[{id:'grade',name:'高二'}],
       classes:[{id:'class-a',name:'一班',gradeId:'grade',pairedDevices:1},{id:'class-b',name:'二班',gradeId:'grade',pairedDevices:0}],settings:policies});
@@ -611,6 +612,8 @@ for (const width of [1440, 390]) {
       const editor=panel.locator('.study-settings');
       await expect(editor.getByLabel('自习开始 1',{exact:true})).toHaveValue('19:10');
       await expect(editor.getByLabel('作业每页轮换间隔',{exact:true})).toHaveValue('75');
+      await expect(editor.getByLabel('第一阈值线 · 高电平')).toHaveValue('72');
+      await expect(editor.getByLabel('第二阈值线 · 中电平')).toHaveValue('54');
       const select=async(label,name)=>{await editor.locator('.v-select').filter({hasText:label}).click();await page.getByRole('option',{name,exact:true}).click();};
       await select('自习配置范围','行政班');await expect(editor.getByLabel('自习启用规则')).toHaveValue('继承年级设置');
       await select('自习启用规则','单独设置本班自习');
@@ -620,6 +623,14 @@ for (const width of [1440, 390]) {
       await expect(editor.getByLabel('作业每页轮换间隔')).toHaveValue('60');
       await expect(editor.getByLabel('启用阈值拍照')).not.toBeChecked();
       await expect(editor.getByLabel('高线连续超限时间')).toHaveValue('3');
+      await expect(editor.getByLabel('第一阈值线 · 高电平')).toHaveValue('65');
+      await expect(editor.getByLabel('第二阈值线 · 中电平')).toHaveValue('50');
+      await select('双阈值使用的单位','dBFS 数字输入电平');
+      await expect(editor.getByLabel('第一阈值线 · 高电平')).toHaveValue('');
+      await select('双阈值使用的单位','估算 dB(A) · 需要本机外部参考');
+      await expect(editor.getByLabel('第一阈值线 · 高电平')).toHaveValue('65');
+      await expect(editor.getByLabel('第二阈值线 · 中电平')).toHaveValue('50');
+      await select('双阈值使用的单位','dBFS 数字输入电平');
       await editor.getByLabel('高线连续超限时间').fill('4');
       await expect(editor.getByRole('button',{name:'保存自习设置',exact:true})).toBeDisabled();
       await editor.getByLabel('自习生效日期').fill('2026-10-12');
@@ -650,7 +661,7 @@ for (const width of [1440, 390]) {
       await expect(editor.locator('.study-preview')).toContainText('物理走班 A');await expect(editor.locator('.study-preview')).toContainText('物理走班 B');
       await expect(editor.locator('.study-preview')).toContainText('2026-10-12 19:00:00');
       await editor.getByRole('button',{name:'保存自习设置',exact:true}).click();
-      expect(saved[0].policy.settings.noise).toEqual({enabled:true,redLineDbfs:-35,mediumLineDbfs:-45,disciplineCooldownSeconds:720,highContinuousSeconds:4});
+      expect(saved[0].policy.settings.noise).toEqual({enabled:true,redLineDbfs:-35,mediumLineDbfs:-45,disciplineCooldownSeconds:720,highContinuousSeconds:4,estimated:null});
       expect(saved[0].policy.settings.photos.cooldownSeconds).toBe(30);expect(saved[0].policy.settings.photos.continuousSeconds).toBe(4);
       await expect(editor).toContainText('自习设置已保存');await expect(editor).toContainText('保存不代表设备已应用、展示页已显示或正在采集');
       expect(saved).toHaveLength(1);expect(saved[0]).toMatchObject({termId:'term',targetType:'CLASS',targetId:'class-a',expectedRevision:0,
