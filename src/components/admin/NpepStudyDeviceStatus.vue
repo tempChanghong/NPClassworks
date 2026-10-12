@@ -142,7 +142,7 @@ const visible = computed(() => presentationFresh.value && data.value.presentatio
 const presentationLabel = computed(() => !data.value?.presentation ? '尚无展示执行回执'
   : !presentationFresh.value ? '展示执行回执待确认' : visible.value ? '设备回报展示页可见'
     : ({Hidden: '设备回报展示页已收起', NotRequired: '当前无需展示自习', Blocked: '展示条件未满足', Unknown: '展示状态待确认'}[data.value.presentation.state] || '展示状态待确认'));
-const presentationReason = computed(() => ({FRAME_CURRENT: '窗口可见且界面近期更新', TEMPORARY_HIDE: '临时使用电脑，按期限返回',
+const presentationReason = computed(() => ({FRAME_CURRENT: '窗口可见且界面近期更新', TEMPORARY_HIDE: '临时使用电脑，等待无操作后返回',
   APP_HIDDEN: '桌面窗口已收起', FRAME_STALE: '界面更新待确认', APP_STALE: '桌面回执已失效', WAITING_APP: '等待展示窗口回执',
   WAITING_HIDE_CONFIRMATION: '等待窗口收起回执',
   DISABLED: '自习展示已关闭', OUTSIDE_WINDOW: '自习时段外', EXAM_PAUSED: '考试模式暂停',

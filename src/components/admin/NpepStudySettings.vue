@@ -320,18 +320,15 @@
             cols="12"
             md="5"
           >
-            <v-select
-              v-model="settings.presentation.temporaryHideSeconds"
-              :items="hideDurations"
-              label="临时收起展示时长"
-              open-text="临时收起展示时长"
-              close-text="收起临时收起展示时长"
+            <v-text-field
+              model-value="连续无操作 10 分钟"
+              label="临时使用电脑后自动返回"
               variant="outlined"
-              :disabled="busy"
+              readonly
             />
           </v-col>
         </v-row>
-        <p>原生全屏页日常使用 ClassIsland 学校时间、考试使用 Windows 北京时间，下方展示作业。提前五分钟自动展示已发布的自习座位表，开始后两分钟收起；座位表不参与作业轮换。准备提示十秒，开始和结束各五秒。长按两秒临时收起，最多三分钟后恢复；采集与照片策略继续。考试放映器优先，期间自习提示音暂停，过期不补播。手动自习的提前展示时间在本机设置，学校定时保护不套用于手动自习。</p>
+        <p>原生全屏页日常使用 ClassIsland 学校时间、考试使用 Windows 北京时间，下方展示作业。提前五分钟自动展示已发布的自习座位表，开始后两分钟收起；座位表不参与作业轮换。准备提示十秒，开始和结束各五秒。长按两秒临时收起，连续无操作十分钟后返回，操作其他软件也会重新计时；采集与照片策略继续。考试放映器优先，期间自习提示音暂停，过期不补播。手动自习的提前展示与无操作返回设置在本机配置，学校定时保护不套用于手动自习。</p>
         <v-switch
           v-model="settings.homework.enabled"
           label="展示当天作业"
@@ -623,7 +620,6 @@ const modes = computed(() => [...(targetType.value === 'CLASS' ? [{title:'继承
 const days = ['周一','周二','周三','周四','周五','周六','周日'].map((title, i) => ({title,value:i+1}));
 const calendarKinds = [{title:'停用（节假日等）',value:'Skip'}, {title:'按指定星期补课',value:'UseWeekday'}];
 const noiseDisplays = [{title:'只显示状态',value:'Status'}, {title:'状态＋小型实时趋势',value:'StatusTrend'}, {title:'状态＋当前单位数值',value:'StatusDbfs'}];
-const hideDurations = [1,2,3].map(minutes => ({title:`${minutes} 分钟`,value:minutes*60}));
 const homeworkModes = [{title:'各班显示本班及相关走班作业',value:'OwnClass'}, {title:'指定来源行政班（自动包含其相关走班）',value:'SelectedClasses'}];
 const scheduleMode = ref('Daily');
 const activeSchedule = computed(() => {
@@ -649,7 +645,7 @@ const redLine = threshold('redLineDbfs', 'highDbA');
 const validationMessage = computed(() => ({INVALID_DATES:'请填写有效的生效日期；截止日期不能早于生效日期。',
   EMPTY_RULES:'至少添加一个自习时段。',INVALID_RULE:'请明确选择星期并填写开始、结束时间。',INVALID_DURATION:'时段不能等长或超过三小时。',
   MERGED_WINDOW_TOO_LONG:'时段或日历例外产生了超过三小时的连续自习，请调整。',INVALID_CALENDAR:'请核对日历例外日期、重复日期与补课星期；日期须在生效范围内。',
-  INVALID_PRESENTATION:'临时收起不能超过三分钟，请核对展示设置。',INVALID_HOMEWORK:'请选择有效作业来源；轮换间隔为 15–600 秒。',
+  INVALID_PRESENTATION:'展示设置格式无效，请重新读取并核对策略。',INVALID_HOMEWORK:'请选择有效作业来源；轮换间隔为 15–600 秒。',
   INCONSISTENT_THRESHOLD_DURATION:'高线连续超限时间与兼容字段不一致，请重新加载并核对。',
   INVALID_NOISE:'高线持续时间须为 1–10 秒；阈值须为 −90 至 0 dBFS 或 30 至 130 估算 dB(A)，第一线必须大于第二线；纪律提醒间隔须为 1–86400 秒。',INVALID_PHOTOS:'连续超限为 1–10 秒，间隔为 30–300 秒，保留为 1–180 天。',
   PHOTO_THRESHOLD_REQUIRED:'启用拍照前需开启原生噪音监测并明确填写红线阈值。',RETENTION_ACK_REQUIRED:'超过 30 天保留照片，需要确认延长保留的风险。'}[validation.value] || '请核对自习设置。'));
