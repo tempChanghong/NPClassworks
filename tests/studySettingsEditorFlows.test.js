@@ -44,7 +44,22 @@ test('defaults remain disabled, custom settings survive loading and toggling, cl
   state.targetType.value='CLASS'; state.targetId.value='class';
   assert.deepEqual(state.draft.value,{mode:'Inherit',settings:null});
   state.changeMode('Override'); assert.deepEqual(state.draft.value.settings.schedule.rules,[{days:[],start:'19:00',end:'21:30'}]);
+  assert.deepEqual(state.draft.value.settings.noise.estimated,{highDbA:65,mediumDbA:50});
   assert.equal(state.draft.value.settings.schedule.effectiveFrom,''); assert.equal(state.valid.value,false);
+});
+
+test('loading and toggling existing acoustic/digital policies preserve school custom thresholds',async()=>{
+  for(const estimated of [{highDbA:72,mediumDbA:54},null,undefined]) {
+    const custom=policy();
+    if(estimated===undefined)delete custom.settings.noise.estimated;
+    else custom.settings.noise.estimated=estimated;
+    custom.settings.noise.redLineDbfs=-37;custom.settings.noise.mediumLineDbfs=-48;
+    const original=globalThis.structuredClone(custom);
+    const {state,unmount}=await editor({...catalog(),settings:[{targetType:'GRADE',targetId:'grade',revision:7,policy:custom}]});
+    assert.deepEqual(state.draft.value,original);
+    state.changeMode('Disabled');state.changeMode('Override');assert.deepEqual(state.draft.value,original);
+    assert.equal(state.hasUnsavedChanges.value,false);unmount();
+  }
 });
 
 test('actual 0.10 client requires preview and preserves request ID across an ambiguous save retry',async()=>{

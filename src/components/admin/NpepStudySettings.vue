@@ -447,7 +447,7 @@
         />
         <p>新建默认高线持续 3 秒，纪律提醒与照片使用同一持续条件；两者限频分别计算。已有保存值保留，不自动覆盖。</p>
         <p>默认 600 秒（10 分钟）至多提醒一次。连续达到第一线后，桌面显示五秒深红“注意纪律”并播放提示音；第二线仅显示较轻的红色边缘效果，无声音，达到第一线时边缘效果更强。提醒与拍照间隔分别计时，不播报拍照状态。高线必须大于中线。dBFS 越接近 0 电平越高；估算 dB(A) 随数值增大。留空表示尚未配置，不触发阈值效果。</p>
-        <p>dBFS 是数字信号电平，不是教室声压级。估算 dB(A) 使用本机外部参考及 A 加权 F/S 平滑统计，未校准时只显示 dBFS。阈值需结合现场麦克风与增益确认，不预填猜测值，也不用它直接排名班级。</p>
+        <p>dBFS 是数字信号电平，不是教室声压级。新建估算配置默认中线 50、高线 65 dB(A)，管理员可以调整；已保存配置保持原值。估算 dB(A) 使用本机外部参考及 A 加权 F/S 平滑统计，未校准时只显示 dBFS。阈值需结合现场麦克风与增益确认，不用它直接排名班级。</p>
         <v-switch
           v-model="settings.photos.enabled"
           label="启用阈值拍照"
@@ -608,6 +608,7 @@
 import {computed, ref, toRef, watch} from 'vue';
 import {useStudySettingsEditor} from '@/composables/admin/useStudySettingsEditor.js';
 import {confirmAction} from '@/utils/actionDialog.js';
+import {defaultStudyEstimatedThresholds} from '@/utils/npepStudySettings.js';
 const props = defineProps({schoolId: {type: String, required: true}, schoolName: {type: String, default: '当前学校'}, termId: {type: String, default: ''}});
 const emit = defineEmits(['dirty']);
 const editor = useStudySettingsEditor(toRef(props, 'schoolId'), toRef(props, 'termId'));
@@ -635,7 +636,8 @@ const endDate = computed({get: () => activeSchedule.value?.effectiveTo || '', se
 const highDuration = computed({get: () => settings.value?.noise.highContinuousSeconds, set: value => { const seconds = value === '' || value == null ? NaN : Number(value); settings.value.noise.highContinuousSeconds = seconds; settings.value.photos.continuousSeconds = seconds; }});
 const noiseUnits = [{title:'dBFS 数字输入电平',value:'Dbfs'}, {title:'估算 dB(A) · 需要本机外部参考',value:'Estimated'}];
 const noiseUnit = computed({get: () => settings.value?.noise.estimated ? 'Estimated' : 'Dbfs', set: value => {
-  settings.value.noise.estimated = value === 'Estimated' ? {highDbA: null, mediumDbA: null} : null;
+  if ((settings.value.noise.estimated ? 'Estimated' : 'Dbfs') === value) return;
+  settings.value.noise.estimated = value === 'Estimated' ? defaultStudyEstimatedThresholds() : null;
 }});
 const threshold = (raw, estimated) => computed({get: () => (settings.value?.noise.estimated ? settings.value.noise.estimated[estimated] : settings.value?.noise[raw]) ?? '', set: value => {
   const number = value === '' || value == null ? null : Number(value);
