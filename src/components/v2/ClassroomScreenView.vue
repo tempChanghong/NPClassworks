@@ -114,6 +114,12 @@
           </v-menu>
         </div>
       </v-card-text>
+      <v-progress-linear
+        v-show="store.feedLoading"
+        class="screen-refresh-progress"
+        height="3"
+        indeterminate
+      />
     </v-card>
 
     <HomeworkTomorrowButton
@@ -216,14 +222,8 @@
       :suspended="copyModeSuspended"
     />
 
-    <v-progress-linear
-      v-if="store.feedLoading && store.feed.length"
-      class="mt-3"
-      indeterminate
-      rounded
-    />
     <v-skeleton-loader
-      v-if="store.feedLoading && !store.feed.length"
+      v-if="store.feedLoading && !store.feed.length && !store.feedGeneratedAt"
       class="mt-4"
       type="article, article"
     />
@@ -710,6 +710,7 @@ onUnmounted(() => {
   width: 1px;
 }
 .screen-toolbar { position: relative; z-index: 1; }
+.screen-refresh-progress { position: absolute; inset-inline: 0; bottom: 0; pointer-events: none; }
 .screen-toolbar-content {
   align-items: center;
   display: grid;
