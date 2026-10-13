@@ -14,6 +14,21 @@ const input = () => ({now, schoolId: uuid, filter: 'ALL', stale: false, backendU
       classIsland: {connection: 'READY', bridgeVersion: '0.2.0.0'}, examAware: {connection: 'DISCONNECTED', bridgeVersion: null}}}],
 });
 
+test('current desktop version survives diagnostic export without arbitrary metadata', () => {
+  const source = input();
+  for (const [value, expected] of [
+    ['v1.1.5 · EVA-02（二号机）', '1.1.5'],
+    ['v1.1.5 · EVA-02（二号机）+abcdef1234567890', '1.1.5+abcdef1234567890'],
+    ['v1.1.5 · PRIVATE-CREDENTIAL', null],
+    ['v1.1.5 · EVA-02（二号机）\nsecret', null],
+  ]) {
+    source.devices[0].status.appVersion = value;
+    const result = createNpepOverviewDiagnostics(source);
+    assert.equal(result.items[0].status.appVersion, expected);
+    assert.ok(!JSON.stringify(result).includes('secret'));
+  }
+});
+
 test('NPEP summary exports only observed state and approved identifiers, never extra fields', () => {
   const source = input(), device = source.devices[0];
   const secret = 'DO-NOT-EXPORT-ABCD2345';

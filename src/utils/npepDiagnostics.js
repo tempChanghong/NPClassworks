@@ -6,6 +6,13 @@ const id = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a
 const date = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
 const number = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
 const version = value => typeof value === 'string' && /^(?:InDev \d{8}|\d+\.\d+\.\d+(?:[-.][a-zA-Z0-9.]+)?)(?:\+[a-fA-F0-9]{7,64})?$/.test(value) && value.length <= 160 ? value : null;
+function applicationVersion(value) {
+  const plain = version(value);
+  if (plain) return plain;
+  if (typeof value !== 'string' || value.length > 160 || /[\r\n]/.test(value)) return null;
+  const branded = /^v(\d+\.\d+\.\d+) · EVA-02（二号机）(\+[a-fA-F0-9]{7,64})?$/.exec(value);
+  return branded ? branded[1] + (branded[2] || '') : null;
+}
 function origin(value) {
   try {
     const url = new URL(value);
@@ -31,7 +38,7 @@ export function createNpepOverviewDiagnostics({overview, devices, schoolId, filt
     issues: [...new Set((Array.isArray(device?.issues) ? device.issues : []).map(code => choice(code,
       'UNREPORTED OFFLINE MODE_NOT_READY MODE_INCOMPLETE RECORDING_UNKNOWN CLASSISLAND_NOT_CONNECTED EXAMAWARE_NOT_CONNECTED')))],
     status: device?.status ? {
-      appVersion: version(device.status.appVersion), mode: choice(device.status.mode, 'DAILY EXAM UNCONFIGURED UNKNOWN'),
+      appVersion: applicationVersion(device.status.appVersion), mode: choice(device.status.mode, 'DAILY EXAM UNCONFIGURED UNKNOWN'),
       modePhase: choice(device.status.modePhase, 'IDLE CHECKING SWITCHING RUNNING INCOMPLETE UNAVAILABLE UNKNOWN'),
       modeRevision: number(device.status.modeRevision), automaticRecording: choice(device.status.automaticRecording, 'ENABLED DISABLED UNKNOWN'),
       recording: choice(device.status.recording, 'IDLE RECORDING PAUSED FINALIZING UNKNOWN'),
