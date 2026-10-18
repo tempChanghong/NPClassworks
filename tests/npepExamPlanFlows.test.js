@@ -46,3 +46,53 @@ test('plan panel discards old-device status and a file read completed after chan
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(state.view.value.context.identity.deviceId, next); assert.equal(state.canSend.value, false);
 });
+
+test('plan panel clears a failed status query after a successful refresh', async () => {
+  const device = randomUUID(), {path, view} = routes(device);
+  h.routes.set(`GET ${path}`, (_req, reply) => reply({error: {code: 'TEMPORARILY_UNAVAILABLE'}}, 503));
+  const {state} = await h.openComponent('/src/components/admin/NpepExamPlanControl.vue', {schoolId: 'school', deviceId: device});
+  await eventually(() => assert.ok(state.error.value));
+  assert.equal(state.view.value, null);
+  h.routes.set(`GET ${path}`, (req, reply) => reply(envelope(req.headers['x-request-id'], view), 200, true));
+
+  await state.refresh();
+
+  assert.equal(state.view.value.context.identity.deviceId, device);
+  assert.equal(state.blocked.value, '');
+  assert.equal(state.error.value, '');
+});
+
+test('successful status refresh preserves an unresolved delivery error and its retry intent', async () => {
+  const device = randomUUID(), {path} = routes(device);
+  h.routes.set(`POST ${path}`, (_req, reply) => reply({error: {code: 'TEMPORARILY_UNAVAILABLE'}}, 503));
+  const {state} = await h.openComponent('/src/components/admin/NpepExamPlanControl.vue', {schoolId: 'school', deviceId: device});
+  await eventually(() => assert.ok(state.view.value));
+  await state.choose(new File(['{}'], 'plan.json'));
+  await state.create();
+  const failure = state.error.value, intent = state.pending.value;
+  assert.ok(failure); assert.ok(intent);
+
+  await state.refresh();
+
+  assert.equal(state.error.value, failure);
+  assert.deepEqual(state.pending.value, intent);
+  assert.equal(h.requests.filter(r => r.method === 'POST' && r.path === path).length, 1);
+});
+
+test('successful status refresh preserves file validation feedback until a new selection', async () => {
+  const device = randomUUID(); routes(device);
+  const {state} = await h.openComponent('/src/components/admin/NpepExamPlanControl.vue', {schoolId: 'school', deviceId: device});
+  await eventually(() => assert.ok(state.view.value));
+  await state.choose(new File(['broken'], 'plan.json'));
+  const failure = state.error.value;
+  assert.ok(failure);
+
+  await state.refresh();
+
+  assert.equal(state.error.value, failure);
+  assert.equal(state.canSend.value, false);
+  await state.choose(new File(['{}'], 'valid.json'));
+  await state.refresh();
+  assert.equal(state.error.value, '');
+  assert.equal(state.canSend.value, true);
+});
