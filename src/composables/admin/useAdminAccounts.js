@@ -1,4 +1,4 @@
-import {computed, ref, watch} from "vue";
+import {computed, onScopeDispose, ref, watch} from "vue";
 import {classworksV2Api, describeApiError} from "@/utils/classworksV2Client";
 import {confirmAction, promptAction} from "@/utils/actionDialog";
 
@@ -6,7 +6,15 @@ import {confirmAction, promptAction} from "@/utils/actionDialog";
 export function useAdminAccounts({selectedSchoolId, selectedSchool, errorMessage, successMessage,
   recentCredentials, roleName, offerUndo, bootstrap, loadRoster}) {
   const localAccounts = ref([]);
-  const accountBusy = ref(false);
+  const accountLoading = ref(false), accountCreating = ref(false);
+  const accountBusy = computed(() => accountLoading.value || accountCreating.value);
+  let loadGeneration = 0, disposed = false;
+  watch(selectedSchoolId, () => {
+    loadGeneration++;
+    localAccounts.value = [];
+    accountLoading.value = false;
+  }, {flush: "sync"});
+  onScopeDispose(() => { disposed = true; loadGeneration++; });
   const accountSearch = ref("");
   const accountStatusFilter = ref("ALL");
   const newAdminUsername = ref("");
@@ -41,23 +49,29 @@ export function useAdminAccounts({selectedSchoolId, selectedSchool, errorMessage
   });
 
   async function loadLocalAccounts() {
-    if (!selectedSchoolId.value) {
+    if (disposed) return;
+    const schoolId = selectedSchoolId.value, generation = ++loadGeneration;
+    const current = () => !disposed && generation === loadGeneration && schoolId === selectedSchoolId.value;
+    if (!schoolId) {
       localAccounts.value = [];
+      accountLoading.value = false;
       return;
     }
-    accountBusy.value = true;
+    accountLoading.value = true;
     try {
-      localAccounts.value = await classworksV2Api.localAccounts(selectedSchoolId.value);
+      const accounts = await classworksV2Api.localAccounts(schoolId);
+      if (current()) localAccounts.value = accounts;
     } catch (error) {
+      if (!current()) return;
       localAccounts.value = [];
       errorMessage.value = describeApiError(error, "加载本地账号失败");
     } finally {
-      accountBusy.value = false;
+      if (current()) accountLoading.value = false;
     }
   }
 
   async function createAdministrator() {
-    accountBusy.value = true;
+    accountCreating.value = true;
     errorMessage.value = "";
     try {
       await classworksV2Api.createLocalAdministrator(selectedSchoolId.value, {
@@ -81,7 +95,7 @@ export function useAdminAccounts({selectedSchoolId, selectedSchool, errorMessage
     } catch (error) {
       errorMessage.value = describeApiError(error, "创建管理员失败");
     } finally {
-      accountBusy.value = false;
+      accountCreating.value = false;
     }
   }
 
