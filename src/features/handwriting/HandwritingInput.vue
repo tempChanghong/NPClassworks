@@ -131,7 +131,7 @@
               {{ choice }}
             </v-btn>
           </details>
-          <small>{{ offline ? '识别资源已可离线使用' : `识别资源待确认，识别时按需准备，完整约 ${resourceMiB} MiB；普通录入不加载模型` }} · 识别在本机完成，不上传笔迹</small>
+          <small>{{ resourceHint }} · 识别在本机完成，不上传笔迹</small>
         </div>
         <footer>
           <span>插入后仍需在原页面保存作业</span>
@@ -161,9 +161,15 @@ const emit = defineEmits(["recognized"]);
 const props = defineProps({target: {type: Object, required: true}, field: {type: String, required: true}, label: {type: String, default: ""}});
 const opened = ref(false), busy = ref(false), canvas = ref(null), resultInput = ref(null), result = ref(""), notice = ref(""), status = ref("");
 const invalidated = ref(false), strokeCount = ref(0), offline = ref(false), choices = ref([]), resultEdited = ref(false);
+const controlled = ref(Boolean(navigator.serviceWorker?.controller));
 const session = shallowRef(null), lastEdit = shallowRef(null);
 const rowResults = new LineResultCache(), rowRevisions = [0, 0, 0];
 const resourceMiB = Math.ceil(resourceBytes / (1024 * 1024));
+// Cache receipts describe storage, not whether worker imports can reach that
+// storage offline. A normal page with SW blocked can still prepare resources.
+const resourceHint = computed(() => offline.value
+  ? `识别资源已缓存${controlled.value ? '' : '；当前页面未启用离线访问，请保持联网'}`
+  : `识别资源待确认，识别时按需准备，完整约 ${resourceMiB} MiB；普通录入不加载模型`);
 const pointLimitNotice = "笔迹较多，已达到本段上限，请先识别并插入这一段。";
 const strokeLimitNotice = "笔画较多，请先识别并插入这一段。";
 let snapshot, strokes = [], pointCount = 0, active, frame = 0, idleTimer, operation = 0, recognizedInk = -1, recognizedText = "", inkVersion = 0, resettingResult = false, applyingText = false;
@@ -311,9 +317,17 @@ async function insert() {
     await nextTick(); props.target.restoreSelection(lastEdit.value);
   } catch (error) { status.value = error.message; }
 }
-function undoInsert() { try { props.target.undo(lastEdit.value); lastEdit.value = null; notice.value = "已撤销本次插入。"; } catch (error) { notice.value = error.message; } }
+async function undoInsert() {
+  try {
+    const restored = props.target.undo(lastEdit.value);
+    lastEdit.value = null; notice.value = "已撤销本次插入。";
+    await nextTick(); props.target.restoreSelection(restored);
+  } catch (error) { notice.value = error.message; }
+}
 function background() { if (document.hidden && opened.value) { finishPointer(); cancelRecognition(); } }
+function controllerChanged() { controlled.value = Boolean(navigator.serviceWorker?.controller); }
 function unload(event) { if (opened.value && (strokeCount.value || result.value)) { event.preventDefault(); event.returnValue = ""; } }
 document.addEventListener("visibilitychange", background); window.addEventListener("beforeunload", unload);
-onBeforeUnmount(() => { operation++; finishPointer(); if (frame) window.cancelAnimationFrame(frame); clearTimeout(idleTimer); session.value?.dispose(); releaseReloadBlocker(); document.removeEventListener("visibilitychange", background); window.removeEventListener("beforeunload", unload); });
+navigator.serviceWorker?.addEventListener("controllerchange", controllerChanged);
+onBeforeUnmount(() => { operation++; finishPointer(); if (frame) window.cancelAnimationFrame(frame); clearTimeout(idleTimer); session.value?.dispose(); releaseReloadBlocker(); document.removeEventListener("visibilitychange", background); window.removeEventListener("beforeunload", unload); navigator.serviceWorker?.removeEventListener("controllerchange", controllerChanged); });
 </script>

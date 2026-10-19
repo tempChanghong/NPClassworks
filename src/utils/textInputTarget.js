@@ -26,14 +26,15 @@ export function createTextInputTarget({read, write, context, textarea, disabled,
       const value = snapshot.value.slice(0, snapshot.start) + input + snapshot.value.slice(snapshot.end);
       if (value.length > limit) throw Error(`插入后超过 ${limit} 字，请缩短后重试；原文保留。`);
       write(value); applied.add(snapshot);
-      return {before: snapshot.value, after: value, scope: snapshot.scope, cursor: snapshot.start + input.length};
+      return {before: snapshot.value, after: value, scope: snapshot.scope, cursor: snapshot.start + input.length,
+        beforeStart: snapshot.start, beforeEnd: snapshot.end};
     },
     restoreSelection(edit) {
       if (!edit || disabled() || edit.scope !== JSON.stringify(context()) || read() !== edit.after) return false;
       const element = textarea();
       if (!element?.setSelectionRange) return false;
       element.focus?.({preventScroll: true});
-      element.setSelectionRange(edit.cursor, edit.cursor);
+      element.setSelectionRange(edit.cursor, edit.cursorEnd ?? edit.cursor);
       return true;
     },
     undo(edit) {
@@ -41,6 +42,7 @@ export function createTextInputTarget({read, write, context, textarea, disabled,
         throw Error("正文或编辑范围已变化，未撤销后续输入。");
       }
       write(edit.before);
+      return {after: edit.before, scope: edit.scope, cursor: edit.beforeStart, cursorEnd: edit.beforeEnd};
     },
   };
 }

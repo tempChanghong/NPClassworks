@@ -52,3 +52,20 @@ test("confirmed text restores focus and cursor only while it still owns the fiel
   disabled = false; value += "后续输入"; assert.equal(target.restoreSelection(edit), false);
   assert.deepEqual(calls, []);
 });
+
+test("undo restores the original replaced range without stealing focus after a later change", () => {
+  let value = "完成第10—20页";
+  const calls = [], element = {selectionStart: 3, selectionEnd: 5,
+    focus: options => calls.push(["focus", options]), setSelectionRange: (...range) => calls.push(["range", ...range])};
+  const target = createTextInputTarget({read: () => value, write: text => { value = text; },
+    context: () => ["class-a"], textarea: () => element, disabled: () => false});
+  const edit = target.apply(target.capture(), "12");
+  const restored = target.undo(edit);
+  assert.equal(value, "完成第10—20页");
+  assert.equal(target.restoreSelection(restored), true);
+  assert.deepEqual(calls, [["focus", {preventScroll: true}], ["range", 3, 5]]);
+  calls.length = 0;
+  value += "后续输入";
+  assert.equal(target.restoreSelection(restored), false);
+  assert.deepEqual(calls, []);
+});
