@@ -166,7 +166,7 @@ const rowResults = new LineResultCache(), rowRevisions = [0, 0, 0];
 const resourceMiB = Math.ceil(resourceBytes / (1024 * 1024));
 const pointLimitNotice = "笔迹较多，已达到本段上限，请先识别并插入这一段。";
 const strokeLimitNotice = "笔画较多，请先识别并插入这一段。";
-let snapshot, strokes = [], pointCount = 0, active, frame = 0, idleTimer, operation = 0, recognizedInk = -1, inkVersion = 0, resettingResult = false, applyingText = false;
+let snapshot, strokes = [], pointCount = 0, active, frame = 0, idleTimer, operation = 0, recognizedInk = -1, recognizedText = "", inkVersion = 0, resettingResult = false, applyingText = false;
 const scope = computed(() => props.target.scope);
 watch([scope, () => props.target.value], () => {
   if (lastEdit.value && (lastEdit.value.scope !== props.target.scope || lastEdit.value.after !== props.target.value)) lastEdit.value = null;
@@ -242,13 +242,13 @@ async function open(captured = null) {
     snapshot = captured || current;
   } catch (error) { notice.value = error.message; return; }
   operation++; invalidated.value = false; offline.value = false; opened.value = true; notice.value = ""; status.value = "写好后点击识别，首次准备可能较慢。";
-  resettingResult = true; result.value = ""; resettingResult = false; resultEdited.value = false; choices.value = []; recognizedInk = -1;
+  resettingResult = true; result.value = ""; resettingResult = false; resultEdited.value = false; choices.value = []; recognizedInk = -1; recognizedText = "";
   session.value = new RecognitionSession(message => { status.value = message; });
   await nextTick(); clearInk(); const current = operation;
   const ready = await offlineReady(); if (current === operation && opened.value) offline.value = ready;
 }
 defineExpose({open});
-function cancelRecognition() { operation++; session.value?.dispose(); busy.value = false; status.value = "识别已停止，笔迹与文字保留。"; }
+function cancelRecognition() { operation++; clearTimeout(idleTimer); session.value?.dispose(); busy.value = false; status.value = "识别已停止，笔迹与文字保留。"; }
 function chooseResult(choice) {
   if (busy.value || resultEdited.value) return;
   // Comparing generated candidates is not a manual edit. Keep the original
@@ -262,6 +262,17 @@ async function close() {
 async function recognize() {
   if (busy.value || invalidated.value) return;
   finishPointer(); if (frame) window.cancelAnimationFrame(frame); render(); clearTimeout(idleTimer);
+  // A cached OCR result is not allowed to undo human corrections or a chosen
+  // candidate. Changed ink may replace them only after explicit confirmation.
+  if (result.value.trim() && result.value !== recognizedText) {
+    if (recognizedInk === inkVersion) {
+      status.value = "笔迹未变化，已保留校对后的文字，可直接插入正文。";
+      idle(); return;
+    }
+    if (!window.confirm("重新识别会替换你修改或选定的文字。是否继续？当前正文仍不会自动保存。")) {
+      idle(); return;
+    }
+  }
   const current = ++operation, start = window.performance.now(), version = inkVersion; busy.value = true;
   try {
     let preprocessMs = 0;
@@ -271,7 +282,7 @@ async function recognize() {
       : {lines: [], cold: false, loadMs: 0, runtimeThreads: 0};
     if (current !== operation || !opened.value || invalidated.value) return;
     out.lines = rowResults.finish(plan, out.lines);
-    resettingResult = true; result.value = out.lines.map(l => l.text).join("\n"); resettingResult = false; resultEdited.value = false; recognizedInk = version;
+    resettingResult = true; result.value = out.lines.map(l => l.text).join("\n"); resettingResult = false; resultEdited.value = false; recognizedInk = version; recognizedText = result.value;
     const candidates = out.lines.length === 1 ? [...new Set([result.value, ...out.lines[0].candidates])].filter(Boolean).slice(0, 5) : [];
     choices.value = candidates.length > 1 ? candidates : [];
     if (out.resources) offline.value = out.resources.offline;

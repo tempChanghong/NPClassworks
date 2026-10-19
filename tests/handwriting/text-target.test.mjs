@@ -37,3 +37,18 @@ test("replacement retains leading/trailing newlines and counts them toward the l
   assert.equal(value, "正文：\n第1题\n结束"); assert.equal(edit.cursor, 8);
   target.undo(edit); assert.equal(value, snapshot.value);
 });
+
+test("confirmed text restores focus and cursor only while it still owns the field", () => {
+  let value = "题号", disabled = false;
+  const calls = [], element = {selectionStart: 2, selectionEnd: 2,
+    focus: options => calls.push(["focus", options]), setSelectionRange: (...range) => calls.push(["range", ...range])};
+  const target = createTextInputTarget({read: () => value, write: text => { value = text; },
+    context: () => ["class-a"], textarea: () => element, disabled: () => disabled});
+  const edit = target.apply(target.capture(), "第8题");
+  assert.equal(target.restoreSelection(edit), true);
+  assert.deepEqual(calls, [["focus", {preventScroll: true}], ["range", 5, 5]]);
+  calls.length = 0;
+  disabled = true; assert.equal(target.restoreSelection(edit), false);
+  disabled = false; value += "后续输入"; assert.equal(target.restoreSelection(edit), false);
+  assert.deepEqual(calls, []);
+});

@@ -30,7 +30,10 @@ export function createTextInputTarget({read, write, context, textarea, disabled,
     },
     restoreSelection(edit) {
       if (!edit || disabled() || edit.scope !== JSON.stringify(context()) || read() !== edit.after) return false;
-      textarea()?.setSelectionRange?.(edit.cursor, edit.cursor);
+      const element = textarea();
+      if (!element?.setSelectionRange) return false;
+      element.focus?.({preventScroll: true});
+      element.setSelectionRange(edit.cursor, edit.cursor);
       return true;
     },
     undo(edit) {
