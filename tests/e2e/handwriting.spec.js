@@ -241,6 +241,30 @@ test('teacher class switch while the editor chunk loads invalidates the old sele
   } finally { await s.context.close(); }
 });
 
+for (const role of ['screen', 'teacher']) test(`race: ${role} only opens the latest field requested during the editor download`, async ({browser}) => {
+  const s = await setup(browser, role, {serviceWorkers: 'block'});
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  try {
+    if (role === 'teacher') await s.page.getByRole('button', {name: '添加选做内容', exact: true}).click();
+    await body(s.page, role).fill('保留原有必做正文');
+    await s.page.route('**/assets/HandwritingInput-*.js', async route => { await gate; await route.continue(); });
+    await launcher(s.page).click();
+    await launcher(s.page, 'optionalContent').click();
+    release();
+    await expect(work(s.page)).toHaveCount(1);
+    await expect(work(s.page).getByRole('heading', {name: '手写选做正文', exact: true})).toBeVisible();
+    await insert(s.page, '选做第8题');
+    await expect(work(s.page)).toHaveCount(0);
+    await expect(body(s.page, role)).toHaveValue('保留原有必做正文');
+    await expect(s.page.getByLabel('选做内容（可选）', {exact: true})).toHaveValue('选做第8题');
+    // The retired first button must be usable again, without another download.
+    await open(s.page); await insert(s.page, '，补充第11题');
+    await expect(body(s.page, role)).toHaveValue('保留原有必做正文，补充第11题');
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { release(); await s.context.close(); }
+});
+
 test('screen draft retains confirmed text across closing, and discards unconfirmed ink', async ({browser}) => {
   const s = await setup(browser, 'screen');
   try {
