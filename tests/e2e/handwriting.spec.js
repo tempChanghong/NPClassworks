@@ -249,6 +249,132 @@ test('a failed editor download can retry without refreshing or discarding the or
   } finally { await s.context.close(); }
 });
 
+test('follow-up: unchanged ink retains manually corrected text when recognition is clicked again', async ({browser}) => {
+  const s = await setup(browser, 'screen');
+  try {
+    await open(s.page); await paint(s.page, '完成第10—20页。'); await recognize(s.page);
+    await result(s.page).fill('完成第10—20页，另做第8题。');
+    const count = await s.page.evaluate(() => window.ocrTest.results.length);
+    await work(s.page).getByRole('button', {name: '识别文字', exact: true}).click();
+    await expect(work(s.page)).toHaveAttribute('data-busy', 'false');
+    await expect(result(s.page)).toHaveValue('完成第10—20页，另做第8题。');
+    expect(await s.page.evaluate(() => window.ocrTest.results.length)).toBe(count);
+    await insert(s.page);
+    await expect(body(s.page, 'screen')).toHaveValue('完成第10—20页，另做第8题。');
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test('follow-up: recognizing changed ink asks before replacing a manual correction', async ({browser}) => {
+  const s = await setup(browser, 'teacher');
+  try {
+    await open(s.page); await paint(s.page, '第10页，第1题。'); await recognize(s.page);
+    await result(s.page).fill('老师校对后的第10页，第11题。');
+    await paint(s.page, '第20页，第8题。');
+    s.page.removeAllListeners('dialog');
+    const dismissed = s.page.waitForEvent('dialog');
+    s.page.once('dialog', dialog => dialog.dismiss());
+    await work(s.page).getByRole('button', {name: '识别文字', exact: true}).click();
+    expect((await dismissed).message()).toContain('修改');
+    await expect(result(s.page)).toHaveValue('老师校对后的第10页，第11题。');
+    expect(await s.page.evaluate(() => window.ocrTest.results.length)).toBe(1);
+    s.page.on('dialog', dialog => dialog.accept());
+    await recognize(s.page);
+    expect(await result(s.page).inputValue()).toContain('20');
+    await insert(s.page); await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+for (const role of ['screen', 'teacher']) test(`follow-up: ${role} continues typing at the confirmed insertion cursor`, async ({browser}) => {
+  const s = await setup(browser, role);
+  try {
+    // Begin from a non-text control, as when selecting a subject/class by touch.
+    await open(s.page); await insert(s.page, '完成第10页');
+    await expect(body(s.page, role)).toBeFocused();
+    await s.page.keyboard.insertText('，第8题');
+    await expect(body(s.page, role)).toHaveValue('完成第10页，第8题');
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test('follow-up: reused homework confirms only new body text and leaves its source unchanged', async ({browser, request}) => {
+  const date = new Date().toLocaleDateString('en-CA', {timeZone: 'Asia/Shanghai'});
+  await request.post(`${api}/api/v2/publications`, {data: {subjectId: 'math', targetWorkspaceIds: ['class-a'],
+    title: '手写复用来源', content: '原历史必做', contentJson: {optionalContent: '原历史选做'},
+    boardDate: date, publishAt: new Date(Date.now() - 60000).toISOString()}});
+  const s = await setup(browser, 'teacher');
+  try {
+    await s.page.getByRole('button', {name: '复用历史作业', exact: true}).click();
+    const reuse = s.page.locator('.homework-reuse-dialog');
+    await reuse.getByRole('checkbox').check();
+    await reuse.getByRole('button', {name: '核对所选 1 项作业', exact: true}).click();
+    const required = reuse.locator('.publication-composer textarea').first();
+    const optional = reuse.getByLabel('选做内容（可选）', {exact: true});
+    await expect(required).toHaveValue('原历史必做');
+    await expect(optional).toHaveValue('原历史选做');
+    const target = reuse.getByLabel('发布到', {exact: true});
+    await target.fill('高一一班');
+    await s.page.getByRole('option').filter({hasText: '高一一班'}).first().click();
+    await s.page.keyboard.press('Escape');
+    await required.evaluate(el => el.setSelectionRange(el.value.length, el.value.length));
+    await reuse.locator('.handwriting-launcher[data-field="content"]').getByRole('button', {name: /^手写输入/}).click();
+    await insert(s.page, '，补充第8题');
+    await optional.evaluate(el => el.setSelectionRange(el.value.length, el.value.length));
+    await reuse.locator('.handwriting-launcher[data-field="optionalContent"]').getByRole('button', {name: /^手写输入/}).click();
+    await insert(s.page, '，补充第11题');
+    await reuse.getByLabel('已重新核对截止时间（可留空）和携带日期', {exact: true}).check();
+    const submission = s.page.waitForRequest(req => req.method() === 'POST' && new URL(req.url()).pathname === '/api/v2/publications');
+    await reuse.getByRole('button', {name: '保存草稿', exact: true}).click();
+    expect((await submission).postDataJSON().status).toBe('DRAFT');
+    await expect.poll(async () => (await (await request.get(`${api}/__test/state`)).json()).data.items.length).toBe(2);
+    const items = (await (await request.get(`${api}/__test/state`)).json()).data.items;
+    expect(items[0].content).toBe('原历史必做');
+    expect(items[0].contentJson.optionalContent).toBe('原历史选做');
+    expect(items[1].content).toBe('原历史必做，补充第8题');
+    expect(items[1].contentJson.optionalContent).toBe('原历史选做，补充第11题');
+    expect(JSON.stringify(items[1])).not.toMatch(/strokes|modelText|memoryFeature|data:image/);
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test('follow-up: repeated confirmation releases real workers and each reopen can recognize again', async ({browser}) => {
+  const s = await setup(browser, 'screen'), control = await browser.newBrowserCDPSession();
+  const workers = async () => (await control.send('Target.getTargets')).targetInfos.filter(t => t.type === 'worker' && t.url.startsWith(origin));
+  try {
+    for (let i = 0; i < 4; i++) {
+      await open(s.page); await paint(s.page, '第10—20页，第1、11题。'); await recognize(s.page);
+      expect((await workers()).length).toBe(1);
+      await insert(s.page);
+      await noLiveWorkers(s.page); await expect.poll(async () => (await workers()).length).toBe(0);
+    }
+    expect(await s.page.evaluate(() => window.ocrTest.results.length)).toBe(4);
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); await control.detach(); }
+});
+
+test('follow-up: background interruption retains correction and ink before a fresh foreground recognition', async ({browser}) => {
+  const s = await setup(browser, 'screen');
+  try {
+    await open(s.page); await paint(s.page, '第10—20页，第1、11题。'); await recognize(s.page);
+    await result(s.page).fill('已校对：第10—20页，第11题。');
+    // Headless Edge keeps all tabs visible. Exercise the visibility event path
+    // explicitly; this does not claim acceptance of an installed PWA background.
+    await s.page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', {configurable: true, value: true});
+      document.dispatchEvent(new window.Event('visibilitychange'));
+    });
+    await noLiveWorkers(s.page);
+    await expect(result(s.page)).toHaveValue('已校对：第10—20页，第11题。');
+    await s.page.evaluate(() => { delete document.hidden; document.dispatchEvent(new window.Event('visibilitychange')); });
+    await work(s.page).getByRole('button', {name: '识别文字', exact: true}).click();
+    await expect(result(s.page)).toHaveValue('已校对：第10—20页，第11题。');
+    await noLiveWorkers(s.page);
+    await paint(s.page, '第20页，第8题。'); await recognize(s.page);
+    expect(await result(s.page).inputValue()).toContain('20');
+    await insert(s.page); await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
 for (const width of [1280, 640, 390, 320]) test(`DPR2 layout and real touch capture at ${width} CSS px retain reachable actions`, async ({browser}, info) => {
   const s = await setup(browser, 'screen', {viewport: {width, height: width === 1280 ? 720 : 480}});
   try {
