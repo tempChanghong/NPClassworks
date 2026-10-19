@@ -68,6 +68,14 @@ test('PWA validator rejects malformed options instead of silently checking defau
   }
 });
 
+test('PWA installation does not silently prefetch the handwriting model/runtime', t => {
+  const {directory, output} = fixture(t);
+  writeFileSync(join(output, 'sw.js'), 'importScripts("sw-cache-manager.js");precacheAndRoute([{url:"index.html"},{url:"handwriting/r19/assets/recognizer.ort"}],{});');
+  const result = run(directory, ['--dist', output]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /手写模型和运行库不应进入 precache/);
+});
+
 test('lint ignores generated acceptance caches and keeps checking authored source', async () => {
   const eslint = new ESLint({cwd: root});
   for (const file of ['.artifacts/noise-schedules/vite-cache/deps/vue.js', '.cache/dev-scan-verification/deps/axios.js']) {

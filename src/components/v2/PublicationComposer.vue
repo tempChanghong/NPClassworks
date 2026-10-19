@@ -115,6 +115,17 @@
         rows="5"
         variant="outlined"
       />
+      <slot
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
+        name="text-input"
+        field="content"
+        :target="textTargets.content"
+      >
+        <HandwritingTextInput
+          field="content"
+          :target="textTargets.content"
+        />
+      </slot>
       <HomeworkQuickInputBar
         v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
         density="teacher"
@@ -144,6 +155,7 @@
       </v-btn>
       <v-textarea
         v-if="form.type === 'ASSIGNMENT' && !form.noHomework && (optionalExpanded || form.optionalContent)"
+        ref="optionalInput"
         v-model="form.optionalContent"
         label="选做内容（可选）"
         maxlength="6000"
@@ -152,6 +164,17 @@
         rows="3"
         variant="outlined"
       />
+      <slot
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework && (optionalExpanded || form.optionalContent)"
+        name="text-input"
+        field="optionalContent"
+        :target="textTargets.optionalContent"
+      >
+        <HandwritingTextInput
+          field="optionalContent"
+          :target="textTargets.optionalContent"
+        />
+      </slot>
       <v-btn
         v-if="form.type === 'ASSIGNMENT'"
         :disabled="templatesDisabled"
@@ -574,6 +597,8 @@ import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import {publicationDraftInput} from "@/utils/publicationDraft";
 import {submissionOf, optionalHomeworkOf} from "@/utils/homeworkInstructions";
 import {preparationOf} from "@/utils/homeworkPreparation";
+import HandwritingTextInput from "@/features/handwriting/HandwritingTextInput.vue";
+import {createTextInputTarget} from "@/utils/textInputTarget";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {describeApiError} from "@/utils/classworksV2Client";
@@ -623,6 +648,7 @@ const duplicateStatus = ref("PUBLISHED");
 const requestBusy = computed(() => saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 const reuseDatesConfirmed = ref(false);
 const contentInput = ref(null);
+const optionalInput = ref(null);
 const TeacherHomeworkTemplates = defineAsyncComponent(() => import("@/components/v2/TeacherHomeworkTemplates.vue"));
 const PublicationScreenPreview = defineAsyncComponent(() => import("@/components/v2/PublicationScreenPreview.vue"));
 const screenPreview = ref(null);
@@ -692,6 +718,16 @@ const form = reactive({
   priority: "NORMAL",
   popupEnabled: false,
 });
+const textTargets = Object.fromEntries(["content", "optionalContent"].map(field => [field, createTextInputTarget({
+  limit: field === "optionalContent" ? 6000 : Infinity,
+  read: () => form[field], write: value => { form[field] = value; },
+  label: () => `${store.teacherSubjects.find(s => s.id === form.subjectId)?.name || "未选择科目"} · ${form.targetWorkspaceIds.map(id => store.teacherWorkspaces.find(w => w.id === id)?.name || id).join("、") || "未选择班级"} · ${form.boardDate}`,
+  textarea: () => (field === "content" ? contentInput : optionalInput).value?.$el?.querySelector("textarea"),
+  disabled: () => form.type !== "ASSIGNMENT" || form.noHomework || Boolean(requestBusy.value || conflict.value || duplicateWarning.value),
+  context: () => ["teacher", field, store.account?.id, store.teacherSessionVersion, editorGeneration,
+    props.editingPublication?.id, editingBase.value?.revision, form.type, form.noHomework, form.subjectId,
+    [...form.targetWorkspaceIds].sort(), form.boardDate],
+})]));
 const cleanForm = ref("");
 const hasUnsavedChanges = computed(() => JSON.stringify(form) !== cleanForm.value);
 const submittedFormSnapshot = ref("");
@@ -1053,7 +1089,9 @@ async function submit(status, allowDuplicate = false) {
         conflict.value = nextConflict;
       }
     } else {
-      localError.value = describeApiError(error, "保存发布内容失败，请稍后重试");
+      localError.value = !error.response && navigator.onLine === false
+        ? "当前离线，保存失败，正文已保留在当前页面。请联网后重试，或复制文字留存。"
+        : describeApiError(error, "保存发布内容失败，请稍后重试");
     }
   } finally {
     flag.value = false;

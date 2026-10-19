@@ -306,4 +306,3 @@ function unload(event) { if (opened.value && (strokeCount.value || result.value)
 document.addEventListener("visibilitychange", background); window.addEventListener("beforeunload", unload);
 onBeforeUnmount(() => { operation++; finishPointer(); if (frame) window.cancelAnimationFrame(frame); clearTimeout(idleTimer); session.value?.dispose(); releaseReloadBlocker(); document.removeEventListener("visibilitychange", background); window.removeEventListener("beforeunload", unload); });
 </script>
-

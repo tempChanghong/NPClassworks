@@ -52,6 +52,14 @@
         :inert="!draftReady"
       >
         <v-alert
+          v-if="draftReady && !draftScopeCurrent"
+          class="mb-4"
+          type="warning"
+          variant="tonal"
+        >
+          大屏绑定已变化，原班级草稿已保留。请关闭录入窗口后重新打开，避免保存到其他班级。
+        </v-alert>
+        <v-alert
           v-if="draftSaveFailed"
           class="mb-4"
           type="warning"
@@ -156,6 +164,16 @@
             @blur="contentFocused = false"
             @focus="contentFocused = true"
           />
+          <slot
+            name="text-input"
+            field="content"
+            :target="textTargets.content"
+          >
+            <HandwritingTextInput
+              field="content"
+              :target="textTargets.content"
+            />
+          </slot>
           <HomeworkQuickInputBar
             density="screen"
             :items="quickInputs"
@@ -163,6 +181,7 @@
             @insert="insertQuickInput"
           />
           <v-textarea
+            ref="optionalInput"
             v-model="form.optionalContent"
             auto-grow
             class="mt-4"
@@ -171,6 +190,16 @@
             rows="2"
             variant="outlined"
           />
+          <slot
+            name="text-input"
+            field="optionalContent"
+            :target="textTargets.optionalContent"
+          >
+            <HandwritingTextInput
+              field="optionalContent"
+              :target="textTargets.optionalContent"
+            />
+          </slot>
         </section>
 
         <section class="composer-section">
@@ -427,6 +456,8 @@ import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
 import {openScreenDraftStorage} from "@/utils/screenDraftSession";
 import {useClassworksV2Store} from "@/stores/classworksV2";
 import {describeApiError} from "@/utils/classworksV2Client";
+import HandwritingTextInput from "@/features/handwriting/HandwritingTextInput.vue";
+import {createTextInputTarget} from "@/utils/textInputTarget";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {todayBoardDate} from "@/utils/boardDate";
 import {
@@ -471,11 +502,15 @@ const requestBusy = computed(() => saving.value || conflictApplying.value || con
 const duplicateWarning = ref(null);
 const contentFocused = ref(false);
 const contentInput = ref(null);
+const optionalInput = ref(null);
 const advancedPanel = ref();
 const draftRestored = ref(false);
 const draftReady = ref(false);
 const draftSaveFailed = ref(false);
 const draftReadError = ref("");
+const draftBindingScope = ref("");
+const bindingScope = computed(() => JSON.stringify([store.screenSession?.binding?.id, store.screenSession?.binding?.credentialVersion]));
+const draftScopeCurrent = computed(() => bindingScope.value === draftBindingScope.value);
 let draftStorage;
 let draftLoadVersion = 0;
 onUnmounted(() => { draftLoadVersion += 1; draftReady.value = false; });
@@ -495,6 +530,17 @@ const form = reactive({
   priority: "NORMAL",
 });
 
+const textTargets = Object.fromEntries(["content", "optionalContent"].map(field => [field, createTextInputTarget({
+  limit: field === "optionalContent" ? 6000 : Infinity,
+  read: () => form[field], write: value => { form[field] = value; },
+  label: () => `${eligibleSubjects.value.find(s => s.id === form.subjectId)?.name || "未选择科目"} · ${eligibleTargets.value.find(w => w.id === form.targetWorkspaceId)?.name || "未选择班级"} · ${form.boardDate}`,
+  textarea: () => (field === "content" ? contentInput : optionalInput).value?.$el?.querySelector("textarea"),
+  disabled: () => !props.modelValue || !draftReady.value || !draftScopeCurrent.value || Boolean(draftReadError.value || requestBusy.value || conflict.value),
+  context: () => ["screen", field, props.modelValue, store.screenSession?.binding?.id,
+    store.screenSession?.binding?.credentialVersion, basePublication.value?.id, basePublication.value?.revision,
+    form.subjectId, form.targetWorkspaceId, form.boardDate],
+})]));
+
 const priorities = [
   {title: "普通", value: "NORMAL"},
   {title: "重要", value: "IMPORTANT"},
@@ -512,6 +558,7 @@ const quickInputs = computed(() => sanitizeHomeworkQuickInputs(
 ));
 const canSave = computed(() => Boolean(
   draftReady.value &&
+  draftScopeCurrent.value &&
   !draftReadError.value && !conflict.value &&
   form.subjectId &&
   form.targetWorkspaceId &&
@@ -571,7 +618,7 @@ watch(() => form.subjectId, () => {
 });
 watch(form, () => {
   duplicateWarning.value = null;
-  if (!props.modelValue || !draftReady.value) return;
+  if (!props.modelValue || !draftReady.value || !draftScopeCurrent.value) return;
   const saved = saveScreenHomeworkDraft(
     store.screenSession?.binding?.id,
     basePublication.value?.id || "new",
@@ -594,6 +641,7 @@ function draftSnapshot() {
 }
 
 function writeInput(publication = basePublication.value) {
+  if (!draftScopeCurrent.value) throw new Error("大屏绑定已变化，原草稿已保留，请关闭后重新打开录入。");
   // All save paths, including offline conflict copies, share validation.
   if (!form.subjectId || !form.targetWorkspaceId) throw new Error("请选择科目和具体班级");
   if (!form.title.trim() && !form.content.trim()) throw new Error("标题和作业内容不能同时为空");
@@ -660,6 +708,7 @@ function loadPublication(publication) {
 async function restoreDraft() {
   const version = ++draftLoadVersion;
   draftReady.value = false;
+  draftBindingScope.value = bindingScope.value;
   basePublication.value = props.publication;
   conflict.value = null;
   draftRestored.value = false;
