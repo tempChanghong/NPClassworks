@@ -440,6 +440,59 @@ test('follow-up: background interruption retains correction and ink before a fre
   } finally { await s.context.close(); }
 });
 
+test('lifecycle: canceled cold preparation can retry before its delayed download finishes', async ({browser}) => {
+  const s = await setup(browser, 'screen', {serviceWorkers: 'block'});
+  let release, entered, requests = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  const downloading = new Promise(resolve => { entered = resolve; });
+  try {
+    await s.context.route('**/handwriting/r19/assets/manifest.json', async route => {
+      if (++requests === 1) { entered(); await gate; }
+      await route.continue();
+    });
+    await body(s.page, 'screen').fill('保留原正文');
+    await open(s.page); await paint(s.page, '第10—20页，第1、11题。');
+    await result(s.page).fill('尚未插入的校对文字');
+    await work(s.page).getByRole('button', {name: '识别文字', exact: true}).click();
+    await downloading;
+    await work(s.page).getByRole('button', {name: '取消识别', exact: true}).click();
+    await noLiveWorkers(s.page);
+    await expect(result(s.page)).toHaveValue('尚未插入的校对文字');
+    await expect(work(s.page)).toContainText('1 笔');
+    const run = await recognize(s.page);
+    expect(run.text).toContain('10');
+    release();
+    await expect(work(s.page).locator('.handwriting-status')).toContainText('识别完成');
+    await expect(body(s.page, 'screen')).toHaveValue('保留原正文');
+    await insert(s.page);
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { release(); await s.context.close(); }
+});
+
+test('lifecycle: a second window retains its ink and can recognize after the owning window closes', async ({browser}) => {
+  const s = await setup(browser, 'screen');
+  try {
+    await open(s.page); await paint(s.page, '第10页，第8题。'); await recognize(s.page);
+    const other = await s.context.newPage();
+    other.on('pageerror', error => s.errors.push(error.message));
+    other.on('dialog', dialog => dialog.accept());
+    await other.goto(origin);
+    await other.getByRole('button', {name: '录入作业', exact: true}).first().click();
+    await other.getByRole('button', {name: '数学', exact: true}).click();
+    await open(other); await paint(other, '第12—15页，第11题。');
+    await work(other).getByRole('button', {name: '识别文字', exact: true}).click();
+    await expect(work(other)).toHaveAttribute('data-busy', 'false');
+    await expect(work(other).locator('.handwriting-status')).toContainText('另一个窗口');
+    await expect(work(other)).toContainText('1 笔');
+    await noLiveWorkers(other);
+    expect(await s.page.evaluate(() => window.ocrTest.workers.filter(w => !w.dead).length)).toBe(1);
+    await s.page.close();
+    await expect.poll(async () => (await other.evaluate(() => navigator.locks.query())).held.filter(lock => lock.name === 'npclassworks-handwriting-lab-ocr').length).toBe(0);
+    expect((await recognize(other)).text).toContain('12');
+    await insert(other); await noLiveWorkers(other); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
 for (const width of [1280, 640, 390, 320]) test(`DPR2 layout and real touch capture at ${width} CSS px retain reachable actions`, async ({browser}, info) => {
   const s = await setup(browser, 'screen', {viewport: {width, height: width === 1280 ? 720 : 480}});
   try {
