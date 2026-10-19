@@ -147,7 +147,8 @@ test('prepared PWA recognizes offline and screen text follows the original offli
     await paint(s.page, '第12～15页；第6至8题。');
     const offline = await recognize(s.page);
     expect(offline.text).toContain('12');
-    await expect(work(s.page)).toContainText('识别资源已可离线使用');
+    await expect(work(s.page)).toContainText('识别资源已缓存');
+    await expect(work(s.page)).not.toContainText('请保持联网');
     await insert(s.page, '离线识别后确认的选做');
     await s.page.getByRole('button', {name: '保存作业', exact: true}).click();
     await expect(s.page.locator('.screen-composer')).toHaveCount(0);
@@ -175,6 +176,46 @@ test('offline cold start keeps ink and existing draft instead of claiming recogn
     await work(s.page).getByRole('button', {name: '返回录入'}).click();
     await expect(body(s.page, 'screen')).toHaveValue('原有正文');
     expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test('boundary: cached resources do not promise offline access without a controlling service worker', async ({browser}) => {
+  const s = await setup(browser, 'screen', {serviceWorkers: 'block'});
+  try {
+    await body(s.page, 'screen').fill('原正文');
+    await open(s.page); await paint(s.page, '第10页，第8题。'); await recognize(s.page);
+    const resourceHint = await work(s.page).locator('.handwriting-body > small').innerText();
+    await work(s.page).getByRole('button', {name: '返回录入'}).click();
+    await s.context.setOffline(true);
+    await open(s.page); await paint(s.page, '第12页，第11题。');
+    await work(s.page).getByRole('button', {name: '识别文字', exact: true}).click();
+    await expect(work(s.page)).toHaveAttribute('data-busy', 'false', {timeout: 90000});
+    await expect(work(s.page).locator('.handwriting-status')).toContainText('联网');
+    await expect(result(s.page)).toHaveValue('');
+    await expect(work(s.page)).toContainText('1 笔');
+    await expect(body(s.page, 'screen')).toHaveValue('原正文');
+    await noLiveWorkers(s.page);
+    expect(resourceHint).toContain('已缓存');
+    expect(resourceHint).toContain('请保持联网');
+    expect(resourceHint).not.toContain('已可离线使用');
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+for (const role of ['screen', 'teacher']) test(`boundary: ${role} undo restores the replaced selection for continued typing`, async ({browser}) => {
+  const s = await setup(browser, role);
+  try {
+    await body(s.page, role).fill('完成第10—20页');
+    await body(s.page, role).evaluate(el => el.setSelectionRange(3, 5));
+    await open(s.page); await insert(s.page, '12');
+    await expect(body(s.page, role)).toHaveValue('完成第12—20页');
+    await s.page.locator('.handwriting-launcher[data-field="content"]').getByRole('button', {name: '撤销本次插入', exact: true}).click();
+    await expect(body(s.page, role)).toHaveValue('完成第10—20页');
+    await expect(body(s.page, role)).toBeFocused();
+    expect(await body(s.page, role).evaluate(el => [el.selectionStart, el.selectionEnd])).toEqual([3, 5]);
+    await s.page.keyboard.insertText('15');
+    await expect(body(s.page, role)).toHaveValue('完成第15—20页');
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
   } finally { await s.context.close(); }
 });
 
