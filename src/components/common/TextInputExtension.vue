@@ -34,6 +34,7 @@
 
 <script setup>
 import {nextTick, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
+import {beginTextInputActivation} from '@/utils/textInputActivation';
 
 // A text-field extension boundary. It does not import an OCR engine, know
 // credentials, persist input, or submit a publication. The caller supplies it.
@@ -44,13 +45,13 @@ const props = defineProps({
   loadEditor: {type: Function, required: true},
 });
 const editorComponent = shallowRef(null), editor = ref(null), loading = ref(false), notice = ref('');
-let generation = 0, mounted = true;
+let generation = 0, mounted = true, activation;
 watch([() => props.target, () => props.target.scope, () => props.target.value], () => {
   if (!loading.value) return;
-  generation++; loading.value = false;
+  generation++; loading.value = false; activation?.release();
   notice.value = '编辑范围已变化，本次未打开手写输入，请在当前正文重新操作。';
 }, {flush: 'sync'});
-onBeforeUnmount(() => { mounted = false; generation++; });
+onBeforeUnmount(() => { mounted = false; generation++; activation?.release(); });
 async function activate() {
   if (loading.value || props.target.disabled) return;
   const target = props.target;
@@ -58,7 +59,8 @@ async function activate() {
   try { snapshot = target.capture(); }
   catch { notice.value = '当前编辑器不可录入，请完成当前操作后重试。'; return; }
   const ticket = ++generation, scope = snapshot.scope, value = snapshot.value;
-  const current = () => mounted && ticket === generation && props.target === target &&
+  const request = activation = beginTextInputActivation();
+  const current = () => mounted && request.current() && ticket === generation && props.target === target &&
     !target.disabled && target.scope === scope && target.value === value;
   loading.value = true; notice.value = '';
   try {
@@ -71,7 +73,7 @@ async function activate() {
     if (current()) notice.value = error?.requiresReload
       ? '本次页面的手写组件无法载入。请先保存正文，再刷新重试；可以继续键盘录入。'
       : '手写输入暂不可用，正文保留。请检查网络后重试，也可继续键盘录入。';
-  } finally { if (mounted && ticket === generation) loading.value = false; }
+  } finally { request.release(); if (mounted && ticket === generation) loading.value = false; }
 }
 </script>
 
