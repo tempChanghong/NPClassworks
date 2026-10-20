@@ -96,8 +96,8 @@ async function create(classroom, request, content = '服务端原正文', overri
   expect(response.status()).toBe(201);
   return (await response.json()).data;
 }
-async function edit(classroom, role) {
-  const session = await classroom.open(role);
+async function edit(classroom, role, options) {
+  const session = await classroom.open(role, options);
   session.mutations = observe(session.page);
   if (role === 'screen') await session.page.getByRole('button', {name: '修改', exact: true}).click();
   else {
@@ -566,7 +566,10 @@ for (const loseReply of [false, true]) test(`same-document navigation preserves 
 
 test('a real late conflict reload preserves confirmed screen text after token rotation', async ({classroom, request}) => {
   const original = await create(classroom, request, '原服务器正文');
-  const {page, errors, mutations} = await edit(classroom, 'screen');
+  // Hold the real GET at the page boundary. A controlling service worker can
+  // send its own fetch without passing through page.route; offline/PWA cases
+  // above retain their actual service worker instead.
+  const {page, errors, mutations} = await edit(classroom, 'screen', {serviceWorkers: 'block'});
   await body(page, 'screen').fill(''); await write(page, '凭证变化时仍需保留的确认正文');
   expect((await request.patch(`${api}/api/v2/publications/${original.id}`, {
     headers: {Authorization: `Bearer ${classroom.credentials.accessToken}`, 'If-Match': '"1"'},
