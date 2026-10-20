@@ -311,6 +311,60 @@ test('an unreadable queue between uploads cannot authorize the remaining batch f
   assert.equal(store.screenQueueReadError, '');
 });
 
+test('a confirmed duplicate retry retains its explicit decision after a transient failure and reload', async () => {
+  const store = h.newStore({screen: true}), submitted = [];
+  store.screenNetworkOnline = false;
+  await store.saveScreenPublication({content: '确实需要重复发布的已确认文字'});
+  const [item] = store.screenPendingUploads;
+  let confirmedAttempts = 0;
+  h.routes.set('POST /api/v2/classroom-screens/publications', (req, reply) => {
+    submitted.push(req.body);
+    if (!req.body.allowDuplicate) return reply({code: 'DUPLICATE_ASSIGNMENT_SUSPECTED', message: '疑似重复作业'}, 409);
+    if (++confirmedAttempts === 1) return reply({message: 'temporary upstream outage'}, 503);
+    const saved = {id: 'explicit-duplicate', ...req.body, revision: 1};
+    h.publications.push(saved); reply(saved);
+  });
+  store.screenNetworkOnline = true;
+  await store.flushScreenPublicationQueue();
+  assert.equal(store.screenPendingUploads[0].status, 'needs_review');
+  assert.equal(await store.retryScreenQueuedPublication(item.id, {allowDuplicate: true}), false);
+  assert.equal(store.screenPendingUploads[0].status, 'pending');
+  assert.equal(store.screenPendingUploads[0].queuedAt, item.queuedAt);
+  const reloaded = h.newStore({screen: true});
+  await reloaded.flushScreenPublicationQueue();
+  assert.deepEqual(h.queue.loadScreenPublicationQueue('screen-a'), []);
+  assert.equal(h.publications.length, 1);
+  assert.deepEqual(submitted.map(input => input.allowDuplicate === true), [false, true, true]);
+  assert.equal(new Set(submitted.map(input => input.clientRequestId)).size, 1);
+  assert.equal(submitted[0].clientRequestId, item.input.clientRequestId);
+  assert.equal(reloaded.screenSyncing, false);
+});
+
+test('a duplicate confirmation stays on its own queue item and ordinary retries still require review', async () => {
+  const store = h.newStore({screen: true}), submitted = [], attempts = new Map();
+  store.screenNetworkOnline = false;
+  await store.saveScreenPublication({content: '明确确认重复的第一项'});
+  await store.saveScreenPublication({content: '没有确认重复的第二项'});
+  const [first, second] = store.screenPendingUploads;
+  h.routes.set('POST /api/v2/classroom-screens/publications', (req, reply) => {
+    submitted.push(req.body);
+    const id = req.body.clientRequestId, count = (attempts.get(id) || 0) + 1; attempts.set(id, count);
+    if (count === 1) return reply({message: 'temporary outage'}, 503);
+    if (!req.body.allowDuplicate) return reply({code: 'DUPLICATE_ASSIGNMENT_SUSPECTED', message: '仍需人工确认'}, 409);
+    const saved = {id: 'confirmed-first', ...req.body, revision: 1}; h.publications.push(saved); reply(saved);
+  });
+  store.screenNetworkOnline = true;
+  await store.retryScreenQueuedPublication(first.id, {allowDuplicate: true});
+  await store.retryScreenQueuedPublication(second.id);
+  const reloaded = h.newStore({screen: true}); await reloaded.flushScreenPublicationQueue();
+  const remaining = h.queue.loadScreenPublicationQueue('screen-a');
+  assert.equal(h.publications.length, 1);
+  assert.equal(remaining.length, 1); assert.equal(remaining[0].id, second.id);
+  assert.equal(remaining[0].status, 'needs_review'); assert.notEqual(remaining[0].input.allowDuplicate, true);
+  assert.deepEqual(submitted.filter(input => input.clientRequestId === first.input.clientRequestId).map(input => input.allowDuplicate), [true, true]);
+  assert.ok(submitted.filter(input => input.clientRequestId === second.input.clientRequestId).every(input => input.allowDuplicate !== true));
+});
+
 for (const change of ['token', 'credential']) for (const manual of [false, true]) test(`a changed ${change} during ${manual ? 'manual' : 'automatic'} replay retains the original queue`, async () => {
   const store = h.newStore({screen: true}), hold = deferred();
   const token = h.api.getClassroomScreenToken(), version = store.screenSession.binding.credentialVersion;

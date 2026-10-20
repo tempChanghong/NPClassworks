@@ -378,11 +378,9 @@ export const screenSyncActions = {
     if (!item) return false;
     context?.retry.begin();
     this.screenSyncing = true;
+    const submittedInput = {...item.input, ...(allowDuplicate ? {allowDuplicate: true} : {})};
     try {
-      await classworksV2Api.createScreenPublication({
-        ...item.input,
-        ...(allowDuplicate ? {allowDuplicate: true} : {}),
-      });
+      await classworksV2Api.createScreenPublication(submittedInput);
       if (!isCurrent()) return false;
       const remaining = await mutateScreenPublicationQueue(bindingId, () => removeScreenPublicationQueueItem(bindingId, item.id));
       if (!isCurrent()) return false;
@@ -402,6 +400,9 @@ export const screenSyncActions = {
       if (isTransientScreenRequestError(error)) context?.retry.failed();
       try {
         const remaining = await mutateScreenPublicationQueue(bindingId, () => updateScreenPublicationQueueItem(bindingId, item.id, {
+          // Keep this item's explicit duplicate confirmation with its original
+          // request ID, so a temporary outage/reload does not discard it.
+          input: submittedInput,
           attempts: item.attempts + 1,
           status: isTransientScreenRequestError(error) ? "pending" : "needs_review",
           error: {
