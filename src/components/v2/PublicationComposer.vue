@@ -656,11 +656,11 @@ const templatesOpen = ref(false), templateApplying = ref(false);
 const templatesDisabled = computed(() => Boolean(requestBusy.value || conflict.value || duplicateWarning.value || form.noHomework || form.type !== "ASSIGNMENT"));
 async function applyTemplate(input) {
   if (templateApplying.value || templatesDisabled.value) return;
-  const generation = editorGeneration, session = store.teacherSessionVersion, snapshot = JSON.stringify(form);
+  const edit = captureEditor();
   templateApplying.value = true;
   try {
     if ((form.title || form.content || form.materials || form.submission || form.optionalContent) && !await confirmAction({title: "替换当前作业内容？", message: "将替换标题、正文、选做内容、提交说明和需带物品，模板中的空字段也会清空对应内容。携带日期将清空，含物品时请重新选择。班级、科目、作业日期和截止时间保持当前设置。", confirmText: "替换内容"})) return;
-    if (!mounted || generation !== editorGeneration || session !== store.teacherSessionVersion || !templatesOpen.value || templatesDisabled.value || snapshot !== JSON.stringify(form)) return;
+    if (!edit.unchanged() || !templatesOpen.value || templatesDisabled.value) return;
     form.title = input.title; form.content = input.content;
     form.submission = input.submission;
     form.optionalContent = input.optionalContent || ""; optionalExpanded.value = Boolean(form.optionalContent);

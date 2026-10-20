@@ -156,7 +156,7 @@ import {todayBoardDate} from "@/utils/boardDate";
 import {canReuseHomework, homeworkReuseDraft, HOMEWORK_REUSE_LIMIT} from "@/utils/homeworkReuse";
 import {validPreparationDate} from "@/utils/homeworkPreparation";
 import {confirmAction} from "@/utils/actionDialog";
-import {describeApiError} from "@/utils/classworksV2Client";
+import {describeApiError, getAccountTokens} from "@/utils/classworksV2Client";
 import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 
 const emit = defineEmits(["close"]);
@@ -173,11 +173,20 @@ const current = computed(() => queue.value[index.value]);
 const currentResult = computed(() => results.value[index.value]);
 const pending = computed(() => preparing.value || queue.value.length > results.value.length);
 let mounted = true, generation = 0;
-const alive = (version, session, account) => mounted && version === generation && session === store.teacherSessionVersion && account === store.account?.id;
+// A peer can replace and restore credentials before this workspace refreshes.
+// Access-token renewal retains ownership; a refresh-token change does not.
+const credentialEpoch = ref(0);
+const loginScope = () => JSON.stringify([store.teacherSessionVersion, store.account?.id,
+  getAccountTokens().refreshToken, credentialEpoch.value]);
+const alive = (version, scope) => mounted && version === generation && scope === loginScope();
+function credentialChanged(event) {
+  if (event.key === null || event.key === "classworks-v2-refresh-token") credentialEpoch.value++;
+}
+window.addEventListener("storage", credentialChanged);
 const releaseBlocker = registerAppReloadBlocker(() => pending.value ? "历史作业复用尚未完成，请先保存或关闭复用窗口。" : "");
-onUnmounted(() => { mounted = false; generation++; releaseBlocker(); });
-watch([() => store.teacherSessionVersion, () => store.account?.id], () => {
-  generation++; queue.value = []; selected.value = []; results.value = []; emit("close");
+onUnmounted(() => { mounted = false; generation++; releaseBlocker(); window.removeEventListener("storage", credentialChanged); });
+watch(loginScope, () => {
+  generation++; preparing.value = false; queue.value = []; selected.value = []; results.value = []; emit("close");
 }, {flush: "sync"});
 watch(sourceDate, () => { selected.value = []; error.value = ""; }, {flush: "sync"});
 watch(selectableIds, (allowed) => {
@@ -202,13 +211,13 @@ async function prepare() {
   if (!validPreparationDate(targetDate.value)) { error.value = "请选择有效的新作业板日期。"; return; }
   const ids = [...selected.value], date = targetDate.value, originalDate = sourceDate.value;
   if (ids.length > HOMEWORK_REUSE_LIMIT) return;
-  const version = ++generation, session = store.teacherSessionVersion, account = store.account?.id;
+  const version = ++generation, scope = loginScope();
   preparing.value = true;
   try {
     const next = [];
     for (const id of ids) {
       const item = await store.latestPublication(id);
-      if (!alive(version, session, account)) return;
+      if (!alive(version, scope)) return;
       if (String(item.boardDate).slice(0, 10) !== originalDate) {
         selected.value = selected.value.filter(value => value !== id);
         throw new Error("所选作业的历史日期已变化，请刷新后重新选择。");
@@ -219,8 +228,8 @@ async function prepare() {
     if (ids.some(id => !selected.value.includes(id))) throw new Error("历史作业列表已变化，请重新核对选择。");
     queue.value = next;
   } catch (failure) {
-    if (alive(version, session, account)) error.value = describeApiError(failure, "读取历史作业失败，请重试。");
-  } finally { if (alive(version, session, account)) preparing.value = false; }
+    if (alive(version, scope)) error.value = describeApiError(failure, "读取历史作业失败，请重试。");
+  } finally { if (alive(version, scope)) preparing.value = false; }
 }
 function saved(publication) {
   if (!mounted || currentResult.value) return;
