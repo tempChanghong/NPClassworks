@@ -37,6 +37,17 @@ function screenCommandGuard(store) {
     && isCurrentSync(store, bindingId, context) && getClassroomScreenToken() === token;
 }
 
+function updateFailedScreenUpload(bindingId, item, patch) {
+  return mutateScreenPublicationQueue(bindingId, () => {
+    const items = loadScreenPublicationQueue(bindingId, undefined, {strict: true});
+    const current = items.find(candidate => candidate.id === item.id);
+    // A peer may have confirmed a duplicate while this older request waited.
+    // Its failure describes the old input, not the newly confirmed decision.
+    if (!current || JSON.stringify(current.input) !== JSON.stringify(item.input)) return {items, applied: false};
+    return {items: updateScreenPublicationQueueItem(bindingId, item.id, patch), applied: true};
+  });
+}
+
 // Mixed into the existing store: actions share its reactive state and Pinia binding.
 export const screenSyncActions = {
   readScreenPublicationQueue() {
@@ -325,7 +336,7 @@ export const screenSyncActions = {
           if (!isCurrent()) return;
           if (error instanceof ScreenPublicationQueueError) throw error;
           if (isTransientScreenRequestError(error)) { context?.retry.failed(); break; }
-          const remaining = await mutateScreenPublicationQueue(bindingId, () => updateScreenPublicationQueueItem(bindingId, item.id, {
+          const failure = await updateFailedScreenUpload(bindingId, item, {
             attempts: item.attempts + 1,
             status: "needs_review",
             error: {
@@ -333,9 +344,10 @@ export const screenSyncActions = {
               message: error.response?.data?.message || error.message || "提交失败",
               details: error.response?.data?.details || null,
             },
-          }));
+          });
           if (!isCurrent()) return;
-          this.screenPendingUploads = remaining;
+          this.screenPendingUploads = failure.items;
+          if (!failure.applied) continue;
           recordDiagnosticEvent({
             category: "SCREEN_SYNC",
             severity: "ERROR",
@@ -399,7 +411,7 @@ export const screenSyncActions = {
       }
       if (isTransientScreenRequestError(error)) context?.retry.failed();
       try {
-        const remaining = await mutateScreenPublicationQueue(bindingId, () => updateScreenPublicationQueueItem(bindingId, item.id, {
+        const failure = await updateFailedScreenUpload(bindingId, item, {
           // Keep this item's explicit duplicate confirmation with its original
           // request ID, so a temporary outage/reload does not discard it.
           input: submittedInput,
@@ -410,9 +422,10 @@ export const screenSyncActions = {
             message: error.response?.data?.message || error.message || "提交失败",
             details: error.response?.data?.details || null,
           },
-        }));
+        });
         if (!isCurrent()) return false;
-        this.screenPendingUploads = remaining;
+        this.screenPendingUploads = failure.items;
+        if (!failure.applied) return false;
       } catch (storageError) {
         if (!isTransientScreenRequestError(error)) context?.retry.failed();
         this.reportScreenQueueError(storageError);

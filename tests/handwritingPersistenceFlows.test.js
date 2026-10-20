@@ -311,6 +311,42 @@ test('an unreadable queue between uploads cannot authorize the remaining batch f
   assert.equal(store.screenQueueReadError, '');
 });
 
+for (const method of ['automatic', 'manual']) test(`a late ${method} rejection cannot replace another window's newer duplicate confirmation`, async () => {
+  const primary = h.newStore({screen: true}), peer = h.newStore({screen: true}), hold = deferred();
+  primary.screenNetworkOnline = false;
+  await primary.saveScreenPublication({content: '另一窗口已明确确认重复的手写文字'});
+  const [item] = primary.screenPendingUploads, sent = [];
+  let ordinary = 0, confirmed = 0;
+  h.routes.set('POST /api/v2/classroom-screens/publications', async (req, reply) => {
+    sent.push(req.body);
+    if (!req.body.allowDuplicate) {
+      if (++ordinary === 1) await hold.promise;
+      return reply({code: 'DUPLICATE_ASSIGNMENT_SUSPECTED', message: '旧请求的重复检查'}, 409);
+    }
+    if (++confirmed === 1) return reply({message: 'temporary outage after explicit confirmation'}, 503);
+    const saved = {id: 'newer-confirmed-publication', ...req.body, revision: 1};
+    h.publications.push(saved); reply(saved);
+  });
+  primary.screenNetworkOnline = true;
+  const pending = method === 'automatic' ? primary.flushScreenPublicationQueue() : primary.retryScreenQueuedPublication(item.id);
+  try {
+    await eventually(() => assert.equal(ordinary, 1));
+    await peer.flushScreenPublicationQueue();
+    assert.equal(peer.screenPendingUploads[0].error.code, 'DUPLICATE_ASSIGNMENT_SUSPECTED');
+    await peer.retryScreenQueuedPublication(item.id, {allowDuplicate: true});
+    const [newer] = h.queue.loadScreenPublicationQueue('screen-a');
+    assert.equal(newer.input.allowDuplicate, true); assert.equal(newer.status, 'pending');
+    hold.resolve(); await pending;
+    assert.deepEqual(h.queue.loadScreenPublicationQueue('screen-a'), [newer], 'the stale rejection must not rewrite the newer queued decision');
+    const reloaded = h.newStore({screen: true});
+    await reloaded.flushScreenPublicationQueue();
+    assert.deepEqual(h.queue.loadScreenPublicationQueue('screen-a'), []);
+    assert.equal(h.publications.length, 1); assert.equal(h.publications[0].content, item.input.content);
+    assert.equal(new Set(sent.map(input => input.clientRequestId)).size, 1);
+    assert.equal(primary.screenSyncing, false); assert.equal(peer.screenSyncing, false);
+  } finally { hold.resolve(); await pending; }
+});
+
 test('a confirmed duplicate retry retains its explicit decision after a transient failure and reload', async () => {
   const store = h.newStore({screen: true}), submitted = [];
   store.screenNetworkOnline = false;
