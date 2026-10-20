@@ -42,4 +42,22 @@ $env:E2E_API_PORT = '4207'
 pnpm exec playwright test --config playwright.handwriting.config.js
 ```
 
-浏览器测试构建真实生产页面、Service Worker 和模型，只连接回环内存 HTTP 夹具，不连接学校或数据库。独立配置默认使用开发电脑的 Edge；常规 CI 使用已安装的 Chromium 运行同一用例。生成字体只验证集成前后的输出一致性，CDP 触控和 DPR2 只验证对应模拟层。实体一体机真人新笔迹、真实触控/Windows 200% 缩放、已安装 PWA 和实际 KV 保存仍需现场验收。
+以上浏览器测试构建真实生产页面、Service Worker 和模型，只连接回环内存 HTTP 夹具，不连接学校或数据库。独立配置默认使用开发电脑的 Edge；常规 CI 使用已安装的 Chromium 运行同一用例。生成字体只验证集成前后的输出一致性，CDP 触控和 DPR2 只验证对应模拟层。
+
+### 真实 KV 与临时 PostgreSQL
+
+本机需要已安装的原生 PostgreSQL 工具和 Edge，以及相邻 `NPClassworksKV` 的依赖。运行：
+
+```powershell
+# 非默认工具目录可先设置：
+# $env:NPEP_TEST_PG_BIN = 'C:\Program Files\PostgreSQL\17\bin'
+pnpm run test:handwriting:kv
+```
+
+入口自动分配三个回环端口，新建带随机口令的自有 PostgreSQL 集群和空测试库，只向该库执行现有迁移；不读取现有数据库连接、不使用 Docker、不连接学校服务。浏览器运行正式构建、Service Worker 和实际模型，HTTP 保存由真实 Express/Prisma/PostgreSQL 处理。测试放在独立目录，不加入常规 fullstack 用例集合。
+
+覆盖大屏与教师的必做/选做保存、草稿、历史复用、切班、真实 409 冲突、大屏断网刷新补传、提交已成功但响应丢失后的去重，以及教师离线保存失败后手动重试。请求、数据库正文、修订历史、审计和本地草稿/补传队列均检查仅含确认后的文字。大屏瞬时网络失败使用原有约 15–30 秒首次退避，不把瞬间仍在队列中判为补传失败。
+
+结果与日志写入忽略目录 `.artifacts/handwriting-kv/<本次编号>/`，以该次 `result.json` 为准。记录源码提交及工作树指纹；测试期间不要编辑相关源码。Prisma 客户端生成前备份原字节，结束后恢复；若检测到并发修改则停止覆盖并保留备份。成功时关闭并删除自有临时集群；失败时保留已停止的集群供诊断。
+
+真实 KV 隔离联调已经覆盖本地数据库保存，详见 [2026-10-20 验证记录](handwriting-kv-validation-20261020.md)。实体一体机真人新笔迹、真实触控/Windows 200% 缩放、已安装 PWA 和生产服务仍需现场验收；本地数据库通过不代表现场通过。

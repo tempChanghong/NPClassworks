@@ -18,6 +18,7 @@
     "pwa:validate": "node scripts/validate-pwa-build.js",
     "test": "node --test tests/*.test.js tests/handwriting/*.test.mjs",
     "test:handwriting": "node --test tests/handwriting/*.test.mjs",
+    "test:handwriting:kv": "node scripts/run-handwriting-fullstack.js",
     "test:flows": "node --test tests/publicationFlows.test.js",
     "test:e2e": "playwright test",
     "test:e2e:fullstack": "node scripts/run-fullstack.js",
