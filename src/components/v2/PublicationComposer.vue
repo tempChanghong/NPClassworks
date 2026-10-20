@@ -601,7 +601,7 @@ import HandwritingTextInput from "@/features/handwriting/HandwritingTextInput.vu
 import {createTextInputTarget} from "@/utils/textInputTarget";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
-import {describeApiError} from "@/utils/classworksV2Client";
+import {describeApiError, getAccountTokens} from "@/utils/classworksV2Client";
 import {todayBoardDate} from "@/utils/boardDate";
 import {
   teacherTargetCombinationId,
@@ -718,6 +718,14 @@ const form = reactive({
   priority: "NORMAL",
   popupEnabled: false,
 });
+const credentialEpoch = ref(0);
+function credentialChanged(event) {
+  // Access-token renewal retains the login. A new/cleared refresh token does
+  // not, even when another tab later restores the original token pair.
+  if (event.key === null || event.key === "classworks-v2-refresh-token") credentialEpoch.value++;
+}
+window.addEventListener("storage", credentialChanged);
+onUnmounted(() => window.removeEventListener("storage", credentialChanged));
 const textTargets = Object.fromEntries(["content", "optionalContent"].map(field => [field, createTextInputTarget({
   limit: field === "optionalContent" ? 6000 : Infinity,
   read: () => form[field], write: value => { form[field] = value; },
@@ -725,6 +733,7 @@ const textTargets = Object.fromEntries(["content", "optionalContent"].map(field 
   textarea: () => (field === "content" ? contentInput : optionalInput).value?.$el?.querySelector("textarea"),
   disabled: () => form.type !== "ASSIGNMENT" || form.noHomework || Boolean(requestBusy.value || conflict.value || duplicateWarning.value),
   context: () => ["teacher", field, store.account?.id, store.teacherSessionVersion, editorGeneration,
+    getAccountTokens().refreshToken, credentialEpoch.value,
     props.editingPublication?.id, editingBase.value?.revision, form.type, form.noHomework, form.subjectId,
     [...form.targetWorkspaceIds].sort(), form.boardDate],
 })]));

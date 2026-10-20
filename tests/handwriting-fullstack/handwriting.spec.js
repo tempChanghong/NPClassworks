@@ -1,5 +1,6 @@
 import {test, expect} from '../fullstack/fixture.js';
 import {api, origin} from '../e2e/environment.js';
+import {backendModule} from '../fullstack/environment.js';
 import {todayBoardDate} from '../../src/utils/boardDate.js';
 import {createHash, randomUUID} from 'node:crypto';
 
@@ -471,4 +472,45 @@ for (const restore of [false, true]) test(`another real tab rotating ${restore ?
   const [row] = await persisted(classroom, mutations);
   expect(row.content).toBe('重新打开后确认的正文'); expect(row.revision).toBe(1);
   await storageTextOnly(page); expect(errors).toEqual([]);
+});
+
+for (const restore of [false, true]) test(`another real teacher login ${restore ? 'and return to the original login ' : ''}revokes unconfirmed text`, async ({classroom}) => {
+  const {page, context, errors, mutations} = await setup(classroom, 'teacher');
+  await body(page, 'teacher').fill('保留教师原正文');
+  await open(page); await result(page).fill('未确认绝不落库');
+  const other = await context.newPage(); await other.goto(origin);
+  await expect(other.getByRole('button', {name: '账号', exact: true}).first()).toBeVisible();
+  const {generateTokenPair} = await backendModule('utils/tokenManager.js');
+  const tokens = await generateTokenPair(classroom.account);
+  const changeLogin = values => {
+    localStorage.setItem('classworks-v2-access-token', values.accessToken);
+    localStorage.setItem('classworks-v2-refresh-token', values.refreshToken);
+  };
+  await other.evaluate(changeLogin, tokens);
+  await expect(work(page)).toContainText('编辑范围已变化');
+  if (restore) await other.evaluate(changeLogin, classroom.credentials);
+  await page.bringToFront();
+  await expect(work(page).getByRole('button', {name: '插入正文', exact: true})).toBeDisabled();
+  await work(page).getByRole('button', {name: '返回录入', exact: true}).click();
+  await expect(body(page, 'teacher')).toHaveValue('保留教师原正文');
+  expect(await classroom.rows()).toEqual([]); expect(mutations).toEqual([]); expect(errors).toEqual([]);
+});
+
+test('a real access-token renewal leaves confirmed teacher text insertable and saveable', async ({classroom, request}) => {
+  const {page, context, errors, mutations} = await setup(classroom, 'teacher');
+  await body(page, 'teacher').fill('保留教师原正文');
+  await open(page); await result(page).fill('正常续期后确认的文字');
+  const other = await context.newPage(); await other.goto(origin);
+  await expect(other.getByRole('button', {name: '账号', exact: true}).first()).toBeVisible();
+  const response = await request.post(`${api}/accounts/refresh`, {data: {refresh_token: classroom.credentials.refreshToken}});
+  expect(response.status()).toBe(200);
+  const payload = await response.json(), token = (payload.data || payload).access_token;
+  expect(typeof token).toBe('string'); expect(token.length).toBeGreaterThan(0);
+  await other.evaluate(value => localStorage.setItem('classworks-v2-access-token', value), token);
+  await page.bringToFront();
+  await insert(page, '正常续期后确认的文字');
+  await composer(page, 'teacher').getByRole('button', {name: '保存草稿', exact: true}).click();
+  await expect.poll(async () => (await classroom.rows()).length).toBe(1);
+  const [row] = await persisted(classroom, mutations);
+  expect(row.content).toBe('保留教师原正文正常续期后确认的文字'); expect(row.status).toBe('DRAFT'); expect(errors).toEqual([]);
 });

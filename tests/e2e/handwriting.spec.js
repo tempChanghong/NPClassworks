@@ -132,6 +132,37 @@ for (const role of ['screen', 'teacher']) test(`${role}: ordinary text entry and
   } finally { await s.context.close(); }
 });
 
+for (const restore of [false, true]) test(`teacher credentials: another tab ${restore ? 'rotating and restoring' : 'rotating'} the login revokes the old selection`, async ({browser}) => {
+  const s = await setup(browser, 'teacher');
+  try {
+    await body(s.page, 'teacher').fill('保留教师原正文');
+    await open(s.page); await result(s.page).fill('旧登录下未确认的文字');
+    const other = await s.context.newPage(); await other.goto(origin);
+    await other.evaluate(() => localStorage.setItem('classworks-v2-refresh-token', 'another-login'));
+    await expect(work(s.page)).toContainText('编辑范围已变化');
+    if (restore) await other.evaluate(() => localStorage.setItem('classworks-v2-refresh-token', 'teacher-refresh'));
+    await s.page.bringToFront();
+    await expect(work(s.page).getByRole('button', {name: '插入正文', exact: true})).toBeDisabled();
+    await expect(body(s.page, 'teacher')).toHaveValue('保留教师原正文');
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
+test('teacher credentials: ordinary access-token renewal keeps the current selection usable', async ({browser}) => {
+  const s = await setup(browser, 'teacher');
+  try {
+    await body(s.page, 'teacher').fill('保留教师原正文');
+    await open(s.page); await result(s.page).fill('续期后确认的文字');
+    const other = await s.context.newPage(); await other.goto(origin);
+    // Normal renewal changes only the access token; the login refresh token stays.
+    await other.evaluate(() => localStorage.setItem('classworks-v2-access-token', 'renewed-teacher-access'));
+    await s.page.bringToFront();
+    await insert(s.page);
+    await expect(body(s.page, 'teacher')).toHaveValue('保留教师原正文续期后确认的文字');
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
 for (const role of ['screen', 'teacher']) test(`${role}: required and optional confirmation only submits plain text through the existing save`, async ({browser, request}) => {
   const s = await setup(browser, role);
   try {
