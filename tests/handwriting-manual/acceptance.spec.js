@@ -83,6 +83,9 @@ test('isolated screen and teacher handwriting acceptance session', async ({class
         await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
         await page.getByRole('button', {name: '数学', exact: true}).click();
       } else {
+        // page.reload() waits for HTML, not the account/workspace bootstrap.
+        // Decide between compact navigation and the wide layout only afterwards.
+        await expect(page.getByText('已授权 2 个教学空间', {exact: true})).toBeVisible();
         const navigation = page.locator('.teacher-task-nav');
         if (await navigation.isVisible()) await navigation.getByRole('button', {name: '新建发布', exact: true}).click();
         const composer = page.locator('.publication-composer');
