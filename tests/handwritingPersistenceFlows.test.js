@@ -51,3 +51,24 @@ test('an old successful save cannot close the composer or clear its confirmed dr
   assert.equal(h.loadDraft('screen-a', 'new').content, '原班已确认文字');
   assert.equal(h.requests.filter(r => r.path.includes('/feed')).length, 0);
 });
+
+for (const change of ['token', 'credential']) for (const manual of [false, true]) test(`a changed ${change} during ${manual ? 'manual' : 'automatic'} replay retains the original queue`, async () => {
+  const store = h.newStore({screen: true}), hold = deferred();
+  store.screenNetworkOnline = false;
+  await store.saveScreenPublication({content: '第一项确认文字'});
+  await store.saveScreenPublication({content: '第二项确认文字'});
+  store.screenNetworkOnline = true;
+  h.routes.set('POST /api/v2/classroom-screens/publications', async (_req, reply) => {
+    await hold.promise; reply({id: 'old-replay-success', revision: 1});
+  });
+  const pending = manual ? store.retryScreenQueuedPublication(store.screenPendingUploads[0].id) : store.flushScreenPublicationQueue();
+  await eventually(() => assert.ok(h.requests.some(r => r.method === 'POST')));
+  // Bootstrap may still be waiting: the token changes before binding data does.
+  if (change === 'token') h.api.saveClassroomScreenToken('replacement-screen-token');
+  else store.screenSession.binding.credentialVersion = 2;
+  hold.resolve(); await pending;
+  assert.equal(h.requests.filter(r => r.method === 'POST').length, 1);
+  assert.equal(h.queue.loadScreenPublicationQueue('screen-a').length, 2);
+  assert.equal(store.screenSyncing, false);
+  assert.equal(h.requests.filter(r => r.path.includes('/feed')).length, 0);
+});

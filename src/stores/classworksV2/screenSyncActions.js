@@ -21,6 +21,13 @@ function isCurrentSync(store, bindingId, context) {
   return store.screenSession?.binding?.id === bindingId && screenSyncContexts.get(store) === context;
 }
 
+function screenUploadGuard(store, bindingId, context) {
+  const token = getClassroomScreenToken();
+  const version = store.screenSession?.binding?.credentialVersion;
+  return () => isCurrentSync(store, bindingId, context) && getClassroomScreenToken() === token
+    && store.screenSession?.binding?.credentialVersion === version;
+}
+
 function screenCommandGuard(store) {
   const bindingId = store.screenSession?.binding?.id;
   const context = screenSyncContexts.get(store);
@@ -286,6 +293,7 @@ export const screenSyncActions = {
   async flushScreenPublicationQueue() {
     const bindingId = this.screenSession?.binding?.id;
     const context = screenSyncContexts.get(this);
+    const isCurrent = screenUploadGuard(this, bindingId, context);
     if (!bindingId || !this.screenNetworkOnline || this.screenSyncing) return;
     context?.retry.begin();
     this.screenSyncing = true;
@@ -297,17 +305,17 @@ export const screenSyncActions = {
       }
       const pending = this.screenPendingUploads.filter((item) => item.status === "pending");
       for (const item of pending) {
-        if (!isCurrentSync(this, bindingId, context) || !this.screenNetworkOnline) break;
+        if (!isCurrent() || !this.screenNetworkOnline) break;
         try {
           await classworksV2Api.createScreenPublication(item.input);
-          if (!isCurrentSync(this, bindingId, context)) return;
+          if (!isCurrent()) return;
           const remaining = await mutateScreenPublicationQueue(bindingId, () => removeScreenPublicationQueueItem(bindingId, item.id));
-          if (!isCurrentSync(this, bindingId, context)) return;
+          if (!isCurrent()) return;
           this.screenPendingUploads = remaining;
           context?.retry.succeeded();
           savedAny = true;
         } catch (error) {
-          if (!isCurrentSync(this, bindingId, context)) return;
+          if (!isCurrent()) return;
           if (error instanceof ScreenPublicationQueueError) throw error;
           if (isTransientScreenRequestError(error)) { context?.retry.failed(); break; }
           const remaining = await mutateScreenPublicationQueue(bindingId, () => updateScreenPublicationQueueItem(bindingId, item.id, {
@@ -319,7 +327,7 @@ export const screenSyncActions = {
               details: error.response?.data?.details || null,
             },
           }));
-          if (!isCurrentSync(this, bindingId, context)) return;
+          if (!isCurrent()) return;
           this.screenPendingUploads = remaining;
           recordDiagnosticEvent({
             category: "SCREEN_SYNC",
@@ -330,20 +338,24 @@ export const screenSyncActions = {
           });
         }
       }
-      if (savedAny && isCurrentSync(this, bindingId, context)) {
+      if (savedAny && isCurrent()) {
         this.screenLastSyncedAt = new Date().toISOString();
         await this.loadActiveFeed();
       }
     } catch (error) {
-      if (isCurrentSync(this, bindingId, context)) {
+      if (isCurrent()) {
         context?.retry.failed();
         this.reportScreenQueueError(error);
       }
     } finally {
-      if (isCurrentSync(this, bindingId, context)) {
-        if (!this.screenQueueReadError && !this.readScreenPublicationQueue()) context?.retry.failed();
+      if (screenSyncContexts.get(this) === context) {
+        if (isCurrent() && !this.screenQueueReadError && !this.readScreenPublicationQueue()) context?.retry.failed();
         this.screenSyncing = false;
-        context?.retry.request();
+        if (isCurrent()) context?.retry.request();
+        else {
+          context?.retry.pause();
+          this.screenError = "大屏绑定或凭证已变化，本次补传已暂停，原队列已保留。请核对当前绑定后重试。";
+        }
       }
     }
   },
@@ -351,6 +363,7 @@ export const screenSyncActions = {
   async retryScreenQueuedPublication(itemId, {allowDuplicate = false} = {}) {
     const bindingId = this.screenSession?.binding?.id;
     const context = screenSyncContexts.get(this);
+    const isCurrent = screenUploadGuard(this, bindingId, context);
     if (!bindingId || !this.screenNetworkOnline || this.screenSyncing) return false;
     if (!this.recoverScreenPublicationQueue()) return false;
     const item = this.screenPendingUploads.find((candidate) => candidate.id === itemId);
@@ -362,16 +375,16 @@ export const screenSyncActions = {
         ...item.input,
         ...(allowDuplicate ? {allowDuplicate: true} : {}),
       });
-      if (!isCurrentSync(this, bindingId, context)) return false;
+      if (!isCurrent()) return false;
       const remaining = await mutateScreenPublicationQueue(bindingId, () => removeScreenPublicationQueueItem(bindingId, item.id));
-      if (!isCurrentSync(this, bindingId, context)) return false;
+      if (!isCurrent()) return false;
       this.screenPendingUploads = remaining;
       context?.retry.succeeded();
       this.screenLastSyncedAt = new Date().toISOString();
       await this.loadActiveFeed();
       return true;
     } catch (error) {
-      if (!isCurrentSync(this, bindingId, context)) return false;
+      if (!isCurrent()) return false;
       if (error instanceof ScreenPublicationQueueError) {
         context?.retry.failed();
         this.reportScreenQueueError(error);
@@ -388,7 +401,7 @@ export const screenSyncActions = {
             details: error.response?.data?.details || null,
           },
         }));
-        if (!isCurrentSync(this, bindingId, context)) return false;
+        if (!isCurrent()) return false;
         this.screenPendingUploads = remaining;
       } catch (storageError) {
         if (!isTransientScreenRequestError(error)) context?.retry.failed();
@@ -404,9 +417,13 @@ export const screenSyncActions = {
       });
       return false;
     } finally {
-      if (isCurrentSync(this, bindingId, context)) {
+      if (screenSyncContexts.get(this) === context) {
         this.screenSyncing = false;
-        context?.retry.request();
+        if (isCurrent()) context?.retry.request();
+        else {
+          context?.retry.pause();
+          this.screenError = "大屏绑定或凭证已变化，本次补传已暂停，原队列已保留。请核对当前绑定后重试。";
+        }
       }
     }
   },
