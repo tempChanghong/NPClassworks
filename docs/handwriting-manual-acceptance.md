@@ -7,7 +7,7 @@
 在 NPClassworks 根目录运行：
 
 ```powershell
-# 默认后端为相邻 NPClassworksKV。可指定另一个已安装依赖的只读候选工作树：
+# 默认后端为相邻 NPClassworksKV。可指定另一个已安装依赖的独立候选工作树：
 # $env:CLASSWORKS_BACKEND_ROOT = 'D:\CodeProjects\Research\handwriting-integration-kv-main-20261020'
 # 非默认 PostgreSQL 目录可设置：
 # $env:NPEP_TEST_PG_BIN = 'C:\Program Files\PostgreSQL\17\bin'
@@ -39,6 +39,8 @@ pnpm run test:handwriting:manual:smoke
 
 ## 操作表
 
+将下表复制到本次忽略目录中的 `browser/operator-notes.md` 填写，不要在会话运行中编辑仓库内本指南或源码。`manual-session.json` 由工具写入，不要直接修改它作为签字记录。
+
 | 项目 | 操作与应见结果 | 人工结果 |
 | --- | --- | --- |
 | 新笔迹 | 真人书写“完成第10—20页，第1、11题”“选做P10～15，第8题”“化学：CO、NaOH、H2O”“Unit 10”，至少重复一组新笔迹；记录原始结果、自动改善和需手改处，不用生成字体代替 | 待填 |
@@ -62,3 +64,14 @@ pnpm run test:handwriting:manual:smoke
 - 内存用 Edge 浏览器任务管理器另记空闲、识别期间、关闭后的范围；记清哪些进程被计入，不把 JS 堆、资源大小或两种角色同时打开的总量当作单次识别成本。测某个角色时，另一角色不要同时保持识别模型运行。不能用强制 GC 或清缓存制造低内存结果。
 
 填完操作表并记录设备、问题与指标后，才讨论人工通过与 PR。启动冒烟和模拟触控通过不能替代人工结论。
+
+## 入口验证记录（2026-10-20）
+
+本地运行候选 `d21f5e2403ff84b529cc970de3b120328b5b470f`，配合 KV `main` 的 `ca0944ef3a2ce4b57620219895cf74a05ff3a551`：
+
+- 人工入口启动冒烟：1 通过，无跳过/重试；记录 `.artifacts/handwriting-kv/6bd434fc7816483c9756503a6d8f5d2f/result.json`，模式 `manual-startup-smoke`，人工结论仍为 `PENDING`。两个角色错误计数均为 0，未启动识别 Worker。
+- 普通真实 KV 回归：22 通过，无跳过/重试；记录 `.artifacts/handwriting-kv/fefc226fa0254990884006c593dcda02/result.json`，模式 `automated`。该次实际构建目录的 PWA 校验通过。
+- 两次通过记录均显示源码稳定、生成客户端还原、临时 PostgreSQL 关闭及清理成功。之前两次入口准备失败的集群已停止并保留诊断，未当作人工验收结果。
+- 全量 Node 测试 826 项：812 通过、14 项既有条件跳过、0 失败；记录 `.artifacts/handwriting-manual-final-unit.log`。ESLint 与 Git 空白检查通过。
+
+启动复验修正了验收工具在窄窗口下未等待账号加载就判断教师导航的竞态，并给准备操作加上有界等待与阶段记录。截图关闭仍可能产生失败页文字快照，因此人工模式额外关闭了当前锁定版本 Playwright 的该项快照。应用正文录入、识别模型及运行代码未因这轮验收工具工作而改变。
