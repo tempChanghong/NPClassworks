@@ -32,12 +32,14 @@ async function chooseClass(page, scope, name) {
   await page.getByRole('option').filter({hasText: name}).first().click();
   await page.keyboard.press('Escape');
 }
-async function setup(classroom, role) {
-  const session = await classroom.open(role, {viewport: {width: 1280, height: 720}, deviceScaleFactor: 2, hasTouch: true});
+async function setup(classroom, role, contextOptions = {}) {
+  const session = await classroom.open(role, {viewport: {width: 1280, height: 720}, deviceScaleFactor: 2, hasTouch: true, ...contextOptions});
   const {page} = session;
   session.mutations = observe(page);
-  await page.evaluate(() => navigator.serviceWorker.ready);
-  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  if (contextOptions.serviceWorkers !== 'block') {
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  }
   if (role === 'screen') {
     await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
     await page.getByRole('button', {name: '数学', exact: true}).click();
@@ -732,7 +734,10 @@ test('a real late conflict reload preserves confirmed screen text after token ro
 for (const method of ['automatic', 'manual']) test(`a late real ${method} rejection cannot revoke a peer's newer queued duplicate confirmation`, async ({classroom, request}) => {
   const text = '双窗口确认仍需发布第10—20页，第1、11题';
   const original = await create(classroom, request, text);
-  const {page, context, errors, mutations} = await setup(classroom, 'screen');
+  // Per-tab CDP offline conditions must not route a peer's POST through a
+  // shared SW with another target's network state. These cases test HTTP/queue
+  // ordering; the dedicated offline reload cases retain the actual SW.
+  const {page, context, errors, mutations} = await setup(classroom, 'screen', {serviceWorkers: 'block'});
   const peer = await context.newPage(), peerErrors = [], peerMutations = observe(peer);
   peer.on('pageerror', error => peerErrors.push(error.message));
   await peer.goto(origin);
