@@ -107,6 +107,26 @@ async function edit(classroom, role, options) {
   return session;
 }
 
+async function changePeerTeacherLogin(classroom, request, page, peer, change) {
+  if (change === 'renewal') {
+    const response = await request.post(`${api}/accounts/refresh`, {data: {refresh_token: classroom.credentials.refreshToken}});
+    expect(response.status()).toBe(200);
+    const payload = await response.json(), token = (payload.data || payload).access_token;
+    expect(typeof token).toBe('string');
+    await peer.evaluate(value => localStorage.setItem('classworks-v2-access-token', value), token);
+  } else {
+    const {generateTokenPair} = await backendModule('utils/tokenManager.js');
+    const tokens = await generateTokenPair(classroom.account);
+    const replaceLogin = values => {
+      localStorage.setItem('classworks-v2-access-token', values.accessToken);
+      localStorage.setItem('classworks-v2-refresh-token', values.refreshToken);
+    };
+    await peer.evaluate(replaceLogin, tokens);
+    if (change === 'login-return') await peer.evaluate(replaceLogin, classroom.credentials);
+  }
+  await page.bringToFront();
+}
+
 test('the production test server serves the pinned module and WASM with their correct MIME types', async ({request}) => {
   for (const [name, type] of [['ort-wasm-simd-threaded.mjs', 'text/javascript'], ['ort-wasm-simd-threaded.wasm', 'application/wasm']]) {
     const response = await request.head(`${origin}/handwriting/r19/assets/${name}`);
@@ -198,6 +218,66 @@ test('history reuse inserts confirmed handwriting into a new draft without chang
   expect(rows).toHaveLength(2); expect(original.content).toBe('历史来源必做'); expect(original.revision).toBe(1);
   expect(copy.content).toBe('复用后确认的第10—20页'); expect(copy.contentJson.optionalContent).toBe('复用后选做第8题');
   expect(copy.status).toBe('DRAFT'); expect(copy.revision).toBe(1); expect(errors).toEqual([]);
+});
+
+for (const change of ['login', 'login-return', 'renewal']) test(`history reuse ${change}: a held real source read retains its login ownership`, async ({classroom, request}) => {
+  const source = await create(classroom, request, '等待期间的历史复用正文', {title: '登录交接复用源', boardDate: '2020-01-01', publishAt: '2020-01-01T00:00:00Z'});
+  // This exact GET must reach page.route; offline/PWA cases keep the actual SW.
+  const {page, context, errors} = await classroom.open('teacher', {serviceWorkers: 'block'});
+  const mutations = observe(page), peer = await context.newPage();
+  await peer.goto(origin); await expect(peer.getByRole('button', {name: '账号', exact: true}).first()).toBeVisible();
+  await page.bringToFront();
+  await page.getByRole('button', {name: '复用历史作业', exact: true}).click();
+  const dialog = page.locator('.homework-reuse-dialog');
+  await dialog.getByRole('checkbox', {name: '数学 · 登录交接复用源', exact: true}).check();
+  await dialog.getByLabel('新作业板日期', {exact: true}).fill(todayBoardDate());
+  let release, fetched = false;
+  const gate = new Promise(resolve => { release = resolve; }), endpoint = `${api}/api/v2/publications/${source.id}`;
+  await page.route(endpoint, async route => {
+    const response = await route.fetch(); expect(response.status()).toBe(200);
+    fetched = true; await gate; await route.fulfill({response});
+  });
+  try {
+    await dialog.getByRole('button', {name: '核对所选 1 项作业', exact: true}).click();
+    await expect.poll(() => fetched).toBe(true);
+    await changePeerTeacherLogin(classroom, request, page, peer, change);
+    const received = page.waitForResponse(response => response.url() === endpoint && response.request().method() === 'GET');
+    release(); await (await received).finished();
+    if (change === 'renewal') await expect(dialog.locator('textarea').first()).toHaveValue(source.content);
+    else await expect(dialog).toHaveCount(0);
+    expect(mutations).toEqual([]);
+    const [row] = await persisted(classroom, mutations);
+    expect(row.id).toBe(source.id); expect(row.revision).toBe(1); expect(row.revisions).toHaveLength(1);
+    expect(errors).toEqual([]);
+  } finally { release(); }
+});
+
+for (const change of ['login', 'login-return', 'renewal']) test(`template ${change}: real replacement confirmation preserves handwritten text ownership`, async ({classroom, request}) => {
+  const created = await request.post(`${api}/accounts/preferences/homework-templates`, {
+    headers: {Authorization: `Bearer ${classroom.credentials.accessToken}`},
+    data: {name: '登录交接模板', title: '', content: '模板必做第12页', optionalContent: '模板选做第9题', materials: '', submission: ''},
+  });
+  expect(created.status()).toBe(201);
+  const {page, context, errors, mutations} = await setup(classroom, 'teacher');
+  await write(page, '保留的手写确认正文第10—20页');
+  await page.getByRole('button', {name: '添加选做内容', exact: true}).click();
+  await write(page, '保留的手写选做第8题', 'optionalContent');
+  const peer = await context.newPage();
+  await peer.goto(origin); await expect(peer.getByRole('button', {name: '账号', exact: true}).first()).toBeVisible();
+  await page.bringToFront();
+  await page.getByRole('button', {name: '个人作业模板', exact: true}).click();
+  const templates = page.locator('.homework-templates');
+  await templates.getByRole('button', {name: '填写使用', exact: true}).click();
+  await templates.getByRole('button', {name: '套用到编辑器', exact: true}).click();
+  const confirm = page.getByRole('button', {name: '替换内容', exact: true});
+  await expect(confirm).toBeVisible();
+  await changePeerTeacherLogin(classroom, request, page, peer, change);
+  await confirm.click();
+  await expect(confirm).toHaveCount(0);
+  await expect(body(page, 'teacher')).toHaveValue(change === 'renewal' ? '模板必做第12页' : '保留的手写确认正文第10—20页');
+  await expect(composer(page, 'teacher').getByLabel('选做内容（可选）', {exact: true})).toHaveValue(change === 'renewal' ? '模板选做第9题' : '保留的手写选做第8题');
+  await expect(templates).toHaveCount(0);
+  expect(await persisted(classroom, mutations)).toEqual([]); expect(mutations).toEqual([]); expect(errors).toEqual([]);
 });
 
 test('changing the actual target class during editor download revokes the old handwriting request', async ({classroom}) => {
