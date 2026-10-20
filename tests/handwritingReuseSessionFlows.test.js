@@ -62,10 +62,13 @@ for (const change of ['login', 'login-return', 'renewal']) test(`template confir
   }
   await nextTick();
   s.templatesOpen.value = true;
+  s.screenPreview.value = {publication: {content: s.form.content}};
   const pending = s.applyTemplate({title: '模板标题', content: '模板必做', optionalContent: '模板选做', submission: '', materials: ''});
   try {
     assert.equal(s.templateApplying.value, true);
     replaceCredentials(change); await nextTick();
+    assert.equal(s.templatesOpen.value, change === 'renewal', 'a changed login cannot keep offering templates from the previous session');
+    if (change !== 'renewal') assert.equal(s.screenPreview.value, null);
     h.dialogs.settleActionDialog(true); await pending;
     assert.equal(s.form.content, change === 'renewal' ? '模板必做' : '必须保留的手写确认正文');
     assert.equal(s.form.optionalContent, change === 'renewal' ? '模板选做' : '必须保留的选做第8题');

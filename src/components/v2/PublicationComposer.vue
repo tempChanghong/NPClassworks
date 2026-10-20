@@ -746,7 +746,7 @@ const canSwitchDuringSave = computed(() => Boolean(
   && JSON.stringify(form) === submittedFormSnapshot.value
 ));
 defineExpose({requestBusy, hasUnsavedChanges, canSwitchDuringSave});
-watch(() => [store.account?.id, store.teacherSessionVersion, props.editingPublication, form.type, form.noHomework], () => { templatesOpen.value = false; screenPreview.value = null; }, {flush: "sync"});
+watch(() => [store.account?.id, store.teacherSessionVersion, credentialEpoch.value, props.editingPublication, form.type, form.noHomework], () => { templatesOpen.value = false; screenPreview.value = null; }, {flush: "sync"});
 const releaseReloadProtection = registerAppReloadBlocker(() => {
   if (saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value) {
     return "正在保存或载入发布内容，请等待完成后再刷新。";
