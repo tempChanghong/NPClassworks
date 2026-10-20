@@ -654,3 +654,64 @@ test('another real tab can remove later queued handwriting while an earlier real
     expect(rows[0].revisions).toHaveLength(1); expect(errors).toEqual([]); expect(otherErrors).toEqual([]);
   } finally { release(); }
 });
+
+for (const change of ['login', 'login-return', 'renewal']) test(`teacher ${change}: a real held conflict reload keeps its login ownership`, async ({classroom, request}) => {
+  const original = await create(classroom, request, '教师最初的服务器正文');
+  // The held GET must pass through page.route, rather than a SW-owned fetch.
+  // Other cases retain the actual service worker for offline/PWA coverage.
+  const {page, context, errors, mutations} = await edit(classroom, 'teacher', {serviceWorkers: 'block'});
+  await body(page, 'teacher').fill(''); await write(page, '等待期间必须保留的已确认正文');
+  expect((await request.patch(`${api}/api/v2/publications/${original.id}`, {
+    headers: {Authorization: `Bearer ${classroom.credentials.accessToken}`, 'If-Match': '"1"'},
+    data: {content: '教师远程第二版'},
+  })).status()).toBe(200);
+  await page.getByRole('button', {name: '保存修改', exact: true}).click();
+  await expect(composer(page, 'teacher')).toContainText('服务器现在是版本 2');
+  const other = await context.newPage(); await other.goto(origin);
+  await expect(other.getByRole('button', {name: '账号', exact: true}).first()).toBeVisible();
+  let release, fetched = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  const endpoint = `${api}/api/v2/publications/${original.id}`;
+  await page.route(endpoint, async route => {
+    expect(route.request().method()).toBe('GET');
+    const response = await route.fetch(); expect(response.status()).toBe(200);
+    fetched = true; await gate; await route.fulfill({response});
+  });
+  try {
+    await page.bringToFront();
+    const reload = composer(page, 'teacher').getByRole('button', {name: '放弃本机输入并载入最新版', exact: true});
+    await reload.click(); await page.getByRole('button', {name: '载入最新版', exact: true}).click();
+    await expect.poll(() => fetched).toBe(true);
+    await expect(reload).toHaveClass(/v-btn--loading/);
+    if (change === 'renewal') {
+      const response = await request.post(`${api}/accounts/refresh`, {data: {refresh_token: classroom.credentials.refreshToken}});
+      expect(response.status()).toBe(200);
+      const payload = await response.json(), token = (payload.data || payload).access_token;
+      expect(typeof token).toBe('string');
+      await other.evaluate(value => localStorage.setItem('classworks-v2-access-token', value), token);
+    } else {
+      const {generateTokenPair} = await backendModule('utils/tokenManager.js');
+      const tokens = await generateTokenPair(classroom.account);
+      const replaceLogin = values => {
+        localStorage.setItem('classworks-v2-access-token', values.accessToken);
+        localStorage.setItem('classworks-v2-refresh-token', values.refreshToken);
+      };
+      await other.evaluate(replaceLogin, tokens);
+      if (change === 'login-return') await other.evaluate(replaceLogin, classroom.credentials);
+    }
+    const received = page.waitForResponse(response => response.url() === endpoint && response.request().method() === 'GET');
+    release(); await (await received).finished();
+    await page.bringToFront();
+    if (change === 'renewal') {
+      await expect(body(page, 'teacher')).toHaveValue('教师远程第二版');
+      await expect(reload).toHaveCount(0);
+    } else {
+      await expect(reload).not.toHaveClass(/v-btn--loading/);
+      await expect(body(page, 'teacher')).toHaveValue('等待期间必须保留的已确认正文');
+      await expect(composer(page, 'teacher')).toContainText('服务器现在是版本 2');
+    }
+    const rows = await persisted(classroom, mutations);
+    expect(rows).toHaveLength(1); expect(rows[0].revision).toBe(2); expect(rows[0].content).toBe('教师远程第二版');
+    expect(mutations).toHaveLength(1); expect(mutations[0].method).toBe('PATCH'); expect(errors).toEqual([]);
+  } finally { release(); }
+});
