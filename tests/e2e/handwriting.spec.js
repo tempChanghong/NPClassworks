@@ -609,6 +609,59 @@ for (const [role, width] of [['screen', 1280], ['teacher', 640]]) test(`cancella
   } finally { await s.context.close(); }
 });
 
+for (const [role, reopen] of [['screen', false], ['teacher', true]]) test(`lock handoff: ${role} can ${reopen ? 'reopen and ' : ''}retry while its previous native lock is releasing`, async ({browser}) => {
+  const s = await setup(browser, role);
+  try {
+    await s.page.evaluate(() => {
+      const native = navigator.locks.request.bind(navigator.locks);
+      let delayFirst = true;
+      const gate = new Promise(resolve => { window.ocrTest.acknowledgeRelease = resolve; });
+      navigator.locks.request = (name, ...args) => {
+        if (name !== 'npclassworks-handwriting-lab-ocr' || !delayFirst) return native(name, ...args);
+        delayFirst = false;
+        const callback = args.pop();
+        return native(name, ...args, async lock => {
+          try { return await callback(lock); }
+          finally {
+            // Retain the actual native lock until the isolated browser test
+            // acknowledges teardown, rather than assuming a fixed IPC delay.
+            if (lock) { window.ocrTest.releasePending = true; await gate; }
+          }
+        });
+      };
+      const post = window.Worker.prototype.postMessage;
+      let holdFirst = true;
+      window.Worker.prototype.postMessage = function(message, ...args) {
+        if (message.type === 'recognize' && holdFirst) {
+          holdFirst = false; window.ocrTest.modelHeld = true; return;
+        }
+        return post.call(this, message, ...args);
+      };
+    });
+    await body(s.page, role).fill('原正文保留');
+    await open(s.page); await paint(s.page, '第10—20页，第1、11题。');
+    await work(s.page).getByRole('button', {name: '识别文字', exact: true}).click();
+    await s.page.waitForFunction(() => window.ocrTest.modelHeld);
+    await work(s.page).getByRole('button', {name: '取消识别', exact: true}).click();
+    await s.page.waitForFunction(() => window.ocrTest.releasePending);
+    if (reopen) {
+      await work(s.page).getByRole('button', {name: '返回录入', exact: true}).click();
+      await open(s.page); await paint(s.page, '第10—20页，第1、11题。');
+    }
+    await work(s.page).getByRole('button', {name: '识别文字', exact: true}).click();
+    await expect(work(s.page)).toHaveAttribute('data-busy', 'true');
+    await noLiveWorkers(s.page);
+    await s.page.evaluate(() => window.ocrTest.acknowledgeRelease());
+    await expect(work(s.page)).toHaveAttribute('data-busy', 'false', {timeout: 90000});
+    expect(await result(s.page).inputValue()).toContain('10');
+    await expect(body(s.page, role)).toHaveValue('原正文保留');
+    await insert(s.page); await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally {
+    await s.page.evaluate(() => window.ocrTest.acknowledgeRelease?.()).catch(() => {});
+    await s.context.close();
+  }
+});
+
 test('lifecycle: a second window retains its ink and can recognize after the owning window closes', async ({browser}) => {
   const s = await setup(browser, 'screen');
   try {

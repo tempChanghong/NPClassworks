@@ -3,6 +3,7 @@ import pins from "./resource-pins.js";
 import {InputBufferPool} from './input-buffer-pool.js';
 const workerPath = pins.files.find(file => file.path.endsWith("/ocr-worker.js")).path;
 let activeOwner;
+let localLockRelease;
 let sequence = 0;
 const requestTimeoutMs = 90000;
 // One recovery bit for this page's fixed resources, shared across replacement
@@ -25,12 +26,29 @@ export class RecognitionSession {
           timeout = setTimeout(() => settle(reject, Error("等待识别任务超时，笔迹保留，请重试。")), requestTimeoutMs);
           signal.addEventListener('abort', cancelWait, {once: true});
           if (signal.aborted) { cancelWait(); return; }
-          navigator.locks.request("npclassworks-handwriting-lab-ocr", {ifAvailable: true}, async lock => {
-            // A browser lock callback may arrive after cancellation or timeout.
-            // Release only its captured gate; never the immediate retry's lock.
+          const requestLock = () => {
             if (!waiting || signal.aborted || generation !== this.generation) { unlock(); return; }
-            settle(resolve, Boolean(lock)); if (lock) await gate;
-          }).catch(error => settle(reject, error));
+            let released;
+            const completion = new Promise(done => { released = done; });
+            const finish = () => {
+              if (localLockRelease === completion) localLockRelease = null;
+              released();
+            };
+            try {
+              navigator.locks.request("npclassworks-handwriting-lab-ocr", {ifAvailable: true}, async lock => {
+                if (lock) localLockRelease = completion;
+                // A browser lock callback may arrive after cancellation or timeout.
+                // Release only its captured gate; never the immediate retry's lock.
+                if (!waiting || signal.aborted || generation !== this.generation) { unlock(); return; }
+                settle(resolve, Boolean(lock)); if (lock) await gate;
+              }).then(finish, error => { finish(); settle(reject, error); });
+            } catch (error) { finish(); settle(reject, error); }
+          };
+          // Resolving our old gate does not synchronously release its native
+          // lock. Wait for that receipt, including after closing/reopening an
+          // editor. Keep ifAvailable: never queue behind another window's work.
+          if (localLockRelease) localLockRelease.then(requestLock);
+          else requestLock();
         });
       } finally {
         waiting = false; clearTimeout(timeout); signal.removeEventListener('abort', cancelWait);

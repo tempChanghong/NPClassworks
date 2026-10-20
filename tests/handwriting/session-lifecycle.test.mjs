@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {RecognitionSession} from '../../src/features/handwriting/recognition-session.js';
+import {createBrowserLocks} from '../helpers/browserLocks.js';
 const workers=[];
 class FakeWorker extends globalThis.EventTarget{
   constructor(){super();this.messages=[];this.terminated=false;workers.push(this);}
@@ -39,6 +40,87 @@ test('canceled cold preparation cannot cancel an immediate retry',async()=>{
   const compute=await prepared(replacement,{offline:true});compute.reply('result',{lines:[{text:'第12—15页'}]});
   assert.equal((await retry).lines[0].text,'第12—15页');await oldRejected;assert.equal(compute.terminated,false);s.dispose();
 });
+
+for (const replace of [false, true]) test(`an immediate ${replace ? 'replacement-session' : 'same-session'} retry waits for its own native lock release`, async () => {
+  Object.defineProperty(navigator, 'locks', {value: createBrowserLocks(), configurable: true});
+  const old = new RecognitionSession(() => {}), next = replace ? new RecognitionSession(() => {}) : old;
+  const first = old.recognize(lines), canceled = assert.rejects(first, /取消/);
+  let retry, failed;
+  try {
+    await tick(); const compute = await prepared(workers.at(-1));
+    old.dispose();
+    retry = next.recognize(lines); retry.catch(error => { failed = error; });
+    await tick();
+    assert.equal(failed, undefined, failed?.message);
+    assert.notEqual(workers.at(-1), compute);
+    const replacement = await prepared(workers.at(-1));
+    replacement.reply('result', {lines: [{text: '第10—20页，第11题'}]});
+    assert.equal((await retry).lines[0].text, '第10—20页，第11题');
+    await canceled;
+  } finally {
+    old.dispose(); next.dispose(); await Promise.allSettled([first, retry]); await tick();
+    Object.defineProperty(navigator, 'locks', {value: undefined, configurable: true});
+  }
+});
+
+test('canceling a wait for native lock release cannot cancel a later retry', async () => {
+  const native = createBrowserLocks();
+  let acknowledge, firstLock = true;
+  const acknowledged = new Promise(resolve => { acknowledge = resolve; });
+  Object.defineProperty(navigator, 'locks', {value: {async request(...args) {
+    const delayed = firstLock; firstLock = false;
+    const result = await native.request(...args);
+    if (delayed) await acknowledged;
+    return result;
+  }}, configurable: true});
+  const old = new RecognitionSession(() => {}), next = new RecognitionSession(() => {});
+  const first = old.recognize(lines), canceled = assert.rejects(first, /取消/);
+  let waiting, retry;
+  try {
+    await tick(); await prepared(workers.at(-1)); old.dispose(); await canceled;
+    waiting = next.recognize(lines);
+    const stopped = assert.rejects(waiting, /取消/);
+    next.dispose(); await stopped;
+    retry = next.recognize(lines); retry.catch(() => {});
+    acknowledge(); await tick();
+    const compute = await prepared(workers.at(-1));
+    compute.reply('result', {lines: [{text: '第8题'}]});
+    assert.equal((await retry).lines[0].text, '第8题');
+  } finally {
+    acknowledge(); old.dispose(); next.dispose();
+    await Promise.allSettled([first, waiting, retry]); await tick();
+    Object.defineProperty(navigator, 'locks', {value: undefined, configurable: true});
+  }
+});
+
+test('a missing native release receipt cannot leave a replacement session busy forever', async t => {
+  const native = createBrowserLocks();
+  let acknowledge, firstLock = true;
+  const acknowledged = new Promise(resolve => { acknowledge = resolve; });
+  Object.defineProperty(navigator, 'locks', {value: {async request(...args) {
+    const delayed = firstLock; firstLock = false;
+    const result = await native.request(...args);
+    if (delayed) await acknowledged;
+    return result;
+  }}, configurable: true});
+  const old = new RecognitionSession(() => {}), next = new RecognitionSession(() => {});
+  const first = old.recognize(lines), canceled = assert.rejects(first, /取消/);
+  let waiting;
+  try {
+    await tick(); await prepared(workers.at(-1)); old.dispose(); await canceled;
+    const workerCount = workers.length;
+    t.mock.timers.enable({apis: ['setTimeout']});
+    waiting = next.recognize(lines);
+    const timedOut = assert.rejects(waiting, /超时/);
+    t.mock.timers.tick(90001); await timedOut;
+    assert.equal(workers.length, workerCount);
+    assert.equal(next.worker, null); assert.equal(next.controller, null); assert.equal(next.unlock, null);
+  } finally {
+    acknowledge(); old.dispose(); next.dispose(); t.mock.timers.reset();
+    await Promise.allSettled([first, waiting]); await tick();
+    Object.defineProperty(navigator, 'locks', {value: undefined, configurable: true});
+  }
+});
 test('late old messages cannot resolve a newer request',async()=>{
   const s=new RecognitionSession(()=>{}),old=s.recognize(lines),rejected=assert.rejects(old);
   await tick();const first=workers.at(-1);s.dispose();await rejected;
@@ -56,7 +138,11 @@ test('failed resource preparation never creates input tensors and releases owner
 });
 test('cancel before asynchronous Web Lock acquisition releases the old gate only',async()=>{
   const callbacks=[];
-  Object.defineProperty(navigator,'locks',{value:{request(_name,_options,callback){callbacks.push(callback);return Promise.resolve();}},configurable:true});
+  Object.defineProperty(navigator,'locks',{value:{request(_name,_options,callback){
+    return new Promise((resolve,reject)=>callbacks.push(async lock=>{
+      try{const result=await callback(lock);resolve(result);return result;}catch(error){reject(error);throw error;}
+    }));
+  }},configurable:true});
   const s=new RecognitionSession(()=>{}),old=s.recognize(lines),rejected=assert.rejects(old);
   s.dispose();const retry=s.recognize(lines);await callbacks[0]({name:'old'});await tick();await rejected;
   let released=false;const currentGate=callbacks[1]({name:'new'}).then(()=>{released=true;});await tick();assert.equal(released,false);
