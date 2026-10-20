@@ -32,6 +32,11 @@ jobs:
       - run: pnpm run lint:check
       - run: pnpm run build
       - run: pnpm pwa:validate
+      - name: Verify production module MIME with native Nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes nginx
+          bash scripts/check-nginx-static.sh dist
 
   browser:
     runs-on: ubuntu-latest

@@ -71,3 +71,9 @@ pnpm run test:handwriting:kv
 候选已与当前 `main` 整理并重新验证，见 [接入整理记录](handwriting-integration-20261020.md)。PR 增加了独立的原生 PostgreSQL 手写回归；本地用 Edge，Linux CI 用 Chromium。未配置系统默认 PostgreSQL 工具路径时，CI 显式传入 `NPEP_TEST_PG_BIN`。隔离端口从动态私有范围分配并短暂保留，避免随机低端口被浏览器拒绝。
 
 需要真人笔迹操作时可运行 `pnpm run test:handwriting:manual`，详见 [人工验收指南](handwriting-manual-acceptance.md)。该入口创建临时测试环境，和正式学校无关；页面使用 100% 缩放及设备原有 Windows 显示设置。会话结束和启动冒烟通过均不会自动标记人工验收通过。
+
+### 自托管静态文件
+
+识别运行库的 `.mjs` 必须以 `application/javascript` 返回，不能是 `application/octet-stream`，否则浏览器的模块导入会因严格 MIME 检查失败。`deploy/nginx.conf` 显式提供该映射，并让缺失模块返回 404，避免被 SPA 文档替代。自建反向代理也应保留模块和 WASM 的正确类型。
+
+Store 构建与生产部署检查会在 Linux CI 用原生 Nginx、候选 `dist` 和实际生产 server 配置执行 `bash scripts/check-nginx-static.sh dist`。测试仅监听回环地址，覆盖模块、WASM、普通脚本、JSON、HTML 和缺失模块；上层 MIME 表有意不预设 `.mjs`，确保不会因 CI 系统默认值较新而掩盖旧运行镜像的问题。Windows 本地不将 shell 语法检查当作这项 Nginx 运行验收。
