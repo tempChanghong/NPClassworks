@@ -63,3 +63,5 @@ pnpm run test:handwriting:kv
 真实 KV 隔离联调已经覆盖本地数据库保存，详见 [2026-10-20 验证记录](handwriting-kv-validation-20261020.md)。实体一体机真人新笔迹、真实触控/Windows 200% 缩放、已安装 PWA 和生产服务仍需现场验收；本地数据库通过不代表现场通过。
 
 保存或补传期间绑定/凭证变化的修复、草稿与冲突复验，另见 [第二轮缺陷复验](handwriting-kv-bugfix-review-20261020.md)。
+
+最后一轮凭证选区修复、预处理对照与完整回归见 [最后复验](handwriting-final-readiness-20261020.md)；正式启用步骤见 [接入计划](handwriting-production-rollout-plan.md)。
