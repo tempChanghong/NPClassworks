@@ -729,6 +729,79 @@ test('a real late conflict reload preserves confirmed screen text after token ro
   } finally { release(); }
 });
 
+for (const method of ['automatic', 'manual']) test(`a late real ${method} rejection cannot revoke a peer's newer queued duplicate confirmation`, async ({classroom, request}) => {
+  const text = '双窗口确认仍需发布第10—20页，第1、11题';
+  const original = await create(classroom, request, text);
+  const {page, context, errors, mutations} = await setup(classroom, 'screen');
+  const peer = await context.newPage(), peerErrors = [], peerMutations = observe(peer);
+  peer.on('pageerror', error => peerErrors.push(error.message));
+  await peer.goto(origin);
+  await expect(peer.getByRole('button', {name: '录入作业', exact: true}).first()).toBeVisible();
+  const primaryNetwork = await context.newCDPSession(page), peerNetwork = await context.newCDPSession(peer);
+  const offline = (session, value) => session.send('Network.emulateNetworkConditions', {
+    offline: value, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+  });
+  await offline(peerNetwork, true); await expect.poll(() => peer.evaluate(() => navigator.onLine)).toBe(false);
+  await page.bringToFront(); await write(page, text);
+  await offline(primaryNetwork, true); await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+  await page.getByRole('button', {name: '保存作业', exact: true}).click();
+  await expect(composer(page, 'screen')).not.toBeVisible();
+  const queueKey = `classworks-v2-screen-publication-queue:${classroom.binding.id}`;
+  const queued = () => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '[]'), queueKey);
+  const [item] = await queued();
+  let release, rejected = false, fault = false;
+  const gate = new Promise(resolve => { release = resolve; }), endpoint = `${api}/api/v2/classroom-screens/publications`;
+  await page.route(endpoint, async route => {
+    if (route.request().method() === 'POST' && !route.request().postDataJSON().allowDuplicate && !rejected) {
+      const actual = await route.fetch(); expect(actual.status()).toBe(409);
+      rejected = true; await gate; await route.fulfill({response: actual});
+    } else await route.continue();
+  });
+  await peer.route(endpoint, async route => {
+    if (route.request().method() === 'POST' && route.request().postDataJSON().allowDuplicate && !fault) {
+      fault = true;
+      await route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({message: 'controlled outage after peer confirmation'})});
+    } else await route.continue();
+  });
+  try {
+    if (method === 'automatic') {
+      await offline(primaryNetwork, false); await expect.poll(() => rejected).toBe(true);
+      await offline(peerNetwork, false);
+    } else {
+      await offline(peerNetwork, false);
+      await expect.poll(async () => (await queued())[0]?.error?.code).toBe('DUPLICATE_ASSIGNMENT_SUSPECTED');
+      await offline(primaryNetwork, false);
+      await page.locator('.screen-sync-chip').click();
+      await page.locator('.queued-publication').getByRole('button', {name: '重试', exact: true}).click();
+      await expect.poll(() => rejected).toBe(true);
+    }
+    await expect.poll(async () => (await queued())[0]?.error?.code).toBe('DUPLICATE_ASSIGNMENT_SUSPECTED');
+    await peer.bringToFront(); await peer.locator('.screen-sync-chip').click();
+    await peer.getByRole('button', {name: '确认仍然提交', exact: true}).click();
+    await expect.poll(() => fault).toBe(true);
+    await expect.poll(async () => (await queued())[0]?.status).toBe('pending');
+    const [confirmed] = await queued();
+    expect(confirmed.input).toEqual({...item.input, allowDuplicate: true});
+    expect(confirmed.id).toBe(item.id); expect(confirmed.queuedAt).toBe(item.queuedAt);
+    await offline(peerNetwork, true); // Leave the primary tab to recover the durable new decision.
+    release();
+    await expect.poll(async () => (await queued()).length, {timeout: 45000}).toBe(0);
+    await offline(peerNetwork, false);
+    await expect(page.locator('.screen-sync-chip')).not.toContainText('正在同步', {timeout: 25000});
+    const rows = await persisted(classroom, [...mutations, ...peerMutations]);
+    expect(rows).toHaveLength(2);
+    expect(rows.find(row => row.id === original.id).content).toBe(text);
+    const copy = rows.find(row => row.id !== original.id);
+    expect(copy.content).toBe(text); expect(copy.creationRequestId).toBe(item.input.clientRequestId);
+    for (const row of rows) { expect(row.revision).toBe(1); expect(row.revisions).toHaveLength(1); }
+    expect(mutations.map(m => m.body.allowDuplicate === true)).toEqual([false, true]);
+    expect(peerMutations.map(m => m.body.allowDuplicate === true)).toEqual([false, true]);
+    expect(new Set([...mutations, ...peerMutations].map(m => m.body.clientRequestId))).toEqual(new Set([item.input.clientRequestId]));
+    await storageTextOnly(page); await storageTextOnly(peer);
+    expect(errors).toEqual([]); expect(peerErrors).toEqual([]);
+  } finally { release(); }
+});
+
 test('another real tab can remove later queued handwriting while an earlier real upload awaits its receipt', async ({classroom}) => {
   const {page, context, errors, mutations} = await setup(classroom, 'screen');
   const other = await context.newPage(), otherErrors = [];
