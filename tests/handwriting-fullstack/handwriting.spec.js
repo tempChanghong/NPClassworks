@@ -645,7 +645,11 @@ test('another real tab can remove later queued handwriting while an earlier real
     // upload receipt and must not be used to infer that this batch has ended.
     release();
     await expect.poll(async () => (await queued()).length).toBe(0);
-    await expect(page.locator('.screen-sync-chip')).not.toContainText('正在同步');
+    // Once the durable batch is empty, restore the offline peer too. A shared
+    // SW feed fetch can otherwise remain pending until the client's existing
+    // 15s HTTP deadline, which is longer than the default 10s assertion limit.
+    await offline(otherNetwork, false);
+    await expect(page.locator('.screen-sync-chip')).not.toContainText('正在同步', {timeout: 25000});
     expect(mutations.filter(item => item.method === 'POST')).toHaveLength(1);
     expect(otherMutations).toEqual([]);
     await storageTextOnly(page);
