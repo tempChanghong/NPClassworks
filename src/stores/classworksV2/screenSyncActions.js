@@ -16,6 +16,7 @@ import {createScreenUploadRetry} from "@/utils/screenUploadRetry";
 import {isScreenReloadBlocked} from "@/utils/screenReloadProtection";
 
 const screenSyncContexts = new WeakMap();
+const STALE_UPLOAD_MESSAGE = "大屏绑定或凭证已变化，本次补传已暂停，原队列已保留。请核对当前绑定后重试。";
 
 function isCurrentSync(store, bindingId, context) {
   return store.screenSession?.binding?.id === bindingId && screenSyncContexts.get(store) === context;
@@ -339,6 +340,7 @@ export const screenSyncActions = {
         }
       }
       if (savedAny && isCurrent()) {
+        if (this.screenError === STALE_UPLOAD_MESSAGE) this.screenError = "";
         this.screenLastSyncedAt = new Date().toISOString();
         await this.loadActiveFeed();
       }
@@ -354,7 +356,7 @@ export const screenSyncActions = {
         if (isCurrent()) context?.retry.request();
         else {
           context?.retry.pause();
-          this.screenError = "大屏绑定或凭证已变化，本次补传已暂停，原队列已保留。请核对当前绑定后重试。";
+          this.screenError = STALE_UPLOAD_MESSAGE;
         }
       }
     }
@@ -380,6 +382,7 @@ export const screenSyncActions = {
       if (!isCurrent()) return false;
       this.screenPendingUploads = remaining;
       context?.retry.succeeded();
+      if (this.screenError === STALE_UPLOAD_MESSAGE) this.screenError = "";
       this.screenLastSyncedAt = new Date().toISOString();
       await this.loadActiveFeed();
       return true;
@@ -422,7 +425,7 @@ export const screenSyncActions = {
         if (isCurrent()) context?.retry.request();
         else {
           context?.retry.pause();
-          this.screenError = "大屏绑定或凭证已变化，本次补传已暂停，原队列已保留。请核对当前绑定后重试。";
+          this.screenError = STALE_UPLOAD_MESSAGE;
         }
       }
     }

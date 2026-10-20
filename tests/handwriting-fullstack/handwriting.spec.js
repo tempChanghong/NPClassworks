@@ -1,6 +1,7 @@
 import {test, expect} from '../fullstack/fixture.js';
 import {api, origin} from '../e2e/environment.js';
 import {todayBoardDate} from '../../src/utils/boardDate.js';
+import {createHash, randomUUID} from 'node:crypto';
 
 test.use({actionTimeout: 15000});
 
@@ -316,4 +317,125 @@ test('teacher offline save preserves confirmed text and writes only after explic
   const [row] = await persisted(classroom, mutations);
   expect(row.content).toBe('教师离线保留的确认正文'); expect(row.status).toBe('DRAFT'); expect(row.revisions).toHaveLength(1);
   expect(errors).toEqual([]);
+});
+
+for (const loseReply of [false, true]) test(`a rotated real screen credential retains the confirmed draft after an old ${loseReply ? 'lost' : 'successful'} response`, async ({classroom, request}) => {
+  const {page, errors, mutations} = await setup(classroom, 'screen');
+  await write(page, '凭证变化前确认的第10—20页');
+  let release, committed = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route(`${api}/api/v2/classroom-screens/publications`, async route => {
+    const response = await route.fetch(); expect(response.status()).toBe(201);
+    committed = true; await gate;
+    if (loseReply) await route.abort('failed'); else await route.fulfill({response});
+  });
+  try {
+    await page.getByRole('button', {name: '保存作业', exact: true}).click();
+    await expect.poll(() => committed).toBe(true);
+    const token = randomUUID();
+    await classroom.prisma.classroomScreenBinding.update({where: {id: classroom.binding.id},
+      data: {tokenHash: createHash('sha256').update(token).digest('hex')}});
+    const authorized = await request.get(`${api}/api/v2/classroom-screens/session`, {headers: {'X-Classworks-Screen-Token': token}});
+    expect(authorized.status()).toBe(200);
+    // Emulate a credential refreshed in another tab while this POST is waiting.
+    await page.evaluate(value => localStorage.setItem('classworks-v2-screen-token', value), token);
+    release();
+    await expect(composer(page, 'screen')).toContainText('大屏绑定或凭证已变化');
+    await expect(body(page, 'screen')).toHaveValue('凭证变化前确认的第10—20页');
+    const records = await storageTextOnly(page);
+    expect(records.some(record => record.key.includes('screen-homework-draft') && record.value.content === '凭证变化前确认的第10—20页')).toBe(true);
+    expect(records.filter(record => record.key.includes('screen-publication-queue')).flatMap(record => record.value)).toEqual([]);
+    const [row] = await persisted(classroom, mutations);
+    expect((await classroom.rows())).toHaveLength(1); expect(row.revisions).toHaveLength(1);
+    expect(row.content).toBe('凭证变化前确认的第10—20页'); expect(errors).toEqual([]);
+  } finally { release(); }
+});
+
+test('a recovered confirmed screen draft keeps its old base and resolves a real later revision explicitly', async ({classroom, request}) => {
+  const original = await create(classroom, request, '原始正文', {contentJson: {optionalContent: '原选做'}});
+  const {page, errors, mutations} = await edit(classroom, 'screen');
+  await body(page, 'screen').fill(''); await write(page, '恢复草稿的已确认必做');
+  await composer(page, 'screen').getByLabel('选做内容（可选）', {exact: true}).fill('');
+  await write(page, '恢复草稿的已确认选做', 'optionalContent');
+  await composer(page, 'screen').getByRole('button', {name: '取消', exact: true}).click();
+  const updated = await request.patch(`${api}/api/v2/publications/${original.id}`, {
+    headers: {Authorization: `Bearer ${classroom.credentials.accessToken}`, 'If-Match': '"1"'},
+    data: {content: '服务器第二版', contentJson: {optionalContent: '服务器选做'}},
+  });
+  expect(updated.status()).toBe(200);
+  await page.reload(); await page.getByRole('button', {name: '修改', exact: true}).click();
+  await expect(body(page, 'screen')).toHaveValue('恢复草稿的已确认必做');
+  await expect(composer(page, 'screen')).toContainText('你打开的是版本 1，服务器现在是版本 2');
+  await expect(page.getByRole('button', {name: '保存作业', exact: true})).toBeDisabled();
+  expect((await classroom.rows())[0].content).toBe('服务器第二版');
+  await page.getByRole('button', {name: '以本机输入生成新版本', exact: true}).click();
+  await page.getByRole('button', {name: '保存新版本', exact: true}).click();
+  await expect.poll(async () => (await classroom.rows())[0].revision).toBe(3);
+  const [row] = await persisted(classroom, mutations);
+  expect(row.content).toBe('恢复草稿的已确认必做'); expect(row.contentJson.optionalContent).toBe('恢复草稿的已确认选做');
+  expect(row.revisions.map(r => r.snapshot.content)).toEqual(['原始正文', '服务器第二版', row.content]);
+  expect(errors).toEqual([]);
+});
+
+test('a real conflict copied offline uploads confirmed text as a new assignment and preserves its source', async ({classroom, request}) => {
+  const original = await create(classroom, request, '来源正文');
+  const {page, context, errors, mutations} = await edit(classroom, 'screen');
+  await body(page, 'screen').fill(''); await write(page, '另存后确认的第10—20页');
+  await write(page, '另存后确认的选做第8题', 'optionalContent');
+  const updated = await request.patch(`${api}/api/v2/publications/${original.id}`, {
+    headers: {Authorization: `Bearer ${classroom.credentials.accessToken}`, 'If-Match': '"1"'},
+    data: {content: '来源已被远程修改'},
+  });
+  expect(updated.status()).toBe(200);
+  await page.getByRole('button', {name: '保存作业', exact: true}).click();
+  await expect(composer(page, 'screen')).toContainText('服务器现在是版本 2');
+  await context.setOffline(true);
+  await page.getByRole('button', {name: '另存为一项新作业', exact: true}).click();
+  await expect(composer(page, 'screen')).not.toBeVisible();
+  const queueKey = `classworks-v2-screen-publication-queue:${classroom.binding.id}`;
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '[]').length, queueKey)).toBe(1);
+  expect((await classroom.rows())).toHaveLength(1); await storageTextOnly(page);
+  await context.setOffline(false);
+  await expect.poll(async () => (await classroom.rows()).length).toBe(2);
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '[]').length, queueKey)).toBe(0);
+  const rows = await persisted(classroom, mutations), source = rows.find(row => row.id === original.id), copy = rows.find(row => row.id !== original.id);
+  expect(source.content).toBe('来源已被远程修改'); expect(source.revision).toBe(2);
+  expect(copy.content).toBe('另存后确认的第10—20页'); expect(copy.contentJson.optionalContent).toBe('另存后确认的选做第8题');
+  expect(copy.revision).toBe(1); expect(copy.revisions).toHaveLength(1); expect(errors).toEqual([]);
+});
+
+test('credential rotation during real offline replay preserves its receipt and resumes idempotently after reload', async ({classroom}) => {
+  const {page, context, errors, mutations} = await setup(classroom, 'screen');
+  await write(page, '补传过程中更换凭证的确认文字');
+  await context.setOffline(true);
+  await page.getByRole('button', {name: '保存作业', exact: true}).click();
+  await expect(composer(page, 'screen')).not.toBeVisible();
+  const queueKey = `classworks-v2-screen-publication-queue:${classroom.binding.id}`;
+  const queued = () => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '[]'), queueKey);
+  const originalQueue = await queued(); expect(originalQueue).toHaveLength(1);
+  let release, committed = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route(`${api}/api/v2/classroom-screens/publications`, async route => {
+    if (committed) { await route.continue(); return; }
+    const response = await route.fetch(); expect(response.status()).toBe(201);
+    committed = true; await gate; await route.fulfill({response});
+  });
+  try {
+    await context.setOffline(false); await expect.poll(() => committed).toBe(true);
+    const token = randomUUID();
+    await classroom.prisma.classroomScreenBinding.update({where: {id: classroom.binding.id},
+      data: {tokenHash: createHash('sha256').update(token).digest('hex')}});
+    await page.evaluate(value => localStorage.setItem('classworks-v2-screen-token', value), token);
+    release();
+    await expect(page.getByText('大屏绑定或凭证已变化，本次补传已暂停，原队列已保留。请核对当前绑定后重试。', {exact: true})).toBeVisible();
+    await expect(page.locator('.screen-sync-chip')).not.toContainText('正在同步');
+    expect(await queued()).toEqual(originalQueue);
+    await page.reload();
+    await expect(page.getByRole('button', {name: '录入作业', exact: true}).first()).toBeVisible();
+    await expect.poll(async () => (await queued()).length).toBe(0);
+    const rows = await persisted(classroom, mutations); expect(rows).toHaveLength(1); expect(rows[0].revisions).toHaveLength(1);
+    expect(rows[0].content).toBe('补传过程中更换凭证的确认文字');
+    expect(new Set(mutations.map(m => m.body.clientRequestId)).size).toBe(1);
+    await storageTextOnly(page); expect(errors).toEqual([]);
+  } finally { release(); }
 });

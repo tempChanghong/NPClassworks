@@ -54,6 +54,7 @@ test('an old successful save cannot close the composer or clear its confirmed dr
 
 for (const change of ['token', 'credential']) for (const manual of [false, true]) test(`a changed ${change} during ${manual ? 'manual' : 'automatic'} replay retains the original queue`, async () => {
   const store = h.newStore({screen: true}), hold = deferred();
+  const token = h.api.getClassroomScreenToken(), version = store.screenSession.binding.credentialVersion;
   store.screenNetworkOnline = false;
   await store.saveScreenPublication({content: '第一项确认文字'});
   await store.saveScreenPublication({content: '第二项确认文字'});
@@ -71,4 +72,9 @@ for (const change of ['token', 'credential']) for (const manual of [false, true]
   assert.equal(h.queue.loadScreenPublicationQueue('screen-a').length, 2);
   assert.equal(store.screenSyncing, false);
   assert.equal(h.requests.filter(r => r.path.includes('/feed')).length, 0);
+  h.api.saveClassroomScreenToken(token); store.screenSession.binding.credentialVersion = version;
+  await store.flushScreenPublicationQueue();
+  assert.deepEqual(h.queue.loadScreenPublicationQueue('screen-a'), []);
+  assert.equal(store.screenSyncing, false);
+  assert.equal(store.screenError, '');
 });
