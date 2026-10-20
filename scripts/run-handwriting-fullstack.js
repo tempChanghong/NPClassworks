@@ -1,7 +1,7 @@
 // Only an owned native PostgreSQL cluster; never Docker, a service, or an ambient DATABASE_URL.
 import {spawnSync} from 'node:child_process';
 import {openSync, closeSync, readFileSync, writeFileSync, mkdirSync} from 'node:fs';
-import {mkdtemp, writeFile, readdir, access, rm} from 'node:fs/promises';
+import {mkdtemp, writeFile, appendFile, readdir, access, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve, join, dirname, basename, relative, isAbsolute} from 'node:path';
 import {randomUUID, randomBytes, createHash} from 'node:crypto';
@@ -85,7 +85,10 @@ try {
   report.ports = {postgres: dbPort, web: webPort, api: apiPort}; save();
   run(join(bin, 'initdb' + suffix), ['-D', data, '-U', 'npclassworks_test', '--pwfile', passwordFile,
     '--auth=scram-sha-256', '--encoding=UTF8', '--locale=C'], root, env, 'initdb');
-  run(join(bin, 'pg_ctl' + suffix), ['-D', data, '-l', join(directory, 'postgres.log'), '-o', `-h 127.0.0.1 -p ${dbPort}`, '-w', '-t', '30', 'start'], root, env, 'start-postgres');
+  // Ubuntu's packaged defaults use /var/run/postgresql, which is not owned by
+  // the runner. Tests connect only through the reserved loopback TCP port.
+  await appendFile(join(data, 'postgresql.conf'), "\nunix_socket_directories = ''\n");
+  run(join(bin, 'pg_ctl' + suffix), ['-D', data, '-l', join(output, 'postgres.log'), '-o', `-h 127.0.0.1 -p ${dbPort}`, '-w', '-t', '30', 'start'], root, env, 'start-postgres');
   started = true;
   const admin = new Client({host: '127.0.0.1', port: dbPort, user: 'npclassworks_test', password, database: 'postgres'});
   await admin.connect();
