@@ -640,8 +640,10 @@ test('another real tab can remove later queued handwriting while an earlier real
     await other.getByTitle('移除本机待提交作业', {exact: true}).nth(1).click();
     await other.getByRole('button', {name: '确认移除', exact: true}).click();
     await expect.poll(async () => (await queued()).length).toBe(1);
-    const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v2/classroom-screens/feed');
-    release(); await (await refreshed).finished();
+    // Queue completion is the contract here. An offline peer can affect its
+    // shared service worker's feed fetch; a successful unrelated GET is not the
+    // upload receipt and must not be used to infer that this batch has ended.
+    release();
     await expect.poll(async () => (await queued()).length).toBe(0);
     await expect(page.locator('.screen-sync-chip')).not.toContainText('正在同步');
     expect(mutations.filter(item => item.method === 'POST')).toHaveLength(1);
