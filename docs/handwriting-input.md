@@ -16,6 +16,8 @@
 
 切换班级、科目、日期、绑定凭证、账号、作业版本或编辑正文后，旧任务不能插入，即使随后切回原值也不能恢复旧任务的权限。撤销插入也不能覆盖更晚的编辑。
 
+教师在另一窗口重新登录或清除登录时，旧手写选区同样失效；普通访问令牌续期保留当前登录，不会因此取消手写。该判断只在页面内存中使用凭证身份，不把凭证加入正文、草稿或识别请求。
+
 ## 性能和离线
 
 - 入口不启动模型。编辑器在点击后加载，识别资源和 Worker 在明确识别后才启动。资源不进入普通 PWA 预缓存。
@@ -65,3 +67,5 @@ pnpm run test:handwriting:kv
 保存或补传期间绑定/凭证变化的修复、草稿与冲突复验，另见 [第二轮缺陷复验](handwriting-kv-bugfix-review-20261020.md)。
 
 最后一轮凭证选区修复、预处理对照与完整回归见 [最后复验](handwriting-final-readiness-20261020.md)；正式启用步骤见 [接入计划](handwriting-production-rollout-plan.md)。
+
+候选已与当前 `main` 整理并重新验证，见 [接入整理记录](handwriting-integration-20261020.md)。PR 增加了独立的原生 PostgreSQL 手写回归；本地用 Edge，Linux CI 用 Chromium。未配置系统默认 PostgreSQL 工具路径时，CI 显式传入 `NPEP_TEST_PG_BIN`。隔离端口从动态私有范围分配并短暂保留，避免随机低端口被浏览器拒绝。
