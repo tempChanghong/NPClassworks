@@ -607,14 +607,21 @@ test('another real tab can remove later queued handwriting while an earlier real
   const otherMutations = observe(other);
   await other.goto(origin);
   await expect(other.getByRole('button', {name: '录入作业', exact: true}).first()).toBeVisible();
-  // Keep the second tab's upload timer paused while it operates the real queue
-  // UI. The first tab uses real time, the real model, and the real KV throughout.
-  await other.clock.install(); await other.clock.pauseAt(new Date(Date.now() + 1000));
+  // Independent target network conditions let the second tab operate the real
+  // local queue offline while the first tab reconnects. Do not pause the shared
+  // context clock: that also stalls the first tab's editor transitions.
+  const primaryNetwork = await context.newCDPSession(page), otherNetwork = await context.newCDPSession(other);
+  const offline = (session, value) => session.send('Network.emulateNetworkConditions', {
+    offline: value, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+  });
+  await offline(otherNetwork, true); await expect.poll(() => other.evaluate(() => navigator.onLine)).toBe(false);
+  await page.bringToFront();
   await write(page, '第一项确认并允许补传的文字');
-  await context.setOffline(true);
+  await offline(primaryNetwork, true); await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
   await page.getByRole('button', {name: '保存作业', exact: true}).click();
   await expect(composer(page, 'screen')).not.toBeVisible();
   await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
+  await page.getByRole('button', {name: '数学', exact: true}).click();
   await body(page, 'screen').fill(''); await write(page, '第二项确认后决定移除的文字');
   await page.getByRole('button', {name: '保存作业', exact: true}).click();
   const queueKey = `classworks-v2-screen-publication-queue:${classroom.binding.id}`;
@@ -626,11 +633,11 @@ test('another real tab can remove later queued handwriting while an earlier real
     const response = await route.fetch(); committed = true; await gate; await route.fulfill({response});
   });
   try {
-    await context.setOffline(false);
+    await offline(primaryNetwork, false); expect(await other.evaluate(() => navigator.onLine)).toBe(false);
     await expect.poll(() => committed).toBe(true);
-    await other.locator('.screen-sync-chip').click(); await other.clock.runFor(100);
+    await other.bringToFront(); await other.locator('.screen-sync-chip').click();
     await expect(other.locator('.queued-publication')).toHaveCount(2);
-    await other.getByTitle('移除本机待提交作业', {exact: true}).nth(1).click(); await other.clock.runFor(100);
+    await other.getByTitle('移除本机待提交作业', {exact: true}).nth(1).click();
     await other.getByRole('button', {name: '确认移除', exact: true}).click();
     await expect.poll(async () => (await queued()).length).toBe(1);
     const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v2/classroom-screens/feed');
