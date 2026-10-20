@@ -914,9 +914,17 @@ watch(() => [form.dueAt, form.materialsDate, form.materials, form.noHomework, fo
 function captureEditor(savedForm) {
   const generation = editorGeneration;
   const accountVersion = store.teacherSessionVersion;
+  const accountId = store.account?.id;
+  const refreshToken = getAccountTokens().refreshToken;
+  const credentials = credentialEpoch.value;
   const source = props.editingPublication;
   const serialized = JSON.stringify(form);
-  const alive = () => mounted && accountVersion === store.teacherSessionVersion;
+  // Another tab can replace credentials before this store bootstraps, or return
+  // to the original login while an old request waits. Such replies no longer
+  // own this editor; ordinary access-token renewal keeps the same login.
+  const alive = () => mounted && accountVersion === store.teacherSessionVersion
+    && accountId === store.account?.id && credentials === credentialEpoch.value
+    && refreshToken === getAccountTokens().refreshToken;
   const current = () => alive() && generation === editorGeneration && source === props.editingPublication;
   return {
     alive, current, unchanged: () => current() && JSON.stringify(form) === serialized,

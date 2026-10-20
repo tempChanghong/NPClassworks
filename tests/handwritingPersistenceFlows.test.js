@@ -8,6 +8,80 @@ before(async () => { h = await createFlowHarness(); });
 after(async () => { await h?.close(); });
 beforeEach(() => h.reset());
 
+for (const restore of [false, true]) for (const operation of ['save', 'merge', 'copy', 'reload']) {
+  test(`teacher ${operation}: a late reply after another-window login${restore ? ' and return' : ''} preserves confirmed text`, async () => {
+    const store = h.newStore(), hold = deferred();
+    const original = {id: 'teacher-source', revision: 1, type: 'ASSIGNMENT', status: 'PUBLISHED',
+      subjectId: 'math', priority: 'NORMAL', content: '原教师正文', publishAt: new Date().toISOString(),
+      targets: [{workspaceId: 'class-a'}]};
+    h.api.saveAccountTokens({accessToken: 'teacher-a', refreshToken: 'refresh-a'});
+    store.account = {id: 'teacher-a'};
+    store.eligibleTeacherWorkspaces = () => [h.workspace];
+    store.rememberTeacherTargetCombination = () => true;
+    const {state: s, events} = await h.openComponent('/src/components/v2/PublicationComposer.vue', {editingPublication: original});
+    await nextTick();
+    s.textTargets.content.apply(s.textTargets.content.capture(), '已确认且需要保留的正文');
+    await nextTick();
+    const confirmed = s.form.content;
+    if (operation !== 'save') {
+      s.conflict.value = {latestRevision: 2, latestPublication: {...original, revision: 2}};
+      s.conflictInput.value = {content: confirmed, subjectId: 'math', targetWorkspaceIds: ['class-a'], status: 'PUBLISHED'};
+      s.conflictFormSnapshot.value = JSON.stringify(s.form);
+    }
+    const path = operation === 'reload' ? 'GET /api/v2/publications/teacher-source'
+      : operation === 'copy' ? 'POST /api/v2/publications' : 'PATCH /api/v2/publications/teacher-source';
+    h.routes.set(path, async (_req, reply) => {
+      await hold.promise; reply({...original, revision: 3, content: '迟到的服务器正文'});
+    });
+    const pending = operation === 'save' ? s.submit('DRAFT') : operation === 'merge' ? s.applyLocalOnLatest()
+      : operation === 'copy' ? s.saveConflictCopy() : s.reloadLatest();
+    if (operation === 'merge' || operation === 'reload') h.dialogs.settleActionDialog(true);
+    try {
+      await eventually(() => assert.ok(h.requests.some(req => `${req.method} ${req.path}` === path)));
+      const session = store.teacherSessionVersion;
+      for (const suffix of restore ? ['b', 'a'] : ['b']) {
+        h.storage.setItem('classworks-v2-access-token', `teacher-${suffix}`);
+        h.storage.setItem('classworks-v2-refresh-token', `refresh-${suffix}`);
+        window.dispatchEvent(Object.assign(new globalThis.Event('storage'), {key: 'classworks-v2-refresh-token'}));
+      }
+      assert.equal(store.teacherSessionVersion, session, 'cross-tab storage changes precede local bootstrap');
+      hold.resolve(); await pending;
+      assert.equal(s.form.content, confirmed);
+      assert.deepEqual(events, []);
+      assert.equal(s.requestBusy.value, false);
+    } finally { hold.resolve(); await pending; }
+  });
+}
+
+for (const operation of ['save', 'reload']) test(`teacher ${operation}: access-token renewal still accepts the current reply`, async () => {
+  const store = h.newStore(), hold = deferred();
+  const original = {id: 'renewal-source', revision: 1, type: 'ASSIGNMENT', status: 'PUBLISHED',
+    subjectId: 'math', priority: 'NORMAL', content: '续期前正文', publishAt: new Date().toISOString(),
+    targets: [{workspaceId: 'class-a'}]};
+  h.api.saveAccountTokens({accessToken: 'teacher-a', refreshToken: 'refresh-a'});
+  store.account = {id: 'teacher-a'};
+  store.eligibleTeacherWorkspaces = () => [h.workspace];
+  store.rememberTeacherTargetCombination = () => true;
+  const {state: s, events} = await h.openComponent('/src/components/v2/PublicationComposer.vue', {editingPublication: original});
+  await nextTick();
+  s.textTargets.content.apply(s.textTargets.content.capture(), '续期期间确认的正文'); await nextTick();
+  if (operation === 'reload') s.conflict.value = {latestRevision: 2};
+  const path = `${operation === 'save' ? 'PATCH' : 'GET'} /api/v2/publications/renewal-source`;
+  h.routes.set(path, async (_req, reply) => { await hold.promise; reply({...original, revision: 2}); });
+  const pending = operation === 'save' ? s.submit('DRAFT') : s.reloadLatest();
+  if (operation === 'reload') h.dialogs.settleActionDialog(true);
+  try {
+    await eventually(() => assert.ok(h.requests.some(req => `${req.method} ${req.path}` === path)));
+    h.storage.setItem('classworks-v2-access-token', 'renewed-access-token');
+    window.dispatchEvent(Object.assign(new globalThis.Event('storage'), {key: 'classworks-v2-access-token'}));
+    hold.resolve(); await pending;
+    assert.equal(events.length, 1);
+    assert.equal(events[0][0], operation === 'save' ? 'published' : 'reload-latest');
+    assert.equal(events[0][1].revision, 2);
+    assert.equal(s.requestBusy.value, false);
+  } finally { hold.resolve(); await pending; }
+});
+
 test('a screen token replacement invalidates unconfirmed handwriting before binding metadata refreshes', async () => {
   const store = h.newStore({screen: true});
   const {state} = await h.openComposer();
