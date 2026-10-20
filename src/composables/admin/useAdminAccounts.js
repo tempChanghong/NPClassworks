@@ -8,13 +8,18 @@ export function useAdminAccounts({selectedSchoolId, selectedSchool, errorMessage
   const localAccounts = ref([]);
   const accountLoading = ref(false), accountCreating = ref(false);
   const accountBusy = computed(() => accountLoading.value || accountCreating.value);
-  let loadGeneration = 0, disposed = false;
+  let loadGeneration = 0, scopeGeneration = 0, disposed = false;
   watch(selectedSchoolId, () => {
-    loadGeneration++;
+    loadGeneration++; scopeGeneration++;
     localAccounts.value = [];
     accountLoading.value = false;
   }, {flush: "sync"});
-  onScopeDispose(() => { disposed = true; loadGeneration++; });
+  onScopeDispose(() => { disposed = true; loadGeneration++; scopeGeneration++; });
+  function operationScope() {
+    const schoolId = selectedSchoolId.value, generation = scopeGeneration;
+    return {schoolId, schoolName: selectedSchool.value?.school.name || "",
+      current: () => !disposed && Boolean(schoolId) && generation === scopeGeneration && schoolId === selectedSchoolId.value};
+  }
   const accountSearch = ref("");
   const accountStatusFilter = ref("ALL");
   const newAdminUsername = ref("");
@@ -71,35 +76,39 @@ export function useAdminAccounts({selectedSchoolId, selectedSchool, errorMessage
   }
 
   async function createAdministrator() {
+    const scope = operationScope();
+    if (accountCreating.value || !scope.current()) return;
+    const input = {username: newAdminUsername.value, name: newAdminName.value, pin: newAdminPin.value, role: newAdminRole.value};
     accountCreating.value = true;
     errorMessage.value = "";
     try {
-      await classworksV2Api.createLocalAdministrator(selectedSchoolId.value, {
-        username: newAdminUsername.value,
-        name: newAdminName.value,
-        pin: newAdminPin.value,
-        role: newAdminRole.value,
-      });
+      await classworksV2Api.createLocalAdministrator(scope.schoolId, input);
+      if (!scope.current()) return;
       recentCredentials.value = [{
-        school: selectedSchool.value?.school.name || "",
-        name: newAdminName.value,
-        username: newAdminUsername.value,
-        pin: newAdminPin.value,
-        workspaces: roleName(newAdminRole.value),
+        school: scope.schoolName,
+        name: input.name,
+        username: input.username,
+        pin: input.pin,
+        workspaces: roleName(input.role),
       }];
-      newAdminUsername.value = "";
-      newAdminName.value = "";
-      newAdminPin.value = "";
+      if (input.username === newAdminUsername.value && input.name === newAdminName.value
+        && input.pin === newAdminPin.value && input.role === newAdminRole.value) {
+        newAdminUsername.value = "";
+        newAdminName.value = "";
+        newAdminPin.value = "";
+      }
       successMessage.value = "第二管理员已创建；可用账号管理工具栏的下载按钮导出本次凭据。";
       await Promise.all([bootstrap(), loadLocalAccounts()]);
     } catch (error) {
-      errorMessage.value = describeApiError(error, "创建管理员失败");
+      if (scope.current()) errorMessage.value = describeApiError(error, "创建管理员失败");
     } finally {
       accountCreating.value = false;
     }
   }
 
   async function resetAccountPin(account) {
+    const scope = operationScope();
+    if (!scope.current()) return;
     const pin = await promptAction({
       title: "重置账号 PIN",
       message: `为 ${account.name || account.username} 设置新 PIN。保存后，该账号的其他设备将退出。`,
@@ -109,11 +118,12 @@ export function useAdminAccounts({selectedSchoolId, selectedSchool, errorMessage
       color: "warning",
       rules: [(value) => /^\d{4,8}$/.test(value) || "请输入4～8位数字"],
     });
-    if (pin === null) return;
+    if (pin === null || !scope.current()) return;
     try {
-      await classworksV2Api.updateLocalAccount(selectedSchoolId.value, account.id, {pin});
+      await classworksV2Api.updateLocalAccount(scope.schoolId, account.id, {pin});
+      if (!scope.current()) return;
       recentCredentials.value = [{
-        school: selectedSchool.value?.school.name || "",
+        school: scope.schoolName,
         name: account.name,
         username: account.username,
         pin,
@@ -122,11 +132,13 @@ export function useAdminAccounts({selectedSchoolId, selectedSchool, errorMessage
       successMessage.value = "PIN 已重置，该账号的其他设备已退出。";
       await loadLocalAccounts();
     } catch (error) {
-      errorMessage.value = describeApiError(error, "重置 PIN 失败");
+      if (scope.current()) errorMessage.value = describeApiError(error, "重置 PIN 失败");
     }
   }
 
   async function setAccountDisabled(account, disabled) {
+    const scope = operationScope();
+    if (!scope.current()) return;
     const action = disabled ? "停用" : "启用";
     if (!await confirmAction({
       title: `${action}账号？`,
@@ -134,39 +146,44 @@ export function useAdminAccounts({selectedSchoolId, selectedSchool, errorMessage
       details: disabled ? ["当前会话将被撤销", "班级分配会保留"] : [],
       confirmText: action,
       color: disabled ? "warning" : "success",
-    })) return;
-    const schoolId = selectedSchoolId.value;
+    }) || !scope.current()) return;
+    const schoolId = scope.schoolId;
     try {
       await classworksV2Api.updateLocalAccount(schoolId, account.id, {disabled});
+      if (!scope.current()) return;
       successMessage.value = `账号已${action}，可在下方短时撤销。`;
       await loadLocalAccounts();
       offerUndo({
         message: `已${action}账号“${account.name || account.username}”`,
         undo: async () => {
           await classworksV2Api.updateLocalAccount(schoolId, account.id, {disabled: !disabled});
+          if (!scope.current()) return;
           successMessage.value = `已撤销“账号${action}”。`;
           await loadLocalAccounts();
         },
       });
     } catch (error) {
-      errorMessage.value = describeApiError(error, `${action}账号失败`);
+      if (scope.current()) errorMessage.value = describeApiError(error, `${action}账号失败`);
     }
   }
 
   async function deactivateAccount(account) {
+    const scope = operationScope();
+    if (!scope.current()) return;
     if (!await confirmAction({
       title: "注销账号全部权限？",
       message: `将移除“${account.name || account.username}”在本校的管理和教学权限。`,
       details: ["账号将停用", "发布历史会保留", "此操作无法从页面撤销"],
       confirmText: "注销权限",
       color: "error",
-    })) return;
+    }) || !scope.current()) return;
     try {
-      await classworksV2Api.deactivateLocalAccount(selectedSchoolId.value, account.id);
+      await classworksV2Api.deactivateLocalAccount(scope.schoolId, account.id);
+      if (!scope.current()) return;
       successMessage.value = "账号已停用，学校与教学空间权限已移除。";
       await Promise.all([bootstrap(), loadLocalAccounts(), loadRoster()]);
     } catch (error) {
-      errorMessage.value = describeApiError(error, "注销账号权限失败");
+      if (scope.current()) errorMessage.value = describeApiError(error, "注销账号权限失败");
     }
   }
 
