@@ -439,3 +439,36 @@ test('credential rotation during real offline replay preserves its receipt and r
     await storageTextOnly(page); expect(errors).toEqual([]);
   } finally { release(); }
 });
+
+for (const restore of [false, true]) test(`another real tab rotating ${restore ? 'and restoring ' : ''}the token revokes an open handwriting selection`, async ({classroom}) => {
+  const {page, context, errors, mutations} = await setup(classroom, 'screen');
+  await body(page, 'screen').fill('原正文');
+  await open(page); await result(page).fill('未确认绝不落库');
+  const other = await context.newPage(); await other.goto(origin);
+  await expect(other.getByRole('button', {name: '录入作业', exact: true}).first()).toBeVisible();
+  const token = randomUUID();
+  await classroom.prisma.classroomScreenBinding.update({where: {id: classroom.binding.id},
+    data: {tokenHash: createHash('sha256').update(token).digest('hex')}});
+  await other.evaluate(value => localStorage.setItem('classworks-v2-screen-token', value), token);
+  await expect(work(page)).toContainText('编辑范围已变化');
+  if (restore) {
+    await classroom.prisma.classroomScreenBinding.update({where: {id: classroom.binding.id},
+      data: {tokenHash: createHash('sha256').update(classroom.screenToken).digest('hex')}});
+    await other.evaluate(value => localStorage.setItem('classworks-v2-screen-token', value), classroom.screenToken);
+  }
+  await page.bringToFront();
+  await expect(work(page).getByRole('button', {name: '插入正文', exact: true})).toBeDisabled();
+  await storageTextOnly(page); expect(await classroom.rows()).toEqual([]); expect(mutations).toEqual([]);
+  await work(page).getByRole('button', {name: '返回录入', exact: true}).click();
+  await expect(body(page, 'screen')).toHaveValue('原正文');
+  await expect(composer(page, 'screen')).toContainText('大屏绑定已变化');
+  await composer(page, 'screen').getByRole('button', {name: '取消', exact: true}).click();
+  await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
+  await expect(body(page, 'screen')).toHaveValue('原正文');
+  await body(page, 'screen').fill(''); await write(page, '重新打开后确认的正文');
+  await page.getByRole('button', {name: '保存作业', exact: true}).click();
+  await expect.poll(async () => (await classroom.rows()).length).toBe(1);
+  const [row] = await persisted(classroom, mutations);
+  expect(row.content).toBe('重新打开后确认的正文'); expect(row.revision).toBe(1);
+  await storageTextOnly(page); expect(errors).toEqual([]);
+});

@@ -455,7 +455,7 @@ import {computed, nextTick, onUnmounted, reactive, ref, watch} from "vue";
 import {registerScreenReloadBlocker} from "@/utils/screenReloadProtection";
 import {openScreenDraftStorage} from "@/utils/screenDraftSession";
 import {useClassworksV2Store} from "@/stores/classworksV2";
-import {describeApiError} from "@/utils/classworksV2Client";
+import {describeApiError, getClassroomScreenToken} from "@/utils/classworksV2Client";
 import HandwritingTextInput from "@/features/handwriting/HandwritingTextInput.vue";
 import {createTextInputTarget} from "@/utils/textInputTarget";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
@@ -509,8 +509,16 @@ const draftReady = ref(false);
 const draftSaveFailed = ref(false);
 const draftReadError = ref("");
 const draftBindingScope = ref("");
-const bindingScope = computed(() => JSON.stringify([store.screenSession?.binding?.id, store.screenSession?.binding?.credentialVersion]));
+const credentialEpoch = ref(0);
+const bindingIdentity = () => JSON.stringify([store.screenSession?.binding?.id,
+  store.screenSession?.binding?.credentialVersion, getClassroomScreenToken(), credentialEpoch.value]);
+const bindingScope = computed(bindingIdentity);
 const draftScopeCurrent = computed(() => bindingScope.value === draftBindingScope.value);
+function credentialChanged(event) {
+  if (event.key === null || event.key === "classworks-v2-screen-token") credentialEpoch.value++;
+}
+window.addEventListener("storage", credentialChanged);
+onUnmounted(() => window.removeEventListener("storage", credentialChanged));
 let draftStorage;
 let draftLoadVersion = 0;
 onUnmounted(() => { draftLoadVersion += 1; draftReady.value = false; });
@@ -536,8 +544,8 @@ const textTargets = Object.fromEntries(["content", "optionalContent"].map(field 
   label: () => `${eligibleSubjects.value.find(s => s.id === form.subjectId)?.name || "未选择科目"} · ${eligibleTargets.value.find(w => w.id === form.targetWorkspaceId)?.name || "未选择班级"} · ${form.boardDate}`,
   textarea: () => (field === "content" ? contentInput : optionalInput).value?.$el?.querySelector("textarea"),
   disabled: () => !props.modelValue || !draftReady.value || !draftScopeCurrent.value || Boolean(draftReadError.value || requestBusy.value || conflict.value),
-  context: () => ["screen", field, props.modelValue, store.screenSession?.binding?.id,
-    store.screenSession?.binding?.credentialVersion, basePublication.value?.id, basePublication.value?.revision,
+  context: () => ["screen", field, props.modelValue, bindingIdentity(),
+    basePublication.value?.id, basePublication.value?.revision,
     form.subjectId, form.targetWorkspaceId, form.boardDate],
 })]));
 
@@ -641,7 +649,7 @@ function draftSnapshot() {
 }
 
 function writeInput(publication = basePublication.value) {
-  if (!draftScopeCurrent.value) throw new Error("大屏绑定已变化，原草稿已保留，请关闭后重新打开录入。");
+  if (bindingIdentity() !== draftBindingScope.value) throw new Error("大屏绑定或凭证已变化，当前输入未清除，请关闭后重新打开录入。");
   // All save paths, including offline conflict copies, share validation.
   if (!form.subjectId || !form.targetWorkspaceId) throw new Error("请选择科目和具体班级");
   if (!form.title.trim() && !form.content.trim()) throw new Error("标题和作业内容不能同时为空");
@@ -708,7 +716,7 @@ function loadPublication(publication) {
 async function restoreDraft() {
   const version = ++draftLoadVersion;
   draftReady.value = false;
-  draftBindingScope.value = bindingScope.value;
+  const scope = draftBindingScope.value = bindingIdentity();
   basePublication.value = props.publication;
   conflict.value = null;
   draftRestored.value = false;
@@ -718,7 +726,7 @@ async function restoreDraft() {
   const publicationId = basePublication.value?.id || "new";
   try {
     const storage = await openScreenDraftStorage(bindingId, publicationId);
-    if (version !== draftLoadVersion || !props.modelValue) return;
+    if (version !== draftLoadVersion || !props.modelValue || scope !== bindingIdentity()) return;
     if (bindingId !== store.screenSession?.binding?.id || publicationId !== (basePublication.value?.id || "new")) return;
     draftStorage = storage;
     draft = loadScreenHomeworkDraft(
@@ -727,7 +735,7 @@ async function restoreDraft() {
       draftStorage,
     );
   } catch (error) {
-    if (version !== draftLoadVersion || !props.modelValue) return;
+    if (version !== draftLoadVersion || !props.modelValue || scope !== bindingIdentity()) return;
     draftReadError.value = `无法读取本机草稿，原数据已保留。请恢复本机存储后重试。${error.message || ""}`;
     return;
   }
@@ -747,7 +755,7 @@ async function restoreDraft() {
     draftRestored.value = true;
   }
   nextTick(() => {
-    draftReady.value = props.modelValue && !draftReadError.value;
+    draftReady.value = version === draftLoadVersion && props.modelValue && scope === bindingIdentity() && !draftReadError.value;
   });
 }
 

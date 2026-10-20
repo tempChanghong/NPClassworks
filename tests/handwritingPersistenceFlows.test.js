@@ -8,6 +8,34 @@ before(async () => { h = await createFlowHarness(); });
 after(async () => { await h?.close(); });
 beforeEach(() => h.reset());
 
+test('a screen token replacement invalidates unconfirmed handwriting before binding metadata refreshes', async () => {
+  const store = h.newStore({screen: true});
+  const {state} = await h.openComposer();
+  Object.assign(state.form, {subjectId: 'math', targetWorkspaceId: 'class-a', content: '原正文'});
+  await nextTick();
+  const target = state.textTargets.content, snapshot = target.capture();
+  h.api.saveClassroomScreenToken('replacement-token');
+  assert.throws(() => target.apply(snapshot, '旧窗口结果'), /变化/);
+  assert.equal(state.form.content, '原正文');
+  await state.save();
+  assert.equal(h.requests.filter(r => r.method === 'POST').length, 0);
+  assert.deepEqual(h.queue.loadScreenPublicationQueue(store.screenSession.binding.id), []);
+  assert.equal(h.loadDraft('screen-a', 'new').content, '原正文');
+});
+
+test('another tab changing and restoring the screen token cannot reactivate an old handwriting selection', async () => {
+  h.newStore({screen: true});
+  const {state} = await h.openComposer();
+  state.form.content = '原正文'; await nextTick();
+  const target = state.textTargets.content, snapshot = target.capture(), token = h.api.getClassroomScreenToken();
+  for (const value of ['other-tab-token', token]) {
+    h.api.saveClassroomScreenToken(value);
+    window.dispatchEvent(Object.assign(new globalThis.Event('storage'), {key: 'classworks-v2-screen-token'}));
+  }
+  assert.throws(() => target.apply(snapshot, '不能复活的旧结果'), /变化|不可录入/);
+  assert.equal(state.form.content, '原正文');
+});
+
 for (const change of ['binding', 'credential', 'token']) test(`confirmed handwriting cannot enter a replacement ${change} queue after a delayed save failure`, async () => {
   const store = h.newStore({screen: true});
   const {state, events} = await h.openComposer();
