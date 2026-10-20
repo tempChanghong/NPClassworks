@@ -23,6 +23,13 @@
       >
         手写输入{{ field === 'content' ? '必做正文' : '选做正文' }}
       </v-btn>
+      <v-btn
+        v-if="loading"
+        variant="text"
+        @click="cancelActivation"
+      >
+        取消打开
+      </v-btn>
     </div>
     <span
       v-if="notice"
@@ -46,12 +53,16 @@ const props = defineProps({
 });
 const editorComponent = shallowRef(null), editor = ref(null), loading = ref(false), notice = ref('');
 let generation = 0, mounted = true, activation;
-watch([() => props.target, () => props.target.scope, () => props.target.value], () => {
+watch([() => props.target, () => props.target.scope, () => props.target.value, () => props.target.disabled], () => {
   if (!loading.value) return;
   generation++; loading.value = false; activation?.release();
   notice.value = '编辑范围已变化，本次未打开手写输入，请在当前正文重新操作。';
 }, {flush: 'sync'});
 onBeforeUnmount(() => { mounted = false; generation++; activation?.release(); });
+function cancelActivation() {
+  generation++; activation?.release(); loading.value = false;
+  notice.value = '已取消打开，正文保留，可重试或继续键盘录入。';
+}
 async function activate() {
   if (loading.value || props.target.disabled) return;
   const target = props.target;
@@ -64,7 +75,7 @@ async function activate() {
     !target.disabled && target.scope === scope && target.value === value;
   loading.value = true; notice.value = '';
   try {
-    const module = await props.loadEditor();
+    const module = await request.wait(props.loadEditor());
     if (!current()) return;
     editorComponent.value = module.default;
     await nextTick();
@@ -72,6 +83,8 @@ async function activate() {
   } catch (error) {
     if (current()) notice.value = error?.requiresReload
       ? '本次页面的手写组件无法载入。请先保存正文，再刷新重试；可以继续键盘录入。'
+      : error?.loadTimedOut
+        ? '手写组件加载超时，正文保留。请检查网络后重试，也可继续键盘录入。'
       : '手写输入暂不可用，正文保留。请检查网络后重试，也可继续键盘录入。';
   } finally { request.release(); if (mounted && ticket === generation) loading.value = false; }
 }

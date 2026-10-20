@@ -306,6 +306,8 @@ for (const role of ['screen', 'teacher']) test(`race: ${role} only opens the lat
     await s.page.route('**/assets/HandwritingInput-*.js', async route => { await gate; await route.continue(); });
     await launcher(s.page).click();
     await launcher(s.page, 'optionalContent').click();
+    // A superseded field must stop spinning even while the shared import waits.
+    await expect(launcher(s.page)).toBeEnabled();
     release();
     await expect(work(s.page)).toHaveCount(1);
     await expect(work(s.page).getByRole('heading', {name: '手写选做正文', exact: true})).toBeVisible();
@@ -367,6 +369,56 @@ test('a failed editor download can retry without refreshing or discarding the or
     await expect(body(s.page, 'screen')).toHaveValue('模块失败也保留原文恢复后的文字');
     expect(attempts).toBe(2); await noLiveWorkers(s.page);
   } finally { await s.context.close(); }
+});
+
+for (const role of ['screen', 'teacher']) test(`editor loading: ${role} can cancel a silent download and retry without losing the body`, async ({browser}) => {
+  const s = await setup(browser, role, {serviceWorkers: 'block', viewport: {width: 640, height: 480}});
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  try {
+    await s.page.route('**/assets/HandwritingInput-*.js', async route => { await gate; await route.continue(); });
+    await body(s.page, role).fill('保留第10—20页、第1题正文');
+    await launcher(s.page).click();
+    const extension = s.page.locator('.text-input-extension').first();
+    const cancel = extension.getByRole('button', {name: '取消打开', exact: true});
+    await expect(cancel).toBeEnabled(); await cancel.tap();
+    await expect(launcher(s.page)).toBeEnabled();
+    await expect(extension).toContainText('已取消');
+    // The outstanding shared download may finish, but must not open a dialog.
+    const arrived = s.page.waitForResponse('**/assets/HandwritingInput-*.js');
+    release(); await arrived;
+    await expect(work(s.page)).toHaveCount(0);
+    await expect(body(s.page, role)).toHaveValue('保留第10—20页、第1题正文');
+    await open(s.page); await insert(s.page, '，另做第11题');
+    await expect(body(s.page, role)).toHaveValue('保留第10—20页、第1题正文，另做第11题');
+    expect(s.resourceRequests).toEqual([]); await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { release(); await s.context.close(); }
+});
+
+test('editor loading: a timed-out import uses a fresh retry entry and ignores the late original', async ({browser}) => {
+  const s = await setup(browser, 'screen', {serviceWorkers: 'block'});
+  let release, attempts = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  try {
+    await s.page.clock.install();
+    await s.page.route('**/assets/HandwritingInput-*.js', async route => {
+      if (++attempts === 1) await gate;
+      await route.continue();
+    });
+    await body(s.page, 'screen').fill('超时仍保留正文');
+    await launcher(s.page).click();
+    await expect.poll(() => attempts).toBe(1);
+    await s.page.clock.fastForward(90001);
+    await expect(s.page.locator('.text-input-extension').first()).toContainText('加载超时');
+    await expect(launcher(s.page)).toBeEnabled();
+    await open(s.page); await insert(s.page, '，恢复第10题');
+    const arrived = s.page.waitForResponse('**/assets/HandwritingInput-*.js');
+    release(); await arrived;
+    await expect(work(s.page)).toHaveCount(0);
+    await expect(body(s.page, 'screen')).toHaveValue('超时仍保留正文，恢复第10题');
+    expect(attempts).toBe(2); expect(s.resourceRequests).toEqual([]);
+    await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { release(); await s.context.close(); }
 });
 
 test('follow-up: unchanged ink retains manually corrected text when recognition is clicked again', async ({browser}) => {
