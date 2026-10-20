@@ -514,3 +514,85 @@ test('a real access-token renewal leaves confirmed teacher text insertable and s
   const [row] = await persisted(classroom, mutations);
   expect(row.content).toBe('保留教师原正文正常续期后确认的文字'); expect(row.status).toBe('DRAFT'); expect(errors).toEqual([]);
 });
+
+for (const loseReply of [false, true]) test(`same-document navigation preserves the next confirmed draft after an old ${loseReply ? 'lost' : 'successful'} save reply`, async ({classroom}) => {
+  const {page, errors} = await classroom.open('screen');
+  const mutations = observe(page);
+  // Build a real SPA history entry; back/forward must not destroy the document
+  // (which would cancel the old JavaScript and hide the continuation defect).
+  await page.goto(`${origin}/settings?context=screen`);
+  await page.getByTitle('返回作业板', {exact: true}).click();
+  const marker = randomUUID(); await page.evaluate(value => { window.handoffDocument = value; }, marker);
+  await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
+  await page.getByRole('button', {name: '数学', exact: true}).click();
+  await write(page, '切页前已经确认并提交的文字');
+  let release, committed = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route(`${api}/api/v2/classroom-screens/publications`, async route => {
+    const response = await route.fetch(); committed = true; await gate;
+    if (loseReply) await route.abort('failed'); else await route.fulfill({response});
+  });
+  try {
+    await page.getByRole('button', {name: '保存作业', exact: true}).click();
+    await expect.poll(() => committed).toBe(true);
+    await page.goBack(); await expect(page.locator('.settings-v2-page')).toBeVisible();
+    await page.goForward();
+    expect(await page.evaluate(() => window.handoffDocument)).toBe(marker);
+    await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
+    await body(page, 'screen').fill(''); await write(page, '重新打开后确认但尚未提交的文字');
+    const queueKey = `classworks-v2-screen-publication-queue:${classroom.binding.id}`;
+    const finished = loseReply ? null
+      : page.waitForResponse(response => new URL(response.url()).pathname === '/api/v2/classroom-screens/feed');
+    // A successful old write refreshes the feed; a lost reply queues its stable
+    // request ID. Neither owns this new composer or its per-document draft key.
+    release();
+    if (loseReply) {
+      // The already-completed POST is not a new browser request; wait for its
+      // local queue handoff rather than manufacturing another network retry.
+      await expect.poll(async () => (await page.evaluate(key => JSON.parse(localStorage.getItem(key) || '[]').length, queueKey)) > 0
+        || mutations.filter(item => item.method === 'POST').length > 1).toBe(true);
+    } else await (await finished).finished();
+    await page.evaluate(() => new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))));
+    await expect(body(page, 'screen')).toHaveValue('重新打开后确认但尚未提交的文字');
+    await composer(page, 'screen').getByRole('button', {name: '取消', exact: true}).click();
+    await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
+    await expect(body(page, 'screen')).toHaveValue('重新打开后确认但尚未提交的文字');
+    await storageTextOnly(page);
+    const [row] = await persisted(classroom, mutations);
+    expect((await classroom.rows())).toHaveLength(1); expect(row.content).toBe('切页前已经确认并提交的文字');
+    expect(row.revisions).toHaveLength(1); expect(errors).toEqual([]);
+  } finally { release(); }
+});
+
+test('a real late conflict reload preserves confirmed screen text after token rotation', async ({classroom, request}) => {
+  const original = await create(classroom, request, '原服务器正文');
+  const {page, errors, mutations} = await edit(classroom, 'screen');
+  await body(page, 'screen').fill(''); await write(page, '凭证变化时仍需保留的确认正文');
+  expect((await request.patch(`${api}/api/v2/publications/${original.id}`, {
+    headers: {Authorization: `Bearer ${classroom.credentials.accessToken}`, 'If-Match': '"1"'},
+    data: {content: '服务器第二版'},
+  })).status()).toBe(200);
+  await page.getByRole('button', {name: '保存作业', exact: true}).click();
+  await expect(composer(page, 'screen')).toContainText('服务器现在是版本 2');
+  let release, fetched = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route(`${api}/api/v2/classroom-screens/publications/${original.id}`, async route => {
+    const response = await route.fetch(); fetched = true; await gate; await route.fulfill({response});
+  });
+  try {
+    await page.getByRole('button', {name: '放弃本机输入并载入最新版', exact: true}).click();
+    await page.getByRole('button', {name: '载入最新版', exact: true}).click();
+    await expect.poll(() => fetched).toBe(true);
+    const token = randomUUID();
+    await classroom.prisma.classroomScreenBinding.update({where: {id: classroom.binding.id},
+      data: {tokenHash: createHash('sha256').update(token).digest('hex')}});
+    await page.evaluate(value => localStorage.setItem('classworks-v2-screen-token', value), token);
+    release();
+    await expect(composer(page, 'screen')).toContainText('大屏绑定或凭证已变化');
+    await expect(body(page, 'screen')).toHaveValue('凭证变化时仍需保留的确认正文');
+    const records = await storageTextOnly(page);
+    expect(records.some(record => record.key.includes('screen-homework-draft') && record.value.content === '凭证变化时仍需保留的确认正文')).toBe(true);
+    const [row] = await persisted(classroom, mutations);
+    expect(row.content).toBe('服务器第二版'); expect(row.revision).toBe(2); expect(errors).toEqual([]);
+  } finally { release(); }
+});

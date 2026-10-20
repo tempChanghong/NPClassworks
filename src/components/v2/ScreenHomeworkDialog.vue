@@ -789,6 +789,20 @@ function setQuickDeadline(preset) {
   form.dueAt = localDateTime(resolveHomeworkQuickDeadline(preset));
 }
 
+function draftRequestGuard() {
+  const version = draftLoadVersion, storage = draftStorage, scope = bindingIdentity();
+  return () => {
+    // A reopened composer can share this document's draft key. An old component
+    // must not clear that newer draft, emit completion, or apply a late read.
+    if (!props.modelValue || version !== draftLoadVersion || storage !== draftStorage) return false;
+    if (scope !== bindingIdentity()) {
+      localError.value = "大屏绑定或凭证已变化，当前输入已保留，请关闭后重新打开录入。";
+      return false;
+    }
+    return true;
+  };
+}
+
 async function save(allowDuplicate = false) {
   if (requestBusy.value || !draftReady.value || draftReadError.value || conflict.value) return;
   localError.value = "";
@@ -800,6 +814,7 @@ async function save(allowDuplicate = false) {
     localError.value = "标题和作业内容不能同时为空";
     return;
   }
+  const isCurrent = draftRequestGuard();
   saving.value = true;
   try {
     const savedContext = {
@@ -811,6 +826,7 @@ async function save(allowDuplicate = false) {
       ...writeInput(),
       ...(allowDuplicate ? {allowDuplicate: true} : {}),
     }, basePublication.value, savedContext);
+    if (!isCurrent()) return;
     clearScreenHomeworkDraft(
       store.screenSession?.binding?.id,
       basePublication.value?.id || "new",
@@ -821,6 +837,7 @@ async function save(allowDuplicate = false) {
     emit("saved", saved, savedContext);
     emit("update:modelValue", false);
   } catch (error) {
+    if (!isCurrent()) return;
     const duplicate = publicationDuplicateState(error);
     if (duplicate) {
       duplicateWarning.value = duplicate;
@@ -835,8 +852,10 @@ async function save(allowDuplicate = false) {
       store.screenError = "";
       try {
         const latestPublication = await store.latestPublication(basePublication.value.id, "screen");
+        if (!isCurrent()) return;
         conflict.value = {...nextConflict, latestPublication};
       } catch {
+        if (!isCurrent()) return;
         conflict.value = nextConflict;
       }
     } else {
@@ -850,12 +869,14 @@ async function save(allowDuplicate = false) {
 async function applyLocalOnLatest() {
   const latest = conflict.value?.latestPublication;
   if (requestBusy.value || !latest) return;
+  const isCurrent = draftRequestGuard();
   if (!await confirmAction({
     title: "用本机输入生成新版本",
     message: "服务器当前版本会保留在历史中，本机输入（含选做内容、需带物品及携带日期）将成为下一个版本。提交说明等本页不可编辑的信息保留服务器最新版。",
     confirmText: "保存新版本",
     color: "warning",
   })) return;
+  if (!isCurrent()) return;
   conflictApplying.value = true;
   localError.value = "";
   try {
@@ -865,11 +886,13 @@ async function applyLocalOnLatest() {
       operation: "updated",
     };
     const saved = await store.saveScreenPublication(writeInput(latest), latest, context);
+    if (!isCurrent()) return;
     clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftStorage);
     conflict.value = null;
     emit("saved", saved, context);
     emit("update:modelValue", false);
   } catch (error) {
+    if (!isCurrent()) return;
     const nextConflict = publicationConflictState(error, latest.revision);
     if (nextConflict) {
       // Discard the obsolete comparison before fetching; a failed read must not
@@ -877,9 +900,11 @@ async function applyLocalOnLatest() {
       conflict.value = nextConflict;
       try {
         const latestPublication = await store.latestPublication(basePublication.value.id, "screen");
+        if (!isCurrent()) return;
         conflict.value = {...nextConflict, latestPublication};
         localError.value = "保存期间内容再次变化，已更新对比，请重新确认。";
       } catch (failure) {
+        if (!isCurrent()) return;
         const message = failure.response?.data?.message || failure.message || "载入最新版失败";
         localError.value = `保存期间内容再次变化，${message}。本机输入已保留，请重试载入最新版，或另存为一项新作业。`;
       }
@@ -893,20 +918,24 @@ async function applyLocalOnLatest() {
 
 async function reloadLatest() {
   if (requestBusy.value || !basePublication.value || !conflict.value) return;
+  const isCurrent = draftRequestGuard();
   if (!await confirmAction({
     title: "载入服务器最新版",
     message: "当前输入会被替换。需要保留时，可以先将其另存为一项新作业。",
     confirmText: "载入最新版",
     color: "warning",
   })) return;
+  if (!isCurrent()) return;
   conflictReloading.value = true;
   localError.value = "";
   try {
     const latest = await store.latestPublication(basePublication.value.id, "screen");
+    if (!isCurrent()) return;
     basePublication.value = latest;
     conflict.value = null;
     loadPublication(latest);
   } catch (error) {
+    if (!isCurrent()) return;
     localError.value = error.response?.data?.message || error.message || "载入最新版失败";
   } finally {
     conflictReloading.value = false;
@@ -915,6 +944,7 @@ async function reloadLatest() {
 
 async function saveConflictCopy() {
   if (requestBusy.value || !conflict.value) return;
+  const isCurrent = draftRequestGuard();
   conflictCopying.value = true;
   localError.value = "";
   try {
@@ -928,11 +958,13 @@ async function saveConflictCopy() {
       publishAt: new Date().toISOString(),
       allowDuplicate: true,
     }, null, savedContext);
+    if (!isCurrent()) return;
     clearScreenHomeworkDraft(store.screenSession?.binding?.id, basePublication.value?.id || "new", draftStorage);
     conflict.value = null;
     emit("saved", saved, savedContext);
     emit("update:modelValue", false);
   } catch (error) {
+    if (!isCurrent()) return;
     localError.value = describeApiError(error, "保存失败，当前输入已保留，请重试。");
   } finally {
     conflictCopying.value = false;

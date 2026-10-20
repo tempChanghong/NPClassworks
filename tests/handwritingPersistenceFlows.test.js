@@ -80,6 +80,76 @@ test('an old successful save cannot close the composer or clear its confirmed dr
   assert.equal(h.requests.filter(r => r.path.includes('/feed')).length, 0);
 });
 
+test('an unmounted save completion cannot delete the replacement editor confirmed draft', async () => {
+  h.newStore({screen: true});
+  const first = await h.openComposer(), hold = deferred();
+  Object.assign(first.state.form, {subjectId: 'math', targetWorkspaceId: 'class-a'});
+  await nextTick();
+  first.state.textTargets.content.apply(first.state.textTargets.content.capture(), '第一份已确认文字');
+  await nextTick();
+  h.routes.set('POST /api/v2/classroom-screens/publications', async (_req, reply) => {
+    await hold.promise; reply({id: 'saved-before-navigation', revision: 1});
+  });
+  const saving = first.state.save();
+  try {
+    await eventually(() => assert.ok(h.requests.some(r => r.method === 'POST')));
+    first.unmount();
+    const replacement = await h.openComposer();
+    replacement.state.form.content = '';
+    await nextTick();
+    replacement.state.textTargets.content.apply(replacement.state.textTargets.content.capture(), '新窗口已确认但未保存的文字');
+    await nextTick();
+    hold.resolve(); await saving;
+    assert.equal(h.loadDraft('screen-a', 'new')?.content, '新窗口已确认但未保存的文字');
+    assert.deepEqual(first.events, []);
+    assert.equal(replacement.state.form.content, '新窗口已确认但未保存的文字');
+  } finally { hold.resolve(); await saving; }
+});
+
+for (const method of ['saveConflictCopy', 'applyLocalOnLatest']) test(`an unmounted ${method} cannot clear a reopened conflict draft`, async () => {
+  h.newStore({screen: true});
+  const original = {id: 'source', revision: 1, subjectId: 'math', content: '原正文',
+    targets: [{workspaceId: 'class-a'}], publishAt: new Date().toISOString()};
+  const first = await h.openComposer(original), hold = deferred();
+  first.state.form.content = '冲突后已确认的原输入'; await nextTick();
+  first.state.conflict.value = {latestRevision: 2, latestPublication: {...original, revision: 2}};
+  const path = method === 'saveConflictCopy' ? 'POST /api/v2/classroom-screens/publications' : 'PATCH /api/v2/classroom-screens/publications/source';
+  h.routes.set(path, async (_req, reply) => { await hold.promise; reply({...original, revision: 3}); });
+  const saving = first.state[method]();
+  if (method === 'applyLocalOnLatest') h.dialogs.settleActionDialog(true);
+  try {
+    await eventually(() => assert.ok(h.requests.some(r => `${r.method} ${r.path}` === path)));
+    first.unmount();
+    const replacement = await h.openComposer(original);
+    replacement.state.form.content = '重新打开后确认的后续输入'; await nextTick();
+    hold.resolve(); await saving;
+    assert.equal(h.loadDraft('screen-a', original.id)?.content, '重新打开后确认的后续输入');
+    assert.deepEqual(first.events, []);
+  } finally { hold.resolve(); await saving; }
+});
+
+test('a delayed conflict reload cannot replace confirmed text after credentials change', async () => {
+  h.newStore({screen: true});
+  const original = {id: 'source', revision: 1, subjectId: 'math', content: '原正文', targets: [{workspaceId: 'class-a'}]};
+  const {state} = await h.openComposer(original), hold = deferred();
+  state.textTargets.content.apply(state.textTargets.content.capture(), '已确认且仍需保留的手写文字');
+  await nextTick();
+  const confirmed = state.form.content;
+  state.conflict.value = {latestRevision: 2};
+  h.routes.set('GET /api/v2/classroom-screens/publications/source', async (_req, reply) => {
+    await hold.promise; reply({...original, content: '旧范围返回的服务器正文', revision: 2});
+  });
+  const loading = state.reloadLatest(); h.dialogs.settleActionDialog(true);
+  try {
+    await eventually(() => assert.ok(h.requests.some(r => r.method === 'GET' && r.path.endsWith('/source'))));
+    h.api.saveClassroomScreenToken('replacement-screen-token');
+    hold.resolve(); await loading;
+    assert.equal(state.form.content, confirmed);
+    assert.equal(h.loadDraft('screen-a', original.id)?.content, confirmed);
+    assert.match(state.localError.value, /绑定.*变化/);
+  } finally { hold.resolve(); await loading; }
+});
+
 for (const change of ['token', 'credential']) for (const manual of [false, true]) test(`a changed ${change} during ${manual ? 'manual' : 'automatic'} replay retains the original queue`, async () => {
   const store = h.newStore({screen: true}), hold = deferred();
   const token = h.api.getClassroomScreenToken(), version = store.screenSession.binding.credentialVersion;
