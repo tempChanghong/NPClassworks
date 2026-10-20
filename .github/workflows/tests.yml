@@ -22,7 +22,7 @@ jobs:
   contracts:
     uses: ./.github/workflows/contracts.yml
     with:
-      backend_ref: ${{ inputs.backend_ref || (github.event_name == 'pull_request' && 'c4afaaef66d64ee0d6f3c5f06ba158f80013c591') || 'main' }}
+      backend_ref: ${{ inputs.backend_ref || (github.event_name == 'pull_request' && '6c4f31c1e6e03492d27a8a664d3f46b0e9370a8a') || 'main' }}
 
   test:
     runs-on: ubuntu-latest
@@ -79,8 +79,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: tempChanghong/NPClassworksKV
-          # No dependency on the separate manual-study homework feature branch.
-          ref: ${{ inputs.backend_ref || 'ca0944ef3a2ce4b57620219895cf74a05ff3a551' }}
+          # Verify the immutable backend candidate from NPClassworksKV PR #11.
+          ref: ${{ inputs.backend_ref || '6c4f31c1e6e03492d27a8a664d3f46b0e9370a8a' }}
           path: .contract-backend
           persist-credentials: false
       - uses: pnpm/action-setup@v4
