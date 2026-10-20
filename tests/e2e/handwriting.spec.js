@@ -17,6 +17,10 @@ async function setup(browser, role, {twoClasses = false, ...options} = {}) {
   };
   const context = await browser.newContext({viewport: {width: 1280, height: 720}, deviceScaleFactor: 2, hasTouch: true,
     storageState: {cookies: [], origins: [{origin, localStorage: Object.entries(values).map(([name, value]) => ({name, value}))}]}, ...options});
+  const resourceRequests = [];
+  context.on('request', request => {
+    if (new URL(request.url()).pathname.includes('/handwriting/r19/')) resourceRequests.push(request.url());
+  });
   if (twoClasses) await context.route('**/api/v2/me/workspaces**', async route => {
     const response = await route.fetch(), payload = await response.json();
     const a = payload.data[0];
@@ -60,7 +64,7 @@ async function setup(browser, role, {twoClasses = false, ...options} = {}) {
     await page.getByRole('option', {name: '数学', exact: true}).click();
     await selectClass(page, '高一一班');
   }
-  return {page, context, errors};
+  return {page, context, errors, resourceRequests};
 }
 async function selectClass(page, name) {
   const input = page.locator('.publication-composer').getByLabel('发布到', {exact: true});
@@ -106,6 +110,26 @@ async function noLiveWorkers(page) {
 test.beforeEach(async ({request}) => {
   await request.post(`${origin}/__test/release`, {data: {release: 'previous'}});
   await request.post(`${api}/__test/reset`);
+});
+
+for (const role of ['screen', 'teacher']) test(`${role}: ordinary text entry and unconfirmed ink never start or download the model`, async ({browser}) => {
+  const s = await setup(browser, role);
+  try {
+    await body(s.page, role).fill('正常键盘录入第10—20页，第1、11题。');
+    expect(s.resourceRequests).toEqual([]);
+    await noLiveWorkers(s.page);
+    await open(s.page);
+    await paint(s.page, '尚未请求识别');
+    await expect(work(s.page)).toContainText('1 笔');
+    expect(s.resourceRequests).toEqual([]);
+    await noLiveWorkers(s.page);
+    await work(s.page).getByRole('button', {name: '返回录入', exact: true}).click();
+    await expect(work(s.page)).toHaveCount(0);
+    await expect(body(s.page, role)).toHaveValue('正常键盘录入第10—20页，第1、11题。');
+    expect(s.resourceRequests).toEqual([]);
+    await noLiveWorkers(s.page);
+    expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
 });
 
 for (const role of ['screen', 'teacher']) test(`${role}: required and optional confirmation only submits plain text through the existing save`, async ({browser, request}) => {
