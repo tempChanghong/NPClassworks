@@ -7,8 +7,8 @@ import {resolve, join, dirname, basename, relative, isAbsolute} from 'node:path'
 import {randomUUID, randomBytes, createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import net from 'node:net';
 import {preserveGeneratedClient} from './handwriting-kv-generated.js';
+import {allocateLoopbackPorts} from './handwriting-kv-ports.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const backend = resolve(process.env.CLASSWORKS_BACKEND_ROOT || join(root, '../NPClassworksKV'));
@@ -36,13 +36,6 @@ function revision(cwd) {
   return {root: cwd, commit: call(['rev-parse', 'HEAD']), dirty: Boolean(call(['status', '--porcelain'])), workingTreeSha256: hash.digest('hex')};
 }
 function save() { writeFileSync(join(output, 'result.json'), JSON.stringify(report, null, 2)); }
-async function port() {
-  const server = net.createServer();
-  await new Promise((resolve, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolve));
-  const selected = server.address().port;
-  await new Promise(resolve => server.close(resolve));
-  return selected;
-}
 async function pgBin() {
   if (process.env.NPEP_TEST_PG_BIN) return resolve(process.env.NPEP_TEST_PG_BIN);
   const base = join(process.env.ProgramFiles || 'C:/Program Files', 'PostgreSQL');
@@ -66,8 +59,7 @@ save();
 try {
   bin = await pgBin();
   for (const name of ['initdb', 'pg_ctl']) await access(join(bin, name + suffix));
-  const dbPort = await port(), webPort = await port(), apiPort = await port();
-  if (new Set([dbPort, webPort, apiPort]).size !== 3) throw new Error('Test ports must differ');
+  const [dbPort, webPort, apiPort] = await allocateLoopbackPorts();
   const password = randomBytes(24).toString('hex'), passwordFile = join(directory, 'password');
   const emptyEnv = join(directory, 'empty.env');
   await writeFile(passwordFile, password, {mode: 0o600}); await writeFile(emptyEnv, '');
