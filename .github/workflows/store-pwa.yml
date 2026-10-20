@@ -55,6 +55,12 @@ jobs:
       - name: Build and validate PWA
         run: pnpm run build:store
 
+      - name: Verify production module MIME with native Nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes nginx
+          bash scripts/check-nginx-static.sh dist
+
       - name: Create store handoff metadata
         run: |
           node <<'NODE'
