@@ -64,6 +64,43 @@ test('cancel before asynchronous Web Lock acquisition releases the old gate only
   s.dispose();await currentGate;assert.equal(released,true);Object.defineProperty(navigator,'locks',{value:undefined,configurable:true});
 });
 
+test('cancel settles recognition even when the browser never answers the lock request', async () => {
+  let callback;
+  Object.defineProperty(navigator, 'locks', {value: {request(_name, _options, handler) {
+    callback = handler; return new Promise(() => {});
+  }}, configurable: true});
+  const session = new RecognitionSession(() => {}), request = session.recognize(lines);
+  const settled = request.then(() => 'resolved', () => 'rejected');
+  try {
+    session.dispose();
+    assert.equal(await Promise.race([settled, new Promise(resolve => setTimeout(() => resolve('pending'), 50))]), 'rejected');
+    assert.equal(session.worker, null);
+  } finally {
+    session.dispose(); await callback(null); await settled;
+    Object.defineProperty(navigator, 'locks', {value: undefined, configurable: true});
+  }
+});
+
+test('a silent browser lock has the same bounded wait as worker requests and releases ownership', async t => {
+  let callback, failure;
+  Object.defineProperty(navigator, 'locks', {value: {request(_name, _options, handler) {
+    callback = handler; return new Promise(() => {});
+  }}, configurable: true});
+  t.mock.timers.enable({apis: ['setTimeout']});
+  const session = new RecognitionSession(() => {}), request = session.recognize(lines).catch(error => { failure = error; });
+  try {
+    t.mock.timers.tick(90001);
+    for (let step = 0; step < 8; step++) await Promise.resolve();
+    assert.match(failure?.message || 'still pending', /超时/);
+    assert.equal(session.controller, null);
+    assert.equal(session.unlock, null);
+    assert.equal(session.worker, null);
+  } finally {
+    session.dispose(); await callback(null); await request; t.mock.timers.reset();
+    Object.defineProperty(navigator, 'locks', {value: undefined, configurable: true});
+  }
+});
+
 test('message decode failure rejects promptly and permits a fresh retry',async()=>{
   const s=new RecognitionSession(()=>{}),request=s.recognize(lines),rejected=assert.rejects(request,/通信/);
   try{

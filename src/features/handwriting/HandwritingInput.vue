@@ -39,9 +39,10 @@
           <div><small>{{ label }}</small><h2>手写{{ field === 'content' ? '必做正文' : '选做正文' }}</h2></div>
           <v-btn
             variant="text"
-            @click="close"
+            :color="busy ? 'primary' : undefined"
+            @click="busy ? cancelRecognition() : close()"
           >
-            返回录入
+            {{ busy ? '取消识别' : '返回录入' }}
           </v-btn>
         </header>
         <div class="handwriting-body">
@@ -84,13 +85,6 @@
               @click="recognize"
             >
               识别文字
-            </v-btn>
-            <v-btn
-              v-if="busy"
-              variant="text"
-              @click="cancelRecognition"
-            >
-              取消识别
             </v-btn>
           </div>
           <p
@@ -280,6 +274,7 @@ async function recognize() {
     }
   }
   const current = ++operation, start = window.performance.now(), version = inkVersion; busy.value = true;
+  status.value = "正在识别，可点击右上角取消，笔迹与文字会保留。";
   try {
     let preprocessMs = 0;
     const plan = rowResults.plan(rowBounds(strokes), rowRevisions);

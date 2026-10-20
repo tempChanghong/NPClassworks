@@ -4,23 +4,37 @@ import {InputBufferPool} from './input-buffer-pool.js';
 const workerPath = pins.files.find(file => file.path.endsWith("/ocr-worker.js")).path;
 let activeOwner;
 let sequence = 0;
+const requestTimeoutMs = 90000;
 // One recovery bit for this page's fixed resources, shared across replacement
 // sessions. Normal cancellation never requests a rehash; compute failures do.
 let verifyCachedResources = false;
 export class RecognitionSession {
   constructor(progress,{reuseInputs=pins.version==='r18'||pins.inputReuseVersion===1}={}) { this.progress = progress; this.generation = 0; this.worker = null; this.pending = null; this.controller = null; this.ready = false; this.inputPool=reuseInputs?new InputBufferPool():null; }
-  async acquire(generation) {
+  async acquire(generation, signal) {
     if (activeOwner && activeOwner !== this) throw Error("本窗口已有手写任务，请先完成或关闭它。");
     activeOwner = this;
     if (!this.unlock && navigator.locks) {
       let unlock;
       const gate = new Promise(resolve => { unlock = resolve; this.unlock = resolve; });
-      const acquired = await new Promise((resolve, reject) => {
-        navigator.locks.request("npclassworks-handwriting-lab-ocr", {ifAvailable: true}, async lock => {
-          if (generation !== this.generation) { unlock(); resolve(false); return; }
-          resolve(Boolean(lock)); if (lock) await gate;
-        }).catch(reject);
-      });
+      let waiting = true, cancelWait, timeout;
+      let acquired;
+      try {
+        acquired = await new Promise((resolve, reject) => {
+          const settle = (finish, value) => { if (waiting) { waiting = false; finish(value); } };
+          cancelWait = () => settle(reject, Error("识别已取消，笔迹保留。"));
+          timeout = setTimeout(() => settle(reject, Error("等待识别任务超时，笔迹保留，请重试。")), requestTimeoutMs);
+          signal.addEventListener('abort', cancelWait, {once: true});
+          if (signal.aborted) { cancelWait(); return; }
+          navigator.locks.request("npclassworks-handwriting-lab-ocr", {ifAvailable: true}, async lock => {
+            // A browser lock callback may arrive after cancellation or timeout.
+            // Release only its captured gate; never the immediate retry's lock.
+            if (!waiting || signal.aborted || generation !== this.generation) { unlock(); return; }
+            settle(resolve, Boolean(lock)); if (lock) await gate;
+          }).catch(error => settle(reject, error));
+        });
+      } finally {
+        waiting = false; clearTimeout(timeout); signal.removeEventListener('abort', cancelWait);
+      }
       if (!acquired) {
         unlock();
         if (this.unlock === unlock) this.unlock = null;
@@ -33,7 +47,7 @@ export class RecognitionSession {
     if (this.controller || this.pending) throw Error("已有识别任务，请稍候。");
     const generation = this.generation, controller = this.controller = new AbortController();
     try {
-      await this.acquire(generation);
+      await this.acquire(generation, controller.signal);
       if (generation !== this.generation) throw Error("识别已取消，笔迹保留。");
       let resources;
       if (!this.ready) {
@@ -76,7 +90,7 @@ export class RecognitionSession {
     }
     const worker = this.worker;
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => { if (this.pending?.id === id) { if (computation) verifyCachedResources = true; this.dispose("识别等待超时，笔迹保留，请重试。"); } }, 90000);
+      const timeout = setTimeout(() => { if (this.pending?.id === id) { if (computation) verifyCachedResources = true; this.dispose("识别等待超时，笔迹保留，请重试。"); } }, requestTimeoutMs);
       this.pending = {id, resolve, reject, timeout,reuse:message.inputReuseVersion===1};
       worker.onmessage = ({data}) => {
         if (this.worker !== worker || this.pending?.id !== id) return;

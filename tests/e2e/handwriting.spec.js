@@ -524,6 +524,39 @@ test('lifecycle: canceled cold preparation can retry before its delayed download
   } finally { release(); await s.context.close(); }
 });
 
+for (const [role, width] of [['screen', 1280], ['teacher', 640]]) test(`cancellation: ${role} can stop a silent model from the fixed header and retry the same ink`, async ({browser}) => {
+  const s = await setup(browser, role, {viewport: {width, height: 360}});
+  try {
+    await s.page.evaluate(() => {
+      const post = window.Worker.prototype.postMessage;
+      window.ocrTest.holdModel = true;
+      window.Worker.prototype.postMessage = function(message, ...rest) {
+        if (message.type === 'recognize' && window.ocrTest.holdModel) {
+          window.ocrTest.holdModel = false; window.ocrTest.modelHeld = true; return;
+        }
+        return post.call(this, message, ...rest);
+      };
+    });
+    await body(s.page, role).fill('原正文保留');
+    await open(s.page); await paint(s.page, '第10—20页，第1、11题。');
+    await result(s.page).fill('尚未插入的校对文字');
+    await work(s.page).getByRole('button', {name: '识别文字', exact: true}).click();
+    await s.page.waitForFunction(() => window.ocrTest.modelHeld);
+    await work(s.page).locator('.handwriting-body').evaluate(el => { el.scrollTop = el.scrollHeight; });
+    const cancel = work(s.page).locator('header').getByRole('button', {name: '取消识别', exact: true});
+    await expect(cancel).toBeInViewport(); await expect(cancel).toBeEnabled();
+    await cancel.tap();
+    await expect(work(s.page)).toHaveAttribute('data-busy', 'false');
+    await expect(work(s.page)).toContainText('1 笔');
+    await expect(result(s.page)).toHaveValue('尚未插入的校对文字');
+    await noLiveWorkers(s.page);
+    await expect(work(s.page).getByRole('button', {name: '识别文字', exact: true})).toBeEnabled();
+    expect((await recognize(s.page)).text).toContain('10');
+    await expect(body(s.page, role)).toHaveValue('原正文保留');
+    await insert(s.page); await noLiveWorkers(s.page); expect(s.errors).toEqual([]);
+  } finally { await s.context.close(); }
+});
+
 test('lifecycle: a second window retains its ink and can recognize after the owning window closes', async ({browser}) => {
   const s = await setup(browser, 'screen');
   try {
