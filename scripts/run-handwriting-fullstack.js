@@ -77,6 +77,9 @@ try {
     FULLSTACK_BUILD_ROOT: join(root, 'dist-e2e/handwriting-kv', id),
     HANDWRITING_ACCEPTANCE_MODE: manual ? 'interactive' : smoke ? 'smoke' : '',
     HANDWRITING_KV_OUTPUT: join(output, 'browser'), PLAYWRIGHT_JSON_OUTPUT_FILE: report.browserReport};
+  // Trace/screenshot off does not disable Playwright's failed-page ARIA dump.
+  // Human input must not be copied into that diagnostic artifact either.
+  if (acceptance) env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
   for (const key of ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSERVICE', 'PGSERVICEFILE', 'PGOPTIONS',
     'NPEP_DEPLOYMENT_FILE', 'INTEGRATION_COMPOSE_PROJECT', 'FULLSTACK_NPEP', 'FULLSTACK_RELEASE_UPGRADE']) delete env[key];
   report.ports = {postgres: dbPort, web: webPort, api: apiPort}; save();

@@ -6,6 +6,7 @@ import {join} from 'node:path';
 test('isolated screen and teacher handwriting acceptance session', async ({classroom}, info) => {
   const mode = process.env.HANDWRITING_ACCEPTANCE_MODE;
   expect(['interactive', 'smoke']).toContain(mode);
+  expect(process.env.PLAYWRIGHT_NO_COPY_PROMPT).toBe('1');
   const directory = process.env.HANDWRITING_KV_OUTPUT || info.outputDir;
   await mkdir(directory, {recursive: true});
   const sessions = [], measurements = {}, output = join(directory, 'manual-session.json');
@@ -14,8 +15,10 @@ test('isolated screen and teacher handwriting acceptance session', async ({class
     browserContexts: 'isolated temporary contexts; not an installed PWA',
     recording: 'bounded numeric timing/counters and saved-row metadata; no ink or text recording', measurements};
   async function save() { await writeFile(output, JSON.stringify(report, null, 2)); }
+  async function stage(value) { report.stage = value; await save(); }
   try {
     for (const role of ['screen', 'teacher']) {
+      await stage(`opening-${role}`);
       const session = await classroom.open(role, {viewport: null});
       sessions.push(session);
       measurements[role] = {observedRequests: 0, recentRequests: [], lastObservedLiveWorkers: 0, maxLiveWorkers: 0};
@@ -70,6 +73,7 @@ test('isolated screen and teacher handwriting acceptance session', async ({class
       teachingAssignments: {create: {accountId: classroom.account.id, subjectId: classroom.subject.id}},
     }});
     for (const [index, role] of ['screen', 'teacher'].entries()) {
+      await stage(`preparing-${role}-editor`);
       const {page} = sessions[index];
       await page.reload();
       await page.evaluate(label => { document.title = `[隔离验收·${label}] NPClassworks`; }, role === 'screen' ? '大屏' : '教师');
@@ -79,6 +83,8 @@ test('isolated screen and teacher handwriting acceptance session', async ({class
         await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
         await page.getByRole('button', {name: '数学', exact: true}).click();
       } else {
+        const navigation = page.locator('.teacher-task-nav');
+        if (await navigation.isVisible()) await navigation.getByRole('button', {name: '新建发布', exact: true}).click();
         const composer = page.locator('.publication-composer');
         await composer.locator('.v-select').filter({hasText: '科目'}).click();
         await page.getByRole('option', {name: '数学', exact: true}).click();
@@ -93,7 +99,7 @@ test('isolated screen and teacher handwriting acceptance session', async ({class
         await page.locator('.handwriting-workspace:visible').getByRole('button', {name: '返回录入', exact: true}).click();
       }
     }
-    await save();
+    await stage('ready');
     if (mode === 'interactive') {
       // Track extra tabs too, so closing the first tab cannot end a conflict/replay check.
       await Promise.all(sessions.map(({context}) => new Promise(resolve => {
@@ -105,6 +111,7 @@ test('isolated screen and teacher handwriting acceptance session', async ({class
     report.completedAt = new Date().toISOString();
     report.savedRows = (await classroom.rows()).map(row => ({id: row.id, revision: row.revision, status: row.status}));
     report.pageErrorCounts = sessions.map(session => session.errors.length);
+    report.stage = 'completed';
     // Session completion is never automatic human sign-off.
     await save();
     expect(report.pageErrorCounts).toEqual([0, 0]);
