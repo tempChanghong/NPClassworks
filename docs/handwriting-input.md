@@ -69,3 +69,5 @@ pnpm run test:handwriting:kv
 最后一轮凭证选区修复、预处理对照与完整回归见 [最后复验](handwriting-final-readiness-20261020.md)；正式启用步骤见 [接入计划](handwriting-production-rollout-plan.md)。
 
 候选已与当前 `main` 整理并重新验证，见 [接入整理记录](handwriting-integration-20261020.md)。PR 增加了独立的原生 PostgreSQL 手写回归；本地用 Edge，Linux CI 用 Chromium。未配置系统默认 PostgreSQL 工具路径时，CI 显式传入 `NPEP_TEST_PG_BIN`。隔离端口从动态私有范围分配并短暂保留，避免随机低端口被浏览器拒绝。
+
+需要真人笔迹操作时可运行 `pnpm run test:handwriting:manual`，详见 [人工验收指南](handwriting-manual-acceptance.md)。该入口创建临时测试环境，和正式学校无关；页面使用 100% 缩放及设备原有 Windows 显示设置。会话结束和启动冒烟通过均不会自动标记人工验收通过。

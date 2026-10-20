@@ -10,6 +10,10 @@ import {fileURLToPath} from 'node:url';
 import {preserveGeneratedClient} from './handwriting-kv-generated.js';
 import {allocateLoopbackPorts} from './handwriting-kv-ports.js';
 
+const args = process.argv.slice(2);
+const manual = args.includes('--manual'), smoke = args.includes('--manual-smoke');
+if (manual && smoke || (manual || smoke) && args.length !== 1) throw new Error('Choose only --manual or --manual-smoke');
+const acceptance = manual || smoke;
 const root = fileURLToPath(new URL('../', import.meta.url));
 const backend = resolve(process.env.CLASSWORKS_BACKEND_ROOT || join(root, '../NPClassworksKV'));
 const requireBackend = createRequire(join(backend, 'package.json'));
@@ -21,7 +25,8 @@ mkdirSync(output, {recursive: true});
 const directory = await mkdtemp(join(tmpdir(), 'npclassworks-handwriting-kv-'));
 const data = join(directory, 'pgdata'), marker = join(directory, 'owner.json');
 await writeFile(marker, JSON.stringify({id}));
-const report = {status: 'RUNNING', frontend: revision(root), backend: revision(backend),
+const report = {status: 'RUNNING', mode: manual ? 'manual-session' : smoke ? 'manual-startup-smoke' : 'automated',
+  ...(acceptance ? {humanAcceptance: 'PENDING'} : {}), frontend: revision(root), backend: revision(backend),
   cluster: directory, database: `npclassworks_test_fullstack_hw_${id}`, loopbackOnly: true,
   docker: false, production: false, browserReport: join(output, 'browser-results.json'), error: null};
 function revision(cwd) {
@@ -70,6 +75,7 @@ try {
     AXIOM_TOKEN: '', AXIOM_DATASET: '', OTEL_SDK_DISABLED: 'true', NPEP_ENABLED: 'false',
     E2E_WEB_PORT: String(webPort), E2E_API_PORT: String(apiPort),
     FULLSTACK_BUILD_ROOT: join(root, 'dist-e2e/handwriting-kv', id),
+    HANDWRITING_ACCEPTANCE_MODE: manual ? 'interactive' : smoke ? 'smoke' : '',
     HANDWRITING_KV_OUTPUT: join(output, 'browser'), PLAYWRIGHT_JSON_OUTPUT_FILE: report.browserReport};
   for (const key of ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSERVICE', 'PGSERVICEFILE', 'PGOPTIONS',
     'NPEP_DEPLOYMENT_FILE', 'INTEGRATION_COMPOSE_PROJECT', 'FULLSTACK_NPEP', 'FULLSTACK_RELEASE_UPGRADE']) delete env[key];
@@ -88,8 +94,13 @@ try {
   try { run(process.execPath, [join(backend, 'node_modules/prisma/build/index.js'), 'generate'], backend, env, 'prisma-generate'); }
   finally { await generated.recordGenerated(); }
   run(process.execPath, [join(backend, 'node_modules/prisma/build/index.js'), 'migrate', 'deploy'], backend, env, 'migrate-owned-database');
-  run(process.execPath, [join(root, 'node_modules/@playwright/test/cli.js'), 'test', '--config', 'playwright.handwriting-fullstack.config.js',
-    '--reporter=line,json', ...process.argv.slice(2)], root, env, 'handwriting-browser');
+  if (acceptance) {
+    console.log(`Acceptance files: ${join(output, 'browser')}`);
+    if (manual) console.log('Opening isolated screen and teacher windows. Close both windows to finish. Human acceptance stays PENDING.');
+  }
+  run(process.execPath, [join(root, 'node_modules/@playwright/test/cli.js'), 'test', '--config',
+    acceptance ? 'playwright.handwriting-manual.config.js' : 'playwright.handwriting-fullstack.config.js',
+    '--reporter=line,json', ...(acceptance ? [] : args)], root, env, 'handwriting-browser');
   const browser = JSON.parse(readFileSync(report.browserReport, 'utf8'));
   if (browser.stats.unexpected || browser.stats.flaky || browser.stats.skipped || !browser.stats.expected)
     throw new Error('Browser results must pass without retries or skips');
