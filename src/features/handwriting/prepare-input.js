@@ -28,7 +28,17 @@ export function prepareLine(canvas,bound,profile='accurate',inputPool=null){
     context.drawImage(canvas,x+x0,y+y0,inkWidth,inkHeight,padding*scale,padding*scale,inkWidth*scale,inkHeight*scale);
     const rgba=context.getImageData(0,0,validWidth,48).data,data=inputPool?inputPool.take(3*48*width):new Float32Array(3*48*width);
     if(options.pad)data.fill(options.pad);
-    for(let py=0;py<48;py++)for(let px=0;px<validWidth;px++)for(let channel=0;channel<3;channel++)data[channel*48*width+py*width+px]=rgba[(py*validWidth+px)*4+2-channel]/127.5-1;
+    // Share pixel/plane offsets; preserve the original BGR normalization exactly.
+    const plane=48*width;
+    for(let py=0;py<48;py++){
+      const targetRow=py*width,sourceRow=py*validWidth*4;
+      for(let px=0;px<validWidth;px++){
+        const dst=targetRow+px,src=sourceRow+px*4;
+        data[dst]=rgba[src+2]/127.5-1;
+        data[plane+dst]=rgba[src+1]/127.5-1;
+        data[plane*2+dst]=rgba[src]/127.5-1;
+      }
+    }
     return {row:bound.row,width,data,validWidth,profile};
   }finally{target.width=target.height=1;}
 }
