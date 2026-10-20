@@ -145,6 +145,9 @@ if (!fs.existsSync(serviceWorkerPath)) {
   if (/url:\s*["'](?:\.\/)?backgrounds\//.test(precacheManifest)) {
     fail('背景图片不应进入 precache，应在查看或选择后按需下载。');
   }
+  if (/url:\s*["'](?:\.\/)?handwriting\//.test(precacheManifest)) {
+    fail('手写模型和运行库不应进入 precache，应在用户识别时按需准备。');
+  }
 }
 
 if (!fs.existsSync(path.join(distDir, 'sw-cache-manager.js'))) {

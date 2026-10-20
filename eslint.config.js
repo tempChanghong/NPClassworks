@@ -9,7 +9,7 @@ export default [
 
   {
     name: 'app/files-to-ignore',
-    ignores: ['images/promo/**/*.jsx', '**/.artifacts/**', '**/.cache/**', '**/dist/**', '**/dist-e2e/**', '**/test-results/**', '**/playwright-report/**', '**/dist-ssr/**', '**/coverage/**', '.contract-backend/**'],
+    ignores: ['images/promo/**/*.jsx', '**/.artifacts/**', '**/.cache/**', '**/dist/**', '**/dist-e2e/**', '**/test-results/**', '**/playwright-report/**', '**/dist-ssr/**', '**/coverage/**', '.contract-backend/**', 'public/handwriting/r19/**'],
   },
 
   js.configs.recommended,

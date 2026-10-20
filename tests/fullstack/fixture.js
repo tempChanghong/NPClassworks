@@ -30,7 +30,7 @@ export const test = base.extend({
         tokenHash: createHash("sha256").update(screenToken).digest("hex"),
       }});
       const credentials = await generateTokenPair(account);
-      async function open(role) {
+      async function open(role, contextOptions = {}) {
         const values = {
           "classworks-v2-oobe": JSON.stringify({version: 1, completed: true, roleHint: role}),
           [`classworks-v2-screen-oobe:${binding.id}`]: JSON.stringify({version: 1, completed: true}),
@@ -41,7 +41,8 @@ export const test = base.extend({
             : {"classworks-v2-screen-token": screenToken}),
         };
         const context = await browser.newContext({viewport: {width: 1440, height: 1000}, serviceWorkers: "allow", timezoneId: "Asia/Shanghai",
-          storageState: {cookies: [], origins: [{origin, localStorage: Object.entries(values).map(([name, value]) => ({name, value}))}]}});
+          storageState: {cookies: [], origins: [{origin, localStorage: Object.entries(values).map(([name, value]) => ({name, value}))}]},
+          ...contextOptions});
         contexts.push(context);
         const page = await context.newPage();
         const errors = [], frames = [];

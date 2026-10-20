@@ -26,7 +26,7 @@ process.env.VITE_ENABLE_ANALYTICS = "false";
 const upgrade = process.env.FULLSTACK_RELEASE_UPGRADE === "true";
 const releases = upgrade ? JSON.parse(await readFile(resolve("dist-e2e/release-upgrade/manifest.json"), "utf8")) : null;
 let activeRelease = "previous";
-const buildRoot = resolve("dist-e2e/fullstack");
+const buildRoot = resolve(process.env.FULLSTACK_BUILD_ROOT || "dist-e2e/fullstack");
 // Prisma's generated client sets global __dirname. Build in a fresh process so
 // backend globals cannot alter frontend plugins' package-relative resolution.
 const build = upgrade ? {status: 0} : spawnSync(process.execPath, [resolve("node_modules/vite/bin/vite.js"), "build", "--outDir", buildRoot, "--logLevel", "error"], {
@@ -35,7 +35,7 @@ const build = upgrade ? {status: 0} : spawnSync(process.execPath, [resolve("node
 if (build.error || build.status !== 0) throw build.error || new Error(`Fullstack frontend build failed (${build.status})`);
 const backend = createServer(app);
 const io = initSocket(backend);
-const mime = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
+const mime = {".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".wasm": "application/wasm", ".css": "text/css", ".json": "application/json",
   ".webmanifest": "application/manifest+json", ".woff2": "font/woff2", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".mp3": "audio/mpeg"};
 const frontend = createServer(async (req, res) => {
   try {

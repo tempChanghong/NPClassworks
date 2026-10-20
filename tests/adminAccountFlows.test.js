@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {after, before, beforeEach, test} from "node:test";
 import {nextTick} from "vue";
-import {createFlowHarness, eventually} from "./helpers/flowHarness.js";
+import {createFlowHarness, deferred, eventually} from "./helpers/flowHarness.js";
 
 let h;
 const base = "/api/v2/admin/schools/school";
@@ -128,4 +128,119 @@ test("role options remain reactive, account filters combine, and page instances 
   s.schoolMemberships.value = [membership("ADMIN")];
   await nextTick();
   assert.equal(s.newAdminRole.value, "OWNER", "unmount stops the role watcher");
+});
+
+for (const outcome of ["success", "failure"]) {
+  test(`an old school's late ${outcome} cannot replace the current account list or release its load`, async () => {
+    const {state: s} = await open();
+    const oldStarted = deferred(), oldRelease = deferred(), nextStarted = deferred(), nextRelease = deferred();
+    h.routes.set(`GET ${base}/local-accounts`, async (_req, reply) => {
+      oldStarted.resolve(); await oldRelease.promise;
+      reply(outcome === "success" ? [account] : {message: "旧学校查询失败"}, outcome === "success" ? 200 : 503);
+    });
+    const nextAccount = {...account, id: "next-account", name: "另一所学校的教师"};
+    for (const [suffix, data] of [["classroom-screens", []], ["homework-settings", {}]])
+      h.routes.set(`GET /api/v2/admin/schools/other-school/${suffix}`, (_req, reply) => reply(data));
+    h.routes.set("GET /api/v2/admin/schools/other-school/local-accounts", async (_req, reply) => {
+      nextStarted.resolve(); await nextRelease.promise; reply([nextAccount]);
+    });
+    s.schoolMemberships.value = [membership("OWNER"), {role: "ADMIN", school: {id: "other-school", terms: []}}];
+    const oldLoad = s.loadLocalAccounts(); await oldStarted.promise;
+    s.selectedSchoolId.value = "other-school";
+    try {
+      await nextStarted.promise;
+      oldRelease.resolve(); await oldLoad;
+      assert.deepEqual(s.localAccounts.value, [], "old-school accounts must be withdrawn while the next school loads");
+      assert.equal(s.accountBusy.value, true, "old query must not release the new query's loading state");
+      assert.doesNotMatch(s.errorMessage.value, /旧学校查询失败/);
+    } finally { oldRelease.resolve(); nextRelease.resolve(); }
+    await eventually(() => {
+      assert.deepEqual(s.localAccounts.value, [nextAccount]);
+      assert.equal(s.accountBusy.value, false);
+    });
+  });
+}
+
+test("overlapping account refreshes keep the latest snapshot even when the older request completes last", async () => {
+  const {state: s} = await open();
+  const started = deferred(), release = deferred();
+  h.routes.set(`GET ${base}/local-accounts`, async (_req, reply) => {
+    started.resolve(); await release.promise; reply([account]);
+  });
+  const oldLoad = s.loadLocalAccounts(); await started.promise;
+  const updated = {...account, disabled: true};
+  h.routes.set(`GET ${base}/local-accounts`, (_req, reply) => reply([updated]));
+  try { await s.loadLocalAccounts(); }
+  finally { release.resolve(); }
+  await oldLoad;
+  assert.deepEqual(s.localAccounts.value, [updated]);
+  assert.equal(s.accountBusy.value, false);
+});
+
+for (const outcome of ["success", "failure"]) {
+  test(`closing the account page ignores a late ${outcome} from its pending refresh`, async () => {
+    const {state: s, unmount} = await open();
+    const started = deferred(), release = deferred();
+    h.routes.set(`GET ${base}/local-accounts`, async (_req, reply) => {
+      started.resolve(); await release.promise;
+      reply(outcome === "success" ? [{...account, name: "关闭后的返回"}] : {message: "关闭后的错误"}, outcome === "success" ? 200 : 503);
+    });
+    const loading = s.loadLocalAccounts(); await started.promise;
+    unmount(); release.resolve(); await loading;
+    assert.deepEqual(s.localAccounts.value, [account]);
+    assert.doesNotMatch(s.errorMessage.value, /关闭后的错误/);
+  });
+}
+
+test("an account list refresh cannot release the busy state of pending administrator creation", async () => {
+  const {state: s} = await open();
+  const started = deferred(), release = deferred();
+  h.routes.set(`POST ${base}/local-admins`, async (_req, reply) => {
+    started.resolve(); await release.promise; reply({});
+  });
+  s.newAdminUsername.value = "new-admin"; s.newAdminName.value = "新管理员"; s.newAdminPin.value = "1234";
+  const creation = s.createAdministrator(); await started.promise;
+  try {
+    await s.loadLocalAccounts();
+    assert.equal(s.accountBusy.value, true);
+  } finally { release.resolve(); await creation; }
+  assert.equal(s.accountBusy.value, false);
+});
+
+test("administrator credentials describe the submitted fields and preserve edits made while saving", async () => {
+  const {state: s} = await open(), hold = deferred(), started = deferred();
+  h.routes.set(`POST ${base}/local-admins`, async (_req, reply) => { started.resolve(); await hold.promise; reply({}); });
+  s.newAdminUsername.value = "submitted-admin"; s.newAdminName.value = "已提交管理员"; s.newAdminPin.value = "1234";
+  const pending = s.createAdministrator(); await started.promise;
+  s.newAdminUsername.value = "next-admin"; s.newAdminName.value = "后续输入"; s.newAdminPin.value = "5678";
+  hold.resolve(); await pending;
+  assert.deepEqual(s.recentCredentials.value, [{school: "测试学校", name: "已提交管理员", username: "submitted-admin", pin: "1234", workspaces: "管理员"}]);
+  assert.equal(s.newAdminUsername.value, "next-admin"); assert.equal(s.newAdminName.value, "后续输入"); assert.equal(s.newAdminPin.value, "5678");
+});
+
+for (const outcome of ['success', 'failure']) test(`an administrator creation's late ${outcome} cannot publish credentials or clear drafts in another school`, async () => {
+  const {state: s} = await open(), hold = deferred(), started = deferred();
+  h.routes.set(`POST ${base}/local-admins`, async (_req, reply) => { started.resolve(); await hold.promise; reply(outcome === 'success' ? {} : {message: '旧学校创建失败'}, outcome === 'success' ? 200 : 503); });
+  s.newAdminUsername.value = 'old-admin'; s.newAdminName.value = '原学校管理员'; s.newAdminPin.value = '1234';
+  const pending = s.createAdministrator(); await started.promise;
+  s.schoolMemberships.value = [membership('OWNER'), {role: 'ADMIN', school: {id: 'other-school', name: '另一学校', terms: []}}];
+  for (const suffix of ['local-accounts', 'classroom-screens']) h.routes.set(`GET /api/v2/admin/schools/other-school/${suffix}`, (_req, reply) => reply([]));
+  h.routes.set('GET /api/v2/admin/schools/other-school/homework-settings', (_req, reply) => reply({}));
+  s.selectedSchoolId.value = 'other-school'; await nextTick();
+  s.newAdminUsername.value = 'new-school-admin'; s.newAdminName.value = '新学校草稿'; s.newAdminPin.value = '5678';
+  hold.resolve(); await pending;
+  assert.deepEqual(s.recentCredentials.value, []);
+  assert.equal(s.newAdminName.value, '新学校草稿'); assert.equal(s.newAdminPin.value, '5678');
+  assert.doesNotMatch(s.errorMessage.value, /旧学校创建失败/);
+  await eventually(() => assert.equal(s.accountBusy.value, false)); // The new school's independent list query can still be loading.
+});
+
+for (const operation of ['reset', 'disable', 'deactivate']) test(`leaving accounts while a ${operation} confirmation waits prevents its abandoned write`, async () => {
+  const {state: s, unmount} = await open();
+  const pending = operation === 'reset' ? s.resetAccountPin(account) : operation === 'disable' ? s.setAccountDisabled(account, true) : s.deactivateAccount(account);
+  await eventually(() => assert.equal(h.dialogs.actionDialogState.open, true));
+  unmount();
+  if (operation === 'reset') h.dialogs.actionDialogState.value = '5678';
+  h.dialogs.settleActionDialog(true); await pending;
+  assert.deepEqual(writes(), []);
 });

@@ -349,7 +349,11 @@ export async function createFlowHarness() {
       props.modelValue = true;
       await nextTick(); await nextTick();
       await eventually(() => { if (!state.draftReady.value && !state.draftReadError.value) throw new Error("draft still loading"); });
-      return {state, events, props};
+      return {state, events, props, unmount() {
+        const index = mounted.indexOf(app);
+        if (index !== -1) mounted.splice(index, 1);
+        app.unmount();
+      }};
     },
     async close() {
       reset();

@@ -115,6 +115,17 @@
         rows="5"
         variant="outlined"
       />
+      <slot
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
+        name="text-input"
+        field="content"
+        :target="textTargets.content"
+      >
+        <HandwritingTextInput
+          field="content"
+          :target="textTargets.content"
+        />
+      </slot>
       <HomeworkQuickInputBar
         v-if="form.type === 'ASSIGNMENT' && !form.noHomework"
         density="teacher"
@@ -144,6 +155,7 @@
       </v-btn>
       <v-textarea
         v-if="form.type === 'ASSIGNMENT' && !form.noHomework && (optionalExpanded || form.optionalContent)"
+        ref="optionalInput"
         v-model="form.optionalContent"
         label="选做内容（可选）"
         maxlength="6000"
@@ -152,6 +164,17 @@
         rows="3"
         variant="outlined"
       />
+      <slot
+        v-if="form.type === 'ASSIGNMENT' && !form.noHomework && (optionalExpanded || form.optionalContent)"
+        name="text-input"
+        field="optionalContent"
+        :target="textTargets.optionalContent"
+      >
+        <HandwritingTextInput
+          field="optionalContent"
+          :target="textTargets.optionalContent"
+        />
+      </slot>
       <v-btn
         v-if="form.type === 'ASSIGNMENT'"
         :disabled="templatesDisabled"
@@ -574,9 +597,11 @@ import {registerAppReloadBlocker} from "@/utils/appReloadProtection";
 import {publicationDraftInput} from "@/utils/publicationDraft";
 import {submissionOf, optionalHomeworkOf} from "@/utils/homeworkInstructions";
 import {preparationOf} from "@/utils/homeworkPreparation";
+import HandwritingTextInput from "@/features/handwriting/HandwritingTextInput.vue";
+import {createTextInputTarget} from "@/utils/textInputTarget";
 import HomeworkQuickInputBar from "@/components/v2/HomeworkQuickInputBar.vue";
 import {useClassworksV2Store} from "@/stores/classworksV2";
-import {describeApiError} from "@/utils/classworksV2Client";
+import {describeApiError, getAccountTokens} from "@/utils/classworksV2Client";
 import {todayBoardDate} from "@/utils/boardDate";
 import {
   teacherTargetCombinationId,
@@ -623,6 +648,7 @@ const duplicateStatus = ref("PUBLISHED");
 const requestBusy = computed(() => saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value);
 const reuseDatesConfirmed = ref(false);
 const contentInput = ref(null);
+const optionalInput = ref(null);
 const TeacherHomeworkTemplates = defineAsyncComponent(() => import("@/components/v2/TeacherHomeworkTemplates.vue"));
 const PublicationScreenPreview = defineAsyncComponent(() => import("@/components/v2/PublicationScreenPreview.vue"));
 const screenPreview = ref(null);
@@ -630,11 +656,11 @@ const templatesOpen = ref(false), templateApplying = ref(false);
 const templatesDisabled = computed(() => Boolean(requestBusy.value || conflict.value || duplicateWarning.value || form.noHomework || form.type !== "ASSIGNMENT"));
 async function applyTemplate(input) {
   if (templateApplying.value || templatesDisabled.value) return;
-  const generation = editorGeneration, session = store.teacherSessionVersion, snapshot = JSON.stringify(form);
+  const edit = captureEditor();
   templateApplying.value = true;
   try {
     if ((form.title || form.content || form.materials || form.submission || form.optionalContent) && !await confirmAction({title: "替换当前作业内容？", message: "将替换标题、正文、选做内容、提交说明和需带物品，模板中的空字段也会清空对应内容。携带日期将清空，含物品时请重新选择。班级、科目、作业日期和截止时间保持当前设置。", confirmText: "替换内容"})) return;
-    if (!mounted || generation !== editorGeneration || session !== store.teacherSessionVersion || !templatesOpen.value || templatesDisabled.value || snapshot !== JSON.stringify(form)) return;
+    if (!edit.unchanged() || !templatesOpen.value || templatesDisabled.value) return;
     form.title = input.title; form.content = input.content;
     form.submission = input.submission;
     form.optionalContent = input.optionalContent || ""; optionalExpanded.value = Boolean(form.optionalContent);
@@ -692,6 +718,25 @@ const form = reactive({
   priority: "NORMAL",
   popupEnabled: false,
 });
+const credentialEpoch = ref(0);
+function credentialChanged(event) {
+  // Access-token renewal retains the login. A new/cleared refresh token does
+  // not, even when another tab later restores the original token pair.
+  if (event.key === null || event.key === "classworks-v2-refresh-token") credentialEpoch.value++;
+}
+window.addEventListener("storage", credentialChanged);
+onUnmounted(() => window.removeEventListener("storage", credentialChanged));
+const textTargets = Object.fromEntries(["content", "optionalContent"].map(field => [field, createTextInputTarget({
+  limit: field === "optionalContent" ? 6000 : Infinity,
+  read: () => form[field], write: value => { form[field] = value; },
+  label: () => `${store.teacherSubjects.find(s => s.id === form.subjectId)?.name || "未选择科目"} · ${form.targetWorkspaceIds.map(id => store.teacherWorkspaces.find(w => w.id === id)?.name || id).join("、") || "未选择班级"} · ${form.boardDate}`,
+  textarea: () => (field === "content" ? contentInput : optionalInput).value?.$el?.querySelector("textarea"),
+  disabled: () => form.type !== "ASSIGNMENT" || form.noHomework || Boolean(requestBusy.value || conflict.value || duplicateWarning.value),
+  context: () => ["teacher", field, store.account?.id, store.teacherSessionVersion, editorGeneration,
+    getAccountTokens().refreshToken, credentialEpoch.value,
+    props.editingPublication?.id, editingBase.value?.revision, form.type, form.noHomework, form.subjectId,
+    [...form.targetWorkspaceIds].sort(), form.boardDate],
+})]));
 const cleanForm = ref("");
 const hasUnsavedChanges = computed(() => JSON.stringify(form) !== cleanForm.value);
 const submittedFormSnapshot = ref("");
@@ -701,7 +746,7 @@ const canSwitchDuringSave = computed(() => Boolean(
   && JSON.stringify(form) === submittedFormSnapshot.value
 ));
 defineExpose({requestBusy, hasUnsavedChanges, canSwitchDuringSave});
-watch(() => [store.account?.id, store.teacherSessionVersion, props.editingPublication, form.type, form.noHomework], () => { templatesOpen.value = false; screenPreview.value = null; }, {flush: "sync"});
+watch(() => [store.account?.id, store.teacherSessionVersion, credentialEpoch.value, props.editingPublication, form.type, form.noHomework], () => { templatesOpen.value = false; screenPreview.value = null; }, {flush: "sync"});
 const releaseReloadProtection = registerAppReloadBlocker(() => {
   if (saving.value || publishing.value || conflictApplying.value || conflictCopying.value || conflictReloading.value) {
     return "正在保存或载入发布内容，请等待完成后再刷新。";
@@ -869,9 +914,17 @@ watch(() => [form.dueAt, form.materialsDate, form.materials, form.noHomework, fo
 function captureEditor(savedForm) {
   const generation = editorGeneration;
   const accountVersion = store.teacherSessionVersion;
+  const accountId = store.account?.id;
+  const refreshToken = getAccountTokens().refreshToken;
+  const credentials = credentialEpoch.value;
   const source = props.editingPublication;
   const serialized = JSON.stringify(form);
-  const alive = () => mounted && accountVersion === store.teacherSessionVersion;
+  // Another tab can replace credentials before this store bootstraps, or return
+  // to the original login while an old request waits. Such replies no longer
+  // own this editor; ordinary access-token renewal keeps the same login.
+  const alive = () => mounted && accountVersion === store.teacherSessionVersion
+    && accountId === store.account?.id && credentials === credentialEpoch.value
+    && refreshToken === getAccountTokens().refreshToken;
   const current = () => alive() && generation === editorGeneration && source === props.editingPublication;
   return {
     alive, current, unchanged: () => current() && JSON.stringify(form) === serialized,
@@ -1053,7 +1106,9 @@ async function submit(status, allowDuplicate = false) {
         conflict.value = nextConflict;
       }
     } else {
-      localError.value = describeApiError(error, "保存发布内容失败，请稍后重试");
+      localError.value = !error.response && navigator.onLine === false
+        ? "当前离线，保存失败，正文已保留在当前页面。请联网后重试，或复制文字留存。"
+        : describeApiError(error, "保存发布内容失败，请稍后重试");
     }
   } finally {
     flag.value = false;

@@ -1,0 +1,89 @@
+{
+  "scope": "Generated Microsoft YaHei glyphs from isolated round25 r19, not human handwriting accuracy. Test answers are never sent to the recognizer.",
+  "cases": [
+    {
+      "fixture": "完成练习册第12至15页，第6、8题。",
+      "text": "完成练习册第12至15页，第6、8题。",
+      "modelText": "完成练习册第12至15页，第6、8题。"
+    },
+    {
+      "fixture": "数学：P36第1—5题，订正第8题。",
+      "text": "数学：P36第1—5题，订正第8题。",
+      "modelText": "数学：P36第1—5题，订正第8题。"
+    },
+    {
+      "fixture": "背诵第3课，默写20个单词。",
+      "text": "背诵第3课，默写20个单词。",
+      "modelText": "背诵第3课，默写20个单词。"
+    },
+    {
+      "fixture": "物理：完成2.3节习题，明天交。",
+      "text": "物理：完成2.3节习题，明天交。",
+      "modelText": "物理：完成2.3节习题，明天交。"
+    },
+    {
+      "fixture": "化学：H2O与CO2，计算0.5 mol。",
+      "text": "化学：H2O与CO2，计算0.5 mol。",
+      "modelText": "化学：H2O与CO2，计算0.5 mol。"
+    },
+    {
+      "fixture": "语文：阅读《故乡》，摘抄200字。",
+      "text": "语文：阅读《故乡》，摘抄200字。",
+      "modelText": "语文：阅读《故乡》，摘抄200字。"
+    },
+    {
+      "fixture": "英语：Unit 4，完成第12页。",
+      "text": "英语：Unit 4，完成第12页。",
+      "modelText": "英语：Unit 4，完成第12页。"
+    },
+    {
+      "fixture": "周测订正：第6题不是第8题，P12—15。",
+      "text": "周测订正：第6题不是第8题，P12—15。",
+      "modelText": "周测订正：第6题不是第8题，P12—15。"
+    },
+    {
+      "fixture": "化学：CO、NaOH和O2，计算0.01 mol。",
+      "text": "化学：CO、NaOH和O2，计算0.01 mol。",
+      "modelText": "化学：CO、NaOH和O2，计算0.01 mol。"
+    },
+    {
+      "fixture": "完成第10—20页，不是第1—2页。",
+      "text": "完成第10—20页，不是第1—2页。",
+      "modelText": "完成第10—20页，不是第1—2页。"
+    },
+    {
+      "fixture": "英语：Lesson 1，抄写look和book。",
+      "text": "英语：Lesson 1，抄写look和book。",
+      "modelText": "英语：Lesson 1，抄写look和book。"
+    },
+    {
+      "fixture": "第100页，1、11、101题，选做第8题。",
+      "text": "第100页，1、11、101题，选做第8题。",
+      "modelText": "第100页，1、11、101题，选做第8题。"
+    },
+    {
+      "fixture": "数学：0.5×10=5，x∈[0,1]。",
+      "text": "数学：0.5×10=5，x∈[0,1]。",
+      "modelText": "数学：0.5×10=5，x∈[0,1]。"
+    },
+    {
+      "fixture": "实验记录：NaCl、HCl、CO2。",
+      "text": "实验记录：NaCl、HCl、CO2。",
+      "modelText": "实验记录：NaCl、HCl、CO2。"
+    },
+    {
+      "fixture": "第12～15页；第6至8题。",
+      "text": "第12～15页；第6至8题。",
+      "modelText": "第12～15页；第6至8题。"
+    },
+    {
+      "fixture": [
+        "必做：第10—15页，第1、11题。",
+        "选做：第20页，第8题。",
+        "化学：NaOH与CO2，0.5 mol。"
+      ],
+      "text": "必做：第10—15页，第1、11题。\n选做：第20页，第8题。\n化学：NaOH与CO2，0.5 mol。",
+      "modelText": "必做：第10—15页，第1、11题。\n选做：第20页，第8题。\n化学：NaOH与CO2，0.5 mol。"
+    }
+  ]
+}

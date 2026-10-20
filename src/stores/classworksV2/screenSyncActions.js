@@ -16,9 +16,17 @@ import {createScreenUploadRetry} from "@/utils/screenUploadRetry";
 import {isScreenReloadBlocked} from "@/utils/screenReloadProtection";
 
 const screenSyncContexts = new WeakMap();
+const STALE_UPLOAD_MESSAGE = "大屏绑定或凭证已变化，本次补传已暂停，原队列已保留。请核对当前绑定后重试。";
 
 function isCurrentSync(store, bindingId, context) {
   return store.screenSession?.binding?.id === bindingId && screenSyncContexts.get(store) === context;
+}
+
+function screenUploadGuard(store, bindingId, context) {
+  const token = getClassroomScreenToken();
+  const version = store.screenSession?.binding?.credentialVersion;
+  return () => isCurrentSync(store, bindingId, context) && getClassroomScreenToken() === token
+    && store.screenSession?.binding?.credentialVersion === version;
 }
 
 function screenCommandGuard(store) {
@@ -27,6 +35,17 @@ function screenCommandGuard(store) {
   const token = getClassroomScreenToken();
   return () => Boolean(bindingId && context && token)
     && isCurrentSync(store, bindingId, context) && getClassroomScreenToken() === token;
+}
+
+function updateFailedScreenUpload(bindingId, item, patch) {
+  return mutateScreenPublicationQueue(bindingId, () => {
+    const items = loadScreenPublicationQueue(bindingId, undefined, {strict: true});
+    const current = items.find(candidate => candidate.id === item.id);
+    // A peer may have confirmed a duplicate while this older request waited.
+    // Its failure describes the old input, not the newly confirmed decision.
+    if (!current || JSON.stringify(current.input) !== JSON.stringify(item.input)) return {items, applied: false};
+    return {items: updateScreenPublicationQueueItem(bindingId, item.id, patch), applied: true};
+  });
 }
 
 // Mixed into the existing store: actions share its reactive state and Pinia binding.
@@ -286,6 +305,7 @@ export const screenSyncActions = {
   async flushScreenPublicationQueue() {
     const bindingId = this.screenSession?.binding?.id;
     const context = screenSyncContexts.get(this);
+    const isCurrent = screenUploadGuard(this, bindingId, context);
     if (!bindingId || !this.screenNetworkOnline || this.screenSyncing) return;
     context?.retry.begin();
     this.screenSyncing = true;
@@ -295,22 +315,28 @@ export const screenSyncActions = {
         context?.retry.failed();
         return;
       }
-      const pending = this.screenPendingUploads.filter((item) => item.status === "pending");
-      for (const item of pending) {
-        if (!isCurrentSync(this, bindingId, context) || !this.screenNetworkOnline) break;
+      const pendingIds = this.screenPendingUploads.filter((item) => item.status === "pending").map((item) => item.id);
+      for (const itemId of pendingIds) {
+        if (!isCurrent() || !this.screenNetworkOnline) break;
+        // An earlier upload can wait while another tab removes a later item or
+        // marks it for review. Only the current durable queue may authorize the
+        // next send; a batch snapshot is not a second copy to keep uploading.
+        if (!this.readScreenPublicationQueue()) { context?.retry.failed(); break; }
+        const item = this.screenPendingUploads.find((candidate) => candidate.id === itemId);
+        if (!item || item.status !== "pending") continue;
         try {
           await classworksV2Api.createScreenPublication(item.input);
-          if (!isCurrentSync(this, bindingId, context)) return;
+          if (!isCurrent()) return;
           const remaining = await mutateScreenPublicationQueue(bindingId, () => removeScreenPublicationQueueItem(bindingId, item.id));
-          if (!isCurrentSync(this, bindingId, context)) return;
+          if (!isCurrent()) return;
           this.screenPendingUploads = remaining;
           context?.retry.succeeded();
           savedAny = true;
         } catch (error) {
-          if (!isCurrentSync(this, bindingId, context)) return;
+          if (!isCurrent()) return;
           if (error instanceof ScreenPublicationQueueError) throw error;
           if (isTransientScreenRequestError(error)) { context?.retry.failed(); break; }
-          const remaining = await mutateScreenPublicationQueue(bindingId, () => updateScreenPublicationQueueItem(bindingId, item.id, {
+          const failure = await updateFailedScreenUpload(bindingId, item, {
             attempts: item.attempts + 1,
             status: "needs_review",
             error: {
@@ -318,9 +344,10 @@ export const screenSyncActions = {
               message: error.response?.data?.message || error.message || "提交失败",
               details: error.response?.data?.details || null,
             },
-          }));
-          if (!isCurrentSync(this, bindingId, context)) return;
-          this.screenPendingUploads = remaining;
+          });
+          if (!isCurrent()) return;
+          this.screenPendingUploads = failure.items;
+          if (!failure.applied) continue;
           recordDiagnosticEvent({
             category: "SCREEN_SYNC",
             severity: "ERROR",
@@ -330,20 +357,25 @@ export const screenSyncActions = {
           });
         }
       }
-      if (savedAny && isCurrentSync(this, bindingId, context)) {
+      if (savedAny && isCurrent()) {
+        if (this.screenError === STALE_UPLOAD_MESSAGE) this.screenError = "";
         this.screenLastSyncedAt = new Date().toISOString();
         await this.loadActiveFeed();
       }
     } catch (error) {
-      if (isCurrentSync(this, bindingId, context)) {
+      if (isCurrent()) {
         context?.retry.failed();
         this.reportScreenQueueError(error);
       }
     } finally {
-      if (isCurrentSync(this, bindingId, context)) {
-        if (!this.screenQueueReadError && !this.readScreenPublicationQueue()) context?.retry.failed();
+      if (screenSyncContexts.get(this) === context) {
+        if (isCurrent() && !this.screenQueueReadError && !this.readScreenPublicationQueue()) context?.retry.failed();
         this.screenSyncing = false;
-        context?.retry.request();
+        if (isCurrent()) context?.retry.request();
+        else {
+          context?.retry.pause();
+          this.screenError = STALE_UPLOAD_MESSAGE;
+        }
       }
     }
   },
@@ -351,27 +383,27 @@ export const screenSyncActions = {
   async retryScreenQueuedPublication(itemId, {allowDuplicate = false} = {}) {
     const bindingId = this.screenSession?.binding?.id;
     const context = screenSyncContexts.get(this);
+    const isCurrent = screenUploadGuard(this, bindingId, context);
     if (!bindingId || !this.screenNetworkOnline || this.screenSyncing) return false;
     if (!this.recoverScreenPublicationQueue()) return false;
     const item = this.screenPendingUploads.find((candidate) => candidate.id === itemId);
     if (!item) return false;
     context?.retry.begin();
     this.screenSyncing = true;
+    const submittedInput = {...item.input, ...(allowDuplicate ? {allowDuplicate: true} : {})};
     try {
-      await classworksV2Api.createScreenPublication({
-        ...item.input,
-        ...(allowDuplicate ? {allowDuplicate: true} : {}),
-      });
-      if (!isCurrentSync(this, bindingId, context)) return false;
+      await classworksV2Api.createScreenPublication(submittedInput);
+      if (!isCurrent()) return false;
       const remaining = await mutateScreenPublicationQueue(bindingId, () => removeScreenPublicationQueueItem(bindingId, item.id));
-      if (!isCurrentSync(this, bindingId, context)) return false;
+      if (!isCurrent()) return false;
       this.screenPendingUploads = remaining;
       context?.retry.succeeded();
+      if (this.screenError === STALE_UPLOAD_MESSAGE) this.screenError = "";
       this.screenLastSyncedAt = new Date().toISOString();
       await this.loadActiveFeed();
       return true;
     } catch (error) {
-      if (!isCurrentSync(this, bindingId, context)) return false;
+      if (!isCurrent()) return false;
       if (error instanceof ScreenPublicationQueueError) {
         context?.retry.failed();
         this.reportScreenQueueError(error);
@@ -379,7 +411,10 @@ export const screenSyncActions = {
       }
       if (isTransientScreenRequestError(error)) context?.retry.failed();
       try {
-        const remaining = await mutateScreenPublicationQueue(bindingId, () => updateScreenPublicationQueueItem(bindingId, item.id, {
+        const failure = await updateFailedScreenUpload(bindingId, item, {
+          // Keep this item's explicit duplicate confirmation with its original
+          // request ID, so a temporary outage/reload does not discard it.
+          input: submittedInput,
           attempts: item.attempts + 1,
           status: isTransientScreenRequestError(error) ? "pending" : "needs_review",
           error: {
@@ -387,9 +422,10 @@ export const screenSyncActions = {
             message: error.response?.data?.message || error.message || "提交失败",
             details: error.response?.data?.details || null,
           },
-        }));
-        if (!isCurrentSync(this, bindingId, context)) return false;
-        this.screenPendingUploads = remaining;
+        });
+        if (!isCurrent()) return false;
+        this.screenPendingUploads = failure.items;
+        if (!failure.applied) return false;
       } catch (storageError) {
         if (!isTransientScreenRequestError(error)) context?.retry.failed();
         this.reportScreenQueueError(storageError);
@@ -404,9 +440,13 @@ export const screenSyncActions = {
       });
       return false;
     } finally {
-      if (isCurrentSync(this, bindingId, context)) {
+      if (screenSyncContexts.get(this) === context) {
         this.screenSyncing = false;
-        context?.retry.request();
+        if (isCurrent()) context?.retry.request();
+        else {
+          context?.retry.pause();
+          this.screenError = STALE_UPLOAD_MESSAGE;
+        }
       }
     }
   },

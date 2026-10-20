@@ -1,0 +1,102 @@
+{
+  "version": "r19",
+  "cache": "npclassworks-handwriting-r19",
+  "files": [
+    {
+      "path": "r19/assets/manifest.json",
+      "bytes": 2246,
+      "sha256": "18ff3ec18d4a333138f22568e5fb3f8092fef9db5d006c25cdba914dba6a1b0e"
+    },
+    {
+      "path": "r19/assets/model-config.json",
+      "bytes": 131110,
+      "sha256": "49f820c44bdb0186c5f83ad5f8067662c826519c74397b20822042d6e5c6cf16"
+    },
+    {
+      "path": "r19/assets/ort-wasm-simd-threaded.mjs",
+      "bytes": 19432,
+      "sha256": "1ee6e58506eb23fb02fa2d7fd34b847e2960e6d17f1c183511dc28e9a38840ba"
+    },
+    {
+      "path": "r19/assets/ort-wasm-simd-threaded.wasm",
+      "bytes": 2302703,
+      "sha256": "7d5f660a033ef3cf1b60746d574fbd35eb57720e44c5d9819b8c82af443ba81a"
+    },
+    {
+      "path": "r19/assets/ort.wasm.min.mjs",
+      "bytes": 50126,
+      "sha256": "219e6a1fc8a9938268d18efca3c91d310bd2f4a59bbd13744df5b2b7fc6cee3b"
+    },
+    {
+      "path": "r19/assets/recognizer.ort",
+      "bytes": 21386296,
+      "sha256": "fea93c502d5a9e2c2d6f5eae940176285c7f6ce595d42125638fea4514d94b5d"
+    },
+    {
+      "path": "r19/context.js",
+      "bytes": 5102,
+      "sha256": "6a9f906102e5a9004d1fff026da5f745fe1f547dfc376ce7737a7f1f03d9097d"
+    },
+    {
+      "path": "r19/core.js",
+      "bytes": 4200,
+      "sha256": "82b04d7b00df22c2dd947f68a65d5c7128482e2d5438d7bcb5fb8687163c6cd1"
+    },
+    {
+      "path": "r19/ctc.js",
+      "bytes": 3450,
+      "sha256": "758cdc1935cb5d88cc88b5e7fd2addbd1074927395fe348b63c3d0354d1b293a"
+    },
+    {
+      "path": "r19/handwriting-memory.js",
+      "bytes": 11497,
+      "sha256": "f42280fd41ebbd35aa3fb57ed9f23587989da2e20493d4a3c71a7369b70f1b53"
+    },
+    {
+      "path": "r19/inference-threads.js",
+      "bytes": 518,
+      "sha256": "0730a137601fd42eedf3308a24b3a50c82b856f83e5ebdde0735ebeeff8a0e04"
+    },
+    {
+      "path": "r19/memory-store.js",
+      "bytes": 10814,
+      "sha256": "b7e4ae46539b7e1ea7873ada8f08c5f7dcc96bcf22e6e30bdaf4b62542feae7b"
+    },
+    {
+      "path": "r19/model-build.js",
+      "bytes": 343,
+      "sha256": "2e547e3bf48a53e8ca4bbb5886b118b8ab97685e8fa80cc57b1eb8710403b9d8"
+    },
+    {
+      "path": "r19/ocr-worker.js",
+      "bytes": 9355,
+      "sha256": "9bedd1b47eb52b8e6af3e6458a46faee5e36b4aaab8f2552ffe9608b2bc9eb89"
+    },
+    {
+      "path": "r19/ort-memory-loader.mjs",
+      "bytes": 309,
+      "sha256": "e80b6d5f550c3eef419cacbbf71e4a9dec663416dd284f665e8bb6078f81e8ed"
+    },
+    {
+      "path": "r19/ort-model-owner.js",
+      "bytes": 1884,
+      "sha256": "5d79c2eac0a418f6c5ddcb06234b2d3cc155f62a95f7174dbe0617a69d440157"
+    },
+    {
+      "path": "r19/recognition-input.js",
+      "bytes": 2262,
+      "sha256": "3279bb58ec81b31b7240a29dc5cd25b9486207e2148990734a2fc14a843657d0"
+    },
+    {
+      "path": "r19/recognition-limits.js",
+      "bytes": 1665,
+      "sha256": "3b1772c6022875667460d11f26ca87b915775671b82efbde9e00317f1c59fa0b"
+    },
+    {
+      "path": "r19/refine.js",
+      "bytes": 6028,
+      "sha256": "7ddbf96b204de157c792b8ec51c2a64869fd41b93e847a024b532b1856221331"
+    }
+  ],
+  "inputReuseVersion": 1
+}

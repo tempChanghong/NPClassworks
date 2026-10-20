@@ -13,6 +13,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { defineConfig, loadEnv } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import {handwritingAssets} from './scripts/handwriting-assets.js'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -39,6 +40,7 @@ export default defineConfig(({ mode }) => {
   // This is a single-page app. Test builds and documentation HTML are not entries.
   optimizeDeps: { entries: ['index.html'] },
   plugins: [
+    handwritingAssets(),
     {
       name: 'site-metadata',
       transformIndexHtml() {
@@ -82,9 +84,10 @@ export default defineConfig(({ mode }) => {
           '**/*.{js,css,html,ico,png,svg,webmanifest,txt,json,woff2}',
         ],
         // The retained legacy banner is not used by the app or current share metadata.
-        globIgnores: ['sounds/**', 'backgrounds/**', 'banner.png'],
+        globIgnores: ['sounds/**', 'backgrounds/**', 'banner.png', 'handwriting/**'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [
+          /\/handwriting\//,
           /^\/api\//,
           /^\/accounts\//,
           /^\/kv\//,
@@ -98,6 +101,20 @@ export default defineConfig(({ mode }) => {
           /^\/ready(?:\/|$)/,
         ],
         runtimeCaching: [
+          {
+            // Preparation alone writes SHA-verified receipts. A delayed raw
+            // CacheFirst write must never overwrite its verified response.
+            urlPattern: ({url, sameOrigin, request}) => sameOrigin &&
+              url.href.startsWith(new URL('handwriting/r19/', self.registration.scope).href) &&
+              request.headers.get('X-Handwriting-Prepare') === '1',
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: ({url, sameOrigin}) => sameOrigin &&
+              url.href.startsWith(new URL('handwriting/r19/', self.registration.scope).href),
+            handler: 'CacheFirst',
+            options: {cacheName: 'npclassworks-handwriting-r19', cacheableResponse: {statuses: [200]}},
+          },
           {
             // 后端接口和 Socket.IO 必须始终走网络。此规则不能限制为
             // sameOrigin：生产环境允许把前端和 API 分别部署到不同域名。

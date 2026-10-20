@@ -22,7 +22,7 @@ jobs:
   contracts:
     uses: ./.github/workflows/contracts.yml
     with:
-      backend_ref: ${{ inputs.backend_ref || (github.event_name == 'pull_request' && 'c4afaaef66d64ee0d6f3c5f06ba158f80013c591') || 'main' }}
+      backend_ref: ${{ inputs.backend_ref || (github.event_name == 'pull_request' && '6c4f31c1e6e03492d27a8a664d3f46b0e9370a8a') || 'main' }}
 
   test:
     runs-on: ubuntu-latest
@@ -65,5 +65,48 @@ jobs:
             test-results/
             .artifacts/pairing-browser/**/*.png
             .artifacts/pairing-browser/**/result.json
+          include-hidden-files: true
+          retention-days: 7
+
+  handwriting-kv:
+    name: Handwriting text persistence (native PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: tempChanghong/NPClassworksKV
+          # Verify the immutable backend candidate from NPClassworksKV PR #11.
+          ref: ${{ inputs.backend_ref || '6c4f31c1e6e03492d27a8a664d3f46b0e9370a8a' }}
+          path: .contract-backend
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+        working-directory: .contract-backend
+      - name: Install native PostgreSQL tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql
+          echo "NPEP_TEST_PG_BIN=$(pg_config --bindir)" >> "$GITHUB_ENV"
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Check confirmed text, drafts, conflicts and offline replay
+        run: pnpm test:handwriting:kv
+        env:
+          CLASSWORKS_BACKEND_ROOT: ${{ github.workspace }}/.contract-backend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: handwriting-kv-results
+          path: .artifacts/handwriting-kv/
           include-hidden-files: true
           retention-days: 7

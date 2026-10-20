@@ -30,4 +30,4 @@ jobs:
     with:
       desktop_sha: ${{ inputs.desktop_sha || (github.event_name == 'pull_request' && 'aa2cc5e716790395d9c65524895c1f0fb74f2546') || '' }}
       web_sha: ${{ inputs.web_sha || '' }}
-      backend_sha: ${{ inputs.backend_sha || (github.event_name == 'pull_request' && '84d4bcbfef680c17d812fecfbc21430613b19133') || '' }}
+      backend_sha: ${{ inputs.backend_sha || (github.event_name == 'pull_request' && '6c4f31c1e6e03492d27a8a664d3f46b0e9370a8a') || '' }}

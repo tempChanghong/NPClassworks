@@ -2,3 +2,7 @@
 images/branding/*.ai binary
 images/promo/**/*.ai binary
 images/promo/**/*.psd binary
+
+# These files are SHA-pinned byte payloads, including JavaScript and JSON.
+# A Windows checkout must not rewrite line endings inside the validated runtime.
+public/handwriting/r19/** -text -whitespace
