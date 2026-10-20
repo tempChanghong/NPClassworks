@@ -174,6 +174,12 @@ export const screenSessionActions = {
   },
 
   async saveScreenPublication(input, publication = null, queueContext = {}) {
+    const scope = classroomToolScope(this);
+    const assertCurrent = () => {
+      if (classroomToolScope(this) !== scope) throw Object.assign(new Error(
+        "大屏绑定或凭证已变化，请回到原绑定核对本次提交。原草稿已保留，未向新绑定补传。",
+      ), {code: "SCREEN_PUBLICATION_SCOPE_CHANGED"});
+    };
     this.screenError = "";
     if (!publication) input = withScreenPublicationRequestId(input);
     if (publication && !this.screenNetworkOnline) {
@@ -189,12 +195,16 @@ export const screenSessionActions = {
       const saved = publication
         ? await classworksV2Api.updateScreenPublication(publication, input)
         : await classworksV2Api.createScreenPublication(input);
+      assertCurrent();
       await this.loadActiveFeed();
+      assertCurrent();
       if (this.isTeacherSignedIn) {
         await Promise.all([this.refreshTeacherPublications(), this.refreshTeacherActionCenter()]);
       }
+      assertCurrent();
       return saved;
     } catch (error) {
+      assertCurrent();
       if (!publication && isTransientScreenRequestError(error)) {
         this.screenError = "";
         return this.enqueueOfflineScreenPublication(input, queueContext);
