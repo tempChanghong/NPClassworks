@@ -150,6 +150,93 @@ test('a delayed conflict reload cannot replace confirmed text after credentials 
   } finally { hold.resolve(); await loading; }
 });
 
+test('closing a failed draft after rebinding persists its final text only under its original class', async () => {
+  const store = h.newStore({screen: true});
+  const {state, events} = await h.openComposer();
+  state.form.content = '原班已落盘正文'; await nextTick();
+  const write = h.storage.setItem;
+  try {
+    h.storage.setItem = (key, value) => {
+      if (key.startsWith('classworks-v2-screen-homework-draft:')) throw new Error('QuotaExceededError');
+      write(key, value);
+    };
+    state.form.content = '原班后来确认但暂未落盘的正文'; await nextTick();
+    assert.equal(state.draftSaveFailed.value, true);
+  } finally { h.storage.setItem = write; }
+  const tab = sessionStorage.getItem('classworks-v2-draft-tab');
+  const key = `classworks-v2-screen-homework-draft:screen-b:new:tab:${tab}`;
+  const second = JSON.stringify({content: '另一个班级自己的草稿', updatedAt: Date.now()});
+  h.storage.setItem(key, second);
+  store.screenSession = {...store.screenSession, binding: {id: 'screen-b'}};
+  await nextTick(); state.requestVisibility(false); await nextTick();
+  assert.equal(h.storage.getItem(key), second);
+  assert.equal(h.loadDraft('screen-a', 'new').content, '原班后来确认但暂未落盘的正文');
+  assert.deepEqual(events, [['update:modelValue', false]]);
+  assert.equal(h.requests.length, 0);
+});
+
+for (const change of ['remove', 'review']) test(`automatic replay skips a queued item another window marks ${change} while an earlier upload waits`, async () => {
+  const store = h.newStore({screen: true}), hold = deferred();
+  store.screenNetworkOnline = false;
+  await store.saveScreenPublication({content: '先提交的确认文字'});
+  await store.saveScreenPublication({content: '后来需要撤销或重新核对的文字'});
+  const [first, second] = store.screenPendingUploads;
+  const sent = [];
+  h.routes.set('POST /api/v2/classroom-screens/publications', async (req, reply) => {
+    sent.push(req.body.clientRequestId);
+    if (sent.length === 1) await hold.promise;
+    reply({id: req.body.clientRequestId, revision: 1});
+  });
+  store.screenNetworkOnline = true;
+  const replay = store.flushScreenPublicationQueue();
+  try {
+    await eventually(() => assert.equal(sent.length, 1));
+    await h.queue.mutateScreenPublicationQueue('screen-a', () => change === 'remove'
+      ? h.queue.removeScreenPublicationQueueItem('screen-a', second.id)
+      : h.queue.updateScreenPublicationQueueItem('screen-a', second.id, {status: 'needs_review'}));
+    hold.resolve(); await replay;
+    assert.deepEqual(sent, [first.input.clientRequestId]);
+    const remaining = h.queue.loadScreenPublicationQueue('screen-a');
+    assert.equal(remaining.length, change === 'remove' ? 0 : 1);
+    if (change === 'review') assert.equal(remaining[0].status, 'needs_review');
+    assert.equal(store.screenSyncing, false);
+  } finally { hold.resolve(); await replay; }
+});
+
+test('an unreadable queue between uploads cannot authorize the remaining batch from memory', async () => {
+  const store = h.newStore({screen: true});
+  store.screenNetworkOnline = false;
+  await store.saveScreenPublication({content: '第一项已确认文字'});
+  await store.saveScreenPublication({content: '第二项仍需读取队列确认'});
+  const [first, second] = store.screenPendingUploads;
+  const key = 'classworks-v2-screen-publication-queue:screen-a';
+  const read = h.storage.getItem, write = h.storage.setItem, sent = [];
+  let blocked = false;
+  h.routes.set('POST /api/v2/classroom-screens/publications', (req, reply) => {
+    sent.push(req.body.clientRequestId); reply({id: req.body.clientRequestId, revision: 1});
+  });
+  h.storage.setItem = (name, value) => {
+    write(name, value);
+    if (name === key && JSON.parse(value).length === 1) blocked = true;
+  };
+  h.storage.getItem = name => {
+    if (name === key && blocked) throw new Error('Storage unavailable');
+    return read(name);
+  };
+  store.screenNetworkOnline = true;
+  try {
+    await store.flushScreenPublicationQueue();
+    assert.deepEqual(sent, [first.input.clientRequestId]);
+    assert.equal(store.screenSyncing, false);
+    assert.ok(store.screenQueueReadError);
+    assert.equal(JSON.parse(read(key))[0].id, second.id);
+  } finally { h.storage.getItem = read; h.storage.setItem = write; }
+  await store.flushScreenPublicationQueue();
+  assert.deepEqual(sent, [first.input.clientRequestId, second.input.clientRequestId]);
+  assert.deepEqual(h.queue.loadScreenPublicationQueue('screen-a'), []);
+  assert.equal(store.screenQueueReadError, '');
+});
+
 for (const change of ['token', 'credential']) for (const manual of [false, true]) test(`a changed ${change} during ${manual ? 'manual' : 'automatic'} replay retains the original queue`, async () => {
   const store = h.newStore({screen: true}), hold = deferred();
   const token = h.api.getClassroomScreenToken(), version = store.screenSession.binding.credentialVersion;

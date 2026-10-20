@@ -599,3 +599,49 @@ test('a real late conflict reload preserves confirmed screen text after token ro
     expect(row.content).toBe('服务器第二版'); expect(row.revision).toBe(2); expect(errors).toEqual([]);
   } finally { release(); }
 });
+
+test('another real tab can remove later queued handwriting while an earlier real upload awaits its receipt', async ({classroom}) => {
+  const {page, context, errors, mutations} = await setup(classroom, 'screen');
+  const other = await context.newPage(), otherErrors = [];
+  other.on('pageerror', error => otherErrors.push(error.message));
+  const otherMutations = observe(other);
+  await other.goto(origin);
+  await expect(other.getByRole('button', {name: '录入作业', exact: true}).first()).toBeVisible();
+  // Keep the second tab's upload timer paused while it operates the real queue
+  // UI. The first tab uses real time, the real model, and the real KV throughout.
+  await other.clock.install(); await other.clock.pauseAt(new Date(Date.now() + 1000));
+  await write(page, '第一项确认并允许补传的文字');
+  await context.setOffline(true);
+  await page.getByRole('button', {name: '保存作业', exact: true}).click();
+  await expect(composer(page, 'screen')).not.toBeVisible();
+  await page.getByRole('button', {name: '录入作业', exact: true}).first().click();
+  await body(page, 'screen').fill(''); await write(page, '第二项确认后决定移除的文字');
+  await page.getByRole('button', {name: '保存作业', exact: true}).click();
+  const queueKey = `classworks-v2-screen-publication-queue:${classroom.binding.id}`;
+  const queued = () => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '[]'), queueKey);
+  expect(await queued()).toHaveLength(2); expect(await classroom.rows()).toEqual([]);
+  let release, committed = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route(`${api}/api/v2/classroom-screens/publications`, async route => {
+    const response = await route.fetch(); committed = true; await gate; await route.fulfill({response});
+  });
+  try {
+    await context.setOffline(false);
+    await expect.poll(() => committed).toBe(true);
+    await other.locator('.screen-sync-chip').click(); await other.clock.runFor(100);
+    await expect(other.locator('.queued-publication')).toHaveCount(2);
+    await other.getByTitle('移除本机待提交作业', {exact: true}).nth(1).click(); await other.clock.runFor(100);
+    await other.getByRole('button', {name: '确认移除', exact: true}).click();
+    await expect.poll(async () => (await queued()).length).toBe(1);
+    const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v2/classroom-screens/feed');
+    release(); await (await refreshed).finished();
+    await expect.poll(async () => (await queued()).length).toBe(0);
+    await expect(page.locator('.screen-sync-chip')).not.toContainText('正在同步');
+    expect(mutations.filter(item => item.method === 'POST')).toHaveLength(1);
+    expect(otherMutations).toEqual([]);
+    await storageTextOnly(page);
+    const rows = await persisted(classroom, mutations);
+    expect(rows).toHaveLength(1); expect(rows[0].content).toBe('第一项确认并允许补传的文字');
+    expect(rows[0].revisions).toHaveLength(1); expect(errors).toEqual([]); expect(otherErrors).toEqual([]);
+  } finally { release(); }
+});

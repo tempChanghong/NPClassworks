@@ -304,9 +304,15 @@ export const screenSyncActions = {
         context?.retry.failed();
         return;
       }
-      const pending = this.screenPendingUploads.filter((item) => item.status === "pending");
-      for (const item of pending) {
+      const pendingIds = this.screenPendingUploads.filter((item) => item.status === "pending").map((item) => item.id);
+      for (const itemId of pendingIds) {
         if (!isCurrent() || !this.screenNetworkOnline) break;
+        // An earlier upload can wait while another tab removes a later item or
+        // marks it for review. Only the current durable queue may authorize the
+        // next send; a batch snapshot is not a second copy to keep uploading.
+        if (!this.readScreenPublicationQueue()) { context?.retry.failed(); break; }
+        const item = this.screenPendingUploads.find((candidate) => candidate.id === itemId);
+        if (!item || item.status !== "pending") continue;
         try {
           await classworksV2Api.createScreenPublication(item.input);
           if (!isCurrent()) return;

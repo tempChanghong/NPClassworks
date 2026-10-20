@@ -195,7 +195,7 @@ async function retry(item, allowDuplicate = false) {
 async function remove(item) {
   if (!await confirmAction({
     title: "移除本机待提交作业",
-    message: "这项作业尚未提交到服务器，移除后无法恢复。",
+    message: "移除后无法恢复本机记录。已经开始的提交仍可能成功，已保存到服务器的作业不会撤回，请在作业板核对。",
     confirmText: "确认移除",
     color: "error",
   })) return;
