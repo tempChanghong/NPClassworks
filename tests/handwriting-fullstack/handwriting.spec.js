@@ -304,6 +304,55 @@ for (const loseReply of [false, true]) test(`offline screen reload and real repl
   await storageTextOnly(page); expect(errors).toEqual([]);
 });
 
+for (const loseReply of [false, true]) test(`explicit duplicate confirmation survives offline reload and real replay (${loseReply ? 'committed reply lost' : 'before commit outage'})`, async ({classroom, request}) => {
+  const text = '已确认仍需发布的第10—20页，第1、11题';
+  const source = await create(classroom, request, text);
+  const {page, context, errors, mutations} = await setup(classroom, 'screen');
+  await write(page, text);
+  await context.setOffline(true);
+  await page.getByRole('button', {name: '保存作业', exact: true}).click();
+  await expect(composer(page, 'screen')).not.toBeVisible();
+  const queueKey = `classworks-v2-screen-publication-queue:${classroom.binding.id}`;
+  const queued = () => page.evaluate(key => JSON.parse(localStorage.getItem(key) || '[]'), queueKey);
+  const [original] = await queued();
+  expect(original.input.content).toBe(text);
+  await context.setOffline(false);
+  await expect.poll(async () => (await queued())[0]?.error?.code).toBe('DUPLICATE_ASSIGNMENT_SUSPECTED');
+  expect(await classroom.rows()).toHaveLength(1);
+  let fault = false;
+  await page.route(`${api}/api/v2/classroom-screens/publications`, async route => {
+    if (route.request().method() === 'POST' && route.request().postDataJSON().allowDuplicate === true && !fault) {
+      fault = true;
+      if (loseReply) {
+        const actual = await route.fetch(); expect(actual.status()).toBe(201);
+        await route.abort('failed'); // Actual transaction commits; only its receipt is lost.
+      } else await route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({message: 'controlled pre-commit outage'})});
+    } else await route.continue();
+  });
+  await page.locator('.screen-sync-chip').click();
+  await page.getByRole('button', {name: '确认仍然提交', exact: true}).click();
+  await expect.poll(() => fault).toBe(true);
+  await expect.poll(async () => (await queued())[0]?.status).toBe('pending');
+  const [pending] = await queued();
+  expect(pending.input).toEqual({...original.input, allowDuplicate: true});
+  expect(pending.id).toBe(original.id); expect(pending.queuedAt).toBe(original.queuedAt);
+  expect(await classroom.rows()).toHaveLength(loseReply ? 2 : 1);
+  await context.setOffline(true);
+  const reloaded = await page.reload({waitUntil: 'domcontentloaded'}); expect(reloaded.fromServiceWorker()).toBe(true);
+  await expect(page.getByRole('button', {name: '录入作业', exact: true}).first()).toBeVisible();
+  expect((await queued())[0].input).toEqual(pending.input);
+  await context.setOffline(false);
+  await expect.poll(async () => (await queued()).length, {timeout: 45000}).toBe(0);
+  const rows = await persisted(classroom, mutations);
+  expect(rows).toHaveLength(2);
+  const unchanged = rows.find(row => row.id === source.id), copy = rows.find(row => row.id !== source.id);
+  expect(unchanged.content).toBe(text); expect(copy.content).toBe(text);
+  for (const row of rows) { expect(row.revision).toBe(1); expect(row.revisions).toHaveLength(1); }
+  expect(mutations.map(mutation => mutation.body.allowDuplicate === true)).toEqual([false, true, true]);
+  expect(new Set(mutations.map(mutation => mutation.body.clientRequestId))).toEqual(new Set([original.input.clientRequestId]));
+  await storageTextOnly(page); expect(errors).toEqual([]);
+});
+
 test('teacher offline save preserves confirmed text and writes only after explicit online retry', async ({classroom}) => {
   const {page, context, errors, mutations} = await setup(classroom, 'teacher');
   await write(page, '教师离线保留的确认正文');
